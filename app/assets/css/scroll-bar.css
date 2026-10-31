@@ -1,0 +1,65 @@
+/* Apply custom scrollbars ONLY to devices using a mouse (Desktop)
+On mobile (touchscreen), the operating system's defaults will be retained for the best swiping experience */
+@media (pointer: fine) {
+  /* 1. Define the width and height of the scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  /* 2. COMPLETELY HIDE the arrow buttons */
+  ::-webkit-scrollbar-button {
+    display: none !important;
+  }
+
+  /* 3. Scrollbar background (Track) */
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* 4. Thumbbar Handle */
+  ::-webkit-scrollbar-thumb {
+    background: rgba(156, 163, 175, 0.15);
+    border-radius: 10px;
+    transition: background 0.2s ease;
+  }
+
+  /* 5. Hover Effect on the Scrollbar */
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(156, 163, 175, 0.3);
+  }
+
+  /* 6. Dark Mode */
+  .dark ::-webkit-scrollbar-thumb {
+    background: rgba(75, 85, 99, 0.2);
+  }
+
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: rgba(75, 85, 99, 0.4);
+  }
+
+  /* 7. .custom-scrollbar utility (For small areas like InputTags) */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 3px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(156, 163, 175, 0.12);
+  }
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: rgb(229, 231, 235);
+  border-radius: 9999px;
+}
+
+.dark .scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: rgb(31, 41, 55);
+}

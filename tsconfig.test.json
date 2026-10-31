@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "baseUrl": ".",
+    "paths": {
+      "~/*": ["./app/*"],
+      "@tmcut-core": ["../tmcut-core/src/index.mjs"]
+    }
+  }
+}

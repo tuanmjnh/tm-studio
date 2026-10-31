@@ -1,0 +1,42 @@
+# Nuxt dev/build outputs
+.output
+.data
+.nuxt
+.nitro
+.cache
+.playwright-mcp
+dist
+
+# Electron build outputs
+release
+dist-electron
+
+# Node dependencies
+node_modules
+
+# Logs
+/logs
+*.log
+
+# Misc
+.DS_Store
+.fleet
+.idea
+
+# Local env files
+.env
+.env.*
+!.env.example
+
+# VSC
+.history
+
+# Private
+private
+ffmpeg.exe
+ffplay.exe
+ffprobe.exe
+yt-dlp.exe
+
+# TMCut render smoke work dir (R79)
+.smoke-render/
