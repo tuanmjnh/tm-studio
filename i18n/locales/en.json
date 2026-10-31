@@ -218,6 +218,7 @@
     "project": "Project",
     "preview": "Preview",
     "timeline": "Timeline",
+    "clearSelection": "Clear selection",
     "inspector": "Properties (Inspector)",
     "addVideo": "Add Video",
     "addText": "Add Text",
@@ -391,7 +392,7 @@
       "transitions": "Transitions",
       "filters": "Filters",
       "assets": "Asset Store",
-      "stock": "Stock",
+      "stock": "Free stock",
       "textHint": "Click a style to add it to the timeline at the playhead",
       "soonTitle": "Coming soon",
       "soonDesc": "This category is planned for a future update"
@@ -1632,6 +1633,7 @@
       "inputs": "Input schema",
       "inputsHint": "What a user must supply. Ids double as prompt variables in prompt blocks.",
       "addInput": "Add input",
+      "removeInput": "Remove input",
       "inputsEmpty": "No inputs — add at least one so the template can be filled in.",
       "newInputLabel": "New input",
       "inputId": "id",
@@ -1641,6 +1643,7 @@
       "scenes": "Scenes",
       "scenesHint": "Shot-by-shot plan. Durations sum into the video length.",
       "addScene": "Add scene",
+      "removeScene": "Remove scene",
       "scenesEmpty": "No scenes — a template needs at least one.",
       "sceneId": "scene id",
       "sceneRole": "Role",
@@ -1652,6 +1655,7 @@
       "promptBlocks": "Prompt blocks",
       "promptBlocksHint": "Reusable prompt fragments whose placeholders are filled from the inputs.",
       "addPromptBlock": "Add block",
+      "removePromptBlock": "Remove prompt block",
       "promptBlocksEmpty": "No prompt blocks — prompts fall back to the scene's visual intent.",
       "blockId": "block id",
       "blockContent": "Prompt text with variables, e.g. productName",
@@ -1982,6 +1986,7 @@
       "hubSignIn": "Sign in to TM Hub to see your connected models.",
       "hubUnavailable": "Could not reach TM Hub — check it is running.",
       "empty": "No connected model yet. Connect a provider in the AI panel (AutoCut step 2).",
+      "emptyAction": "Open connections",
       "hint": "Only models already connected on TM Hub are listed. Test sends a real call."
     },
     "voice": {
@@ -2786,6 +2791,13 @@
   },
   "home": {
     "title": "Home",
+    "description": "Your video editing and AI production workspace",
+    "cards": {
+      "tmcut": "Projects, editor, AutoCut and AI tools in one workspace",
+      "connections": "Connect the AI providers and services the studio can use",
+      "aiKeys": "Keep provider keys encrypted for studio workflows"
+    },
+    "open": "Open",
     "notifications": "Notifications",
     "newMail": "New mail",
     "newCustomer": "New customer"
@@ -3719,6 +3731,8 @@
     "details_placeholder": "Tell us more details...",
     "email": "Contact Email",
     "screenshot": "Attach Screenshot (Optional)",
+    "uploadScreenshot": "Upload screenshot",
+    "removeScreenshot": "Remove screenshot",
     "submit": "Submit Feedback",
     "success_title": "Feedback Submitted",
     "success_desc": "Thank you! We received your feedback.",

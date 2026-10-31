@@ -339,6 +339,7 @@ function runTest() {
                 variant="ghost"
                 icon="i-lucide-ellipsis-vertical"
                 size="xs"
+                :aria-label="t('common.more')"
               />
             </UDropdownMenu>
           </div>
@@ -575,6 +576,7 @@ function runTest() {
                 variant="ghost"
                 icon="i-lucide-x"
                 size="xs"
+                :aria-label="t('tmcut.videoTemplates.removeInput')"
                 @click="removeInput(field.id)"
               />
             </div>
@@ -657,6 +659,7 @@ function runTest() {
                   variant="ghost"
                   icon="i-lucide-trash-2"
                   size="xs"
+                  :aria-label="t('tmcut.videoTemplates.removeScene')"
                   @click="removeScene(scene.id)"
                 />
               </div>
@@ -742,6 +745,7 @@ function runTest() {
                 variant="ghost"
                 icon="i-lucide-trash-2"
                 size="xs"
+                :aria-label="t('tmcut.videoTemplates.removePromptBlock')"
                 class="ml-auto"
                 @click="removePromptBlock(block.id)"
               />

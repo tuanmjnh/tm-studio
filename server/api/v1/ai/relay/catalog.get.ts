@@ -1,3 +1,4 @@
+import { ofetch } from 'ofetch'
 import { relayUpstreamError } from '../../../../utils/aiRelay'
 
 /**
@@ -24,7 +25,7 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    return await $fetch(`${hubUrl}/api/v1/apps/${hubAppId}/ai/relay/catalog`, {
+    return await ofetch(`${hubUrl}/api/v1/apps/${hubAppId}/ai/relay/catalog`, {
       headers: { 'X-App-Id': hubAppId, 'X-App-Secret': hubAppSecret }
     })
   } catch (err: unknown) {

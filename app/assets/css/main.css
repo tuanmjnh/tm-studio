@@ -67,3 +67,22 @@
   from { transform: translateY(0); }
   to { transform: translateY(100%); }
 }
+
+/* Motion budget: decorative motion is opt-in by user preference. Spinners stay
+   because they communicate an in-flight operation; everything else settles to
+   a static end state for prefers-reduced-motion users. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .animate-spin {
+    animation-duration: 1s !important;
+    animation-iteration-count: infinite !important;
+  }
+}

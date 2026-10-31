@@ -786,6 +786,7 @@ function previewResultDirectly() {
                 size="xs"
                 color="neutral"
                 variant="ghost"
+                :aria-label="t('common.close')"
                 @click="open = false"
               />
             </div>

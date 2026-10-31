@@ -196,6 +196,7 @@ function durationLabel(item: StockItem): string {
       <UButton
         size="xs"
         icon="i-lucide-search"
+        :aria-label="t('common.search')"
         :loading="loading"
         :disabled="needsKey || !query.trim()"
         @click="onSearch"

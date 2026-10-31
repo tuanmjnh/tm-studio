@@ -140,6 +140,7 @@ async function onSubmit(event: FormSubmitEvent<Record<string, unknown>>) {
                 variant="ghost"
                 size="sm"
                 icon="i-lucide-upload"
+                :aria-label="t('feedback.uploadScreenshot')"
                 :loading="uploadingFile"
                 class="relative overflow-hidden cursor-pointer"
               >
@@ -173,6 +174,7 @@ async function onSubmit(event: FormSubmitEvent<Record<string, unknown>>) {
             size="xs"
             color="error"
             variant="solid"
+            :aria-label="t('feedback.removeScreenshot')"
             class="absolute top-2 right-2 rounded-full"
             @click="state.screenshot = ''"
           />

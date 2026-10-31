@@ -163,6 +163,7 @@ defineShortcuts({
             color="neutral"
             variant="ghost"
             size="xs"
+            :aria-label="t('inbox.clearSearch')"
             @click="emit('clearSearch')"
           />
           <UButton
@@ -171,6 +172,7 @@ defineShortcuts({
             color="neutral"
             variant="ghost"
             size="xs"
+            :aria-label="t('common.search')"
             @click="emit('search')"
           />
         </template>
@@ -220,6 +222,7 @@ defineShortcuts({
             color="neutral"
             variant="ghost"
             size="xs"
+            :aria-label="t('inbox.batchMarkRead')"
             @click="emit('batchMarkRead', [...selectedIds])"
           />
         </UTooltip>
@@ -229,6 +232,7 @@ defineShortcuts({
             color="neutral"
             variant="ghost"
             size="xs"
+            :aria-label="t('inbox.batchMarkUnread')"
             @click="emit('batchMarkUnread', [...selectedIds])"
           />
         </UTooltip>
@@ -238,6 +242,7 @@ defineShortcuts({
             color="neutral"
             variant="ghost"
             size="xs"
+            :aria-label="t('inbox.batchStar')"
             @click="emit('batchStar', [...selectedIds])"
           />
         </UTooltip>
@@ -247,6 +252,7 @@ defineShortcuts({
             color="error"
             variant="ghost"
             size="xs"
+            :aria-label="t('inbox.batchTrash')"
             @click="emit('batchTrash', [...selectedIds])"
           />
         </UTooltip>
@@ -255,6 +261,7 @@ defineShortcuts({
           color="neutral"
           variant="ghost"
           size="xs"
+          :aria-label="t('inbox.deselectAll')"
           class="ms-auto"
           @click="selectedIds = []"
         />
@@ -288,6 +295,7 @@ defineShortcuts({
             color="neutral"
             variant="ghost"
             size="xs"
+            :aria-label="t('common.refresh')"
             :loading="loading"
             @click="emit('refresh')"
           />
@@ -393,6 +401,7 @@ defineShortcuts({
           <UTooltip :text="mail.unread ? t('inbox.markRead') : t('inbox.markUnread')">
             <UButton
               :icon="mail.unread ? 'i-lucide-mail-open' : 'i-lucide-mail'"
+              :aria-label="mail.unread ? t('inbox.markRead') : t('inbox.markUnread')"
               color="neutral"
               variant="ghost"
               size="xs"
@@ -405,6 +414,7 @@ defineShortcuts({
               color="error"
               variant="ghost"
               size="xs"
+              :aria-label="t('inbox.batchTrash')"
               @click="emit('trash', mail)"
             />
           </UTooltip>

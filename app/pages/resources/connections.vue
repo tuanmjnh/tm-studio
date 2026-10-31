@@ -386,6 +386,7 @@ useHead({ title: t('connections.title') })
           icon="i-lucide-refresh-cw"
           variant="soft"
           size="sm"
+          :aria-label="t('common.refresh')"
           :loading="loading"
           @click="refresh"
         />
@@ -664,6 +665,7 @@ useHead({ title: t('connections.title') })
                 color="neutral"
                 size="xs"
                 icon="i-lucide-arrow-left"
+                :aria-label="t('common.back')"
                 @click="backToCategory"
               />
               <span class="text-xs font-semibold text-highlighted truncate">{{ categoryLabel(addCategory) }}</span>
@@ -724,6 +726,7 @@ useHead({ title: t('connections.title') })
               color="neutral"
               size="xs"
               icon="i-lucide-arrow-left"
+              :aria-label="t('common.back')"
               @click="backToProvider"
             />
             <div class="flex items-center gap-2 min-w-0">

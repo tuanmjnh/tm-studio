@@ -141,6 +141,7 @@ useHead({ title })
           variant="soft"
           color="neutral"
           size="sm"
+          :aria-label="t('common.refresh')"
           :loading="isLoading"
           @click="fetchNotify()"
         />

@@ -2,6 +2,8 @@
 import { useVModel, useInfiniteScroll } from '@vueuse/core'
 import Sortable from 'sortablejs'
 
+const { t } = useI18n()
+
 /**
  * GridList Component
  * A hybrid list/table view that renders items as rows/cards but maintains column alignment.
@@ -373,6 +375,7 @@ const actionsClass = computed(() => {
                         variant="ghost"
                         icon="i-lucide-ellipsis-vertical"
                         size="sm"
+                        :aria-label="t('common.more')"
                       />
                     </UDropdownMenu>
                   </div>
@@ -429,6 +432,7 @@ const actionsClass = computed(() => {
                         color="neutral"
                         variant="ghost"
                         size="xs"
+                        :aria-label="t('common.more')"
                       />
                     </UDropdownMenu>
                   </slot>
@@ -447,6 +451,7 @@ const actionsClass = computed(() => {
                       :key="idx"
                       :color="action.color || 'primary'"
                       :icon="action.icon"
+                      :aria-label="action.label || t('common.more')"
                       variant="solid"
                       square
                       class="h-full rounded-none"

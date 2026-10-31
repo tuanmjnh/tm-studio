@@ -218,6 +218,7 @@
     "project": "Dự án",
     "preview": "Xem trước",
     "timeline": "Dòng thời gian",
+    "clearSelection": "Bỏ chọn",
     "inspector": "Thuộc tính (Inspector)",
     "addVideo": "Thêm video",
     "addText": "Thêm văn bản",
@@ -391,7 +392,7 @@
       "transitions": "Chuyển tiếp",
       "filters": "Bộ lọc",
       "assets": "Kho tài nguyên",
-      "stock": "Kho tài nguyên",
+      "stock": "Stock miễn phí",
       "textHint": "Nhấp một kiểu để thêm vào timeline tại vị trí playhead",
       "soonTitle": "Sắp ra mắt",
       "soonDesc": "Danh mục này dự kiến ở bản cập nhật sau"
@@ -1632,6 +1633,7 @@
       "inputs": "Schema đầu vào",
       "inputsHint": "Những gì người dùng phải điền. Id dùng làm biến trong prompt block.",
       "addInput": "Thêm đầu vào",
+      "removeInput": "Xóa đầu vào",
       "inputsEmpty": "Chưa có đầu vào — thêm ít nhất một để điền nội dung.",
       "newInputLabel": "Đầu vào mới",
       "inputId": "id",
@@ -1641,6 +1643,7 @@
       "scenes": "Phân cảnh",
       "scenesHint": "Kế hoạch từng shot. Tổng thời lượng các cảnh là độ dài video.",
       "addScene": "Thêm cảnh",
+      "removeScene": "Xóa cảnh",
       "scenesEmpty": "Chưa có cảnh — mỗi template cần ít nhất một cảnh.",
       "sceneId": "id cảnh",
       "sceneRole": "Vai trò",
@@ -1652,6 +1655,7 @@
       "promptBlocks": "Prompt block",
       "promptBlocksHint": "Mảnh prompt tái sử dụng, placeholder được điền từ input.",
       "addPromptBlock": "Thêm block",
+      "removePromptBlock": "Xóa khối prompt",
       "promptBlocksEmpty": "Chưa có prompt block — prompt sẽ dùng trực tiếp ý đồ của cảnh.",
       "blockId": "id block",
       "blockContent": "Nội dung prompt, ví dụ: productName",
@@ -1982,6 +1986,7 @@
       "hubSignIn": "Đăng nhập TM Hub để xem các model đã kết nối.",
       "hubUnavailable": "Không kết nối được TM Hub — kiểm tra hub đang chạy.",
       "empty": "Chưa có model nào được kết nối. Hãy kết nối provider ở panel AI (AutoCut bước 2).",
+      "emptyAction": "Mở trang kết nối",
       "hint": "Chỉ hiển thị các model đã kết nối trên TM Hub. Nút Kiểm tra gọi thật để xác nhận."
     },
     "voice": {
@@ -2786,6 +2791,13 @@
   },
   "home": {
     "title": "Trang chủ",
+    "description": "Không gian biên tập video và sản xuất bằng AI của bạn",
+    "cards": {
+      "tmcut": "Dự án, editor, AutoCut và công cụ AI trong một workspace",
+      "connections": "Kết nối nhà cung cấp AI và dịch vụ cho studio sử dụng",
+      "aiKeys": "Lưu khóa nhà cung cấp dạng mã hóa cho quy trình của studio"
+    },
+    "open": "Mở",
     "notifications": "Thông báo",
     "newMail": "Thư mới",
     "newCustomer": "Khách hàng mới"
@@ -3719,6 +3731,8 @@
     "details_placeholder": "Nhập chi tiết ý kiến của bạn ở đây...",
     "email": "Email liên hệ",
     "screenshot": "Đính kèm ảnh chụp màn hình (Tùy chọn)",
+    "uploadScreenshot": "Tải ảnh chụp lên",
+    "removeScreenshot": "Xóa ảnh chụp",
     "submit": "Gửi phản hồi",
     "success_title": "Đã gửi phản hồi",
     "success_desc": "Cảm ơn bạn! Chúng tôi đã nhận được ý kiến đóng góp.",

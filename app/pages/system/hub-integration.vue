@@ -288,6 +288,7 @@ mobileBar.registerActions(computed(() => [
                 variant="ghost"
                 color="neutral"
                 size="xs"
+                :aria-label="copiedKey === 'useHub' ? t('common.copied') : t('common.copy')"
                 @click="copyCode('useHub', codeUseHubSnippet)"
               />
             </div>

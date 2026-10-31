@@ -114,6 +114,7 @@ mobileBar.registerInfo(computed(() => ({
           icon="i-lucide-refresh-cw"
           variant="ghost"
           size="sm"
+          :aria-label="t('common.refresh')"
           :loading="reloading"
           @click="fetchDocsContent"
         />
@@ -239,8 +240,9 @@ mobileBar.registerInfo(computed(() => ({
               <div class="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-1">
                 <span class="text-[10px] font-semibold uppercase tracking-wider text-dimmed">Config / Shell</span>
                 <UButton :icon="copiedKey === 'step_' + idx ? 'i-lucide-check' : 'i-lucide-copy'" color="neutral"
-                  variant="ghost" size="xs" class="text-dimmed hover:text-white"
-                  @click="copyCode('step_' + idx, step.code)" />
+                         variant="ghost" size="xs" class="text-dimmed hover:text-white"
+                         :aria-label="copiedKey === 'step_' + idx ? t('common.copied') : t('common.copy')"
+                         @click="copyCode('step_' + idx, step.code)" />
               </div>
               <pre class="p-3 text-xs overflow-x-auto font-mono"><code>{{ step.code }}</code></pre>
             </div>

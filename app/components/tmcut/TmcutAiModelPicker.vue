@@ -217,7 +217,11 @@ async function handleTest() {
   <div class="rounded-lg border border-default p-2.5 space-y-2">
     <div class="flex items-center justify-between gap-2">
       <span class="flex items-center gap-1.5 text-[11px] font-semibold text-toned uppercase tracking-wide">
-        <UIcon name="i-lucide-sparkles" class="w-3.5 h-3.5 text-dimmed" />
+        <UIcon
+          name="i-lucide-sparkles"
+          class="w-3.5 h-3.5"
+          :class="current ? 'text-studio-mint' : 'text-dimmed'"
+        />
         {{ t('tmcut.aiModelPicker.label') }}
       </span>
       <UBadge
@@ -227,6 +231,7 @@ async function handleTest() {
         size="xs"
         class="max-w-[60%] truncate"
       >
+        <span class="mr-1 inline-block size-1.5 rounded-full bg-studio-mint" aria-hidden="true" />
         {{ current }}
       </UBadge>
     </div>
@@ -268,6 +273,14 @@ async function handleTest() {
     </p>
     <p v-else-if="choices.length === 0 && !loading" class="text-[10px] text-amber-600 dark:text-amber-400">
       {{ t('tmcut.aiModelPicker.empty') }}
+      <NuxtLink
+        to="/resources/connections"
+        target="_blank"
+        rel="noopener"
+        class="underline underline-offset-2 hover:text-amber-500"
+      >
+        {{ t('tmcut.aiModelPicker.emptyAction') }} →
+      </NuxtLink>
     </p>
     <p v-else class="text-[10px] text-dimmed">
       {{ t('tmcut.aiModelPicker.hint', { surface: surfaceLabel }) }}
@@ -276,7 +289,7 @@ async function handleTest() {
     <p
       v-if="testResult"
       class="text-[10px]"
-      :class="testResult.state === 'ok' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'"
+      :class="testResult.state === 'ok' ? 'text-studio-mint' : 'text-red-600 dark:text-red-400'"
     >
       {{ testResult.detail }}
     </p>

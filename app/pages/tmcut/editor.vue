@@ -2343,6 +2343,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
                     variant="soft"
                     color="error"
                     icon="i-lucide-trash"
+                    :aria-label="t('tmcut.snapshot.delete')"
                     @click="handleDeleteSnapshot(snapshot.ts)"
                   />
                 </div>

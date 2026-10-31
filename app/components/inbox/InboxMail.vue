@@ -66,6 +66,7 @@ function formatDate(dateStr: string | null) {
         color="neutral"
         variant="ghost"
         size="sm"
+        :aria-label="t('common.back')"
         class="lg:hidden -ms-1.5"
         @click="emit('back')"
       />
@@ -90,6 +91,7 @@ function formatDate(dateStr: string | null) {
             :icon="firstMessage.starred ? 'i-lucide-star' : 'i-lucide-star'"
             :color="firstMessage.starred ? 'warning' : 'neutral'"
             :class="firstMessage.starred ? 'text-amber-500 fill-amber-500' : ''"
+            :aria-label="firstMessage.starred ? t('inbox.unstar') : t('inbox.star')"
             variant="ghost"
             size="xs"
             @click="emit('toggleStar', firstMessage)"
@@ -99,6 +101,7 @@ function formatDate(dateStr: string | null) {
         <UTooltip :text="firstMessage.unread ? t('inbox.markRead') : t('inbox.markUnread')">
           <UButton
             :icon="firstMessage.unread ? 'i-lucide-mail-open' : 'i-lucide-mail'"
+            :aria-label="firstMessage.unread ? t('inbox.markRead') : t('inbox.markUnread')"
             color="neutral"
             variant="ghost"
             size="xs"
@@ -112,6 +115,7 @@ function formatDate(dateStr: string | null) {
             color="error"
             variant="ghost"
             size="xs"
+            :aria-label="t('inbox.batchTrash')"
             @click="emit('trash', firstMessage)"
           />
         </UTooltip>
@@ -170,6 +174,7 @@ function formatDate(dateStr: string | null) {
                 icon="i-lucide-star"
                 :color="msg.starred ? 'warning' : 'neutral'"
                 :class="msg.starred ? 'text-amber-500 fill-amber-500' : ''"
+                :aria-label="msg.starred ? t('inbox.unstar') : t('inbox.star')"
                 variant="ghost"
                 size="xs"
                 @click="emit('toggleStar', msg)"

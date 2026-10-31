@@ -1,6 +1,8 @@
 <script setup lang="ts">
 defineOptions({ inheritAttrs: false })
 
+const { t } = useI18n()
+
 const props = withDefaults(defineProps<{
   modelValue?: boolean
   open?: boolean
@@ -111,6 +113,7 @@ const uiConfig = computed(() => {
           color="neutral"
           variant="ghost"
           icon="i-lucide-arrow-left"
+          :aria-label="t('common.back')"
           class="inline-flex sm:hidden"
           :disabled="isDisabled"
           :loading="isLoading"

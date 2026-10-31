@@ -1,4 +1,5 @@
 import { readBody } from 'h3'
+import { ofetch } from 'ofetch'
 import { relayUpstreamError } from '../../../../utils/aiRelay'
 
 /**
@@ -60,7 +61,7 @@ export default defineEventHandler(async (event) => {
   if (typeof body.temperature === 'number' && body.temperature >= 0 && body.temperature <= 2) payload.temperature = body.temperature
 
   try {
-    return await $fetch(`${hubUrl}/api/v1/apps/${hubAppId}/ai/relay/chat`, {
+    return await ofetch(`${hubUrl}/api/v1/apps/${hubAppId}/ai/relay/chat`, {
       method: 'POST',
       headers: { 'X-App-Id': hubAppId, 'X-App-Secret': hubAppSecret },
       body: payload

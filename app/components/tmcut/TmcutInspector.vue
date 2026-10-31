@@ -829,6 +829,7 @@ const saveStateLabel = computed(() => {
         size="xs"
         variant="soft"
         color="neutral"
+        :aria-label="t('tmcut.clearSelection')"
         @click="selectClip(null)"
       />
     </div>

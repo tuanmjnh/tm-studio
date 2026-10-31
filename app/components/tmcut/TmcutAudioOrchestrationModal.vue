@@ -77,6 +77,7 @@ function handleOrchestrate() {
             variant="ghost"
             icon="i-lucide-x"
             size="sm"
+            :aria-label="t('common.close')"
             @click="open = false"
           />
         </div>
