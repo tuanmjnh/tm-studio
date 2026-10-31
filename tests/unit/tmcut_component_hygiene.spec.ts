@@ -174,7 +174,7 @@ describe('timeline audio controls expose localized accessible names', () => {
 
 describe('preview stage keeps the still-image layer off video sources', () => {
   const player = read('app/components/tmcut/TmcutPreviewPlayer.vue')
-  const img = player.match(/<img\n[\s\S]*?\n\s*>/)?.[0] ?? ''
+  const img = player.match(/<img\r?\n[\s\S]*?\r?\n\s*>/)?.[0] ?? ''
 
   it('binds src only while the active clip is an image', () => {
     assert.ok(img.includes(':src="isCurrentClipImage ? currentMediaSrc : undefined"'),

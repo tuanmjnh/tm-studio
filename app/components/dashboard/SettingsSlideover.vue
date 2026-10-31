@@ -44,16 +44,6 @@ function navigateAndClose(to: string) {
   >
     <template #body>
       <div class="space-y-6">
-        <!-- Editor Type -->
-        <div class="space-y-3">
-          <div class="flex items-center justify-between">
-            <div class="text-sm font-medium text-highlighted">
-              {{ $t('settings.editorType') }}
-            </div>
-            <LazySharedEditorTypeSwitch />
-          </div>
-        </div>
-
         <!-- Language -->
         <div class="space-y-3">
           <div class="text-sm font-medium text-highlighted">
