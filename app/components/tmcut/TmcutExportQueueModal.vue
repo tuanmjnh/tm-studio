@@ -78,6 +78,7 @@ function modeIcon(mode: TmcutExportJob['mode']): string {
 <template>
   <UModal
     v-model:open="open"
+    :title="t('tmcut.queue.title')"
     :ui="{ content: 'w-[calc(100%-2rem)] max-w-3xl' }"
   >
     <template #content>

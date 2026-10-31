@@ -130,6 +130,7 @@ function usePrompt(prompt: string) {
 <template>
   <UModal
     v-model:open="open"
+    :title="t('tmcut.aiTemplates.title')"
     :ui="{ content: 'max-w-4xl' }"
   >
     <template #content>

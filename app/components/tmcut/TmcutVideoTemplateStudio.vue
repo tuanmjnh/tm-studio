@@ -392,7 +392,7 @@ function runTest() {
       </div>
 
       <!-- Delete confirmation -->
-      <UModal v-model:open="deleteModalOpen" :ui="{ content: 'max-w-md' }">
+      <UModal v-model:open="deleteModalOpen" :title="t('tmcut.videoTemplates.deleteTitle')" :ui="{ content: 'max-w-md' }">
         <template #content>
           <div class="p-6">
             <h3 class="text-base font-semibold text-highlighted dark:text-white">

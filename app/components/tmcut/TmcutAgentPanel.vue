@@ -244,6 +244,7 @@ function closeModal() {
 <template>
   <UModal
     v-model:open="open"
+    :title="t('tmcut.agent.title')"
     :ui="{ content: 'max-w-4xl' }"
   >
     <template #content>

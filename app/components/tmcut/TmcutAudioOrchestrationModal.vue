@@ -55,7 +55,7 @@ function handleOrchestrate() {
 </script>
 
 <template>
-  <UModal v-model:open="open" :ui="{ content: 'max-w-2xl' }">
+  <UModal v-model:open="open" :title="t('tmcut.audioOrchestration.title')" :ui="{ content: 'max-w-2xl' }">
     <template #content>
       <div class="p-6 flex flex-col gap-4">
         <div class="flex items-center justify-between">

@@ -750,6 +750,7 @@ function previewResultDirectly() {
 <template>
   <UModal
     v-model:open="open"
+    :title="t('tmcut.export.title')"
     :ui="{ content: 'w-[calc(100%-2rem)] max-w-5xl' }"
   >
     <template #content>

@@ -150,6 +150,7 @@ function closeModal() {
 <template>
   <UModal
     v-model:open="open"
+    :title="t('tmcut.aiScript.title')"
     :ui="{ content: 'max-w-5xl' }"
   >
     <template #content>

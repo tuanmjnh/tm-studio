@@ -237,7 +237,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <UModal v-model:open="open" :ui="{ content: 'w-[calc(100%-2rem)] max-w-4xl' }">
+  <UModal v-model:open="open" :title="t('tmcut.hotkeys.title')" :ui="{ content: 'w-[calc(100%-2rem)] max-w-4xl' }">
     <template #content>
       <div class="flex flex-col max-h-[85vh] overflow-hidden rounded-xl bg-muted border border-default shadow-2xl">
         <!-- HEADER: title + version badge + close -->
