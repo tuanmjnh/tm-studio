@@ -35,11 +35,11 @@ function getAspectRatioClass(aspectRatio: string): string {
 </script>
 
 <template>
-  <div class="group relative bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-800 rounded-2xl overflow-hidden hover:border-primary-300 dark:hover:border-primary-700 hover:shadow-xl transition-all duration-300 flex flex-col">
+  <div class="group relative bg-white/80 dark:bg-default/80 backdrop-blur-sm border border-default rounded-2xl overflow-hidden hover:border-primary-300 dark:hover:border-primary-700 hover:shadow-xl transition-all duration-300 flex flex-col">
     <!-- Visual Preview -->
-    <div class="w-full h-40 bg-neutral-950 flex items-center justify-center relative overflow-hidden p-4 border-b border-neutral-100 dark:border-neutral-800">
+    <div class="w-full h-40 bg-neutral-950 flex items-center justify-center relative overflow-hidden p-4 border-b border-default">
       <div
-        class="border-2 border-dashed border-neutral-700 rounded-lg flex items-center justify-center bg-neutral-900/80"
+        class="border-2 border-dashed border-accented rounded-lg flex items-center justify-center bg-neutral-900/80"
         :class="getAspectRatioClass(template.aspectRatio)"
       >
         <UIcon :name="template.thumbnail || 'i-lucide-layout-template'" class="w-8 h-8 text-primary-500/80" />
@@ -87,7 +87,7 @@ function getAspectRatioClass(aspectRatio: string): string {
     <div class="p-4 flex-1 flex flex-col justify-between">
       <div>
         <div class="flex items-start justify-between gap-2 mb-2">
-          <h3 class="font-semibold text-base text-neutral-900 dark:text-neutral-100 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors truncate">
+          <h3 class="font-semibold text-base text-highlighted group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors truncate">
             {{ template.name }}
           </h3>
           <div v-if="!template.isBuiltin" class="flex items-center gap-1 shrink-0">
@@ -117,29 +117,29 @@ function getAspectRatioClass(aspectRatio: string): string {
           <span class="truncate">{{ industryLabel(template.industry) }}</span>
         </div>
 
-        <p class="text-xs text-neutral-500 line-clamp-2 mb-3">
+        <p class="text-xs text-muted line-clamp-2 mb-3">
           {{ template.description || $t('tmcut.templateLibrary.subtitle') }}
         </p>
 
         <!-- Placeholders Stats -->
-        <div class="flex items-center gap-3 text-xs text-neutral-500 border-t border-neutral-100 dark:border-neutral-800 pt-3">
+        <div class="flex items-center gap-3 text-xs text-muted border-t border-default pt-3">
           <div class="flex items-center gap-1">
-            <UIcon name="i-lucide-video" class="w-3.5 h-3.5 text-neutral-400" />
+            <UIcon name="i-lucide-video" class="w-3.5 h-3.5 text-dimmed" />
             <span>{{ $t('tmcut.templateLibrary.videoPlaceholders', { n: getMediaSlotsCount(template) }) }}</span>
           </div>
           <div class="flex items-center gap-1">
-            <UIcon name="i-lucide-type" class="w-3.5 h-3.5 text-neutral-400" />
+            <UIcon name="i-lucide-type" class="w-3.5 h-3.5 text-dimmed" />
             <span>{{ $t('tmcut.templateLibrary.textPlaceholders', { n: getTextSlotsCount(template) }) }}</span>
           </div>
           <div class="flex items-center gap-1 ml-auto">
-            <UIcon name="i-lucide-layers" class="w-3.5 h-3.5 text-neutral-400" />
+            <UIcon name="i-lucide-layers" class="w-3.5 h-3.5 text-dimmed" />
             <span>{{ $t('tmcut.templateLibrary.tracksCount', { n: template.tracks?.length || 1 }) }}</span>
           </div>
         </div>
       </div>
 
       <!-- Action Buttons -->
-      <div class="mt-4 pt-3 border-t border-neutral-100 dark:border-neutral-800 flex items-center justify-between gap-2">
+      <div class="mt-4 pt-3 border-t border-default flex items-center justify-between gap-2">
         <TmcutButton
           size="xs"
           variant="ghost"

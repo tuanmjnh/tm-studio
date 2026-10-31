@@ -116,7 +116,7 @@ function durationLabel(item: StockItem): string {
         class="shrink-0 px-2 py-1 rounded-md text-[11px] font-medium border transition-colors cursor-pointer"
         :class="provider === entry.id
           ? 'border-primary bg-primary/15 text-primary'
-          : 'border-neutral-300 dark:border-neutral-800 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200'"
+          : 'border-default text-muted hover:text-toned'"
         :title="entry.licenseNote"
         @click="selectProvider(entry.id)"
       >
@@ -134,7 +134,7 @@ function durationLabel(item: StockItem): string {
         class="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium border transition-colors cursor-pointer"
         :class="kind === option.value
           ? 'border-primary bg-primary/10 text-primary'
-          : 'border-neutral-300 dark:border-neutral-800 text-neutral-500 dark:text-neutral-400'"
+          : 'border-default text-muted'"
         @click="selectKind(option.value as StockKind)"
       >
         <UIcon :name="option.icon" class="size-3" />
@@ -143,7 +143,7 @@ function durationLabel(item: StockItem): string {
     </div>
 
     <!-- Licence guarantee -->
-    <p class="text-[10px] leading-snug text-neutral-500 dark:text-neutral-400 flex items-start gap-1">
+    <p class="text-[10px] leading-snug text-muted flex items-start gap-1">
       <UIcon name="i-lucide-scale" class="size-3 shrink-0 mt-0.5 text-emerald-500" />
       <span>{{ currentProvider?.licenseNote }}</span>
     </p>
@@ -167,7 +167,7 @@ function durationLabel(item: StockItem): string {
           @click="saveKey"
         />
       </div>
-      <div class="flex items-center justify-between text-[10px] text-neutral-500">
+      <div class="flex items-center justify-between text-[10px] text-muted">
         <NuxtLink :to="currentProvider?.keyUrl" target="_blank" class="underline hover:text-primary">
           {{ t('tmcut.stock.getKey', { provider: currentProvider?.label }) }}
         </NuxtLink>
@@ -217,7 +217,7 @@ function durationLabel(item: StockItem): string {
       <figure
         v-for="item in items"
         :key="item.id"
-        class="rounded-lg border border-neutral-300 dark:border-neutral-800 bg-neutral-100/60 dark:bg-neutral-950/60 overflow-hidden"
+        class="rounded-lg border border-default bg-muted/60 overflow-hidden"
       >
         <div class="relative aspect-video bg-neutral-900">
           <img
@@ -235,10 +235,10 @@ function durationLabel(item: StockItem): string {
           </span>
         </div>
         <figcaption class="p-1.5 space-y-1">
-          <p class="text-[10px] font-medium text-neutral-700 dark:text-neutral-200 truncate" :title="item.title">
+          <p class="text-[10px] font-medium text-toned truncate" :title="item.title">
             {{ item.title }}
           </p>
-          <p class="text-[9px] text-neutral-500 truncate">
+          <p class="text-[9px] text-muted truncate">
             {{ item.author }}
           </p>
           <div class="flex items-center gap-1">
@@ -275,7 +275,7 @@ function durationLabel(item: StockItem): string {
             v-if="item.pageUrl"
             :to="item.pageUrl"
             target="_blank"
-            class="block text-[9px] text-neutral-500 underline truncate hover:text-primary"
+            class="block text-[9px] text-muted underline truncate hover:text-primary"
           >
             {{ t('tmcut.stock.source') }}
           </NuxtLink>
@@ -283,7 +283,7 @@ function durationLabel(item: StockItem): string {
       </figure>
     </div>
 
-    <div v-if="!items.length && !loading && !error && !needsKey" class="py-6 text-center text-[11px] text-neutral-500 border border-dashed border-neutral-300 dark:border-neutral-800 rounded-lg">
+    <div v-if="!items.length && !loading && !error && !needsKey" class="py-6 text-center text-[11px] text-muted border border-dashed border-default rounded-lg">
       {{ t('tmcut.stock.empty') }}
     </div>
 

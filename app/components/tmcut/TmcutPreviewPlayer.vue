@@ -1424,19 +1424,19 @@ onUnmounted(() => {
          buttons only. Pinned to the top of the viewport so resizing the
          monitor never pushes it off-screen. -->
     <div
-      class="w-full shrink-0 sticky top-0 z-30 bg-neutral-100/95 dark:bg-neutral-900/95 backdrop-blur-sm flex flex-col gap-1.5 text-[11px] border-b border-neutral-300 dark:border-neutral-800"
+      class="w-full shrink-0 sticky top-0 z-30 bg-muted/95 backdrop-blur-sm flex flex-col gap-1.5 text-[11px] border-b border-default"
       data-tmcut-hud
     >
       <!-- Row 1: labels -->
       <div
-        class="flex items-center gap-2 min-w-0 text-neutral-500 dark:text-neutral-400 flex-wrap px-3 pt-1.5"
+        class="flex items-center gap-2 min-w-0 text-muted flex-wrap px-3 pt-1.5"
         data-hud-row="labels"
       >
         <span
           class="w-1.5 h-1.5 rounded-full shrink-0"
           :class="isPlaying ? 'bg-primary animate-pulse' : 'bg-emerald-400'"
         />
-        <span class="font-medium text-neutral-600 dark:text-neutral-300 truncate">
+        <span class="font-medium text-toned truncate">
           {{ t('tmcut.player.hudCanvas') }}
         </span>
         <span v-if="currentProject?.canvas" class="font-mono shrink-0">
@@ -1479,7 +1479,7 @@ onUnmounted(() => {
         class="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-3 pb-1.5"
         data-hud-row="actions"
       >
-        <span class="inline-flex min-w-0 max-w-[45%] items-center gap-1.5 text-neutral-500 dark:text-neutral-400">
+        <span class="inline-flex min-w-0 max-w-[45%] items-center gap-1.5 text-muted">
           <UIcon name="i-lucide-film" class="size-3 shrink-0" />
           <span class="truncate">
             {{ activeVideoClip?.clip?.name ? t('tmcut.player.hudActiveClip', { name: activeVideoClip.clip.name })
@@ -1596,7 +1596,7 @@ onUnmounted(() => {
     <div ref="stageRef" class="flex-1 min-h-0 overflow-auto m-3 flex items-center justify-center">
       <div
         ref="monitorRef"
-        class="tmcut-monitor relative bg-black rounded-lg border border-neutral-300 dark:border-neutral-800 shadow-2xl overflow-hidden select-none"
+        class="tmcut-monitor relative bg-black rounded-lg border border-default shadow-2xl overflow-hidden select-none"
         :style="monitorBoxStyle"
         :title="isPlaying ? t('tmcut.player.pause') : t('tmcut.player.play')"
         @click="onCanvasClick"
@@ -1693,7 +1693,7 @@ onUnmounted(() => {
         <!-- Hidden-track badge (CapCut eye-off state) -->
         <div
           v-if="isTrackHidden && currentMediaSrc"
-          class="absolute inset-0 flex flex-col items-center justify-center gap-2 text-neutral-500 select-none"
+          class="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted select-none"
           data-canvas-hit
         >
           <UIcon name="i-lucide-eye-off" class="size-10 opacity-40" />
@@ -1761,13 +1761,13 @@ onUnmounted(() => {
         <!-- Empty / Standby Canvas Placeholder -->
         <div
           v-if="!currentMediaSrc"
-          class="absolute inset-0 flex flex-col items-center justify-center text-neutral-500 dark:text-neutral-600 gap-2 p-6 text-center"
+          class="absolute inset-0 flex flex-col items-center justify-center text-muted gap-2 p-6 text-center"
         >
           <UIcon name="i-lucide-clapperboard" class="size-12 opacity-30 text-primary" />
-          <span class="text-xs font-medium text-neutral-500">
+          <span class="text-xs font-medium text-muted">
             {{ t('tmcut.player.noVideoAtPlayhead', { time: formatTimecode(playhead, previewFps) }) }}
           </span>
-          <span class="text-[10px] text-neutral-500 dark:text-neutral-600 font-mono">
+          <span class="text-[10px] text-muted font-mono">
             {{ currentProject?.canvas?.width }} x {{ currentProject?.canvas?.height }}
           </span>
         </div>
@@ -1873,13 +1873,13 @@ onUnmounted(() => {
 
           <!-- Crop Mode Floating Controls Banner -->
           <div
-            class="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-neutral-100/95 dark:bg-neutral-900/95 border border-neutral-400/80 dark:border-neutral-700/80 shadow-2xl backdrop-blur-md select-none max-w-[95%] overflow-x-auto"
+            class="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted/95 border border-accented/80 shadow-2xl backdrop-blur-md select-none max-w-[95%] overflow-x-auto"
             @click.stop
           >
             <span class="text-[10px] font-semibold text-primary uppercase tracking-wider pl-1 shrink-0">
               {{ t('tmcut.crop.tool') }}
             </span>
-            <div class="w-px h-3.5 bg-neutral-300 dark:bg-neutral-700 mx-1 shrink-0" />
+            <div class="w-px h-3.5 bg-accented mx-1 shrink-0" />
             <UButton
               v-for="preset in cropRatioPresets"
               :key="preset.id"
@@ -1891,7 +1891,7 @@ onUnmounted(() => {
             >
               {{ preset.label }}
             </UButton>
-            <div class="w-px h-3.5 bg-neutral-300 dark:bg-neutral-700 mx-1 shrink-0" />
+            <div class="w-px h-3.5 bg-accented mx-1 shrink-0" />
             <UButton
               icon="i-lucide-rotate-ccw"
               size="xs"
@@ -1975,7 +1975,7 @@ onUnmounted(() => {
          sits on its own elevated surface instead of a 50% tint that vanished
          into the panel background in both themes. -->
     <div
-      class="w-full shrink-0 mt-3 border border-neutral-200 bg-white/80 px-3 py-2.5 shadow-sm backdrop-blur-sm dark:border-neutral-800 dark:bg-neutral-900/80"
+      class="w-full shrink-0 mt-3 border border-default bg-white/80 px-3 py-2.5 shadow-sm backdrop-blur-sm dark:border-default dark:bg-default/80"
     >
       <!-- Mini scrub bar: click/drag to seek -->
       <div class="flex items-center gap-3 select-none">
@@ -1991,18 +1991,18 @@ onUnmounted(() => {
           @pointerdown="onScrubPointerDown"
           @pointermove="onScrubPointerMove"
         >
-          <div ref="scrubTrackRef" class="absolute inset-x-0 h-1.5 rounded-full bg-neutral-200 dark:bg-neutral-700" />
+          <div ref="scrubTrackRef" class="absolute inset-x-0 h-1.5 rounded-full bg-accented" />
           <div
             class="absolute h-1.5 rounded-full bg-primary pointer-events-none"
             :style="{ width: scrubProgress + '%' }"
           />
           <div
-            class="absolute w-3.5 h-3.5 rounded-full bg-primary ring-2 ring-white dark:ring-neutral-900 shadow-md pointer-events-none"
+            class="absolute w-3.5 h-3.5 rounded-full bg-primary ring-2 ring-white dark:ring-default shadow-md pointer-events-none"
             :style="{ left: 'calc(' + scrubProgress + '% - 7px)' }"
           />
         </div>
         <span
-          class="font-mono text-[11px] text-neutral-500 dark:text-neutral-400 w-20 shrink-0 text-right tabular-nums"
+          class="font-mono text-[11px] text-muted w-20 shrink-0 text-right tabular-nums"
         >
           {{ formatTimecode(contentDuration, previewFps) }}
         </span>
@@ -2011,7 +2011,7 @@ onUnmounted(() => {
       <!-- Transport controls. `minmax(0, 1fr)` side tracks keep the play
            button dead-centre even when one cluster has a wider min-content. -->
       <div
-        class="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 mt-2.5 pt-2.5 border-t border-neutral-200/80 dark:border-neutral-800"
+        class="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 mt-2.5 pt-2.5 border-t border-default/80"
       >
         <!-- Left: Loop, In/Out marks, jumps -->
         <div class="flex items-center gap-1 min-w-0">
@@ -2044,7 +2044,7 @@ onUnmounted(() => {
           >
             OUT
           </UButton>
-          <div class="w-px h-4 shrink-0 bg-neutral-200 dark:bg-neutral-800 mx-0.5" />
+          <div class="w-px h-4 shrink-0 bg-accented mx-0.5" />
           <UButton
             icon="i-lucide-skip-back"
             size="xs"
@@ -2097,7 +2097,7 @@ onUnmounted(() => {
             :title="t('tmcut.player.jumpToEnd')"
             @click="seek(contentDuration)"
           />
-          <div class="w-px h-4 shrink-0 bg-neutral-200 dark:bg-neutral-800 mx-0.5" />
+          <div class="w-px h-4 shrink-0 bg-accented mx-0.5" />
           <UButton
             :icon="previewMuted || previewVolume === 0 ? 'i-lucide-volume-x' : 'i-lucide-volume-2'"
             size="xs"
@@ -2123,7 +2123,7 @@ onUnmounted(() => {
           <!-- dB readout (mock transport): gain 1.0 = 0 dB, the slider is
                a linear 0..1 gain so dB = 20·log10(v); silence shows -∞. -->
           <span
-            class="font-mono text-[10px] text-neutral-500 dark:text-neutral-400 w-11 text-right shrink-0 tabular-nums"
+            class="font-mono text-[10px] text-muted w-11 text-right shrink-0 tabular-nums"
           >
             {{ previewVolume <= 0 ? '-\u221E dB' : `${(20 * Math.log10(previewVolume)).toFixed(1)} dB` }} </span>
         </div>

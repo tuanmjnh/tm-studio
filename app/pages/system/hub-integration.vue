@@ -260,7 +260,7 @@ mobileBar.registerActions(computed(() => [
           <p class="text-xs text-muted leading-relaxed">
             {{ t('hub_integration.step1_desc') }} <code class="font-mono text-primary font-semibold">d:\Applications\tm-studio\.env</code>:
           </p>
-          <div class="overflow-hidden rounded-lg bg-neutral-900 text-neutral-100">
+          <div class="overflow-hidden rounded-lg bg-neutral-900 text-dimmed">
             <pre class="p-4 text-xs font-mono overflow-x-auto leading-relaxed"><code>{{ envSnippet }}</code></pre>
           </div>
         </div>
@@ -280,9 +280,9 @@ mobileBar.registerActions(computed(() => [
             {{ t('hub_integration.step2_desc') }} <code class="font-mono text-primary">useHub()</code>:
           </p>
 
-          <div class="overflow-hidden rounded-lg bg-neutral-900 text-neutral-100">
+          <div class="overflow-hidden rounded-lg bg-neutral-900 text-dimmed">
             <div class="flex items-center justify-between border-b border-white/10 px-4 py-1.5">
-              <span class="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">TypeScript / Vue Composable</span>
+              <span class="text-[10px] font-semibold uppercase tracking-wider text-dimmed">TypeScript / Vue Composable</span>
               <UButton
                 :icon="copiedKey === 'useHub' ? 'i-lucide-check' : 'i-lucide-copy'"
                 variant="ghost"
@@ -361,7 +361,7 @@ mobileBar.registerActions(computed(() => [
           <p class="text-xs text-muted leading-relaxed">
             {{ t('hub_integration.step3_desc') }}
           </p>
-          <div class="overflow-hidden rounded-lg bg-neutral-900 text-neutral-100">
+          <div class="overflow-hidden rounded-lg bg-neutral-900 text-dimmed">
             <pre class="p-4 text-xs font-mono overflow-x-auto leading-relaxed"><code>{{ codeNavMenuSnippet }}</code></pre>
           </div>
         </div>

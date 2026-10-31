@@ -168,11 +168,11 @@ const ticksPerSecond = TICKS_PER_SECOND
 <template>
   <div v-if="clip" class="space-y-2">
     <div class="flex items-center justify-between gap-2">
-      <span class="font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-[10px]">
+      <span class="font-semibold text-muted uppercase tracking-wider text-[10px]">
         {{ t('tmcut.motion.title') }}
       </span>
       <div class="flex items-center gap-1">
-        <span v-if="hasRows" class="text-[10px] font-mono text-neutral-500">
+        <span v-if="hasRows" class="text-[10px] font-mono text-muted">
           {{ rows.length }}
         </span>
         <UButton v-if="hasRows" icon="i-lucide-trash-2" size="xs" color="neutral" variant="ghost"
@@ -189,17 +189,17 @@ const ticksPerSecond = TICKS_PER_SECOND
       </UButton>
     </div>
 
-    <p v-if="!hasRows" class="text-[10px] text-neutral-500 leading-snug">
+    <p v-if="!hasRows" class="text-[10px] text-muted leading-snug">
       {{ t('tmcut.motion.empty') }}
     </p>
 
     <!-- One block per channel: time / value / curve / delete per row. -->
     <div v-else class="space-y-2">
       <div v-for="option in propOptions.filter(o => rows.some(r => r.prop === o.value))" :key="option.value"
-        class="space-y-1 p-2 rounded-lg bg-neutral-100/60 dark:bg-neutral-900/60 border border-neutral-300/80 dark:border-neutral-800/80">
+        class="space-y-1 p-2 rounded-lg bg-muted/60 border border-default/80">
         <div class="flex items-center gap-1.5">
           <UIcon name="i-lucide-diamond" class="size-3 text-primary shrink-0" />
-          <span class="text-[11px] font-medium text-neutral-700 dark:text-neutral-200">{{ option.label }}</span>
+          <span class="text-[11px] font-medium text-toned">{{ option.label }}</span>
         </div>
         <div v-for="row in rows.filter(r => r.prop === option.value)" :key="`${row.prop}-${row.at}`"
           class="grid grid-cols-[1fr_1fr_auto] gap-1 items-center">
@@ -213,12 +213,12 @@ const ticksPerSecond = TICKS_PER_SECOND
           <USelect :model-value="row.easing" :items="easingOptions" size="xs" class="col-span-2"
             :aria-label="t('tmcut.motion.easing')" :title="t('tmcut.motion.easing')"
             @update:model-value="updateRow(row, { easing: String($event) })" />
-          <span class="text-[9px] font-mono text-neutral-500 text-right">
+          <span class="text-[9px] font-mono text-muted text-right">
             {{ t('tmcut.motion.suffixTicks', { ticks: Math.round(row.timeSec * ticksPerSecond) }) }}
           </span>
         </div>
       </div>
-      <p class="text-[10px] text-neutral-500 leading-snug">
+      <p class="text-[10px] text-muted leading-snug">
         {{ t('tmcut.motion.hint') }}
       </p>
     </div>

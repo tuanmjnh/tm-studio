@@ -505,13 +505,13 @@ const testedRows = computed(() => {
 </script>
 
 <template>
-  <div class="rounded-lg border border-neutral-200 dark:border-neutral-800">
+  <div class="rounded-lg border border-default">
     <button
       type="button"
       class="w-full flex items-center justify-between gap-2 px-3 py-2 text-left"
       @click="expanded = !expanded"
     >
-      <span class="flex items-center gap-2 text-xs font-medium text-neutral-700 dark:text-neutral-300">
+      <span class="flex items-center gap-2 text-xs font-medium text-toned">
         <UIcon name="i-lucide-plug" class="w-4 h-4 shrink-0" />
         {{ t('tmcut.aiConnect.title') }}
       </span>
@@ -519,13 +519,13 @@ const testedRows = computed(() => {
         <UBadge :color="statusColor" variant="subtle" size="xs">
           {{ configured ? t('tmcut.aiConnect.ready') : t('tmcut.aiConnect.notConfigured') }}
         </UBadge>
-        <UIcon :name="expanded ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'" class="w-4 h-4 text-neutral-400" />
+        <UIcon :name="expanded ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'" class="w-4 h-4 text-dimmed" />
       </span>
     </button>
 
     <div
       v-if="expanded"
-      class="px-3 pb-3 pt-3 border-t border-neutral-200 dark:border-neutral-800 flex flex-col gap-3"
+      class="px-3 pb-3 pt-3 border-t border-default flex flex-col gap-3"
     >
       <p v-if="!isDesktop" class="text-[11px] text-amber-600 dark:text-amber-400">
         {{ t('tmcut.aiConnect.desktopOnly') }}
@@ -533,16 +533,16 @@ const testedRows = computed(() => {
 
       <template v-else>
         <!-- ============ What each part of the app runs RIGHT NOW ============ -->
-        <div class="rounded-md border border-neutral-200 dark:border-neutral-800 divide-y divide-neutral-200 dark:divide-neutral-800">
+        <div class="rounded-md border border-default divide-y divide-default">
           <div
             v-for="row in surfaceRows"
             :key="row.key"
             class="flex items-center justify-between gap-2 px-2 py-1.5"
           >
-            <span class="text-[11px] text-neutral-600 dark:text-neutral-300">{{ row.label }}</span>
+            <span class="text-[11px] text-toned">{{ row.label }}</span>
             <span class="flex items-center gap-1 min-w-0">
               <span
-                class="text-[10px] font-mono text-neutral-500 dark:text-neutral-400 truncate max-w-[55%]"
+                class="text-[10px] font-mono text-muted truncate max-w-[55%]"
                 :class="row.st?.configured ? '' : 'text-amber-600 dark:text-amber-400'"
               >
                 {{ row.st ? `${row.st.providerLabel}${row.st.overridden ? ' •' : ''}${row.st.model ? ' · ' + row.st.model : ''}` : '—' }}
@@ -571,19 +571,19 @@ const testedRows = computed(() => {
             <UBadge :color="testStateColor(tested.res)" variant="subtle" size="xs">
               {{ tested.label }}
             </UBadge>
-            <span class="text-[10px] text-neutral-500 dark:text-neutral-400 truncate">
+            <span class="text-[10px] text-muted truncate">
               {{ tested.res.detail }}
             </span>
           </div>
         </div>
-        <p class="text-[10px] text-neutral-400 dark:text-neutral-500 -mt-1.5">
+        <p class="text-[10px] text-dimmed -mt-1.5">
           {{ t('tmcut.aiConnect.surfaceHint') }}
         </p>
 
         <!-- ============ Adopt a TM Hub connection (no re-typing) ========= -->
         <div class="flex items-center gap-2">
-          <UIcon name="i-lucide-cloud-download" class="w-3.5 h-3.5 text-neutral-400" />
-          <span class="text-[11px] font-semibold text-neutral-600 dark:text-neutral-300 uppercase tracking-wide">
+          <UIcon name="i-lucide-cloud-download" class="w-3.5 h-3.5 text-dimmed" />
+          <span class="text-[11px] font-semibold text-toned uppercase tracking-wide">
             {{ t('tmcut.aiConnect.hubLabel') }}
           </span>
         </div>
@@ -593,7 +593,7 @@ const testedRows = computed(() => {
               id="tmcut-aiconnect-hub"
               v-model="hubSelected"
               :aria-label="t('tmcut.aiConnect.hubLabel')"
-              class="w-full min-w-0 text-xs rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-2 py-1.5"
+              class="w-full min-w-0 text-xs rounded-lg border border-default bg-white dark:bg-default px-2 py-1.5"
               :disabled="hubAdopting"
             >
               <option value="">
@@ -616,35 +616,35 @@ const testedRows = computed(() => {
               {{ t('tmcut.aiConnect.hubUse') }}
             </UButton>
           </div>
-          <p class="text-[10px] text-neutral-400 dark:text-neutral-500 -mt-1.5">
+          <p class="text-[10px] text-dimmed -mt-1.5">
             {{ t('tmcut.aiConnect.hubHint') }}
           </p>
         </template>
         <p
           v-else-if="!hubLoading"
           class="text-[10px]"
-          :class="hubError ? 'text-amber-600 dark:text-amber-400' : 'text-neutral-400 dark:text-neutral-500'"
+          :class="hubError ? 'text-amber-600 dark:text-amber-400' : 'text-dimmed'"
         >
           {{ hubError || t('tmcut.aiConnect.hubEmpty') }}
         </p>
 
         <!-- ============ Global (default) configuration ==================== -->
         <div class="flex items-center gap-2">
-          <UIcon name="i-lucide-settings" class="w-3.5 h-3.5 text-neutral-400" />
-          <span class="text-[11px] font-semibold text-neutral-600 dark:text-neutral-300 uppercase tracking-wide">
+          <UIcon name="i-lucide-settings" class="w-3.5 h-3.5 text-dimmed" />
+          <span class="text-[11px] font-semibold text-toned uppercase tracking-wide">
             {{ t('tmcut.aiConnect.globalLabel') }}
           </span>
         </div>
 
         <div class="grid grid-cols-2 gap-2">
           <div>
-            <label for="tmcut-aiconnect-provider" class="block text-[11px] font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+            <label for="tmcut-aiconnect-provider" class="block text-[11px] font-medium text-toned mb-1">
               {{ t('tmcut.aiConnect.providerLabel') }}
             </label>
             <select
               id="tmcut-aiconnect-provider"
               v-model="form.provider"
-              class="w-full text-xs rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-2 py-1.5"
+              class="w-full text-xs rounded-lg border border-default bg-white dark:bg-default px-2 py-1.5"
               @change="handleProviderChange"
             >
               <option v-for="preset in presets" :key="preset.id" :value="preset.id">
@@ -653,7 +653,7 @@ const testedRows = computed(() => {
             </select>
           </div>
           <div>
-            <label for="tmcut-aiconnect-model" class="block text-[11px] font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+            <label for="tmcut-aiconnect-model" class="block text-[11px] font-medium text-toned mb-1">
               {{ t('tmcut.aiConnect.modelLabel') }}
             </label>
             <div class="flex items-center gap-1">
@@ -661,7 +661,7 @@ const testedRows = computed(() => {
                 v-if="models.length > 0"
                 id="tmcut-aiconnect-model"
                 v-model="form.model"
-                class="w-full min-w-0 text-xs rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-2 py-1.5"
+                class="w-full min-w-0 text-xs rounded-lg border border-default bg-white dark:bg-default px-2 py-1.5"
               >
                 <option value="">
                   {{ t('tmcut.aiConnect.modelNone') }}
@@ -677,7 +677,7 @@ const testedRows = computed(() => {
                 type="text"
                 spellcheck="false"
                 :placeholder="t('tmcut.aiConnect.modelPlaceholder')"
-                class="w-full min-w-0 text-xs rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-2 py-1.5"
+                class="w-full min-w-0 text-xs rounded-lg border border-default bg-white dark:bg-default px-2 py-1.5"
               >
               <UButton
                 color="neutral"
@@ -693,7 +693,7 @@ const testedRows = computed(() => {
         </div>
 
         <div>
-          <label for="tmcut-aiconnect-base-url" class="block text-[11px] font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+          <label for="tmcut-aiconnect-base-url" class="block text-[11px] font-medium text-toned mb-1">
             {{ t('tmcut.aiConnect.baseUrlLabel') }}
           </label>
           <input
@@ -702,7 +702,7 @@ const testedRows = computed(() => {
             type="text"
             spellcheck="false"
             :placeholder="t('tmcut.aiConnect.baseUrlPlaceholder')"
-            class="w-full text-xs rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-2 py-1.5"
+            class="w-full text-xs rounded-lg border border-default bg-white dark:bg-default px-2 py-1.5"
           >
           <p v-if="baseUrlMissing" class="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
             {{ t('tmcut.aiConnect.needsBaseHint') }}
@@ -710,7 +710,7 @@ const testedRows = computed(() => {
         </div>
 
         <div>
-          <label for="tmcut-aiconnect-api-key" class="block text-[11px] font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+          <label for="tmcut-aiconnect-api-key" class="block text-[11px] font-medium text-toned mb-1">
             {{ t('tmcut.aiConnect.apiKeyLabel') }}
           </label>
           <input
@@ -719,17 +719,17 @@ const testedRows = computed(() => {
             type="password"
             autocomplete="off"
             :placeholder="hasStoredKey ? t('tmcut.aiConnect.apiKeyKeepPlaceholder') : t('tmcut.aiConnect.apiKeyPlaceholder')"
-            class="w-full text-xs rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-2 py-1.5"
+            class="w-full text-xs rounded-lg border border-default bg-white dark:bg-default px-2 py-1.5"
           >
-          <p v-if="hasStoredKey && !form.apiKey" class="mt-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+          <p v-if="hasStoredKey && !form.apiKey" class="mt-1 text-[11px] text-muted">
             {{ t('tmcut.aiConnect.apiKeyStoredHint') }}
           </p>
         </div>
 
         <!-- ============ Per-surface overrides (AI_*_<TASK> slots) ========= -->
         <div class="flex items-center gap-2">
-          <UIcon name="i-lucide-git-branch" class="w-3.5 h-3.5 text-neutral-400" />
-          <span class="text-[11px] font-semibold text-neutral-600 dark:text-neutral-300 uppercase tracking-wide">
+          <UIcon name="i-lucide-git-branch" class="w-3.5 h-3.5 text-dimmed" />
+          <span class="text-[11px] font-semibold text-toned uppercase tracking-wide">
             {{ t('tmcut.aiConnect.overridesLabel') }}
           </span>
         </div>
@@ -737,15 +737,15 @@ const testedRows = computed(() => {
         <div
           v-for="task in SURFACE_KEYS"
           :key="task"
-          class="rounded-md border border-neutral-200 dark:border-neutral-800 p-2 space-y-2"
+          class="rounded-md border border-default p-2 space-y-2"
         >
           <button
             type="button"
             class="w-full flex items-center justify-between gap-2"
             @click="handleSurfaceToggle(task)"
           >
-            <span class="text-[11px] font-medium text-neutral-700 dark:text-neutral-300 flex items-center gap-1.5">
-              <UIcon :name="surfaceIcon(task)" class="w-3.5 h-3.5 text-neutral-400" />
+            <span class="text-[11px] font-medium text-toned flex items-center gap-1.5">
+              <UIcon :name="surfaceIcon(task)" class="w-3.5 h-3.5 text-dimmed" />
               {{ t(surfaceLabelKey(task)) }}
             </span>
             <UBadge :color="surfaces[task].custom ? 'primary' : 'neutral'" variant="subtle" size="xs">
@@ -756,13 +756,13 @@ const testedRows = computed(() => {
           <template v-if="surfaces[task].custom">
             <div class="grid grid-cols-2 gap-2">
               <div>
-                <label :for="`tmcut-aiconnect-${task}-provider`" class="block text-[11px] font-medium text-neutral-500 dark:text-neutral-400 mb-1">
+                <label :for="`tmcut-aiconnect-${task}-provider`" class="block text-[11px] font-medium text-muted mb-1">
                   {{ t('tmcut.aiConnect.providerLabel') }}
                 </label>
                 <select
                   :id="`tmcut-aiconnect-${task}-provider`"
                   v-model="surfaces[task].provider"
-                  class="w-full text-xs rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-2 py-1.5"
+                  class="w-full text-xs rounded-lg border border-default bg-white dark:bg-default px-2 py-1.5"
                 >
                   <option v-for="preset in presets" :key="preset.id" :value="preset.id">
                     {{ preset.label }}
@@ -770,7 +770,7 @@ const testedRows = computed(() => {
                 </select>
               </div>
               <div>
-                <label :for="`tmcut-aiconnect-${task}-model`" class="block text-[11px] font-medium text-neutral-500 dark:text-neutral-400 mb-1">
+                <label :for="`tmcut-aiconnect-${task}-model`" class="block text-[11px] font-medium text-muted mb-1">
                   {{ t('tmcut.aiConnect.modelLabel') }}
                 </label>
                 <input
@@ -779,12 +779,12 @@ const testedRows = computed(() => {
                   type="text"
                   spellcheck="false"
                   :placeholder="t('tmcut.aiConnect.modelPlaceholder')"
-                  class="w-full text-xs rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-2 py-1.5"
+                  class="w-full text-xs rounded-lg border border-default bg-white dark:bg-default px-2 py-1.5"
                 >
               </div>
             </div>
             <div>
-              <label :for="`tmcut-aiconnect-${task}-base-url`" class="block text-[11px] font-medium text-neutral-500 dark:text-neutral-400 mb-1">
+              <label :for="`tmcut-aiconnect-${task}-base-url`" class="block text-[11px] font-medium text-muted mb-1">
                 {{ t('tmcut.aiConnect.baseUrlLabel') }}
               </label>
               <input
@@ -793,11 +793,11 @@ const testedRows = computed(() => {
                 type="text"
                 spellcheck="false"
                 :placeholder="presetBaseUrl(surfaces[task].provider) || t('tmcut.aiConnect.baseUrlPlaceholder')"
-                class="w-full text-xs rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-2 py-1.5"
+                class="w-full text-xs rounded-lg border border-default bg-white dark:bg-default px-2 py-1.5"
               >
             </div>
             <div>
-              <label :for="`tmcut-aiconnect-${task}-api-key`" class="block text-[11px] font-medium text-neutral-500 dark:text-neutral-400 mb-1">
+              <label :for="`tmcut-aiconnect-${task}-api-key`" class="block text-[11px] font-medium text-muted mb-1">
                 {{ t('tmcut.aiConnect.apiKeyLabel') }}
               </label>
               <input
@@ -806,14 +806,14 @@ const testedRows = computed(() => {
                 type="password"
                 autocomplete="off"
                 :placeholder="t('tmcut.aiConnect.apiKeyPlaceholder')"
-                class="w-full text-xs rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-2 py-1.5"
+                class="w-full text-xs rounded-lg border border-default bg-white dark:bg-default px-2 py-1.5"
               >
             </div>
           </template>
         </div>
 
         <div class="flex items-center justify-between gap-2">
-          <p class="text-[11px] text-neutral-500 dark:text-neutral-400 leading-snug">
+          <p class="text-[11px] text-muted leading-snug">
             {{ t('tmcut.aiConnect.hint') }}
           </p>
           <span class="flex items-center gap-1 shrink-0">

@@ -196,7 +196,7 @@ mobileBar.registerInfo(computed(() => ({
           <div
             v-for="item in section.roadmap.items"
             :key="item.phase"
-            class="rounded-lg border border-neutral-200 dark:border-neutral-800 p-3 space-y-2"
+            class="rounded-lg border border-default p-3 space-y-2"
           >
             <div class="flex items-center justify-between gap-2">
               <span class="text-[11px] font-mono font-semibold text-muted">Phase {{ item.phase }}</span>
@@ -229,17 +229,17 @@ mobileBar.registerInfo(computed(() => ({
 
         <div class="space-y-4">
           <div v-for="(step, idx) in section.setupGuide.steps" :key="idx"
-            class="rounded-lg border border-neutral-200 dark:border-neutral-800 p-4 space-y-2">
+            class="rounded-lg border border-default p-4 space-y-2">
             <h4 class="text-xs font-semibold text-highlighted flex items-center gap-2">
               <span class="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold">{{ idx + 1 }}</span>
               {{ step.title }}
             </h4>
             <p class="text-xs text-muted leading-relaxed">{{ step.desc }}</p>
-            <div v-if="step.code" class="overflow-hidden rounded-lg bg-neutral-900 dark:bg-neutral-800 text-neutral-100 mt-2">
+            <div v-if="step.code" class="overflow-hidden rounded-lg bg-neutral-900 dark:bg-elevated text-dimmed mt-2">
               <div class="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-1">
-                <span class="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Config / Shell</span>
+                <span class="text-[10px] font-semibold uppercase tracking-wider text-dimmed">Config / Shell</span>
                 <UButton :icon="copiedKey === 'step_' + idx ? 'i-lucide-check' : 'i-lucide-copy'" color="neutral"
-                  variant="ghost" size="xs" class="text-neutral-400 hover:text-white"
+                  variant="ghost" size="xs" class="text-dimmed hover:text-white"
                   @click="copyCode('step_' + idx, step.code)" />
               </div>
               <pre class="p-3 text-xs overflow-x-auto font-mono"><code>{{ step.code }}</code></pre>
@@ -260,7 +260,7 @@ mobileBar.registerInfo(computed(() => ({
         </template>
 
         <div class="space-y-3">
-          <p class="text-xs text-neutral-600 dark:text-neutral-300">
+          <p class="text-xs text-toned">
             {{ docsSdkDescriptionFor(section.sdk.description, appBaseName) }}
           </p>
 
@@ -289,10 +289,10 @@ mobileBar.registerInfo(computed(() => ({
             <div
               v-for="command in section.sdk.installCommands"
               :key="command.label"
-              class="overflow-hidden rounded-lg bg-neutral-900 dark:bg-neutral-800 text-neutral-100"
+              class="overflow-hidden rounded-lg bg-neutral-900 dark:bg-elevated text-dimmed"
             >
               <div class="flex items-center justify-between gap-2 border-b border-white/10 dark:border-white/10 px-4 py-1">
-                <span class="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
+                <span class="text-[10px] font-semibold uppercase tracking-wider text-dimmed">
                   {{ command.label }}
                 </span>
                 <UButton
@@ -300,7 +300,7 @@ mobileBar.registerInfo(computed(() => ({
                   color="neutral"
                   variant="ghost"
                   size="xs"
-                  class="text-neutral-400 hover:text-white"
+                  class="text-dimmed hover:text-white"
                   :title="copiedKey === command.label ? section.sdk.copiedLabel : section.sdk.copyLabel"
                   :aria-label="copiedKey === command.label ? section.sdk.copiedLabel : section.sdk.copyLabel"
                   @click="copyCode(command.label, command.code)"
@@ -316,15 +316,15 @@ mobileBar.registerInfo(computed(() => ({
             </p>
           </div>
 
-          <div class="overflow-hidden rounded-lg bg-neutral-900 dark:bg-neutral-800 text-neutral-100">
+          <div class="overflow-hidden rounded-lg bg-neutral-900 dark:bg-elevated text-dimmed">
             <div class="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-1">
-              <span class="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">TypeScript</span>
+              <span class="text-[10px] font-semibold uppercase tracking-wider text-dimmed">TypeScript</span>
               <UButton
                 :icon="copiedKey === 'usage' ? 'i-lucide-check' : 'i-lucide-copy'"
                 color="neutral"
                 variant="ghost"
                 size="xs"
-                class="text-neutral-400 hover:text-white"
+                class="text-dimmed hover:text-white"
                 :title="copiedKey === 'usage' ? section.sdk.copiedLabel : section.sdk.copyLabel"
                 :aria-label="copiedKey === 'usage' ? section.sdk.copiedLabel : section.sdk.copyLabel"
                 @click="copyCode('usage', docsUsageCodeFor(section.sdk.usageCode, appDisplayId, 'NUXT_PUBLIC_HUB_URL'))"
@@ -352,7 +352,7 @@ mobileBar.registerInfo(computed(() => ({
         <div class="overflow-x-auto">
           <table class="w-full text-left text-xs border-collapse">
             <thead>
-              <tr class="border-b border-neutral-200 dark:border-neutral-800 text-muted font-medium">
+              <tr class="border-b border-default text-muted font-medium">
                 <th class="py-2.5 px-3">
                   {{ section.api.headers.module }}
                 </th>
@@ -367,11 +367,11 @@ mobileBar.registerInfo(computed(() => ({
                 </th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-neutral-100 dark:divide-neutral-800/60">
+            <tbody class="divide-y divide-default">
               <tr
                 v-for="api in filteredApis"
                 :key="api.path + api.method"
-                class="hover:bg-neutral-50/50 dark:hover:bg-neutral-900/50 transition-colors"
+                class="hover:bg-muted/50 transition-colors"
               >
                 <td class="py-2.5 px-3 font-medium whitespace-nowrap text-highlighted">
                   {{ api.module }}

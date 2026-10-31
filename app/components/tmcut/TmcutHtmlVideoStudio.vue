@@ -373,10 +373,10 @@ onBeforeUnmount(() => {
   <section class="space-y-4">
     <header class="flex flex-wrap items-start justify-between gap-3">
       <div v-if="!props.embedded">
-        <h2 class="text-lg font-semibold text-neutral-900 dark:text-white">
+        <h2 class="text-lg font-semibold text-highlighted dark:text-white">
           {{ t('tmcut.htmlVideo.title') }}
         </h2>
-        <p class="text-sm text-neutral-500 max-w-2xl">
+        <p class="text-sm text-muted max-w-2xl">
           {{ t('tmcut.htmlVideo.description') }}
         </p>
       </div>
@@ -406,7 +406,7 @@ onBeforeUnmount(() => {
 
     <!-- Starter gallery -->
     <div>
-      <p class="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">
+      <p class="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
         {{ t('tmcut.htmlVideo.startersLabel') }}
       </p>
       <TmcutFilterChips
@@ -424,16 +424,16 @@ onBeforeUnmount(() => {
           class="group flex flex-col gap-1 rounded-xl border p-3 text-left transition-colors"
           :class="item.id === starterId
             ? 'border-primary-500 bg-primary-50/70 dark:bg-primary-950/30'
-            : 'border-neutral-200 bg-white/70 hover:border-neutral-300 dark:border-neutral-800 dark:bg-neutral-900/60 dark:hover:border-neutral-700'"
+            : 'border-default bg-white/70 hover:border-default dark:bg-default/60 dark:hover:border-accented'"
           :aria-pressed="item.id === starterId"
           :data-starter="item.id"
           @click="loadStarter(item)"
         >
           <span class="flex items-center justify-between gap-1">
-            <span class="truncate text-sm font-medium text-neutral-900 dark:text-neutral-100">{{ item.name }}</span>
+            <span class="truncate text-sm font-medium text-highlighted">{{ item.name }}</span>
             <UIcon v-if="item.id === starterId" name="i-lucide-check-circle-2" class="h-4 w-4 shrink-0 text-primary-500" />
           </span>
-          <span class="text-[11px] text-neutral-500">{{ item.aspect }} · {{ item.durationSec }}s · {{ item.fps }}fps</span>
+          <span class="text-[11px] text-muted">{{ item.aspect }} · {{ item.durationSec }}s · {{ item.fps }}fps</span>
         </button>
       </div>
     </div>
@@ -442,20 +442,20 @@ onBeforeUnmount(() => {
       <!-- Editor -->
       <UCard :ui="{ body: 'space-y-3' }">
         <div class="flex flex-wrap items-center justify-between gap-2">
-          <label class="text-sm font-medium text-neutral-900 dark:text-white" for="tmcut-html-video-code">
+          <label class="text-sm font-medium text-highlighted dark:text-white" for="tmcut-html-video-code">
             {{ t('tmcut.htmlVideo.editorLabel') }}
           </label>
-          <span class="font-mono text-xs tabular-nums text-neutral-500">{{ width }}×{{ height }} · {{ fps }} FPS</span>
+          <span class="font-mono text-xs tabular-nums text-muted">{{ width }}×{{ height }} · {{ fps }} FPS</span>
         </div>
         <textarea
           id="tmcut-html-video-code"
           v-model="html"
           name="tmcut-html-video-code"
           spellcheck="false"
-          class="h-[440px] w-full resize-y rounded-lg border border-neutral-200 bg-neutral-950 p-4 font-mono text-xs leading-5 text-emerald-100 outline-none focus:border-primary-500 dark:border-neutral-700"
+          class="h-[440px] w-full resize-y rounded-lg border border-default bg-neutral-950 p-4 font-mono text-xs leading-5 text-emerald-100 outline-none focus:border-primary-500 dark:border-accented"
         />
         <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <label class="space-y-1 text-xs text-neutral-500">
+          <label class="space-y-1 text-xs text-muted">
             {{ t('tmcut.htmlVideo.aspect') }}
             <USelect
               v-model="aspectModel"
@@ -468,7 +468,7 @@ onBeforeUnmount(() => {
               size="sm"
             />
           </label>
-          <label class="space-y-1 text-xs text-neutral-500">
+          <label class="space-y-1 text-xs text-muted">
             {{ t('tmcut.htmlVideo.fps') }}
             <USelect
               v-model="fps"
@@ -476,7 +476,7 @@ onBeforeUnmount(() => {
               size="sm"
             />
           </label>
-          <label class="space-y-1 text-xs text-neutral-500">
+          <label class="space-y-1 text-xs text-muted">
             {{ t('tmcut.htmlVideo.quality') }}
             <UInput
               id="tmcut-html-video-quality"
@@ -489,7 +489,7 @@ onBeforeUnmount(() => {
               size="sm"
             />
           </label>
-          <label class="flex items-end gap-2 pb-1 text-xs text-neutral-500">
+          <label class="flex items-end gap-2 pb-1 text-xs text-muted">
             <input
               id="tmcut-html-video-allow-remote"
               v-model="allowRemote"
@@ -500,7 +500,7 @@ onBeforeUnmount(() => {
             <span>{{ t('tmcut.htmlVideo.allowRemote') }}</span>
           </label>
         </div>
-        <p class="text-xs text-neutral-500">
+        <p class="text-xs text-muted">
           {{ t('tmcut.htmlVideo.durationHint', { duration: renderDuration.toFixed(2), frames: framesEstimate }) }}
         </p>
         <p v-if="allowRemote" class="text-xs text-amber-600 dark:text-amber-400">
@@ -511,10 +511,10 @@ onBeforeUnmount(() => {
       <!-- Preview -->
       <UCard :ui="{ body: 'space-y-3' }">
         <div class="flex items-center justify-between gap-2">
-          <h3 class="text-sm font-medium text-neutral-900 dark:text-white">
+          <h3 class="text-sm font-medium text-highlighted dark:text-white">
             {{ t('tmcut.htmlVideo.preview') }}
           </h3>
-          <span class="font-mono text-xs tabular-nums text-neutral-500">
+          <span class="font-mono text-xs tabular-nums text-muted">
             {{ previewTime.toFixed(2) }} / {{ renderDuration.toFixed(2) }}s
           </span>
         </div>
@@ -529,7 +529,7 @@ onBeforeUnmount(() => {
             @load="postSeek(previewTime)"
           />
         </div>
-        <label class="block space-y-1 text-xs text-neutral-500">
+        <label class="block space-y-1 text-xs text-muted">
           {{ t('tmcut.htmlVideo.scrub') }}
           <input
             id="tmcut-html-video-scrub"
@@ -586,7 +586,7 @@ onBeforeUnmount(() => {
             {{ t('tmcut.htmlVideo.next') }}
           </UButton>
         </div>
-        <p class="text-xs text-neutral-500">
+        <p class="text-xs text-muted">
           {{ t('tmcut.htmlVideo.previewHint') }}
         </p>
         <p v-if="previewError" class="text-xs text-red-600 dark:text-red-400">
@@ -601,10 +601,10 @@ onBeforeUnmount(() => {
         <div>
           <div class="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <h3 class="text-sm font-medium text-neutral-900 dark:text-white">
+              <h3 class="text-sm font-medium text-highlighted dark:text-white">
                 {{ t('tmcut.htmlVideo.variablesLabel') }}
               </h3>
-              <p class="text-xs text-neutral-500">
+              <p class="text-xs text-muted">
                 {{ t('tmcut.htmlVideo.variablesHint') }}
               </p>
             </div>
@@ -620,15 +620,15 @@ onBeforeUnmount(() => {
               {{ t('tmcut.htmlVideo.captionsFromTimeline') }}
             </UButton>
           </div>
-          <p v-if="usesCues" class="mt-2 text-xs text-neutral-500">
+          <p v-if="usesCues" class="mt-2 text-xs text-muted">
             {{ currentProject ? t('tmcut.htmlVideo.captionsHint', { n: captionCueCount }) : t('tmcut.htmlVideo.captionsNoProject') }}
           </p>
         </div>
-        <p v-if="tokens.length === 0" class="text-sm text-neutral-500">
+        <p v-if="tokens.length === 0" class="text-sm text-muted">
           {{ t('tmcut.htmlVideo.noVariables') }}
         </p>
         <div v-else class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <label v-for="token in tokens" :key="token" class="space-y-1 text-xs text-neutral-500">
+          <label v-for="token in tokens" :key="token" class="space-y-1 text-xs text-muted">
             <span class="font-mono">{{ token }}</span>
             <UTextarea
               v-if="token === 'cues'"
@@ -651,7 +651,7 @@ onBeforeUnmount(() => {
 
       <UCard :ui="{ body: 'space-y-3' }">
         <div class="flex items-center justify-between gap-2">
-          <h3 class="text-sm font-medium text-neutral-900 dark:text-white">
+          <h3 class="text-sm font-medium text-highlighted dark:text-white">
             {{ t('tmcut.htmlVideo.checksLabel') }}
           </h3>
           <UBadge :color="lintErrors.length ? 'error' : lintWarnings.length ? 'warning' : 'success'" variant="soft" size="sm">
@@ -669,10 +669,10 @@ onBeforeUnmount(() => {
             <span><span class="font-mono">{{ issue.code }}</span> — {{ issue.message }}</span>
           </li>
         </ul>
-        <p v-else class="text-xs text-neutral-500">
+        <p v-else class="text-xs text-muted">
           {{ t('tmcut.htmlVideo.checksClean') }}
         </p>
-        <p class="text-xs text-neutral-500">
+        <p class="text-xs text-muted">
           {{ t('tmcut.htmlVideo.contractHint') }}
         </p>
       </UCard>
@@ -681,15 +681,15 @@ onBeforeUnmount(() => {
     <!-- Render job -->
     <UCard v-if="rendering || result || renderError" :ui="{ body: 'space-y-3' }">
       <div class="flex flex-wrap items-center justify-between gap-2">
-        <h3 class="text-sm font-medium text-neutral-900 dark:text-white">
+        <h3 class="text-sm font-medium text-highlighted dark:text-white">
           {{ t('tmcut.htmlVideo.resultTitle') }}
         </h3>
-        <span v-if="rendering" class="font-mono text-xs tabular-nums text-neutral-500">
+        <span v-if="rendering" class="font-mono text-xs tabular-nums text-muted">
           {{ progressPercent }}% · {{ outTime.toFixed(2) }} / {{ jobDuration.toFixed(2) }}s
         </span>
       </div>
       <UProgress v-if="rendering" :model-value="progressPercent" size="sm" />
-      <p v-if="rendering" class="text-xs text-neutral-500">
+      <p v-if="rendering" class="text-xs text-muted">
         {{ t('tmcut.htmlVideo.renderProgress', { frames: framesEstimate }) }}
       </p>
       <p v-if="renderError" class="text-sm text-red-600 dark:text-red-400">
@@ -702,7 +702,7 @@ onBeforeUnmount(() => {
           controls
           playsinline
         />
-        <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-neutral-500">
+        <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
           <span class="font-mono tabular-nums">{{ result.duration.toFixed(2) }}s · {{ result.frames }} {{ t('tmcut.htmlVideo.frames') }} · {{ formatBytes(result.size) }}</span>
           <div class="flex items-center gap-2">
             <UButton

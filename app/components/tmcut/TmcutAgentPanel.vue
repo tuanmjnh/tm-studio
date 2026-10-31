@@ -247,16 +247,16 @@ function closeModal() {
     :ui="{ content: 'max-w-4xl' }"
   >
     <template #content>
-      <div class="px-6 py-4 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between">
+      <div class="px-6 py-4 border-b border-default flex items-center justify-between">
         <div class="flex items-center gap-3">
           <div class="w-9 h-9 rounded-lg bg-primary-500/10 dark:bg-primary-400/10 flex items-center justify-center text-primary-500">
             <UIcon name="i-lucide-terminal" class="w-5 h-5" />
           </div>
           <div>
-            <h3 class="text-base font-semibold text-neutral-900 dark:text-white">
+            <h3 class="text-base font-semibold text-highlighted dark:text-white">
               {{ t('tmcut.agent.title') }}
             </h3>
-            <p class="text-xs text-neutral-500 dark:text-neutral-400">
+            <p class="text-xs text-muted">
               {{ t('tmcut.agent.subtitle') }}
             </p>
           </div>
@@ -274,7 +274,7 @@ function closeModal() {
         <!-- Left: command entry -->
         <div class="lg:col-span-5 flex flex-col gap-3">
           <div>
-            <label for="tmcut-agentpanel-command-label" class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+            <label for="tmcut-agentpanel-command-label" class="block text-xs font-medium text-toned mb-1.5">
               {{ t('tmcut.agent.commandLabel') }}
             </label>
             <UTextarea
@@ -289,7 +289,7 @@ function closeModal() {
           </div>
 
           <div>
-            <span class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+            <span class="block text-xs font-medium text-toned mb-1.5">
               {{ t('tmcut.agent.languageLabel') }}
             </span>
             <USelect
@@ -329,19 +329,19 @@ function closeModal() {
             </UButton>
           </div>
 
-          <p class="text-[11px] text-neutral-400 dark:text-neutral-500 flex items-start gap-1.5">
+          <p class="text-[11px] text-dimmed flex items-start gap-1.5">
             <UIcon name="i-lucide-info" class="size-3 mt-0.5 shrink-0" />
             <span>{{ t('tmcut.agent.hint') }}</span>
           </p>
 
           <div
             v-if="transcript"
-            class="rounded-lg border border-neutral-300 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 p-3"
+            class="rounded-lg border border-default bg-muted p-3"
           >
-            <p class="text-[11px] font-semibold text-neutral-500 dark:text-neutral-400 mb-1">
+            <p class="text-[11px] font-semibold text-muted mb-1">
               {{ t('tmcut.agent.transcriptLabel') }}
             </p>
-            <p class="text-xs text-neutral-700 dark:text-neutral-200">
+            <p class="text-xs text-toned">
               {{ transcript }}
             </p>
           </div>
@@ -354,13 +354,13 @@ function closeModal() {
             {{ lastError }}
           </div>
 
-          <div v-if="lastResult" class="rounded-lg border border-neutral-300 dark:border-neutral-800 overflow-hidden">
-            <div class="px-3 py-1.5 bg-neutral-100/80 dark:bg-neutral-900/80 border-b border-neutral-300 dark:border-neutral-800">
-              <p class="text-[11px] font-semibold text-neutral-600 dark:text-neutral-300">
+          <div v-if="lastResult" class="rounded-lg border border-default overflow-hidden">
+            <div class="px-3 py-1.5 bg-muted/80 border-b border-default">
+              <p class="text-[11px] font-semibold text-toned">
                 {{ t('tmcut.agent.readResultTitle') }}
               </p>
             </div>
-            <pre class="p-3 text-[11px] font-mono text-neutral-700 dark:text-neutral-300 max-h-48 overflow-auto whitespace-pre-wrap break-words">{{ JSON.stringify(lastResult, null, 2) }}</pre>
+            <pre class="p-3 text-[11px] font-mono text-toned max-h-48 overflow-auto whitespace-pre-wrap break-words">{{ JSON.stringify(lastResult, null, 2) }}</pre>
           </div>
         </div>
 
@@ -368,13 +368,13 @@ function closeModal() {
         <div class="lg:col-span-7 flex flex-col gap-3 min-h-0">
           <div
             v-if="draftCount === 0"
-            class="border border-dashed border-neutral-300 dark:border-neutral-800 rounded-lg px-6 py-8 text-center"
+            class="border border-dashed border-default rounded-lg px-6 py-8 text-center"
           >
-            <UIcon name="i-lucide-clipboard-list" class="size-8 mx-auto text-neutral-400 mb-2" />
-            <p class="text-xs text-neutral-500 dark:text-neutral-400">
+            <UIcon name="i-lucide-clipboard-list" class="size-8 mx-auto text-dimmed mb-2" />
+            <p class="text-xs text-muted">
               {{ t('tmcut.agent.emptyStateTitle') }}
             </p>
-            <p class="text-[11px] text-neutral-400 dark:text-neutral-500 mt-1">
+            <p class="text-[11px] text-dimmed mt-1">
               {{ t('tmcut.agent.emptyStateDesc') }}
             </p>
           </div>
@@ -389,9 +389,9 @@ function closeModal() {
               </p>
             </div>
 
-            <div class="rounded-lg border border-neutral-300 dark:border-neutral-800 overflow-hidden flex-1 min-h-0 flex flex-col">
-              <div class="px-3 py-1.5 bg-neutral-100/80 dark:bg-neutral-900/80 border-b border-neutral-300 dark:border-neutral-800 flex items-center justify-between">
-                <p class="text-[11px] font-semibold text-neutral-600 dark:text-neutral-300">
+            <div class="rounded-lg border border-default overflow-hidden flex-1 min-h-0 flex flex-col">
+              <div class="px-3 py-1.5 bg-muted/80 border-b border-default flex items-center justify-between">
+                <p class="text-[11px] font-semibold text-toned">
                   {{ t('tmcut.agent.draftTitle') }}
                 </p>
                 <UBadge color="neutral" variant="subtle" size="xs">
@@ -402,7 +402,7 @@ function closeModal() {
                 <div
                   v-for="op in draft?.operations"
                   :key="op.id"
-                  class="flex items-center gap-2 px-2 py-1 rounded-md text-[11px] font-mono bg-neutral-100/70 dark:bg-neutral-900/70 text-neutral-700 dark:text-neutral-300"
+                  class="flex items-center gap-2 px-2 py-1 rounded-md text-[11px] font-mono bg-muted/70 text-toned"
                 >
                   <UIcon name="i-lucide-check" class="size-3 text-primary-400 shrink-0" />
                   <span class="truncate">{{ describeOperation(op) }}</span>

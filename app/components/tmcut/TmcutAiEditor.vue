@@ -89,7 +89,7 @@ function closeModal() {
   >
     <template #content>
       <!-- Modal Header -->
-      <div class="px-6 py-4 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between">
+      <div class="px-6 py-4 border-b border-default flex items-center justify-between">
         <div class="flex items-center gap-3">
           <div
             class="w-9 h-9 rounded-lg bg-primary-500/10 dark:bg-primary-400/10 flex items-center justify-center text-primary-500"
@@ -97,13 +97,13 @@ function closeModal() {
             <UIcon name="i-lucide-wand-sparkles" class="w-5 h-5" />
           </div>
           <div>
-            <h3 class="text-base font-semibold text-neutral-900 dark:text-white flex items-center gap-2">
+            <h3 class="text-base font-semibold text-highlighted dark:text-white flex items-center gap-2">
               {{ t('tmcut.aiEditor.title') }}
               <UBadge :color="hasAiKey ? 'success' : 'neutral'" variant="subtle" size="xs">
                 {{ hasAiKey ? t('tmcut.aiEditor.gatewayOnline') : t('tmcut.aiEditor.gatewayOff') }}
               </UBadge>
             </h3>
-            <p class="text-xs text-neutral-500 dark:text-neutral-400">
+            <p class="text-xs text-muted">
               {{ t('tmcut.aiEditor.subtitle') }}
             </p>
           </div>
@@ -124,7 +124,7 @@ function closeModal() {
           <TmcutAiModelPicker task="plan" label-key="tmcut.aiModelPicker.surfaceEdit" @applied="checkGatewayStatus()" />
 
           <div>
-            <label for="tmcut-aieditor-prompt-label" class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+            <label for="tmcut-aieditor-prompt-label" class="block text-xs font-medium text-toned mb-1.5">
               {{ t('tmcut.aiEditor.promptLabel') }}
             </label>
             <UTextarea
@@ -166,13 +166,13 @@ function closeModal() {
           <!-- Empty state -->
           <div
             v-if="!plan && validationErrors.length === 0 && !lastError"
-            class="flex-1 border border-dashed border-neutral-300 dark:border-neutral-800 rounded-lg p-6 text-center"
+            class="flex-1 border border-dashed border-default rounded-lg p-6 text-center"
           >
-            <UIcon name="i-lucide-clipboard-list" class="size-8 mx-auto text-neutral-400 mb-2" />
-            <p class="text-xs text-neutral-500 dark:text-neutral-400">
+            <UIcon name="i-lucide-clipboard-list" class="size-8 mx-auto text-dimmed mb-2" />
+            <p class="text-xs text-muted">
               {{ t('tmcut.aiEditor.emptyStateTitle') }}
             </p>
-            <p class="text-[11px] text-neutral-400 dark:text-neutral-500 mt-1">
+            <p class="text-[11px] text-dimmed mt-1">
               {{ t('tmcut.aiEditor.emptyStateDesc') }}
             </p>
           </div>
@@ -216,9 +216,9 @@ function closeModal() {
               </ul>
             </div>
 
-            <div class="rounded-lg border border-neutral-300 dark:border-neutral-800 overflow-hidden flex-1 min-h-0 flex flex-col">
-              <div class="px-3 py-1.5 bg-neutral-100/80 dark:bg-neutral-900/80 border-b border-neutral-300 dark:border-neutral-800 flex items-center justify-between">
-                <p class="text-[11px] font-semibold text-neutral-600 dark:text-neutral-300">
+            <div class="rounded-lg border border-default overflow-hidden flex-1 min-h-0 flex flex-col">
+              <div class="px-3 py-1.5 bg-muted/80 border-b border-default flex items-center justify-between">
+                <p class="text-[11px] font-semibold text-toned">
                   {{ t('tmcut.aiEditor.operationsTitle') }}
                 </p>
                 <UBadge color="neutral" variant="subtle" size="xs">
@@ -229,7 +229,7 @@ function closeModal() {
                 <div
                   v-for="(line, index) in planLines"
                   :key="index"
-                  class="flex items-center gap-2 px-2 py-1 rounded-md text-[11px] font-mono bg-neutral-100/70 dark:bg-neutral-900/70 text-neutral-700 dark:text-neutral-300"
+                  class="flex items-center gap-2 px-2 py-1 rounded-md text-[11px] font-mono bg-muted/70 text-toned"
                 >
                   <UIcon name="i-lucide-check" class="size-3 text-primary-400 shrink-0" />
                   <span class="truncate">{{ line }}</span>
@@ -266,7 +266,7 @@ function closeModal() {
               >
                 {{ t('tmcut.aiEditor.discardButton') }}
               </UButton>
-              <span class="text-[10px] text-neutral-400 ml-auto flex items-center gap-1">
+              <span class="text-[10px] text-dimmed ml-auto flex items-center gap-1">
                 <UIcon name="i-lucide-history" class="size-3" />
                 {{ t('tmcut.aiEditor.undoHint') }}
               </span>
@@ -276,13 +276,13 @@ function closeModal() {
           <!-- Apply result summary -->
           <div
             v-if="lastTrace"
-            class="rounded-lg border border-neutral-300 dark:border-neutral-800 p-3 flex items-center gap-2"
+            class="rounded-lg border border-default p-3 flex items-center gap-2"
           >
             <UIcon name="i-lucide-badge-check" class="size-4 text-primary-400" />
-            <p class="text-[11px] text-neutral-600 dark:text-neutral-300">
+            <p class="text-[11px] text-toned">
               {{ t('tmcut.aiEditor.appliedDesc', { applied: lastTrace.applied.length, skipped: lastTrace.skipped.length }) }}
             </p>
-            <ul v-if="lastTrace.skipped.length > 0" class="ml-auto text-[10px] font-mono text-neutral-400 text-right max-w-48">
+            <ul v-if="lastTrace.skipped.length > 0" class="ml-auto text-[10px] font-mono text-dimmed text-right max-w-48">
               <li v-for="step in lastTrace.skipped.slice(0, 3)" :key="step.index">
                 op[{{ step.index }}]: {{ step.reason }}
               </li>

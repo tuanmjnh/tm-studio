@@ -21,16 +21,16 @@ function updateTextInput(value: string) {
 </script>
 
 <template>
-  <div class="p-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm space-y-2">
+  <div class="p-3 rounded-xl border border-default bg-white/80 dark:bg-default/80 backdrop-blur-sm space-y-2">
     <div class="flex items-center justify-between text-sm">
-      <span class="font-medium text-neutral-800 dark:text-neutral-200 flex items-center gap-2">
+      <span class="font-medium text-highlighted flex items-center gap-2">
         <UIcon
           :name="props.placeholder.type === 'text' ? 'i-lucide-type' : props.placeholder.type === 'audio' ? 'i-lucide-music' : 'i-lucide-video'"
           class="w-4 h-4 text-primary-500"
         />
         {{ props.placeholder.label }}
       </span>
-      <span class="text-xs text-neutral-400 font-mono">
+      <span class="text-xs text-dimmed font-mono">
         {{ props.placeholder.type === 'text' ? $t('tmcut.templateLibrary.textSlot') : $t('tmcut.templateLibrary.mediaSlot') }}
       </span>
     </div>
@@ -46,7 +46,7 @@ function updateTextInput(value: string) {
         @update:model-value="updateTextInput"
       />
     </div>
-    <div v-else class="text-xs text-neutral-400 italic">
+    <div v-else class="text-xs text-dimmed italic">
       {{ $t('tmcut.templateLibrary.mediaSlotHint') }}
     </div>
   </div>

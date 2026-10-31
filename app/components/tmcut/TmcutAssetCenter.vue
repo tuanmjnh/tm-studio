@@ -218,7 +218,7 @@ function handleApply(entryId: string, assetKind: string) {
 <template>
   <!-- Web runtime: no verified install path (no local packages) — honest note,
        no dead controls (roadmap: every control does something real). -->
-  <div v-if="!isDesktopStore" class="px-3 py-6 text-center text-[11px] text-neutral-500 dark:text-neutral-500">
+  <div v-if="!isDesktopStore" class="px-3 py-6 text-center text-[11px] text-muted">
     <UIcon name="i-lucide-monitor-pc" class="size-5 mx-auto mb-2 opacity-60" />
     {{ t('tmcut.assetCenter.webOnly') }}
   </div>
@@ -244,7 +244,7 @@ function handleApply(entryId: string, assetKind: string) {
           class="px-2 py-1 rounded-md text-[10px] font-medium shrink-0 border transition-colors cursor-pointer"
           :class="activeCategory === category
             ? 'bg-primary/20 border-primary text-primary font-semibold'
-            : 'bg-neutral-200/60 dark:bg-neutral-800/60 border-neutral-300 dark:border-neutral-800 text-neutral-600 dark:text-neutral-300 hover:border-neutral-400 dark:hover:border-neutral-700'"
+            : 'bg-accented/60 border-default text-toned hover:border-accented'"
           @click="activeCategory = category"
         >
           {{ category === 'all' ? t('tmcut.assetCenter.all') : categoryLabel(category) }}
@@ -265,7 +265,7 @@ function handleApply(entryId: string, assetKind: string) {
     <div class="space-y-1.5">
       <div
         v-if="catalogLoaded && filtered.length === 0"
-        class="border border-dashed border-neutral-300 dark:border-neutral-800 rounded-lg p-4 text-center text-[11px] text-neutral-500"
+        class="border border-dashed border-default rounded-lg p-4 text-center text-[11px] text-muted"
       >
         {{ t('tmcut.assetCenter.empty') }}
       </div>
@@ -273,7 +273,7 @@ function handleApply(entryId: string, assetKind: string) {
       <div
         v-for="entry in filtered"
         :key="entry.id"
-        class="rounded-lg border border-neutral-300/80 dark:border-neutral-800/80 bg-neutral-100/70 dark:bg-neutral-900/70 p-2.5 space-y-1.5"
+        class="rounded-lg border border-default/80 bg-muted/70 p-2.5 space-y-1.5"
       >
         <div class="flex items-start gap-2">
           <UIcon :name="kindIcon(entry)" class="size-4 shrink-0 mt-0.5 text-primary" />
@@ -282,9 +282,9 @@ function handleApply(entryId: string, assetKind: string) {
               <p class="text-[11px] font-semibold truncate">
                 {{ entry.title }}
               </p>
-              <span class="text-[9px] font-mono text-neutral-500 shrink-0">v{{ entry.version }}</span>
+              <span class="text-[9px] font-mono text-muted shrink-0">v{{ entry.version }}</span>
             </div>
-            <p class="text-[10px] text-neutral-500 dark:text-neutral-400 line-clamp-2 leading-snug">
+            <p class="text-[10px] text-muted line-clamp-2 leading-snug">
               {{ entry.description }}
             </p>
           </div>
@@ -339,7 +339,7 @@ function handleApply(entryId: string, assetKind: string) {
 
         <!-- In-flight progress -->
         <div v-if="entryState(entry.id) === 'active' || entryState(entry.id) === 'retrying'" class="space-y-1">
-          <div class="flex items-center justify-between text-[10px] text-neutral-500">
+          <div class="flex items-center justify-between text-[10px] text-muted">
             <span class="flex items-center gap-1">
               <UIcon name="i-lucide-download" class="size-3" />
               {{ entryState(entry.id) === 'retrying' ? t('tmcut.assetCenter.retrying') : t('tmcut.assetCenter.downloading') }}
@@ -371,7 +371,7 @@ function handleApply(entryId: string, assetKind: string) {
 
         <!-- Footer meta + actions -->
         <div class="flex items-center justify-between gap-2 pt-0.5">
-          <div class="flex items-center gap-2 text-[9px] text-neutral-500 min-w-0">
+          <div class="flex items-center gap-2 text-[9px] text-muted min-w-0">
             <span class="truncate">{{ categoryLabel(entry.category) }}</span>
             <span v-if="entry.sizeBytes" class="font-mono shrink-0">{{ formatBytes(entry.sizeBytes) }}</span>
             <span

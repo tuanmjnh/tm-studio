@@ -78,10 +78,10 @@ function handleOpenUpdate(open: boolean) {
         <!-- Placeholders -->
         <div class="space-y-4">
           <div>
-            <h4 class="text-sm font-semibold text-neutral-900 dark:text-neutral-100 uppercase tracking-wider mb-2">
+            <h4 class="text-sm font-semibold text-highlighted uppercase tracking-wider mb-2">
               {{ $t('tmcut.templateLibrary.placeholdersTitle') }}
             </h4>
-            <p class="text-xs text-neutral-500">
+            <p class="text-xs text-muted">
               {{ $t('tmcut.templateLibrary.placeholdersHint') }}
             </p>
           </div>
@@ -98,12 +98,12 @@ function handleOpenUpdate(open: boolean) {
         </div>
 
         <!-- Required Assets -->
-        <div v-if="props.activeReadiness && (props.activeReadiness.missingAssets.length > 0 || props.activeReadiness.localNeeds.length > 0)" class="space-y-3 border-t border-neutral-200 dark:border-neutral-800 pt-4">
-          <h4 class="text-sm font-semibold text-neutral-900 dark:text-neutral-100 uppercase tracking-wider">
+        <div v-if="props.activeReadiness && (props.activeReadiness.missingAssets.length > 0 || props.activeReadiness.localNeeds.length > 0)" class="space-y-3 border-t border-default pt-4">
+          <h4 class="text-sm font-semibold text-highlighted uppercase tracking-wider">
             {{ $t('tmcut.templateLibrary.requiredAssetsTitle') }}
           </h4>
           <div v-for="req in props.activeReadiness.missingAssets" :key="req.assetId" class="flex items-center justify-between gap-2 p-3 rounded-xl border border-amber-500/40 bg-amber-500/5">
-            <span class="text-sm text-neutral-700 dark:text-neutral-300 flex items-center gap-2 min-w-0 truncate">
+            <span class="text-sm text-toned flex items-center gap-2 min-w-0 truncate">
               <UIcon name="i-lucide-package-x" class="w-4 h-4 text-amber-500 shrink-0" />
               {{ props.assetTitle(req.assetId) }}
             </span>
@@ -130,10 +130,10 @@ function handleOpenUpdate(open: boolean) {
               >
                 {{ $t('tmcut.assetCenter.retry') }}
               </UButton>
-              <span v-else class="text-xs text-neutral-500 shrink-0">{{ props.assetInstallState(req.assetId) === 'installed' ? $t('tmcut.templateLibrary.assetReady') : $t('tmcut.assetCenter.downloading') }}</span>
+              <span v-else class="text-xs text-muted shrink-0">{{ props.assetInstallState(req.assetId) === 'installed' ? $t('tmcut.templateLibrary.assetReady') : $t('tmcut.assetCenter.downloading') }}</span>
             </div>
           </div>
-          <div v-for="need in props.activeReadiness.localNeeds" :key="need.assetId" class="flex items-center gap-2 p-3 rounded-xl border border-neutral-300 dark:border-neutral-800 text-sm text-neutral-500">
+          <div v-for="need in props.activeReadiness.localNeeds" :key="need.assetId" class="flex items-center gap-2 p-3 rounded-xl border border-default text-sm text-muted">
             <UIcon name="i-lucide-file-question" class="w-4 h-4 shrink-0" />
             {{ $t('tmcut.templateLibrary.localAssetNote', { file: need.sourceHint || need.assetId }) }}
           </div>

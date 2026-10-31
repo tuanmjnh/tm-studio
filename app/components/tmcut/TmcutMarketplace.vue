@@ -140,14 +140,14 @@ const webOnly = !isDesktop.value
     <!-- Search & Category Filter -->
     <div class="mb-4 flex flex-col sm:flex-row gap-3">
       <div class="relative flex-1">
-        <UIcon name="i-lucide-search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+        <UIcon name="i-lucide-search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-dimmed" />
         <input
           id="tmcut-marketplace-search"
           v-model="search"
           type="text"
           :placeholder="t('tmcut.assetCenter.search')"
           :aria-label="t('tmcut.assetCenter.search')"
-          class="w-full bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg pl-9 pr-3 py-2 text-sm text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 focus:outline-none focus:border-primary/50"
+          class="w-full bg-white dark:bg-default border border-default rounded-lg pl-9 pr-3 py-2 text-sm text-highlighted placeholder:text-dimmed focus:outline-none focus:border-primary/50"
         />
       </div>
       <div class="flex items-center gap-1.5">
@@ -165,14 +165,14 @@ const webOnly = !isDesktop.value
     </div>
 
     <!-- Category Tabs -->
-    <div class="mb-4 flex gap-1 bg-white dark:bg-neutral-900 p-1 rounded-lg border border-neutral-200 dark:border-neutral-800">
+    <div class="mb-4 flex gap-1 bg-white dark:bg-default p-1 rounded-lg border border-default">
       <button
         v-for="tab in tabOptions"
         :key="tab.id"
         type="button"
         :class="activeTab === tab.id
           ? 'bg-primary/15 text-primary'
-          : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200'"
+          : 'text-muted hover:text-toned'"
         class="flex-1 py-1.5 px-3 rounded-md text-sm font-medium flex items-center justify-center gap-1.5 transition-colors"
         @click="activeTab = tab.id as 'music' | 'sfx' | 'fonts'"
       >
@@ -187,7 +187,7 @@ const webOnly = !isDesktop.value
         <div
           v-for="entry in filtered"
           :key="entry.id"
-          class="group bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 flex flex-col hover:border-primary/50 transition-all"
+          class="group bg-white dark:bg-default border border-default rounded-xl p-4 flex flex-col hover:border-primary/50 transition-all"
         >
           <!-- Header -->
           <div class="flex items-start justify-between gap-2 mb-3">
@@ -196,8 +196,8 @@ const webOnly = !isDesktop.value
                 <UIcon :name="getCategoryIcon(entry.category)" class="w-4 h-4 text-primary" />
               </div>
               <div>
-                <p class="text-xs font-medium text-neutral-900 dark:text-neutral-100 truncate">{{ entry.title }}</p>
-                <p class="text-[10px] text-neutral-500 uppercase tracking-wider">
+                <p class="text-xs font-medium text-highlighted truncate">{{ entry.title }}</p>
+                <p class="text-[10px] text-muted uppercase tracking-wider">
                   {{ t(`tmcut.assetCenter.categories.${entry.category}`, entry.category) }}
                 </p>
               </div>
@@ -210,12 +210,12 @@ const webOnly = !isDesktop.value
           </div>
 
           <!-- Description -->
-          <p class="text-sm text-neutral-600 dark:text-neutral-400 line-clamp-2 mb-3 flex-1">
+          <p class="text-sm text-toned line-clamp-2 mb-3 flex-1">
             {{ entry.description }}
           </p>
 
           <!-- Meta -->
-          <div class="flex items-center gap-3 text-[11px] text-neutral-500 mb-3">
+          <div class="flex items-center gap-3 text-[11px] text-muted mb-3">
             <span class="flex items-center gap-1">
               <UIcon name="i-lucide-package" class="w-3 h-3" />
               {{ formatBytes(entry.sizeBytes) }}
@@ -231,17 +231,17 @@ const webOnly = !isDesktop.value
             <span
               v-for="tag in entry.tags.slice(0, 4)"
               :key="tag"
-              class="px-1.5 py-0.5 rounded text-[10px] bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400"
+              class="px-1.5 py-0.5 rounded text-[10px] bg-muted text-toned"
             >
               {{ tag }}
             </span>
-            <span v-if="entry.tags.length > 4" class="px-1.5 py-0.5 rounded text-[10px] bg-neutral-100 dark:bg-neutral-800 text-neutral-500">
+            <span v-if="entry.tags.length > 4" class="px-1.5 py-0.5 rounded text-[10px] bg-muted text-muted">
               +{{ entry.tags.length - 4 }}
             </span>
           </div>
 
           <!-- Action Bar -->
-          <div class="flex items-center justify-between gap-2 pt-2 border-t border-neutral-100 dark:border-neutral-800">
+          <div class="flex items-center justify-between gap-2 pt-2 border-t border-default">
             <div class="flex items-center gap-1.5">
               <span v-if="entryState(entry.id) === 'downloading'" class="flex items-center gap-1 text-xs text-primary">
                 <UIcon name="i-lucide-loader" class="w-3 h-3 animate-spin" />
@@ -311,13 +311,13 @@ const webOnly = !isDesktop.value
 
       <!-- Empty State -->
       <div v-else class="flex flex-col items-center justify-center py-16 text-center px-4">
-        <div class="w-16 h-16 rounded-xl bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center text-neutral-400 mb-4">
+        <div class="w-16 h-16 rounded-xl bg-muted flex items-center justify-center text-dimmed mb-4">
           <UIcon :name="activeTab === 'music' ? 'i-lucide-music' : activeTab === 'sfx' ? 'i-lucide-audio-lines' : 'i-lucide-case-sensitive'" class="w-8 h-8" />
         </div>
-        <h3 class="text-base font-semibold text-neutral-900 dark:text-neutral-100 mb-1">
+        <h3 class="text-base font-semibold text-highlighted mb-1">
           {{ t('tmcut.marketplace.emptyTitle') }}
         </h3>
-        <p class="text-sm text-neutral-500 max-w-sm">
+        <p class="text-sm text-muted max-w-sm">
           {{ t('tmcut.marketplace.emptyDesc') }}
         </p>
       </div>

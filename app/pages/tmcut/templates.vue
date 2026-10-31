@@ -325,10 +325,10 @@ function confirmDeleteTemplate() {
     <!-- Timeline Template Library -->
     <div v-show="libraryTab === 'timeline'" class="space-y-6 animate-fade-in">
       <!-- Search & Filters Toolbar -->
-      <div class="bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-800 rounded-2xl p-4">
+      <div class="bg-white/80 dark:bg-default/80 backdrop-blur-sm border border-default rounded-2xl p-4">
         <!-- Search -->
         <div class="relative w-full lg:w-80 mb-4 lg:mb-0">
-          <UIcon name="i-lucide-search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+          <UIcon name="i-lucide-search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-dimmed" />
           <input
             id="tmcut-template-search"
             v-model="searchQuery"
@@ -336,7 +336,7 @@ function confirmDeleteTemplate() {
             type="text"
             :aria-label="t('tmcut.templateLibrary.searchPlaceholder')"
             :placeholder="t('tmcut.templateLibrary.searchPlaceholder')"
-            class="w-full bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
+            class="w-full bg-white/80 dark:bg-default/80 backdrop-blur-sm border border-default rounded-xl pl-10 pr-4 py-2.5 text-sm text-highlighted placeholder:text-dimmed focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
           >
         </div>
 
@@ -381,12 +381,12 @@ function confirmDeleteTemplate() {
       </div>
 
       <!-- Empty State -->
-      <div v-else class="text-center py-16 rounded-2xl border-2 border-dashed border-neutral-300 dark:border-neutral-700 bg-white/50 dark:bg-neutral-900/50">
-        <UIcon name="i-lucide-layout-template" class="w-16 h-16 text-neutral-300 dark:text-neutral-600 mx-auto mb-4" />
-        <h3 class="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-1">
+      <div v-else class="text-center py-16 rounded-2xl border-2 border-dashed border-default bg-white/50 dark:bg-default/50">
+        <UIcon name="i-lucide-layout-template" class="w-16 h-16 text-dimmed mx-auto mb-4" />
+        <h3 class="text-lg font-semibold text-highlighted mb-1">
           {{ t('tmcut.templateLibrary.emptyTitle') }}
         </h3>
-        <p class="text-sm text-neutral-500 max-w-sm mx-auto mb-6">
+        <p class="text-sm text-muted max-w-sm mx-auto mb-6">
           {{ t('tmcut.templateLibrary.emptyDesc') }}
         </p>
         <TmcutButton variant="ghost" size="sm" @click="selectedCategory = ['all']; selectedIndustry = ['all']; selectedAspectRatio = 'all'; searchQuery = ''">
@@ -416,7 +416,7 @@ function confirmDeleteTemplate() {
     <!-- Delete Confirm Modal -->
     <LazyTmcutModal v-model:open="deleteModalOpen" :title="t('tmcut.templateLibrary.deleteTemplate')" size="sm">
       <template #body>
-        <p class="text-sm text-neutral-500">
+        <p class="text-sm text-muted">
           {{ t('tmcut.templateLibrary.deleteConfirm', { name: targetDeleteName }) }}
         </p>
       </template>

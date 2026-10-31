@@ -134,7 +134,7 @@ function usePrompt(prompt: string) {
   >
     <template #content>
       <!-- Header -->
-      <div class="px-6 py-4 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between">
+      <div class="px-6 py-4 border-b border-default flex items-center justify-between">
         <div class="flex items-center gap-3">
           <div
             class="w-9 h-9 rounded-lg bg-primary-500/10 dark:bg-primary-400/10 flex items-center justify-center text-primary-500"
@@ -142,13 +142,13 @@ function usePrompt(prompt: string) {
             <UIcon name="i-lucide-layout-template" class="w-5 h-5" />
           </div>
           <div>
-            <h3 class="text-base font-semibold text-neutral-900 dark:text-white flex items-center gap-2">
+            <h3 class="text-base font-semibold text-highlighted dark:text-white flex items-center gap-2">
               {{ t('tmcut.aiTemplates.title') }}
               <UBadge :color="hasAiKey ? 'success' : 'neutral'" variant="subtle" size="xs">
                 {{ hasAiKey ? t('tmcut.aiTemplates.gatewayOnline') : t('tmcut.aiTemplates.gatewayOff') }}
               </UBadge>
             </h3>
-            <p class="text-xs text-neutral-500 dark:text-neutral-400">
+            <p class="text-xs text-muted">
               {{ t('tmcut.aiTemplates.subtitle') }}
             </p>
           </div>
@@ -170,7 +170,7 @@ function usePrompt(prompt: string) {
           <TmcutAiConnect @saved="checkGatewayStatus()" />
 
           <div>
-            <label for="tmcut-aitemplates-brief-label" class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+            <label for="tmcut-aitemplates-brief-label" class="block text-xs font-medium text-toned mb-1.5">
               {{ t('tmcut.aiTemplates.briefLabel') }}
             </label>
             <UTextarea
@@ -183,13 +183,13 @@ function usePrompt(prompt: string) {
           </div>
 
           <!-- Prompt Suggestions -->
-          <div class="space-y-3 border-t border-neutral-200 dark:border-neutral-800 pt-3">
-            <p class="text-[11px] text-neutral-500 dark:text-neutral-400">
+          <div class="space-y-3 border-t border-default pt-3">
+            <p class="text-[11px] text-muted">
               {{ t('tmcut.aiTemplates.promptSuggestionsDesc') }}
             </p>
             <div class="space-y-2">
               <div v-for="category in categoriesWithPrompts" :key="category">
-                <p class="text-[11px] font-medium text-neutral-600 dark:text-neutral-300 uppercase tracking-wider mb-1">
+                <p class="text-[11px] font-medium text-toned uppercase tracking-wider mb-1">
                   {{ categoryLabels[category] }}
                 </p>
                 <div class="flex flex-wrap gap-1.5">
@@ -238,13 +238,13 @@ function usePrompt(prompt: string) {
         <div class="flex flex-col gap-3">
           <div
             v-if="!draft && validationErrors.length === 0 && !lastError"
-            class="flex-1 border border-dashed border-neutral-300 dark:border-neutral-800 rounded-lg p-6 text-center"
+            class="flex-1 border border-dashed border-default rounded-lg p-6 text-center"
           >
-            <UIcon name="i-lucide-clipboard-list" class="size-8 mx-auto text-neutral-400 mb-2" />
-            <p class="text-xs text-neutral-500 dark:text-neutral-400">
+            <UIcon name="i-lucide-clipboard-list" class="size-8 mx-auto text-dimmed mb-2" />
+            <p class="text-xs text-muted">
               {{ t('tmcut.aiTemplates.emptyStateTitle') }}
             </p>
-            <p class="text-[11px] text-neutral-400 dark:text-neutral-500 mt-1">
+            <p class="text-[11px] text-dimmed mt-1">
               {{ t('tmcut.aiTemplates.emptyStateDesc') }}
             </p>
           </div>
@@ -290,9 +290,9 @@ function usePrompt(prompt: string) {
               </UBadge>
             </div>
 
-            <div class="rounded-lg border border-neutral-300 dark:border-neutral-800 overflow-hidden flex-1 min-h-0 flex flex-col">
-              <div class="px-3 py-1.5 bg-neutral-100/80 dark:bg-neutral-900/80 border-b border-neutral-300 dark:border-neutral-800 flex items-center justify-between">
-                <p class="text-[11px] font-semibold text-neutral-600 dark:text-neutral-300">
+            <div class="rounded-lg border border-default overflow-hidden flex-1 min-h-0 flex flex-col">
+              <div class="px-3 py-1.5 bg-muted/80 border-b border-default flex items-center justify-between">
+                <p class="text-[11px] font-semibold text-toned">
                   {{ t('tmcut.aiTemplates.operationsTitle') }}
                 </p>
                 <UBadge color="neutral" variant="subtle" size="xs">
@@ -303,7 +303,7 @@ function usePrompt(prompt: string) {
                 <div
                   v-for="(line, index) in draft.lines"
                   :key="index"
-                  class="flex items-center gap-2 px-2 py-1 rounded-md text-[11px] font-mono bg-neutral-100/70 dark:bg-neutral-900/70 text-neutral-700 dark:text-neutral-300"
+                  class="flex items-center gap-2 px-2 py-1 rounded-md text-[11px] font-mono bg-muted/70 text-toned"
                 >
                   <UIcon name="i-lucide-check" class="size-3 text-primary-400 shrink-0" />
                   <span class="truncate">{{ line }}</span>

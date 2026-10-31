@@ -174,7 +174,7 @@ onBeforeUnmount(() => {
     <!-- Unknown definition: say so instead of inventing an animation. -->
     <div
       v-if="!preview.status.known"
-      class="absolute inset-0 flex items-center justify-center gap-1 px-1 text-[9px] leading-tight text-neutral-400"
+      class="absolute inset-0 flex items-center justify-center gap-1 px-1 text-[9px] leading-tight text-dimmed"
     >
       <UIcon name="i-lucide-circle-question-mark" class="size-3 shrink-0" />
       <span class="truncate">{{ t('tmcut.fxThumb.noPreview') }}</span>
@@ -191,7 +191,7 @@ onBeforeUnmount(() => {
 
     <span
       v-if="badge"
-      class="absolute bottom-0.5 left-0.5 max-w-[calc(100%-4px)] inline-flex items-center gap-0.5 rounded px-1 py-px text-[8px] font-medium leading-none bg-black/60 text-neutral-100"
+      class="absolute bottom-0.5 left-0.5 max-w-[calc(100%-4px)] inline-flex items-center gap-0.5 rounded px-1 py-px text-[8px] font-medium leading-none bg-black/60 text-dimmed"
       :class="badge.tone === 'warning' ? 'text-amber-300' : ''"
       :title="t(badge.key)"
     >

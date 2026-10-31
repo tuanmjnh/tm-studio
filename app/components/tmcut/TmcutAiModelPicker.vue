@@ -214,10 +214,10 @@ async function handleTest() {
 </script>
 
 <template>
-  <div class="rounded-lg border border-neutral-200 dark:border-neutral-800 p-2.5 space-y-2">
+  <div class="rounded-lg border border-default p-2.5 space-y-2">
     <div class="flex items-center justify-between gap-2">
-      <span class="flex items-center gap-1.5 text-[11px] font-semibold text-neutral-600 dark:text-neutral-300 uppercase tracking-wide">
-        <UIcon name="i-lucide-sparkles" class="w-3.5 h-3.5 text-neutral-400" />
+      <span class="flex items-center gap-1.5 text-[11px] font-semibold text-toned uppercase tracking-wide">
+        <UIcon name="i-lucide-sparkles" class="w-3.5 h-3.5 text-dimmed" />
         {{ t('tmcut.aiModelPicker.label') }}
       </span>
       <UBadge
@@ -236,7 +236,7 @@ async function handleTest() {
         id="tmcut-ai-model-picker"
         v-model="selected"
         :aria-label="t('tmcut.aiModelPicker.label')"
-        class="w-full min-w-0 text-xs rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-2 py-1.5"
+        class="w-full min-w-0 text-xs rounded-lg border border-default bg-white dark:bg-default px-2 py-1.5"
         :disabled="loading || choices.length === 0"
         @change="handleSelect"
       >
@@ -269,7 +269,7 @@ async function handleTest() {
     <p v-else-if="choices.length === 0 && !loading" class="text-[10px] text-amber-600 dark:text-amber-400">
       {{ t('tmcut.aiModelPicker.empty') }}
     </p>
-    <p v-else class="text-[10px] text-neutral-400 dark:text-neutral-500">
+    <p v-else class="text-[10px] text-dimmed">
       {{ t('tmcut.aiModelPicker.hint', { surface: surfaceLabel }) }}
     </p>
 

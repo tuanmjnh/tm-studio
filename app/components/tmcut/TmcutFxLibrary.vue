@@ -343,11 +343,11 @@ function handlePickTransition(type: string) {
   <div class="flex flex-col min-h-0">
     <!-- Sub-tab bar (Effects / Transitions / Filters) — hidden when the
          host tab already fixes the category (R120 split tabs). -->
-    <div v-if="showSubTabs" class="flex items-center gap-1 border-b border-neutral-300 dark:border-neutral-800 pb-1.5">
+    <div v-if="showSubTabs" class="flex items-center gap-1 border-b border-default pb-1.5">
       <button
         type="button"
         class="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer"
-        :class="fxTab === 'effects' ? 'bg-primary/15 text-primary' : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200'"
+        :class="fxTab === 'effects' ? 'bg-primary/15 text-primary' : 'text-muted hover:text-toned'"
         @click="fxTab = 'effects'"
       >
         <UIcon name="i-lucide-sparkles" class="size-3" />
@@ -356,7 +356,7 @@ function handlePickTransition(type: string) {
       <button
         type="button"
         class="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer"
-        :class="fxTab === 'transitions' ? 'bg-primary/15 text-primary' : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200'"
+        :class="fxTab === 'transitions' ? 'bg-primary/15 text-primary' : 'text-muted hover:text-toned'"
         @click="fxTab = 'transitions'"
       >
         <UIcon name="i-lucide-shapes" class="size-3" />
@@ -365,7 +365,7 @@ function handlePickTransition(type: string) {
       <button
         type="button"
         class="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer"
-        :class="fxTab === 'filters' ? 'bg-primary/15 text-primary' : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200'"
+        :class="fxTab === 'filters' ? 'bg-primary/15 text-primary' : 'text-muted hover:text-toned'"
         @click="fxTab = 'filters'"
       >
         <UIcon name="i-lucide-palette" class="size-3" />
@@ -378,7 +378,7 @@ function handlePickTransition(type: string) {
       class="mx-2 mt-2 px-2 py-1.5 rounded-md text-[10px] leading-snug flex items-start gap-1.5"
       :class="targetOk
         ? 'bg-primary/10 text-primary border border-primary/20'
-        : 'bg-neutral-200/60 dark:bg-neutral-800/60 text-neutral-500 dark:text-neutral-400 border border-neutral-300 dark:border-neutral-800'"
+        : 'bg-accented/60 text-muted border border-default'"
     >
       <UIcon :name="targetOk ? 'i-lucide-mouse-pointer-click' : 'i-lucide-info'" class="size-3 shrink-0 mt-0.5" />
       <span>{{ t('tmcut.fxLib.targetHint', { clip: selectedClip?.item?.name || selectedClip?.item?.text || t('tmcut.fxLib.unnamedClip') }) }}</span>
@@ -409,7 +409,7 @@ function handlePickTransition(type: string) {
         class="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors cursor-pointer"
         :class="activeCategory === chip
           ? 'border-primary bg-primary/15 text-primary'
-          : 'border-neutral-300 dark:border-neutral-800 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200'"
+          : 'border-default text-muted hover:text-toned'"
         @click="activeCategory = chip"
       >
         {{ chip === 'all' ? t('tmcut.fxLib.categoryAll') : effectCategoryLabel(chip) }}
@@ -420,7 +420,7 @@ function handlePickTransition(type: string) {
       <!-- Effects: one grid per registry category -->
       <template v-if="fxTab === 'effects'">
         <div v-for="group in effectGroups" :key="group.category" class="space-y-1.5">
-          <span class="text-[10px] font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
+          <span class="text-[10px] font-semibold text-muted uppercase tracking-wider">
             {{ group.label }}
           </span>
           <div class="grid grid-cols-2 gap-2">
@@ -431,7 +431,7 @@ function handlePickTransition(type: string) {
               class="flex flex-col gap-1.5 p-1.5 rounded-lg border text-left transition-colors cursor-pointer"
               :class="card.active
                 ? 'border-primary bg-primary/10'
-                : 'border-neutral-300 dark:border-neutral-800 bg-neutral-100/60 dark:bg-neutral-950/60 hover:border-primary/60'"
+                : 'border-default bg-muted/60 hover:border-primary/60'"
               :title="card.desc"
               @click="handleToggleEffect(card.type)"
               @focusin="focusedKey = `effect:${card.type}`"
@@ -446,8 +446,8 @@ function handlePickTransition(type: string) {
                 :active="tileActive('effect', card.type, card.active)"
               />
               <div class="flex items-center gap-1.5 w-full px-0.5">
-                <UIcon :name="card.icon" class="size-3.5 shrink-0" :class="card.active ? 'text-primary' : 'text-neutral-500 dark:text-neutral-400'" />
-                <span class="text-[11px] font-medium text-neutral-700 dark:text-neutral-200 leading-tight truncate flex-1">{{ card.label }}</span>
+                <UIcon :name="card.icon" class="size-3.5 shrink-0" :class="card.active ? 'text-primary' : 'text-muted'" />
+                <span class="text-[11px] font-medium text-toned leading-tight truncate flex-1">{{ card.label }}</span>
                 <UIcon v-if="card.active" name="i-lucide-check" class="size-3.5 text-primary shrink-0" />
               </div>
             </button>
@@ -457,7 +457,7 @@ function handlePickTransition(type: string) {
         <!-- Honest empty state: registry/query produced no tile -->
         <div
           v-if="matchedEffectCount === 0"
-          class="py-6 text-center text-[11px] text-neutral-500 border border-dashed border-neutral-300 dark:border-neutral-800 rounded-lg"
+          class="py-6 text-center text-[11px] text-muted border border-dashed border-default rounded-lg"
         >
           {{ t(`tmcut.fxLib.${emptyKey}`) }}
         </div>
@@ -473,7 +473,7 @@ function handlePickTransition(type: string) {
             class="flex flex-col items-stretch gap-1.5 p-1.5 rounded-lg border text-left transition-colors cursor-pointer"
             :class="card.active
               ? 'border-primary bg-primary/10'
-              : 'border-neutral-300 dark:border-neutral-800 bg-neutral-100/60 dark:bg-neutral-950/60 hover:border-primary/60'"
+              : 'border-default bg-muted/60 hover:border-primary/60'"
             @click="handleToggleLut(card.preset)"
             @focusin="focusedKey = `filter:${card.preset}`"
             @focusout="focusedKey = null"
@@ -485,7 +485,7 @@ function handlePickTransition(type: string) {
               :active="tileActive('filter', card.preset, card.active)"
             />
             <div class="flex items-center gap-1.5 px-0.5">
-              <span class="text-[11px] font-medium text-neutral-700 dark:text-neutral-200 truncate flex-1">{{ card.label }}</span>
+              <span class="text-[11px] font-medium text-toned truncate flex-1">{{ card.label }}</span>
               <UIcon v-if="card.active" name="i-lucide-check" class="size-3.5 text-primary shrink-0" />
             </div>
           </button>
@@ -493,7 +493,7 @@ function handlePickTransition(type: string) {
 
         <div
           v-if="filterCards.length === 0"
-          class="py-6 text-center text-[11px] text-neutral-500 border border-dashed border-neutral-300 dark:border-neutral-800 rounded-lg"
+          class="py-6 text-center text-[11px] text-muted border border-dashed border-default rounded-lg"
         >
           {{ t(`tmcut.fxLib.${emptyKey}`) }}
         </div>
@@ -502,7 +502,7 @@ function handlePickTransition(type: string) {
       <!-- Transitions: grouped by fxCatalog category, readable labels -->
       <template v-else>
         <div v-for="group in transitionGroups" :key="group.category" class="space-y-1.5">
-          <span class="text-[10px] font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
+          <span class="text-[10px] font-semibold text-muted uppercase tracking-wider">
             {{ group.label }}
           </span>
           <div class="grid grid-cols-2 gap-2">
@@ -513,7 +513,7 @@ function handlePickTransition(type: string) {
               class="flex flex-col gap-1.5 p-1.5 rounded-lg border text-left transition-colors cursor-pointer"
               :class="card.active
                 ? 'border-primary bg-primary/10'
-                : 'border-neutral-300 dark:border-neutral-800 bg-neutral-100/60 dark:bg-neutral-950/60 hover:border-primary/60'"
+                : 'border-default bg-muted/60 hover:border-primary/60'"
               :title="t('tmcut.fxLib.transitionDefault')"
               @click="handlePickTransition(card.key)"
               @focusin="focusedKey = `transition:${card.key}`"
@@ -527,8 +527,8 @@ function handlePickTransition(type: string) {
                 :active="tileActive('transition', card.key, card.active)"
               />
               <div class="flex items-center gap-1.5 w-full px-0.5">
-                <UIcon :name="card.icon" class="size-3.5 shrink-0" :class="card.active ? 'text-primary' : 'text-neutral-500 dark:text-neutral-400'" />
-                <span class="text-[11px] font-medium text-neutral-700 dark:text-neutral-200 leading-tight truncate flex-1">{{ card.label }}</span>
+                <UIcon :name="card.icon" class="size-3.5 shrink-0" :class="card.active ? 'text-primary' : 'text-muted'" />
+                <span class="text-[11px] font-medium text-toned leading-tight truncate flex-1">{{ card.label }}</span>
                 <UIcon v-if="card.active" name="i-lucide-check" class="size-3.5 text-primary shrink-0" />
               </div>
             </button>
@@ -537,7 +537,7 @@ function handlePickTransition(type: string) {
 
         <div
           v-if="matchedTransitionCount === 0"
-          class="py-6 text-center text-[11px] text-neutral-500 border border-dashed border-neutral-300 dark:border-neutral-800 rounded-lg"
+          class="py-6 text-center text-[11px] text-muted border border-dashed border-default rounded-lg"
         >
           {{ t(`tmcut.fxLib.${emptyKey}`) }}
         </div>

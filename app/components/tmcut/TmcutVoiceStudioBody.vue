@@ -301,7 +301,7 @@ onMounted(async () => {
         <h2 class="text-lg font-semibold">
           {{ t('tmcut.voice.title') }}
         </h2>
-        <p class="text-xs text-neutral-500">
+        <p class="text-xs text-muted">
           {{ t('tmcut.voice.subtitle') }}
         </p>
       </div>
@@ -314,7 +314,7 @@ onMounted(async () => {
       />
     </header>
 
-    <section class="rounded-lg border border-neutral-200 dark:border-neutral-800 p-3 space-y-3">
+    <section class="rounded-lg border border-default p-3 space-y-3">
       <h3 class="font-medium text-sm">
         {{ t('tmcut.voice.localTitle') }}
       </h3>
@@ -363,9 +363,9 @@ onMounted(async () => {
         >
           {{ t('tmcut.voice.saveReference') }}
         </UButton>
-        <span class="text-xs text-neutral-500 self-center">{{ t('tmcut.voice.referencePrivacy') }}</span>
+        <span class="text-xs text-muted self-center">{{ t('tmcut.voice.referencePrivacy') }}</span>
       </div>
-      <p v-else class="text-[11px] text-neutral-500">
+      <p v-else class="text-[11px] text-muted">
         {{ t('tmcut.voice.referenceDesktopOnly') }}
       </p>
       <div v-if="managedVoices.length" class="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-2 items-end">
@@ -390,14 +390,14 @@ onMounted(async () => {
           {{ t('tmcut.voice.delete') }}
         </UButton>
       </div>
-      <p v-if="localVoices.length" class="text-[11px] text-neutral-500">
+      <p v-if="localVoices.length" class="text-[11px] text-muted">
         {{ t('tmcut.voice.serviceVoices', { count: localVoices.length }) }}
       </p>
-      <p v-if="isDesktop" class="text-[11px] text-neutral-500">
+      <p v-if="isDesktop" class="text-[11px] text-muted">
         {{ t('tmcut.voice.localPersistenceNote') }}
       </p>
     </section>
-    <section class="rounded-lg border border-neutral-200 dark:border-neutral-800 p-3 space-y-3">
+    <section class="rounded-lg border border-default p-3 space-y-3">
       <div class="flex flex-wrap items-center gap-2">
         <h3 class="font-medium text-sm mr-auto">
           {{ t('tmcut.voice.narrationTitle') }}
@@ -435,7 +435,7 @@ onMounted(async () => {
         <UFormField v-else :label="t('tmcut.voice.selectedVoice')">
           <USelect v-model="selectedLocalVoice" :items="localVoices.map(v => ({ label: v.name, value: v.name }))" class="w-full" />
         </UFormField>
-        <p class="text-[11px] text-neutral-500">
+        <p class="text-[11px] text-muted">
           {{ t('tmcut.voice.localOnlyInfo') }}
         </p>
       </template>

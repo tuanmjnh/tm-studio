@@ -686,9 +686,9 @@ function removeBatch(batchId: string) {
     <!-- Batch builder -->
     <!-- ================================================================== -->
     <div class="xl:col-span-5 flex flex-col gap-4">
-      <div class="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 flex flex-col gap-4">
+      <div class="bg-white dark:bg-default border border-default rounded-xl p-4 flex flex-col gap-4">
         <div>
-          <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">
+          <h3 class="text-sm font-semibold text-highlighted dark:text-white">
             {{ t('tmcut.factory.newBatch') }}
           </h3>
           <!-- No card description: the page header already shows the same
@@ -699,7 +699,7 @@ function removeBatch(batchId: string) {
           <!-- The accessible name goes on the control itself (aria-label): a
                <label> without a for/wrapped control names nothing, and these
                fields showed up in the browser as unlabelled form controls. -->
-          <p class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+          <p class="block text-xs font-medium text-toned mb-1.5">
             {{ t('tmcut.factory.templateLabel') }}
           </p>
           <USelect
@@ -710,7 +710,7 @@ function removeBatch(batchId: string) {
             class="w-full"
             @update:model-value="previewed = null"
           />
-          <p v-if="templateOptions.length === 0" class="text-xs text-neutral-400 mt-1.5">
+          <p v-if="templateOptions.length === 0" class="text-xs text-dimmed mt-1.5">
             {{ t('tmcut.factory.noPublished') }}
           </p>
         </div>
@@ -718,7 +718,7 @@ function removeBatch(batchId: string) {
         <div>
           <!-- Input mode selector: Manual CSV/JSON vs Prompt-to-Batch -->
           <div class="mb-2">
-            <p class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+            <p class="block text-xs font-medium text-toned mb-1.5">
               {{ t('tmcut.factory.inputModeLabel') }}
             </p>
             <div class="flex items-center gap-1" role="group" :aria-label="t('tmcut.factory.inputModeLabel')">
@@ -743,7 +743,7 @@ function removeBatch(batchId: string) {
           </div>
 
           <div v-if="inputMode === 'prompt'" class="mb-3">
-            <p class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+            <p class="block text-xs font-medium text-toned mb-1.5">
               {{ t('tmcut.factory.promptLabel') }}
             </p>
             <UTextarea
@@ -776,7 +776,7 @@ function removeBatch(batchId: string) {
               >
                 <UIcon name="i-lucide-plus" class="size-3" />
               </UButton>
-              <span class="text-xs text-neutral-500 ml-2">{{ t('tmcut.factory.variants') }}</span>
+              <span class="text-xs text-muted ml-2">{{ t('tmcut.factory.variants') }}</span>
             </div>
             <UButton
               color="primary"
@@ -792,7 +792,7 @@ function removeBatch(batchId: string) {
           </div>
 
           <div v-else class="flex items-center justify-between mb-1.5">
-            <p class="block text-xs font-medium text-neutral-700 dark:text-neutral-300">
+            <p class="block text-xs font-medium text-toned">
               {{ t('tmcut.factory.inputLabel') }}
             </p>
             <div class="flex items-center gap-1">
@@ -833,7 +833,7 @@ function removeBatch(batchId: string) {
             class="w-full font-mono text-xs"
             @update:model-value="previewed = null; parseError = null"
           />
-          <p class="text-xs text-neutral-400 mt-1.5">
+          <p class="text-xs text-dimmed mt-1.5">
             {{ t('tmcut.factory.inputHint') }}
           </p>
           <p v-if="parseError" class="text-xs text-error mt-1.5">
@@ -843,7 +843,7 @@ function removeBatch(batchId: string) {
 
         <!-- Run mode: dry run (offline, safe) vs live provider (real cost) -->
         <div>
-          <p class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+          <p class="block text-xs font-medium text-toned mb-1.5">
             {{ t('tmcut.factory.runModeLabel', 'Run mode') }}
           </p>
           <div class="flex items-center gap-1.5 mb-2" role="group" :aria-label="t('tmcut.factory.runModeLabel', 'Run mode')">
@@ -900,10 +900,10 @@ function removeBatch(batchId: string) {
       <!-- Plan + estimate -->
       <div
         v-if="previewed && plan && estimate && guard"
-        class="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 flex flex-col gap-3"
+        class="bg-white dark:bg-default border border-default rounded-xl p-4 flex flex-col gap-3"
       >
         <div class="flex items-center justify-between">
-          <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">
+          <h3 class="text-sm font-semibold text-highlighted dark:text-white">
             {{ t('tmcut.factory.planTitle') }}
           </h3>
           <UBadge :color="guard.allowed && plan.validCount > 0 ? 'success' : 'error'" variant="subtle" size="xs">
@@ -912,39 +912,39 @@ function removeBatch(batchId: string) {
         </div>
 
         <div class="grid grid-cols-3 gap-2 text-center">
-          <div class="bg-neutral-50 dark:bg-neutral-950 rounded-lg p-2">
-            <p class="text-lg font-semibold text-neutral-900 dark:text-white">
+          <div class="bg-muted rounded-lg p-2">
+            <p class="text-lg font-semibold text-highlighted dark:text-white">
               {{ plan.validCount }}
             </p>
-            <p class="text-[11px] text-neutral-500">
+            <p class="text-[11px] text-muted">
               {{ t('tmcut.factory.validRows') }}
             </p>
           </div>
-          <div class="bg-neutral-50 dark:bg-neutral-950 rounded-lg p-2">
-            <p class="text-lg font-semibold text-neutral-900 dark:text-white">
+          <div class="bg-muted rounded-lg p-2">
+            <p class="text-lg font-semibold text-highlighted dark:text-white">
               {{ plan.sceneCount }}
             </p>
-            <p class="text-[11px] text-neutral-500">
+            <p class="text-[11px] text-muted">
               {{ t('tmcut.factory.scenes') }}
             </p>
           </div>
-          <div class="bg-neutral-50 dark:bg-neutral-950 rounded-lg p-2">
-            <p class="text-lg font-semibold text-neutral-900 dark:text-white">
+          <div class="bg-muted rounded-lg p-2">
+            <p class="text-lg font-semibold text-highlighted dark:text-white">
               {{ Math.round(plan.durationSec) }}s
             </p>
-            <p class="text-[11px] text-neutral-500">
+            <p class="text-[11px] text-muted">
               {{ t('tmcut.factory.totalDuration') }}
             </p>
           </div>
         </div>
 
-        <div class="flex items-baseline justify-between border-t border-neutral-200 dark:border-neutral-800 pt-3">
-          <span class="text-xs text-neutral-500">{{ t('tmcut.factory.estimatedCost') }}</span>
-          <span class="text-sm font-semibold text-neutral-900 dark:text-white">
+        <div class="flex items-baseline justify-between border-t border-default pt-3">
+          <span class="text-xs text-muted">{{ t('tmcut.factory.estimatedCost') }}</span>
+          <span class="text-sm font-semibold text-highlighted dark:text-white">
             {{ estimate.lowEstimateUsd }}–{{ estimate.highEstimateUsd }} {{ estimate.currency }}
           </span>
         </div>
-        <p class="text-[11px] text-neutral-400">
+        <p class="text-[11px] text-dimmed">
           {{ t('tmcut.factory.estimateNote') }}
         </p>
 
@@ -956,7 +956,7 @@ function removeBatch(batchId: string) {
             <li
               v-for="item in plan.items.filter(entry => !entry.ok)"
               :key="item.rowIndex"
-              class="text-[11px] text-neutral-500 dark:text-neutral-400"
+              class="text-[11px] text-muted"
             >
               <span class="font-medium">{{ item.label }}:</span>
               {{ item.errors.map(error => error.message).join('; ') }}
@@ -973,10 +973,10 @@ function removeBatch(batchId: string) {
         <div v-if="guard.requiresConfirmation && !guard.blockedBy" class="flex items-start gap-2">
           <USwitch v-model="confirmed" size="sm" :aria-label="t('tmcut.factory.confirmLabel')" />
           <div>
-            <p class="text-xs font-medium text-neutral-700 dark:text-neutral-300">
+            <p class="text-xs font-medium text-toned">
               {{ t('tmcut.factory.confirmLabel') }}
             </p>
-            <p class="text-[11px] text-neutral-400">
+            <p class="text-[11px] text-dimmed">
               {{ t('tmcut.factory.confirmHint') }}
             </p>
           </div>
@@ -993,7 +993,7 @@ function removeBatch(batchId: string) {
         >
           {{ t('tmcut.factory.runBatch') }}
         </UButton>
-        <p class="text-[11px] text-neutral-400">
+        <p class="text-[11px] text-dimmed">
           {{ t('tmcut.factory.dryRunNote') }}
         </p>
       </div>
@@ -1003,9 +1003,9 @@ function removeBatch(batchId: string) {
     <!-- Queue + results -->
     <!-- ================================================================== -->
     <div class="xl:col-span-7 flex flex-col gap-4">
-      <div class="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl">
-        <div class="px-4 py-3 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between">
-          <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">
+      <div class="bg-white dark:bg-default border border-default rounded-xl">
+        <div class="px-4 py-3 border-b border-default flex items-center justify-between">
+          <h3 class="text-sm font-semibold text-highlighted dark:text-white">
             {{ t('tmcut.factory.queueTitle') }}
           </h3>
           <UBadge color="neutral" variant="subtle" size="xs">
@@ -1016,28 +1016,28 @@ function removeBatch(batchId: string) {
              its detail card stays open just below. Rendering "No batch is
              queued." in that state contradicted the card underneath it. -->
         <div v-if="queue.length === 0 && !selectedBatch" class="px-4 py-8 text-center">
-          <UIcon name="i-lucide-inbox" class="size-7 mx-auto text-neutral-400 mb-2" />
-          <p class="text-xs text-neutral-500">
+          <UIcon name="i-lucide-inbox" class="size-7 mx-auto text-dimmed mb-2" />
+          <p class="text-xs text-muted">
             {{ t('tmcut.factory.emptyQueue') }}
           </p>
         </div>
-        <p v-else-if="queue.length === 0" class="px-4 py-3 text-[11px] text-neutral-500">
+        <p v-else-if="queue.length === 0" class="px-4 py-3 text-[11px] text-muted">
           {{ t('tmcut.factory.queueIdle') }}
         </p>
-        <ul v-else class="divide-y divide-neutral-200 dark:divide-neutral-800">
+        <ul v-else class="divide-y divide-default">
           <li
             v-for="batch in queue"
             :key="batch.batchId"
-            class="px-4 py-3 cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-950/50"
-            :class="{ 'bg-neutral-50 dark:bg-neutral-950/50': selectedBatchId === batch.batchId }"
+            class="px-4 py-3 cursor-pointer hover:bg-muted"
+            :class="{ 'bg-muted': selectedBatchId === batch.batchId }"
             @click="selectedBatchId = batch.batchId"
           >
             <div class="flex items-center justify-between gap-2">
               <div class="min-w-0">
-                <p class="text-xs font-medium text-neutral-900 dark:text-white truncate">
+                <p class="text-xs font-medium text-highlighted dark:text-white truncate">
                   {{ batchTemplateName(batch) }}
                 </p>
-                <p class="text-[11px] text-neutral-500">
+                <p class="text-[11px] text-muted">
                   {{ t('tmcut.factory.itemCount', { done: batch.completedItems, total: batch.totalItems }) }}
                   · {{ batch.estimatedCostUsd }} {{ 'USD' }}
                 </p>
@@ -1046,7 +1046,7 @@ function removeBatch(batchId: string) {
                 {{ statusLabel(batch.status) }}
               </UBadge>
             </div>
-            <div class="mt-2 h-1.5 rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden">
+            <div class="mt-2 h-1.5 rounded-full bg-accented overflow-hidden">
               <div
                 class="h-full bg-primary-500 transition-all"
                 :style="{ width: `${batchProgress(batch)}%` }"
@@ -1099,13 +1099,13 @@ function removeBatch(batchId: string) {
       </div>
 
       <!-- Selected batch detail -->
-      <div v-if="selectedBatch" class="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl">
-        <div class="px-4 py-3 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between gap-2">
+      <div v-if="selectedBatch" class="bg-white dark:bg-default border border-default rounded-xl">
+        <div class="px-4 py-3 border-b border-default flex items-center justify-between gap-2">
           <div class="min-w-0">
-            <p class="text-sm font-semibold text-neutral-900 dark:text-white truncate">
+            <p class="text-sm font-semibold text-highlighted dark:text-white truncate">
               {{ batchTemplateName(selectedBatch) }}
             </p>
-            <p class="text-[11px] text-neutral-500">
+            <p class="text-[11px] text-muted">
               {{ t('tmcut.factory.jobCount', { count: selectedJobs.length }) }}
               · {{ t('tmcut.factory.actualCost', { cost: selectedBatch.actualCostUsd }) }}
             </p>
@@ -1114,11 +1114,11 @@ function removeBatch(batchId: string) {
             {{ statusLabel(selectedBatch.status) }}
           </UBadge>
         </div>
-        <ul class="divide-y divide-neutral-200 dark:divide-neutral-800 max-h-[420px] overflow-y-auto">
+        <ul class="divide-y divide-default max-h-[420px] overflow-y-auto">
           <li v-for="item in selectedItems" :key="item.itemId" class="px-4 py-2.5">
             <div class="flex items-center justify-between gap-2">
               <div class="min-w-0">
-                <p class="text-xs font-medium text-neutral-900 dark:text-white truncate">
+                <p class="text-xs font-medium text-highlighted dark:text-white truncate">
                   {{ itemLabel(item) }}
                 </p>
                 <p v-if="item.error" class="text-[11px] text-error truncate">
@@ -1139,7 +1139,7 @@ function removeBatch(batchId: string) {
                   'border-success/40 text-success': selectedJobs.find(job => job.jobId === jobId)?.status === 'completed',
                   'border-error/40 text-error': selectedJobs.find(job => job.jobId === jobId)?.status === 'failed',
                   'border-primary/40 text-primary': ['processing', 'submitting'].includes(selectedJobs.find(job => job.jobId === jobId)?.status ?? ''),
-                  'border-neutral-300 dark:border-neutral-700 text-neutral-500': !['completed', 'failed', 'processing', 'submitting'].includes(selectedJobs.find(job => job.jobId === jobId)?.status ?? '')
+                  'border-default text-muted': !['completed', 'failed', 'processing', 'submitting'].includes(selectedJobs.find(job => job.jobId === jobId)?.status ?? '')
                 }"
                 @click="selectedBatchId = item.batchId"
               >
@@ -1176,26 +1176,26 @@ function removeBatch(batchId: string) {
         <!-- P6: approved outputs → editable project timeline -->
         <div
           v-if="assembly?.plan"
-          class="px-4 py-3 border-t border-neutral-200 dark:border-neutral-800 flex items-center justify-between gap-2"
+          class="px-4 py-3 border-t border-default flex items-center justify-between gap-2"
         >
           <div class="min-w-0">
-            <p class="text-[11px] font-medium text-neutral-700 dark:text-neutral-300">
+            <p class="text-[11px] font-medium text-toned">
               {{ t('tmcut.factory.assemblyTitle') }}
             </p>
-            <p class="text-[11px] text-neutral-500">
+            <p class="text-[11px] text-muted">
               {{ t('tmcut.factory.assemblyReady', { ready: assemblyReady, total: assemblyTotal }) }}
             </p>
             <p v-if="assemblyBlocked > 0" class="text-[11px] text-warning truncate">
               {{ firstBlockedReason() }}
             </p>
-            <p v-if="assemblyNarration > 0" class="text-[11px] text-neutral-400">
+            <p v-if="assemblyNarration > 0" class="text-[11px] text-dimmed">
               {{ t('tmcut.factory.assemblyNarrationNote', { count: assemblyNarration }) }}
             </p>
             <div v-if="ingestProgress" class="mt-1.5">
-              <div class="h-1 rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden">
+              <div class="h-1 rounded-full bg-accented overflow-hidden">
                 <div class="h-full bg-primary-500 transition-all" :style="{ width: `${ingestPercent}%` }" />
               </div>
-              <p class="text-[10px] text-neutral-400 mt-1">
+              <p class="text-[10px] text-dimmed mt-1">
                 {{ t('tmcut.factory.assemblyDownloading', { percent: ingestPercent }) }}
               </p>
             </div>
@@ -1225,24 +1225,24 @@ function removeBatch(batchId: string) {
       </div>
 
       <!-- History -->
-      <div v-if="historyBatches.length > 0" class="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl">
-        <div class="px-4 py-3 border-b border-neutral-200 dark:border-neutral-800">
-          <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">
+      <div v-if="historyBatches.length > 0" class="bg-white dark:bg-default border border-default rounded-xl">
+        <div class="px-4 py-3 border-b border-default">
+          <h3 class="text-sm font-semibold text-highlighted dark:text-white">
             {{ t('tmcut.factory.historyTitle') }}
           </h3>
         </div>
-        <ul class="divide-y divide-neutral-200 dark:divide-neutral-800 max-h-[260px] overflow-y-auto">
+        <ul class="divide-y divide-default max-h-[260px] overflow-y-auto">
           <li
             v-for="batch in historyBatches"
             :key="batch.batchId"
-            class="px-4 py-2.5 flex items-center justify-between gap-2 cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-950/50"
+            class="px-4 py-2.5 flex items-center justify-between gap-2 cursor-pointer hover:bg-muted"
             @click="selectedBatchId = batch.batchId"
           >
             <div class="min-w-0">
-              <p class="text-xs font-medium text-neutral-900 dark:text-white truncate">
+              <p class="text-xs font-medium text-highlighted dark:text-white truncate">
                 {{ batchTemplateName(batch) }}
               </p>
-              <p class="text-[11px] text-neutral-500">
+              <p class="text-[11px] text-muted">
                 {{ new Date(batch.createdAt).toLocaleString() }}
                 · {{ t('tmcut.factory.itemCount', { done: batch.completedItems, total: batch.totalItems }) }}
               </p>

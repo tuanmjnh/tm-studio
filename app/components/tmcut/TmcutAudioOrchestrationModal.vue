@@ -64,10 +64,10 @@ function handleOrchestrate() {
               <UIcon name="i-lucide-music-2" class="w-5 h-5" />
             </div>
             <div>
-              <h3 class="text-base font-semibold text-neutral-900 dark:text-white">
+              <h3 class="text-base font-semibold text-highlighted dark:text-white">
                 {{ t('tmcut.audioOrchestration.title') }}
               </h3>
-              <p class="text-xs text-neutral-500">
+              <p class="text-xs text-muted">
                 {{ t('tmcut.audioOrchestration.subtitle') }}
               </p>
             </div>
@@ -101,7 +101,7 @@ function handleOrchestrate() {
         </div>
 
         <div class="flex items-center gap-3">
-          <label for="tmcut-audio-bed-volume" class="text-xs font-medium text-neutral-700 dark:text-neutral-300">{{ t('tmcut.audioOrchestration.bedVolume') }}</label>
+          <label for="tmcut-audio-bed-volume" class="text-xs font-medium text-toned">{{ t('tmcut.audioOrchestration.bedVolume') }}</label>
           <!-- UInputNumber forwards `id` to its inner <input>, so this is a real
                label association (the control is labelable, unlike the slider and
                select roots elsewhere in the editor). -->
@@ -113,15 +113,15 @@ function handleOrchestrate() {
           />
         </div>
 
-        <div class="rounded-lg border border-neutral-300 dark:border-neutral-800 overflow-hidden max-h-56">
-          <div class="px-3 py-1.5 bg-neutral-100/80 dark:bg-neutral-900/80 border-b border-neutral-300 dark:border-neutral-800 text-[11px] font-semibold">
+        <div class="rounded-lg border border-default overflow-hidden max-h-56">
+          <div class="px-3 py-1.5 bg-muted/80 border-b border-default text-[11px] font-semibold">
             {{ t('tmcut.audioOrchestration.candidatesTitle') }} ({{ candidates.length }})
           </div>
           <div class="overflow-y-auto max-h-40 p-2 space-y-1">
             <div v-for="c in candidates" :key="c.mediaRef" class="text-[11px] font-mono truncate">
               {{ c.mediaRef }} — {{ c.name }} ({{ c.origin }} / {{ c.licenseStatus }})
             </div>
-            <div v-if="candidates.length === 0" class="text-[11px] text-neutral-500 px-2 py-2">
+            <div v-if="candidates.length === 0" class="text-[11px] text-muted px-2 py-2">
               {{ t('tmcut.audioOrchestration.noCandidates') }}
             </div>
           </div>

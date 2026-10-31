@@ -590,7 +590,7 @@ async function handleAccept() {
 
     <div class="space-y-6">
       <!-- Modern Stepper -->
-      <div class="bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-800 rounded-2xl p-4">
+      <div class="bg-white/80 dark:bg-default/80 backdrop-blur-sm border border-default rounded-2xl p-4">
         <div class="flex items-center gap-2 overflow-x-auto">
           <template v-for="(s, index) in steps" :key="s.step">
             <div
@@ -605,7 +605,7 @@ async function handleAccept() {
                   ? 'bg-primary-500/20 text-primary-600 dark:text-primary-400'
                   : currentStep === s.step
                     ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/30'
-                    : 'bg-neutral-200 dark:bg-neutral-700 text-neutral-400'"
+                    : 'bg-accented text-dimmed'"
               >
                 <UIcon v-if="currentStep > s.step" name="i-lucide-check" class="w-4 h-4" />
                 <span v-else class="text-sm">{{ s.step }}</span>
@@ -613,19 +613,19 @@ async function handleAccept() {
               <div class="flex flex-col">
                 <span
                   class="text-[10px] uppercase tracking-wider font-semibold"
-                  :class="currentStep === s.step ? 'text-primary-600 dark:text-primary-400' : 'text-neutral-400'"
+                  :class="currentStep === s.step ? 'text-primary-600 dark:text-primary-400' : 'text-dimmed'"
                 >
                   {{ t('tmcut.steps.step', { step: s.step }) }}
                 </span>
                 <span
                   class="text-sm font-medium whitespace-nowrap"
-                  :class="currentStep === s.step ? 'text-neutral-900 dark:text-neutral-100' : 'text-neutral-500'"
+                  :class="currentStep === s.step ? 'text-highlighted' : 'text-muted'"
                 >
                   {{ s.title }}
                 </span>
               </div>
             </div>
-            <UIcon v-if="index < steps.length - 1" name="i-lucide-chevron-right" class="w-4 h-4 text-neutral-300 shrink-0" />
+            <UIcon v-if="index < steps.length - 1" name="i-lucide-chevron-right" class="w-4 h-4 text-dimmed shrink-0" />
           </template>
 
           <!-- Status chips -->
@@ -660,7 +660,7 @@ async function handleAccept() {
       <div class="steps-container animate-fade-in">
         <div v-if="currentStep === 1" key="step1" class="space-y-6 animate-slide-up">
           <div
-            class="bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm border-2 border-dashed border-neutral-300 dark:border-neutral-700 rounded-2xl p-12 text-center transition-colors duration-200"
+            class="bg-white/80 dark:bg-default/80 backdrop-blur-sm border-2 border-dashed border-default rounded-2xl p-12 text-center transition-colors duration-200"
             :class="{ 'ring-2 ring-primary bg-primary/5': sourceDropActive && !sourceBusy }"
             :aria-busy="sourceBusy"
             @dragenter.prevent.stop="onSourceDragEnter"
@@ -669,10 +669,10 @@ async function handleAccept() {
             @drop.prevent.stop="onSourceDrop"
           >
             <UIcon name="i-lucide-upload-cloud" class="w-14 h-14 text-primary mx-auto mb-4" />
-            <h3 class="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-1">
+            <h3 class="text-lg font-semibold text-highlighted mb-1">
               {{ t('tmcut.steps.dragDrop') }}
             </h3>
-            <p class="text-sm text-neutral-500 max-w-md mx-auto mb-6">
+            <p class="text-sm text-muted max-w-md mx-auto mb-6">
               {{ t('tmcut.steps.dragDropDesc') }}
             </p>
             <div class="flex justify-center gap-3">
@@ -703,9 +703,9 @@ async function handleAccept() {
             </p>
           </div>
 
-          <div v-if="sourceAsset" class="flex items-center gap-3 px-4 py-3 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-800 rounded-xl">
+          <div v-if="sourceAsset" class="flex items-center gap-3 px-4 py-3 bg-white/80 dark:bg-default/80 backdrop-blur-sm border border-default rounded-xl">
             <UIcon name="i-lucide-file-video" class="w-5 h-5 text-primary shrink-0" />
-            <span class="truncate font-medium text-neutral-900 dark:text-neutral-100 flex-1">{{ sourceAsset.name }}</span>
+            <span class="truncate font-medium text-highlighted flex-1">{{ sourceAsset.name }}</span>
             <TmcutBadge variant="success" size="xs">
               {{ $t('tmcut.steps.sourceReady') }}
             </TmcutBadge>
@@ -739,14 +739,14 @@ async function handleAccept() {
 
           <!-- AutoCut v2: Vocabulary & Filler Words Card -->
           <div
-            class="border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 bg-neutral-50 dark:bg-neutral-900/60 space-y-4"
+            class="border border-default rounded-xl p-4 bg-muted space-y-4"
           >
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
                 <div class="w-6 h-6 rounded bg-primary/10 flex items-center justify-center text-primary">
                   <UIcon name="i-lucide-sparkles" class="w-4 h-4" />
                 </div>
-                <h4 class="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                <h4 class="text-sm font-semibold text-highlighted">
                   {{ t('tmcut.autocutV2.title') }}
                 </h4>
               </div>
@@ -755,20 +755,20 @@ async function handleAccept() {
               </span>
             </div>
 
-            <p class="text-xs text-neutral-500">
+            <p class="text-xs text-muted">
               {{ t('tmcut.autocutV2.desc') }}
             </p>
 
             <div class="space-y-3 pt-1">
               <!-- Toggle Filler Words -->
               <!-- Toggle Filler Words -->
-              <div class="bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-800 rounded-xl p-4">
+              <div class="bg-white/80 dark:bg-default/80 backdrop-blur-sm border border-default rounded-xl p-4">
                 <div class="space-y-1">
                   <div class="flex items-center gap-2">
                     <UIcon name="i-lucide-filter-x" class="w-4 h-4 text-amber-500 shrink-0" />
-                    <span class="text-xs font-medium text-neutral-900 dark:text-neutral-100">{{ t('tmcut.autocutV2.filterFillerLabel') }}</span>
+                    <span class="text-xs font-medium text-highlighted">{{ t('tmcut.autocutV2.filterFillerLabel') }}</span>
                   </div>
-                  <p class="text-xs text-neutral-500">
+                  <p class="text-xs text-muted">
                     {{ t('tmcut.autocutV2.filterFillerDesc') }}
                   </p>
                 </div>
@@ -780,13 +780,13 @@ async function handleAccept() {
               </div>
 
               <!-- AI content triage -->
-              <div class="bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-800 rounded-xl p-4">
+              <div class="bg-white/80 dark:bg-default/80 backdrop-blur-sm border border-default rounded-xl p-4">
                 <div class="space-y-1">
                   <div class="flex items-center gap-2">
                     <UIcon name="i-lucide-sparkles" class="w-4 h-4 text-sky-500 shrink-0" />
-                    <span class="text-xs font-medium text-neutral-900 dark:text-neutral-100">{{ t('tmcut.autocutV2.aiAnalysisLabel') }}</span>
+                    <span class="text-xs font-medium text-highlighted">{{ t('tmcut.autocutV2.aiAnalysisLabel') }}</span>
                   </div>
-                  <p class="text-xs text-neutral-500">
+                  <p class="text-xs text-muted">
                     {{ t('tmcut.autocutV2.aiAnalysisDesc') }}
                   </p>
                 </div>
@@ -802,10 +802,10 @@ async function handleAccept() {
                  so the UI cannot promise more influence than the engine
                  allows. 0 skips the triage call entirely (see composable). -->
               <!-- AI Weight Slider -->
-              <div v-if="aiAnalysis" class="bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 space-y-3">
+              <div v-if="aiAnalysis" class="bg-white/80 dark:bg-default/80 backdrop-blur-sm border border-default rounded-xl p-4 space-y-3">
                 <div class="flex items-center justify-between">
-                  <span class="text-xs font-medium text-neutral-900 dark:text-neutral-100">{{ t('tmcut.autocutV2.aiWeightLabel') }}</span>
-                  <span class="text-xs tabular-nums text-neutral-500 font-mono">{{ Math.round(aiWeight * 100) }}%</span>
+                  <span class="text-xs font-medium text-highlighted">{{ t('tmcut.autocutV2.aiWeightLabel') }}</span>
+                  <span class="text-xs tabular-nums text-muted font-mono">{{ Math.round(aiWeight * 100) }}%</span>
                 </div>
                 <USlider
                   v-model="aiWeight"
@@ -814,21 +814,21 @@ async function handleAccept() {
                   :max="0.5"
                   :step="0.05"
                 />
-                <p class="text-xs text-neutral-400">
+                <p class="text-xs text-dimmed">
                   {{ t('tmcut.autocutV2.aiWeightDesc') }}
                 </p>
               </div>
 
               <!-- Priority Keywords Input -->
-              <div class="bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 space-y-3">
+              <div class="bg-white/80 dark:bg-default/80 backdrop-blur-sm border border-default rounded-xl p-4 space-y-3">
                 <div class="flex items-center justify-between">
                   <div class="flex items-center gap-2">
                     <UIcon name="i-lucide-tag" class="w-4 h-4 text-purple-500 shrink-0" />
-                    <span class="text-xs font-medium text-neutral-900 dark:text-neutral-100">{{ t('tmcut.autocutV2.keywordsLabel') }}</span>
+                    <span class="text-xs font-medium text-highlighted">{{ t('tmcut.autocutV2.keywordsLabel') }}</span>
                   </div>
-                  <span class="text-xs text-neutral-400">{{ t('tmcut.autocutV2.keywordsOptional') }}</span>
+                  <span class="text-xs text-dimmed">{{ t('tmcut.autocutV2.keywordsOptional') }}</span>
                 </div>
-                <div class="flex flex-wrap items-center gap-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white/80 dark:bg-neutral-900/80 px-2 py-1.5">
+                <div class="flex flex-wrap items-center gap-1.5 rounded-lg border border-default bg-white/80 dark:bg-default/80 px-2 py-1.5">
                   <span v-for="chip in keywordChips" :key="chip" class="inline-flex items-center gap-1 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 px-2 py-0.5 text-xs font-medium">
                     {{ chip }}
                     <button
@@ -844,14 +844,14 @@ async function handleAccept() {
                     id="tmcut-autocut-keyword"
                     v-model="keywordDraft"
                     type="text"
-                    class="flex-1 min-w-24 bg-transparent text-xs text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 focus:outline-none"
+                    class="flex-1 min-w-24 bg-transparent text-xs text-highlighted placeholder:text-dimmed focus:outline-none"
                     :placeholder="keywordChips.length ? '' : $t('tmcut.autocutV2.keywordsPlaceholder')"
                     :aria-label="$t('tmcut.autocutV2.keywordsLabel')"
                     @keydown="onKeywordDraftKeydown"
                     @blur="commitKeywordDraft"
                   >
                 </div>
-                <p class="text-xs text-neutral-400">
+                <p class="text-xs text-dimmed">
                   {{ t('tmcut.autocutV2.keywordsHelp') }}
                 </p>
               </div>
@@ -860,7 +860,7 @@ async function handleAccept() {
 
           <TmcutAiConnect class="my-4" />
 
-          <div class="flex justify-between pt-2 border-t border-neutral-200 dark:border-neutral-800">
+          <div class="flex justify-between pt-2 border-t border-default">
             <TmcutButton variant="soft" color="neutral" @click="currentStep = 1">
               {{ t('tmcut.back') }}
             </TmcutButton>
@@ -882,13 +882,13 @@ async function handleAccept() {
           <!-- Analyzing state -->
           <div
             v-if="analyzing"
-            class="border border-neutral-200 dark:border-neutral-800 rounded-xl p-8 text-center bg-neutral-50 dark:bg-neutral-900/50"
+            class="border border-default rounded-xl p-8 text-center bg-muted"
           >
             <UIcon name="i-lucide-loader-circle" class="w-10 h-10 text-primary mx-auto mb-3 animate-spin" />
-            <h3 class="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+            <h3 class="text-sm font-semibold text-highlighted">
               {{ t('tmcut.steps.analyzing') }}
             </h3>
-            <p class="text-xs text-neutral-500 mt-1">
+            <p class="text-xs text-muted mt-1">
               {{ stageKey ? t(stageKey) : '' }}
             </p>
           </div>
@@ -926,12 +926,12 @@ async function handleAccept() {
                     <div class="w-6 h-6 rounded bg-primary/10 flex items-center justify-center text-primary">
                       <UIcon name="i-lucide-list-ordered" class="w-4 h-4" />
                     </div>
-                    <h3 class="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                    <h3 class="text-sm font-semibold text-highlighted">
                       {{ t('tmcut.wizard.reviewList', { count: segmentCount }) }}
                     </h3>
                   </div>
                   <span
-                    class="font-mono text-[11px] px-2 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-500"
+                    class="font-mono text-[11px] px-2 py-0.5 rounded bg-muted text-muted"
                   >
                     EDL · {{ edlResult!.edl.profile }} · {{ edlResult!.edl.analyzerVersion }}
                   </span>
@@ -939,28 +939,28 @@ async function handleAccept() {
 
                 <!-- Metric stat strip + bulk actions -->
                 <div
-                  class="flex flex-wrap items-center justify-between gap-3 bg-neutral-50 dark:bg-neutral-900/60 border border-neutral-200 dark:border-neutral-800 rounded-xl p-3"
+                  class="flex flex-wrap items-center justify-between gap-3 bg-muted border border-default rounded-xl p-3"
                 >
                   <div class="flex items-center gap-4">
                     <div class="flex flex-col">
-                      <span class="text-[10px] uppercase tracking-wider text-neutral-400">
+                      <span class="text-[10px] uppercase tracking-wider text-dimmed">
                         {{ t('tmcut.wizard.keptLabel') }}
                       </span>
                       <div class="flex items-baseline gap-1">
                         <span class="font-mono text-lg font-bold text-primary">
                           {{ formatDurationSec(keptDuration) }}
                         </span>
-                        <span class="font-mono text-[11px] text-neutral-400">
+                        <span class="font-mono text-[11px] text-dimmed">
                           / {{ t('tmcut.wizard.sourceLabel', { duration: formatDurationSec(sourceDuration) }) }}
                         </span>
                       </div>
                     </div>
-                    <div class="h-6 w-px bg-neutral-200 dark:bg-neutral-700" />
+                    <div class="h-6 w-px bg-accented" />
                     <div class="flex flex-col">
-                      <span class="text-[10px] uppercase tracking-wider text-neutral-400">
+                      <span class="text-[10px] uppercase tracking-wider text-dimmed">
                         {{ t('tmcut.wizard.compressionLabel') }}
                       </span>
-                      <span class="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                      <span class="text-sm font-semibold text-highlighted">
                         {{ t('tmcut.wizard.compressionValue', { pct: compressionPct }) }}
                       </span>
                     </div>
@@ -1002,8 +1002,8 @@ async function handleAccept() {
                 </div>
 
                 <!-- Profile scorer selector: clicking re-runs the real scoring pipeline -->
-                <div class="bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 space-y-3">
-                  <span class="text-xs uppercase tracking-wider text-neutral-400">{{ t('tmcut.wizard.scorerLabel') }}</span>
+                <div class="bg-white/80 dark:bg-default/80 backdrop-blur-sm border border-default rounded-xl p-4 space-y-3">
+                  <span class="text-xs uppercase tracking-wider text-dimmed">{{ t('tmcut.wizard.scorerLabel') }}</span>
                   <div class="grid grid-cols-1 md:grid-cols-3 gap-1.5">
                     <TmcutProfileCard
                       v-for="prof in aiProfiles"
@@ -1018,9 +1018,9 @@ async function handleAccept() {
                 <!-- Segment list cards -->
                 <div
                   v-if="segmentCount === 0"
-                  class="border border-dashed border-neutral-300 dark:border-neutral-700 rounded-xl p-8 text-center"
+                  class="border border-dashed border-default rounded-xl p-8 text-center"
                 >
-                  <p class="text-sm text-neutral-500">
+                  <p class="text-sm text-muted">
                     {{ t('tmcut.steps.noSegments') }}
                   </p>
                 </div>
@@ -1033,8 +1033,8 @@ async function handleAccept() {
                     :class="activeSegmentIndex === index
                       ? 'border-primary/50 bg-primary/5 shadow-sm'
                       : included.includes(index)
-                        ? 'border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 hover:border-neutral-300'
-                        : 'border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/50 opacity-60'"
+                        ? 'border-default bg-white dark:bg-default hover:border-default'
+                        : 'border-default bg-muted opacity-60'"
                     @click="selectSegment(index)"
                   >
                     <!-- Checkbox & sequence # -->
@@ -1047,7 +1047,7 @@ async function handleAccept() {
                       />
                       <span
                         class="font-mono text-[11px] font-semibold"
-                        :class="activeSegmentIndex === index ? 'text-primary' : 'text-neutral-400'"
+                        :class="activeSegmentIndex === index ? 'text-primary' : 'text-dimmed'"
                       >
                         #{{ String(index + 1).padStart(2, '0') }}
                       </span>
@@ -1058,7 +1058,7 @@ async function handleAccept() {
                        falling back to the shared source poster while the
                        batch extracts / on web sessions. -->
                     <div
-                      class="relative w-28 h-16 rounded-lg overflow-hidden shrink-0 bg-neutral-200 dark:bg-neutral-800"
+                      class="relative w-28 h-16 rounded-lg overflow-hidden shrink-0 bg-accented"
                       :class="{ grayscale: !included.includes(index) }"
                     >
                       <img
@@ -1067,7 +1067,7 @@ async function handleAccept() {
                         class="w-full h-full object-cover"
                         alt=""
                       >
-                      <UIcon v-else name="i-lucide-film" class="w-6 h-6 text-neutral-400 absolute inset-0 m-auto" />
+                      <UIcon v-else name="i-lucide-film" class="w-6 h-6 text-dimmed absolute inset-0 m-auto" />
                       <span class="absolute bottom-1 right-1 px-1 rounded bg-black/70 text-white font-mono text-[9px]">
                         {{ formatRange(segment.start, segment.end) }}
                       </span>
@@ -1077,10 +1077,10 @@ async function handleAccept() {
                     <div class="flex flex-col flex-1 min-w-0 gap-1">
                       <div class="flex items-center justify-between gap-2">
                         <div class="flex items-center gap-1.5 min-w-0">
-                          <span class="font-mono text-xs text-neutral-900 dark:text-neutral-100 font-semibold">
+                          <span class="font-mono text-xs text-highlighted font-semibold">
                             {{ formatRange(segment.start, segment.end) }}
                           </span>
-                          <span class="font-mono text-[10px] text-neutral-400">
+                          <span class="font-mono text-[10px] text-dimmed">
                             ({{ Math.max(0, segment.end - segment.start).toFixed(1) }}s)
                           </span>
                         </div>
@@ -1094,7 +1094,7 @@ async function handleAccept() {
                       <p v-if="transcriptLines[index]" class="text-xs italic text-primary/80 truncate">
                         “{{ transcriptLines[index] }}”
                       </p>
-                      <div class="h-1.5 rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden">
+                      <div class="h-1.5 rounded-full bg-accented overflow-hidden">
                         <div
                           class="h-full rounded-full transition-all"
                           :class="scoreBarClass(segment.score)"
@@ -1103,7 +1103,7 @@ async function handleAccept() {
                       </div>
                       <div class="flex flex-wrap items-center gap-1.5">
                         <span
-                          class="text-[10px] px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-500 truncate"
+                          class="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted truncate"
                         >
                           {{ segment.reason }}
                         </span>
@@ -1131,7 +1131,7 @@ async function handleAccept() {
                     <div class="flex items-center gap-1 shrink-0 self-end md:self-center">
                       <button
                         type="button"
-                        class="w-7 h-7 flex items-center justify-center rounded bg-neutral-100 dark:bg-neutral-800 hover:bg-primary hover:text-neutral-900 text-neutral-600 dark:text-neutral-300 transition-colors cursor-pointer"
+                        class="w-7 h-7 flex items-center justify-center rounded bg-muted hover:bg-primary hover:text-highlighted text-toned transition-colors cursor-pointer"
                         :title="t('tmcut.wizard.playSegment')"
                         @click.stop="selectSegment(index, true)"
                       >
@@ -1146,12 +1146,12 @@ async function handleAccept() {
               <div class="xl:col-span-5 flex flex-col gap-4">
                 <!-- Video player mini-review card -->
                 <div
-                  class="border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 bg-white dark:bg-neutral-900 flex flex-col gap-2"
+                  class="border border-default rounded-xl p-4 bg-white dark:bg-default flex flex-col gap-2"
                 >
                   <div class="flex items-center justify-between gap-2">
                     <div class="flex items-center gap-1.5 min-w-0">
                       <UIcon name="i-lucide-rectangle-vertical" class="w-4 h-4 text-primary shrink-0" />
-                      <span class="text-xs font-semibold text-neutral-900 dark:text-neutral-100 truncate">
+                      <span class="text-xs font-semibold text-highlighted truncate">
                         {{ t('tmcut.wizard.playerTitle', {
                           index: activeSegmentIndex === null ? '–' : activeSegmentIndex
                             + 1
@@ -1159,7 +1159,7 @@ async function handleAccept() {
                       </span>
                     </div>
                     <span
-                      class="font-mono text-[10px] px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-500 shrink-0"
+                      class="font-mono text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted shrink-0"
                     >
                       {{ t('tmcut.wizard.guideTag') }}
                     </span>
@@ -1189,7 +1189,7 @@ async function handleAccept() {
                         <span>{{ t('tmcut.wizard.guideTag') }}</span>
                       </div>
                       <div class="absolute bottom-1 inset-x-1 text-center">
-                        <span class="px-1.5 py-0.5 rounded bg-black/70 text-[9px] font-mono text-neutral-300">
+                        <span class="px-1.5 py-0.5 rounded bg-black/70 text-[9px] font-mono text-dimmed">
                           {{ t('tmcut.wizard.guideBottom') }}
                         </span>
                       </div>
@@ -1211,7 +1211,7 @@ async function handleAccept() {
                   <!-- Mini scrubber + transport -->
                   <div class="flex flex-col gap-1.5">
                     <div
-                      class="relative w-full h-2 rounded-full bg-neutral-200 dark:bg-neutral-700 overflow-hidden cursor-pointer"
+                      class="relative w-full h-2 rounded-full bg-accented overflow-hidden cursor-pointer"
                       @click="seekReview"
                     >
                       <div
@@ -1219,12 +1219,12 @@ async function handleAccept() {
                         :style="{ width: `${reviewProgress}%` }"
                       />
                     </div>
-                    <div class="flex items-center justify-between font-mono text-[10px] text-neutral-400">
+                    <div class="flex items-center justify-between font-mono text-[10px] text-dimmed">
                       <span>In: {{ activeSegment ? formatDurationSec(activeSegment.start) : '--:--' }}</span>
                       <div class="flex items-center gap-2">
                         <button
                           type="button"
-                          class="text-neutral-500 hover:text-primary transition-colors cursor-pointer"
+                          class="text-muted hover:text-primary transition-colors cursor-pointer"
                           :title="t('tmcut.wizard.replay5')"
                           @click="nudgeReview(-5)"
                         >
@@ -1232,7 +1232,7 @@ async function handleAccept() {
                         </button>
                         <button
                           type="button"
-                          class="w-6 h-6 rounded-full bg-primary text-neutral-900 flex items-center justify-center cursor-pointer"
+                          class="w-6 h-6 rounded-full bg-primary text-highlighted flex items-center justify-center cursor-pointer"
                           :title="reviewPlaying ? t('tmcut.wizard.pause') : t('tmcut.wizard.play')"
                           @click="toggleReviewPlay"
                         >
@@ -1240,7 +1240,7 @@ async function handleAccept() {
                         </button>
                         <button
                           type="button"
-                          class="text-neutral-500 hover:text-primary transition-colors cursor-pointer"
+                          class="text-muted hover:text-primary transition-colors cursor-pointer"
                           :title="t('tmcut.wizard.forward5')"
                           @click="nudgeReview(5)"
                         >
@@ -1253,64 +1253,64 @@ async function handleAccept() {
                 </div>
 
                 <!-- AI analysis breakdown -->
-                <div class="bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-800 rounded-2xl p-4 flex flex-col gap-2">
+                <div class="bg-white/80 dark:bg-default/80 backdrop-blur-sm border border-default rounded-2xl p-4 flex flex-col gap-2">
                   <div class="flex items-center justify-between">
                     <div class="flex items-center gap-1.5">
                       <UIcon name="i-lucide-bar-chart-3" class="w-4 h-4 text-primary-500" />
-                      <span class="text-xs font-semibold text-neutral-900 dark:text-neutral-100">{{ t('tmcut.wizard.breakdownTitle') }}</span>
+                      <span class="text-xs font-semibold text-highlighted">{{ t('tmcut.wizard.breakdownTitle') }}</span>
                     </div>
                     <TmcutBadge variant="neutral" size="xs" class="font-mono">
                       §65.6
                     </TmcutBadge>
                   </div>
                   <div class="grid grid-cols-2 gap-1.5">
-                    <div class="bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-800 rounded-lg p-2.5 flex flex-col">
+                    <div class="bg-white/80 dark:bg-default/80 backdrop-blur-sm border border-default rounded-lg p-2.5 flex flex-col">
                       <div class="flex items-center justify-between mb-0.5">
-                        <span class="text-xs text-neutral-400">{{ t('tmcut.wizard.metricScenes') }}</span>
+                        <span class="text-xs text-dimmed">{{ t('tmcut.wizard.metricScenes') }}</span>
                         <UIcon name="i-lucide-scissors" class="w-3.5 h-3.5 text-primary-500" />
                       </div>
-                      <span class="text-sm font-bold text-neutral-900 dark:text-neutral-100">{{ edlResult!.sceneCount }}</span>
-                      <span class="text-xs text-neutral-500 truncate">{{ t('tmcut.wizard.metricScenesSub') }}</span>
+                      <span class="text-sm font-bold text-highlighted">{{ edlResult!.sceneCount }}</span>
+                      <span class="text-xs text-muted truncate">{{ t('tmcut.wizard.metricScenesSub') }}</span>
                     </div>
-                    <div class="bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-800 rounded-lg p-2.5 flex flex-col">
+                    <div class="bg-white/80 dark:bg-default/80 backdrop-blur-sm border border-default rounded-lg p-2.5 flex flex-col">
                       <div class="flex items-center justify-between mb-0.5">
-                        <span class="text-xs text-neutral-400">{{ t('tmcut.wizard.metricSilences') }}</span>
+                        <span class="text-xs text-dimmed">{{ t('tmcut.wizard.metricSilences') }}</span>
                         <UIcon name="i-lucide-volume-x" class="w-3.5 h-3.5 text-primary-500" />
                       </div>
-                      <span class="text-sm font-bold text-neutral-900 dark:text-neutral-100">{{ edlResult!.silenceCount }}</span>
-                      <span class="text-xs text-neutral-500 truncate">{{ t('tmcut.wizard.metricSilencesSub', { duration: formatDurationSec(edlResult!.silenceRemovedSec) }) }}</span>
+                      <span class="text-sm font-bold text-highlighted">{{ edlResult!.silenceCount }}</span>
+                      <span class="text-xs text-muted truncate">{{ t('tmcut.wizard.metricSilencesSub', { duration: formatDurationSec(edlResult!.silenceRemovedSec) }) }}</span>
                     </div>
-                    <div class="bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-800 rounded-lg p-2.5 flex flex-col">
+                    <div class="bg-white/80 dark:bg-default/80 backdrop-blur-sm border border-default rounded-lg p-2.5 flex flex-col">
                       <div class="flex items-center justify-between mb-0.5">
-                        <span class="text-xs text-neutral-400">{{ t('tmcut.wizard.metricSpeech') }}</span>
+                        <span class="text-xs text-dimmed">{{ t('tmcut.wizard.metricSpeech') }}</span>
                         <UIcon name="i-lucide-mic" class="w-3.5 h-3.5 text-primary-500" />
                       </div>
-                      <span class="text-sm font-bold text-neutral-900 dark:text-neutral-100">{{ edlResult!.transcriptUsed ? `${speechPct}%` : '—' }}</span>
-                      <span class="text-xs text-neutral-500 truncate">{{ edlResult!.transcriptUsed ? $t('tmcut.steps.transcriptOn') : $t('tmcut.steps.transcriptOff') }}</span>
+                      <span class="text-sm font-bold text-highlighted">{{ edlResult!.transcriptUsed ? `${speechPct}%` : '—' }}</span>
+                      <span class="text-xs text-muted truncate">{{ edlResult!.transcriptUsed ? $t('tmcut.steps.transcriptOn') : $t('tmcut.steps.transcriptOff') }}</span>
                     </div>
-                    <div class="bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-800 rounded-lg p-2.5 flex flex-col">
+                    <div class="bg-white/80 dark:bg-default/80 backdrop-blur-sm border border-default rounded-lg p-2.5 flex flex-col">
                       <div class="flex items-center justify-between mb-0.5">
-                        <span class="text-xs text-neutral-400">{{ t('tmcut.wizard.metricSource') }}</span>
+                        <span class="text-xs text-dimmed">{{ t('tmcut.wizard.metricSource') }}</span>
                         <UIcon name="i-lucide-clock" class="w-3.5 h-3.5 text-primary-500" />
                       </div>
-                      <span class="text-sm font-bold text-neutral-900 dark:text-neutral-100">{{ formatDurationSec(sourceDuration) }}</span>
-                      <span class="text-xs text-neutral-500 truncate">{{ sourceAsset?.name || '—' }}</span>
+                      <span class="text-sm font-bold text-highlighted">{{ formatDurationSec(sourceDuration) }}</span>
+                      <span class="text-xs text-muted truncate">{{ sourceAsset?.name || '—' }}</span>
                     </div>
                   </div>
 
                   <!-- Safe draft project notice -->
-                  <div class="bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-800 rounded-xl p-3 flex items-start gap-2">
+                  <div class="bg-white/80 dark:bg-default/80 backdrop-blur-sm border border-default rounded-xl p-3 flex items-start gap-2">
                     <div class="w-6 h-6 rounded-full bg-primary-500/20 text-primary-500 flex items-center justify-center shrink-0 mt-0.5">
                       <UIcon name="i-lucide-shield-check" class="w-3 h-3" />
                     </div>
                     <div class="flex flex-col gap-0.5">
                       <div class="flex items-center gap-1.5">
-                        <span class="text-xs font-semibold text-neutral-900 dark:text-neutral-100">{{ t('tmcut.wizard.draftNoticeTitle') }}</span>
+                        <span class="text-xs font-semibold text-highlighted">{{ t('tmcut.wizard.draftNoticeTitle') }}</span>
                         <TmcutBadge variant="primary" size="xs" class="font-mono">
                           Non-destructive
                         </TmcutBadge>
                       </div>
-                      <p class="text-xs text-neutral-500 leading-relaxed">
+                      <p class="text-xs text-muted leading-relaxed">
                         {{ t('tmcut.wizard.draftNotice') }}
                       </p>
                     </div>
@@ -1321,20 +1321,20 @@ async function handleAccept() {
 
             <!-- Bottom action bar -->
             <div
-              class="sticky bottom-0 z-40 px-3 py-2.5 bg-white/95 dark:bg-neutral-950/95 backdrop-blur border-t border-neutral-200 dark:border-neutral-800 rounded-b-xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg"
+              class="sticky bottom-0 z-40 px-3 py-2.5 bg-white/95 dark:bg-studio-canvas/95 backdrop-blur border-t border-default rounded-b-xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg"
             >
               <div class="flex items-center gap-2 text-sm">
                 <span class="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                <span class="font-medium text-neutral-900 dark:text-neutral-100">
+                <span class="font-medium text-highlighted">
                   {{ t('tmcut.wizard.selectedSummary', { selected: included.length, total: segmentCount }) }}
                 </span>
-                <span class="text-neutral-300 dark:text-neutral-700">•</span>
-                <span class="text-neutral-500">{{ t('tmcut.wizard.publishDuration') }}</span>
+                <span class="text-dimmed">•</span>
+                <span class="text-muted">{{ t('tmcut.wizard.publishDuration') }}</span>
                 <span class="font-mono font-bold text-primary">{{ formatDurationSec(keptDuration) }}</span>
                 <!-- Phase 7: optional auto-captions from the real transcript -->
                 <UCheckbox v-if="edlResult?.transcriptUsed" v-model="autoCaptions" size="sm">
                   <template #label>
-                    <span class="text-xs text-neutral-500">{{ t('tmcut.wizard.autoCaptions') }}</span>
+                    <span class="text-xs text-muted">{{ t('tmcut.wizard.autoCaptions') }}</span>
                   </template>
                 </UCheckbox>
               </div>
@@ -1379,7 +1379,7 @@ async function handleAccept() {
             <UIcon name="i-lucide-check-circle" class="w-5 h-5" />
             {{ t('tmcut.steps.edlDoneTitle') }}
           </div>
-          <p class="text-xs text-neutral-400">
+          <p class="text-xs text-dimmed">
             {{ t('tmcut.steps.edlDoneDesc') }}
           </p>
 

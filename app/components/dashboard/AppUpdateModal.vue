@@ -26,7 +26,7 @@ function formatSpeed(bytesPerSecond: number): string {
       <div class="space-y-4 text-xs">
         <!-- Version Info Card -->
         <div
-          class="p-3.5 rounded-xl border border-neutral-200/80 dark:border-neutral-800 bg-neutral-50/60 dark:bg-neutral-900/40 flex items-center justify-between"
+          class="p-3.5 rounded-xl border border-default/80 bg-muted/60 flex items-center justify-between"
         >
           <div class="flex items-center gap-3">
             <div class="p-2 rounded-lg bg-primary/10 text-primary">
@@ -61,12 +61,12 @@ function formatSpeed(bytesPerSecond: number): string {
 
         <!-- Release Notes Section -->
         <div v-if="updater.updateInfo.value?.releaseNotes" class="space-y-1.5">
-          <div class="flex items-center gap-1.5 font-semibold text-neutral-700 dark:text-neutral-300">
+          <div class="flex items-center gap-1.5 font-semibold text-toned">
             <UIcon name="i-lucide-file-text" class="size-3.5 text-primary" />
             <span>{{ t('appUpdate.changelog') }}</span>
           </div>
           <div
-            class="max-h-48 overflow-y-auto p-3 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white/60 dark:bg-neutral-900/60 font-mono text-[11px] leading-relaxed whitespace-pre-wrap select-text"
+            class="max-h-48 overflow-y-auto p-3 rounded-lg border border-default bg-white/60 dark:bg-default/60 font-mono text-[11px] leading-relaxed whitespace-pre-wrap select-text"
           >
             {{ updater.updateInfo.value.releaseNotes }}
           </div>
@@ -105,7 +105,7 @@ function formatSpeed(bytesPerSecond: number): string {
             <p class="font-semibold text-success">
               {{ t('appUpdate.downloadCompleted') }}
             </p>
-            <p class="text-xs text-neutral-600 dark:text-neutral-300">
+            <p class="text-xs text-toned">
               {{ t('appUpdate.readyToInstallDesc') }}
             </p>
           </div>

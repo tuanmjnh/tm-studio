@@ -154,7 +154,7 @@ function closeModal() {
   >
     <template #content>
       <!-- Modal Header -->
-      <div class="px-6 py-4 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between">
+      <div class="px-6 py-4 border-b border-default flex items-center justify-between">
         <div class="flex items-center gap-3">
           <div
             class="w-9 h-9 rounded-lg bg-primary-500/10 dark:bg-primary-400/10 flex items-center justify-center text-primary-500"
@@ -162,13 +162,13 @@ function closeModal() {
             <UIcon name="i-lucide-sparkles" class="w-5 h-5" />
           </div>
           <div>
-            <h3 class="text-base font-semibold text-neutral-900 dark:text-white flex items-center gap-2">
+            <h3 class="text-base font-semibold text-highlighted dark:text-white flex items-center gap-2">
               {{ t('tmcut.aiScript.title') }}
               <UBadge :color="hasAiKey ? 'success' : 'neutral'" variant="subtle" size="xs">
                 {{ hasAiKey ? t('tmcut.aiScript.gatewayOnline') : t('tmcut.aiScript.presetMode') }}
               </UBadge>
             </h3>
-            <p class="text-xs text-neutral-500 dark:text-neutral-400">
+            <p class="text-xs text-muted">
               {{ t('tmcut.aiScript.subtitle') }}
             </p>
           </div>
@@ -194,7 +194,7 @@ function closeModal() {
           <TmcutAiModelPicker @applied="checkGatewayStatus()" />
 
           <div>
-            <label for="tmcut-aiscriptmodal-topic-label" class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+            <label for="tmcut-aiscriptmodal-topic-label" class="block text-xs font-medium text-toned mb-1.5">
               {{ t('tmcut.aiScript.topicLabel') }}
             </label>
             <UTextarea
@@ -207,7 +207,7 @@ function closeModal() {
           </div>
 
           <div>
-            <label class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+            <label class="block text-xs font-medium text-toned mb-1.5">
               {{ t('tmcut.aiScript.platformLabel') }}
             </label>
             <div class="grid grid-cols-2 gap-2">
@@ -218,7 +218,7 @@ function closeModal() {
                 class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border text-left transition-all"
                 :class="selectedPlatform === plat.value
                   ? 'border-primary-500 bg-primary-50/50 dark:bg-primary-950/30 text-primary-600 dark:text-primary-400 font-semibold'
-                  : 'border-neutral-200 dark:border-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-900'"
+                  : 'border-default text-toned hover:bg-muted'"
                 @click="selectedPlatform = plat.value"
               >
                 <UIcon :name="plat.icon" class="w-4 h-4 shrink-0" />
@@ -228,7 +228,7 @@ function closeModal() {
           </div>
 
           <div>
-            <label class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+            <label class="block text-xs font-medium text-toned mb-1.5">
               {{ t('tmcut.aiScript.durationLabel') }}
             </label>
             <div class="flex items-center gap-2">
@@ -239,7 +239,7 @@ function closeModal() {
                 class="flex-1 py-1.5 text-xs font-medium rounded-md border text-center transition-all"
                 :class="selectedDuration === dur.value
                   ? 'border-primary-500 bg-primary-50/50 dark:bg-primary-950/30 text-primary-600 dark:text-primary-400'
-                  : 'border-neutral-200 dark:border-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-900'"
+                  : 'border-default text-toned hover:bg-muted'"
                 @click="selectedDuration = dur.value"
               >
                 {{ dur.label }}
@@ -261,8 +261,8 @@ function closeModal() {
           </div>
 
           <!-- Curated Presets Bar -->
-          <div class="pt-3 border-t border-neutral-200 dark:border-neutral-800">
-            <span class="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider block mb-2">
+          <div class="pt-3 border-t border-default">
+            <span class="text-[11px] font-medium text-muted uppercase tracking-wider block mb-2">
               {{ t('tmcut.aiScript.samplePresets') }}
             </span>
             <div class="flex flex-col gap-1.5">
@@ -270,11 +270,11 @@ function closeModal() {
                 v-for="(preset, idx) in CURATED_SCRIPT_PRESETS"
                 :key="idx"
                 type="button"
-                class="text-left px-2.5 py-1.5 rounded text-xs text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition-colors flex items-center justify-between group"
+                class="text-left px-2.5 py-1.5 rounded text-xs text-toned hover:bg-muted transition-colors flex items-center justify-between group"
                 @click="handleLoadPreset(preset)"
               >
                 <span class="truncate group-hover:text-primary-500">{{ preset.title }}</span>
-                <span class="text-[10px] text-neutral-500 dark:text-neutral-400 shrink-0 ml-2">{{ preset.targetDurationSec }}s</span>
+                <span class="text-[10px] text-muted shrink-0 ml-2">{{ preset.targetDurationSec }}s</span>
               </button>
             </div>
           </div>
@@ -284,13 +284,13 @@ function closeModal() {
         <div class="lg:col-span-7 flex flex-col min-h-87.5">
           <template v-if="generatedScript">
             <div
-              class="flex items-center justify-between pb-3 border-b border-neutral-200 dark:border-neutral-800 mb-3"
+              class="flex items-center justify-between pb-3 border-b border-default mb-3"
             >
               <div>
-                <h4 class="text-sm font-semibold text-neutral-900 dark:text-white">
+                <h4 class="text-sm font-semibold text-highlighted dark:text-white">
                   {{ generatedScript.title }}
                 </h4>
-                <p class="text-xs text-neutral-500 line-clamp-1">
+                <p class="text-xs text-muted line-clamp-1">
                   {{ generatedScript.synopsis }}
                 </p>
               </div>
@@ -309,7 +309,7 @@ function closeModal() {
               <div
                 v-for="scene in generatedScript.scenes"
                 :key="scene.id"
-                class="p-3.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/40 text-xs flex flex-col gap-2 transition-all hover:border-neutral-300 dark:hover:border-neutral-700"
+                class="p-3.5 rounded-lg border border-default bg-muted/50 text-xs flex flex-col gap-2 transition-all hover:border-default"
               >
                 <div class="flex items-center justify-between">
                   <div class="flex items-center gap-2">
@@ -318,7 +318,7 @@ function closeModal() {
                     >
                       {{ scene.order }}
                     </span>
-                    <span class="font-semibold text-neutral-800 dark:text-neutral-200">
+                    <span class="font-semibold text-highlighted">
                       {{ scene.title }}
                     </span>
                   </div>
@@ -327,14 +327,14 @@ function closeModal() {
                   </UBadge>
                 </div>
 
-                <div v-if="scene.visualPrompt" class="flex items-start gap-2 text-neutral-600 dark:text-neutral-400">
-                  <UIcon name="i-lucide-video" class="w-3.5 h-3.5 shrink-0 mt-0.5 text-neutral-500 dark:text-neutral-400" />
+                <div v-if="scene.visualPrompt" class="flex items-start gap-2 text-toned">
+                  <UIcon name="i-lucide-video" class="w-3.5 h-3.5 shrink-0 mt-0.5 text-muted" />
                   <span class="italic leading-relaxed">{{ scene.visualPrompt }}</span>
                 </div>
 
                 <div
                   v-if="scene.voiceover"
-                  class="flex items-start gap-2 text-neutral-700 dark:text-neutral-300 bg-white dark:bg-neutral-950/60 p-2 rounded border border-neutral-200/60 dark:border-neutral-800/60"
+                  class="flex items-start gap-2 text-toned bg-white dark:bg-studio-canvas/60 p-2 rounded border border-default/60"
                 >
                   <UIcon name="i-lucide-mic" class="w-3.5 h-3.5 shrink-0 mt-0.5 text-primary-500" />
                   <span class="leading-relaxed">"{{ scene.voiceover }}"</span>
@@ -354,17 +354,17 @@ function closeModal() {
           <!-- Empty State -->
           <div
             v-else
-            class="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-neutral-200 dark:border-neutral-800 rounded-xl p-8 text-center text-neutral-500 dark:text-neutral-400"
+            class="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-default rounded-xl p-8 text-center text-muted"
           >
             <div
-              class="w-12 h-12 rounded-xl bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center mb-3 text-neutral-500 dark:text-neutral-400"
+              class="w-12 h-12 rounded-xl bg-muted flex items-center justify-center mb-3 text-muted"
             >
               <UIcon name="i-lucide-film" class="w-6 h-6" />
             </div>
-            <p class="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+            <p class="text-sm font-medium text-toned mb-1">
               {{ t('tmcut.aiScript.emptyStateTitle') }}
             </p>
-            <p class="text-xs text-neutral-500 dark:text-neutral-400 max-w-sm">
+            <p class="text-xs text-muted max-w-sm">
               {{ t('tmcut.aiScript.emptyStateDesc') }}
             </p>
           </div>
@@ -373,7 +373,7 @@ function closeModal() {
 
       <!-- Modal Footer -->
       <div
-        class="px-6 py-3.5 border-t border-neutral-200 dark:border-neutral-800 flex items-center justify-between bg-neutral-50/50 dark:bg-neutral-900/30"
+        class="px-6 py-3.5 border-t border-default flex items-center justify-between bg-muted/50"
       >
         <div>
           <UButton

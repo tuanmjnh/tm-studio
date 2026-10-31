@@ -84,9 +84,9 @@ const trackStyles = computed(() => {
       }
     default:
       return {
-        bg: 'bg-neutral-300/20 dark:bg-neutral-600/20 border-neutral-500/60 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-300/30 dark:hover:bg-neutral-600/30',
-        activeBg: 'bg-neutral-300/40 dark:bg-neutral-600/40 border-neutral-400 ring-2 ring-neutral-400',
-        handle: 'bg-neutral-400',
+        bg: 'bg-accented/20 border-accented/60 text-toned hover:bg-accented/30',
+        activeBg: 'bg-accented/40 border-accented ring-2 ring-accented',
+        handle: 'bg-accented',
         icon: 'i-lucide-film'
       }
   }
@@ -616,14 +616,14 @@ function runToggleLock() {
       v-if="menuOpen"
       ref="menuEl"
       data-tmcut-clip-menu
-      class="fixed z-[120] w-60 max-h-[calc(100vh-16px)] overflow-y-auto rounded-lg border border-neutral-400 bg-neutral-100/95 p-1.5 text-xs text-neutral-700 shadow-2xl backdrop-blur-sm select-none dark:border-neutral-700 dark:bg-neutral-900/95 dark:text-neutral-200"
+      class="fixed z-[120] w-60 max-h-[calc(100vh-16px)] overflow-y-auto rounded-lg border border-accented bg-muted/95 p-1.5 text-xs text-toned shadow-2xl backdrop-blur-sm select-none dark:border-accented dark:bg-default/95 dark:text-highlighted"
       :class="menuReady ? 'opacity-100' : 'opacity-0'"
       :style="{ left: `${menuPos.x}px`, top: `${menuPos.y}px` }"
       @contextmenu.prevent
     >
       <div class="flex items-center justify-between gap-2 px-1.5 pb-1">
         <span class="min-w-0 truncate text-[11px] font-semibold">{{ clipMenuLabel }}</span>
-        <span class="shrink-0 font-mono text-[10px] text-neutral-500 dark:text-neutral-400">{{ clipMenuDuration }}</span>
+        <span class="shrink-0 font-mono text-[10px] text-muted">{{ clipMenuDuration }}</span>
       </div>
 
       <div class="flex flex-col gap-0.5">
@@ -639,7 +639,7 @@ function runToggleLock() {
           @click="runSplit"
         >
           {{ t('tmcut.clipMenu.actions.split') }}
-          <span class="ml-auto font-mono text-[10px] text-neutral-500">S</span>
+          <span class="ml-auto font-mono text-[10px] text-muted">S</span>
         </UButton>
         <UButton
           icon="i-lucide-copy"
@@ -653,7 +653,7 @@ function runToggleLock() {
           @click="runCopy"
         >
           {{ t('tmcut.clipMenu.actions.copy') }}
-          <span class="ml-auto font-mono text-[10px] text-neutral-500">Ctrl+C</span>
+          <span class="ml-auto font-mono text-[10px] text-muted">Ctrl+C</span>
         </UButton>
         <UButton
           icon="i-lucide-files"
@@ -667,7 +667,7 @@ function runToggleLock() {
           @click="runDuplicate"
         >
           {{ t('tmcut.clipMenu.actions.duplicate') }}
-          <span class="ml-auto font-mono text-[10px] text-neutral-500">Ctrl+D</span>
+          <span class="ml-auto font-mono text-[10px] text-muted">Ctrl+D</span>
         </UButton>
         <UButton
           icon="i-lucide-clipboard-paste"
@@ -681,7 +681,7 @@ function runToggleLock() {
           @click="runPaste"
         >
           {{ t('tmcut.clipMenu.actions.paste') }}
-          <span class="ml-auto font-mono text-[10px] text-neutral-500">Ctrl+V</span>
+          <span class="ml-auto font-mono text-[10px] text-muted">Ctrl+V</span>
         </UButton>
         <UButton
           icon="i-lucide-trash-2"
@@ -695,7 +695,7 @@ function runToggleLock() {
           @click="runDelete"
         >
           {{ t('tmcut.clipMenu.actions.delete') }}
-          <span class="ml-auto font-mono text-[10px] text-neutral-500">Del</span>
+          <span class="ml-auto font-mono text-[10px] text-muted">Del</span>
         </UButton>
         <UButton
           icon="i-lucide-arrow-left-to-line"
@@ -714,7 +714,7 @@ function runToggleLock() {
 
       <!-- Track section: clips inherit their track's lock, so this is the
            one place to release a locked clip without hunting the track head. -->
-      <div class="mt-1 border-t border-neutral-300/80 pt-1 dark:border-neutral-700/80">
+      <div class="mt-1 border-t border-default/80 pt-1 dark:border-accented/80">
         <UButton
           :icon="locked ? 'i-lucide-lock-open' : 'i-lucide-lock'"
           variant="ghost"
@@ -736,12 +736,12 @@ function runToggleLock() {
            validated via core C5. The type grid scrolls inside a capped box so
            the whole panel stays inside the viewport. -->
       <template v-if="trackType === 'video'">
-        <div class="mt-1 border-t border-neutral-300/80 pt-1 dark:border-neutral-700/80">
+        <div class="mt-1 border-t border-default/80 pt-1 dark:border-accented/80">
           <div class="flex items-center justify-between gap-2 px-1 pb-1">
-            <span class="text-[10px] font-semibold tracking-wide text-neutral-500 uppercase dark:text-neutral-400">
+            <span class="text-[10px] font-semibold tracking-wide text-muted uppercase dark:text-muted">
               {{ t('tmcut.clipMenu.transition') }}
             </span>
-            <span class="truncate font-mono text-[10px] text-neutral-500">{{ appliedLabel }}</span>
+            <span class="truncate font-mono text-[10px] text-muted">{{ appliedLabel }}</span>
           </div>
 
           <div class="grid max-h-44 grid-cols-3 gap-1 overflow-y-auto pr-0.5">
@@ -752,7 +752,7 @@ function runToggleLock() {
               class="rounded border px-1 py-1.5 text-[10px] leading-tight transition-colors disabled:cursor-not-allowed disabled:opacity-40"
               :class="clip.transitionIn?.type === type
                 ? 'bg-primary/30 border-primary/60 text-primary-100'
-                : 'bg-neutral-200/70 dark:bg-neutral-800/70 border-neutral-400 dark:border-neutral-700 hover:bg-neutral-300/70 dark:hover:bg-neutral-700/70 text-neutral-600 dark:text-neutral-300'"
+                : 'bg-accented/70 border-accented hover:bg-accented/70 text-toned'"
               :disabled="locked || !!reasonFor(type, menuDuration)"
               :title="titleFor(type, menuDuration)"
               @click="pickType(type)"
@@ -761,7 +761,7 @@ function runToggleLock() {
             </button>
           </div>
 
-          <div class="mt-1.5 px-1 text-[10px] tracking-wide text-neutral-500 uppercase">
+          <div class="mt-1.5 px-1 text-[10px] tracking-wide text-muted uppercase">
             {{ t('tmcut.clipMenu.duration') }}
           </div>
           <div class="mt-1 grid grid-cols-4 gap-1">
@@ -772,7 +772,7 @@ function runToggleLock() {
               class="rounded border px-1 py-1 text-[10px] transition-colors disabled:cursor-not-allowed disabled:opacity-40"
               :class="Math.abs((ticksToSec(clip.transitionIn?.duration ?? 0)) - d) < 0.001
                 ? 'bg-primary/30 border-primary/60 text-primary-100'
-                : 'bg-neutral-200/70 dark:bg-neutral-800/70 border-neutral-400 dark:border-neutral-700 hover:bg-neutral-300/70 dark:hover:bg-neutral-700/70 text-neutral-600 dark:text-neutral-300'"
+                : 'bg-accented/70 border-accented hover:bg-accented/70 text-toned'"
               :disabled="locked || !!reasonFor(menuType, d)"
               :title="titleFor(menuType, d)"
               @click="pickDuration(d)"
@@ -784,13 +784,13 @@ function runToggleLock() {
           <div class="mt-1.5 flex items-center justify-between gap-2">
             <button
               type="button"
-              class="rounded border border-neutral-400 px-2 py-1 text-[10px] text-neutral-600 transition-colors hover:bg-neutral-300/70 disabled:cursor-not-allowed disabled:opacity-40 dark:border-neutral-700 dark:bg-neutral-800/70 dark:text-neutral-300 dark:hover:bg-neutral-700/70"
+              class="rounded border border-accented px-2 py-1 text-[10px] text-toned transition-colors hover:bg-accented/70 disabled:cursor-not-allowed disabled:opacity-40 dark:border-accented dark:bg-elevated/70 dark:text-toned dark:hover:bg-accented/70"
               :disabled="locked || !hasTransition"
               @click="clearTransitionPick"
             >
               {{ t('tmcut.clipMenu.none') }}
             </button>
-            <span v-if="!isDesktop" class="text-right text-[9px] leading-tight text-neutral-500">
+            <span v-if="!isDesktop" class="text-right text-[9px] leading-tight text-muted">
               {{ t('tmcut.clipMenu.previewOnly') }}
             </span>
           </div>

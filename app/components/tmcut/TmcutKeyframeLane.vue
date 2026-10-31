@@ -223,15 +223,15 @@ const easingLabel = (e: string) => t(`tmcut.keyframeLane.easing_${e}`)
 
 <template>
   <div
-    class="h-[92px] shrink-0 border-t border-neutral-300 dark:border-neutral-800 bg-neutral-100/60 dark:bg-neutral-900/60 pr-1 py-1.5 select-none">
+    class="h-[92px] shrink-0 border-t border-default bg-muted/60 pr-1 py-1.5 select-none">
     <div class="flex items-center gap-2 h-6 px-2">
       <UIcon name="i-lucide-spline" class="size-3.5 text-primary shrink-0" />
-      <span class="text-[10px] font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+      <span class="text-[10px] font-semibold uppercase tracking-wide text-muted">
         {{ t('tmcut.keyframeLane.title') }}
       </span>
 
       <template v-if="clip">
-        <span class="text-[10px] text-neutral-600 dark:text-neutral-300 truncate max-w-[180px]">
+        <span class="text-[10px] text-toned truncate max-w-[180px]">
           {{ clip.text || clip.name || 'Clip' }}
         </span>
 
@@ -246,24 +246,24 @@ const easingLabel = (e: string) => t(`tmcut.keyframeLane.easing_${e}`)
             :items="KEYFRAME_EASINGS.map(e => ({ label: easingLabel(e), value: e }))"
             :model-value="activeKf.easing || 'linear'" size="xs" class="w-32"
             @update:model-value="handleEasingChange(String($event))" />
-          <span class="text-[10px] font-mono text-neutral-500 ml-1">
+          <span class="text-[10px] font-mono text-muted ml-1">
             {{ formatValue(currentValue(activeProp)) }}
           </span>
         </div>
       </template>
 
-      <span v-else class="text-[10px] text-neutral-400 dark:text-neutral-500">
+      <span v-else class="text-[10px] text-dimmed">
         {{ t('tmcut.keyframeLane.selectClipHint') }}
       </span>
     </div>
 
     <!-- Curve band. Fixed viewBox (640x72) scales to any lane width, so
          the curve never distorts with the timeline zoom. -->
-    <div v-if="clip" class="relative h-[58px] mt-1 bg-neutral-50 dark:bg-neutral-950 overflow-hidden cursor-crosshair"
+    <div v-if="clip" class="relative h-[58px] mt-1 bg-muted overflow-hidden cursor-crosshair"
       @click="handleLaneClick">
       <!-- Center gridline (the y=0 / baseline for x-y offsets) -->
       <div
-        class="absolute inset-x-0 top-1/2 border-t border-dashed border-neutral-300 dark:border-neutral-700 pointer-events-none" />
+        class="absolute inset-x-0 top-1/2 border-t border-dashed border-default pointer-events-none" />
 
       <svg v-if="curvePoints.length > 1" class="absolute inset-0 w-full h-full" :viewBox="`0 0 ${W} ${H}`"
         preserveAspectRatio="none">
@@ -281,7 +281,7 @@ const easingLabel = (e: string) => t(`tmcut.keyframeLane.easing_${e}`)
 
       <!-- Empty state: clip selected, prop has no keyframes yet -->
       <div v-if="!clipHasAnyKf" class="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <span class="text-[10px] text-neutral-400 dark:text-neutral-500">
+        <span class="text-[10px] text-dimmed">
           {{ t('tmcut.keyframeLane.noKeyframes') }}
         </span>
       </div>

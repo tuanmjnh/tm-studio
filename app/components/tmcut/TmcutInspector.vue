@@ -813,14 +813,14 @@ const saveStateLabel = computed(() => {
 <template>
   <div v-if="clip" class="space-y-4 text-xs select-none">
     <!-- Header with Name & Deselect -->
-    <div class="flex items-center justify-between pb-3 border-b border-neutral-300 dark:border-neutral-800">
+    <div class="flex items-center justify-between pb-3 border-b border-default">
       <div class="flex items-center gap-2 min-w-0">
         <UIcon
           :name="trackType === 'video' ? 'i-lucide-film' : trackType === 'text' ? 'i-lucide-type' : 'i-lucide-music'"
           class="size-4 shrink-0"
           :class="trackType === 'video' ? 'text-blue-400' : trackType === 'text' ? 'text-amber-400' : 'text-emerald-400'"
         />
-        <span class="font-medium text-neutral-800 dark:text-neutral-100 truncate text-sm">
+        <span class="font-medium text-highlighted truncate text-sm">
           {{ clip.name || clip.text || t('tmcut.project') }}
         </span>
       </div>
@@ -837,13 +837,13 @@ const saveStateLabel = computed(() => {
          five Vietnamese labels (Hình ảnh/Âm thanh/Tốc độ/Hoạt ảnh/Hiệu ứng)
          overflow a single row inside the 288 px panel. 3 columns wrap to a
          second line for video clips; 2-3 tab sets stay on one line. -->
-    <div class="grid gap-1 bg-neutral-100/60 dark:bg-neutral-900/60 border border-neutral-300 dark:border-neutral-800 rounded-lg p-1" :class="tabItems.length === 2 ? 'grid-cols-2' : 'grid-cols-3'">
+    <div class="grid gap-1 bg-muted/60 border border-default rounded-lg p-1" :class="tabItems.length === 2 ? 'grid-cols-2' : 'grid-cols-3'">
       <button
         v-for="tab in tabItems"
         :key="tab.key"
         type="button"
         class="min-w-0 flex items-center justify-center gap-1 px-1.5 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer"
-        :class="currentTab === tab.key ? 'bg-primary/15 text-primary' : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200'"
+        :class="currentTab === tab.key ? 'bg-primary/15 text-primary' : 'text-muted hover:text-toned'"
         @click="activeTab = tab.key"
       >
         <UIcon :name="tab.icon" class="size-3 shrink-0" />
@@ -853,7 +853,7 @@ const saveStateLabel = computed(() => {
 
     <!-- Text Content Editor (If Text Track) -->
     <div v-if="currentTab === 'visual' && trackType === 'text'" class="space-y-2">
-      <label for="tmcut-insp-text-content" class="font-medium text-neutral-500 dark:text-neutral-400">{{ t('tmcut.inspectorProps.textContent') }}</label>
+      <label for="tmcut-insp-text-content" class="font-medium text-muted">{{ t('tmcut.inspectorProps.textContent') }}</label>
       <UTextarea
         id="tmcut-insp-text-content"
         :model-value="clip.text || ''"
@@ -865,7 +865,7 @@ const saveStateLabel = computed(() => {
 
       <div class="grid grid-cols-2 gap-2 pt-1">
         <div>
-          <label for="tmcut-insp-font-size" class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.fontSize') }}</label>
+          <label for="tmcut-insp-font-size" class="text-[10px] text-muted">{{ t('tmcut.inspectorProps.fontSize') }}</label>
           <UInput
             id="tmcut-insp-font-size"
             type="number"
@@ -877,16 +877,16 @@ const saveStateLabel = computed(() => {
           />
         </div>
         <div>
-          <label for="tmcut-insp-text-color" class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.textColor') }}</label>
+          <label for="tmcut-insp-text-color" class="text-[10px] text-muted">{{ t('tmcut.inspectorProps.textColor') }}</label>
           <div class="flex items-center gap-1.5 mt-0.5">
             <input
               id="tmcut-insp-text-color"
               type="color"
               :value="clip.color || '#ffffff'"
-              class="w-6 h-6 rounded border border-neutral-400 dark:border-neutral-700 bg-transparent cursor-pointer"
+              class="w-6 h-6 rounded border border-accented bg-transparent cursor-pointer"
               @input="handleUpdate('color', ($event.target as HTMLInputElement).value)"
             >
-            <span class="font-mono text-[10px] text-neutral-500 dark:text-neutral-400">{{ clip.color || '#ffffff' }}</span>
+            <span class="font-mono text-[10px] text-muted">{{ clip.color || '#ffffff' }}</span>
           </div>
         </div>
       </div>
@@ -895,7 +895,7 @@ const saveStateLabel = computed(() => {
            main-process font scanner. Empty on web (no IPC) or when the
            addon fails — hidden rather than a fake or dead list. -->
       <div v-if="fontChoices.length" class="pt-1">
-        <label class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.font') }}</label>
+        <label class="text-[10px] text-muted">{{ t('tmcut.inspectorProps.font') }}</label>
         <USelectMenu
           :items="fontChoices"
           value-key="family"
@@ -930,20 +930,20 @@ const saveStateLabel = computed(() => {
           :title="t('tmcut.inspectorProps.italic')"
           @click="handleStyleToggle('italic')"
         />
-        <div class="flex items-center gap-0.5 bg-neutral-100/60 dark:bg-neutral-900/60 border border-neutral-300 dark:border-neutral-800 rounded-md p-0.5">
+        <div class="flex items-center gap-0.5 bg-muted/60 border border-default rounded-md p-0.5">
           <button
             v-for="option in alignOptions"
             :key="option.key"
             type="button"
             class="px-1.5 py-1 rounded cursor-pointer transition-colors"
-            :class="(clip.align || 'center') === option.key ? 'bg-primary/15 text-primary' : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200'"
+            :class="(clip.align || 'center') === option.key ? 'bg-primary/15 text-primary' : 'text-muted hover:text-toned'"
             :title="t(`tmcut.inspectorProps.${option.title}`)"
             @click="handleAlign(option.key)"
           >
             <UIcon :name="option.icon" class="size-3" />
           </button>
         </div>
-        <div class="w-px h-4 bg-neutral-200 dark:bg-neutral-800 mx-0.5" />
+        <div class="w-px h-4 bg-accented mx-0.5" />
         <UButton
           icon="i-lucide-moon"
           size="xs"
@@ -965,15 +965,15 @@ const saveStateLabel = computed(() => {
 
     <!-- Audio motion: the volume envelope the export already renders
          (render/audio.ts -> keyframeExpr(clip,'volume')). -->
-    <div v-if="currentTab === 'animation' && trackType === 'audio'" class="space-y-3 pt-2 border-t border-neutral-300 dark:border-neutral-800">
+    <div v-if="currentTab === 'animation' && trackType === 'audio'" class="space-y-3 pt-2 border-t border-default">
       <TmcutKeyframeEditor :allowed="['volume']" />
     </div>
 
     <!-- Tab: Text Animation (Roadmap C-5) -->
-    <div v-if="currentTab === 'animation' && trackType === 'text'" class="space-y-4 pt-2 border-t border-neutral-300 dark:border-neutral-800">
+    <div v-if="currentTab === 'animation' && trackType === 'text'" class="space-y-4 pt-2 border-t border-default">
       <!-- Quick Presets -->
       <div class="space-y-1.5">
-        <label class="text-[11px] font-medium text-neutral-500 dark:text-neutral-400">
+        <label class="text-[11px] font-medium text-muted">
           {{ t('tmcut.animation.presets') }}
         </label>
         <div class="grid grid-cols-4 gap-1.5">
@@ -1017,15 +1017,15 @@ const saveStateLabel = computed(() => {
       </div>
 
       <!-- Animation In -->
-      <div class="space-y-2 p-2.5 rounded-lg bg-neutral-100/60 dark:bg-neutral-900/60 border border-neutral-300/80 dark:border-neutral-800/80">
+      <div class="space-y-2 p-2.5 rounded-lg bg-muted/60 border border-default/80">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-1.5">
             <UIcon name="i-lucide-log-in" class="size-3.5 text-primary" />
-            <span class="text-xs font-medium text-neutral-700 dark:text-neutral-200">
+            <span class="text-xs font-medium text-toned">
               {{ t('tmcut.animation.animIn') }}
             </span>
           </div>
-          <span v-if="clip.animIn && clip.animIn !== 'none'" class="text-[11px] font-mono text-neutral-500 dark:text-neutral-400">
+          <span v-if="clip.animIn && clip.animIn !== 'none'" class="text-[11px] font-mono text-muted">
             {{ clip.animInDuration ?? 0.5 }}s
           </span>
         </div>
@@ -1038,9 +1038,9 @@ const saveStateLabel = computed(() => {
           @update:model-value="handleUpdate('animIn', $event as TmcutTextAnimationType)"
         />
         <div v-if="clip.animIn && clip.animIn !== 'none'" class="space-y-1 pt-1">
-          <div class="flex items-center justify-between text-[11px] text-neutral-500 dark:text-neutral-400">
+          <div class="flex items-center justify-between text-[11px] text-muted">
             <span>{{ t('tmcut.animation.duration') }}</span>
-            <span class="font-mono text-neutral-600 dark:text-neutral-300">{{ clip.animInDuration ?? 0.5 }}s</span>
+            <span class="font-mono text-toned">{{ clip.animInDuration ?? 0.5 }}s</span>
           </div>
           <input
             id="tmcut-insp-anim-in-duration"
@@ -1057,15 +1057,15 @@ const saveStateLabel = computed(() => {
       </div>
 
       <!-- Animation Out -->
-      <div class="space-y-2 p-2.5 rounded-lg bg-neutral-100/60 dark:bg-neutral-900/60 border border-neutral-300/80 dark:border-neutral-800/80">
+      <div class="space-y-2 p-2.5 rounded-lg bg-muted/60 border border-default/80">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-1.5">
             <UIcon name="i-lucide-log-out" class="size-3.5 text-primary" />
-            <span class="text-xs font-medium text-neutral-700 dark:text-neutral-200">
+            <span class="text-xs font-medium text-toned">
               {{ t('tmcut.animation.animOut') }}
             </span>
           </div>
-          <span v-if="clip.animOut && clip.animOut !== 'none'" class="text-[11px] font-mono text-neutral-500 dark:text-neutral-400">
+          <span v-if="clip.animOut && clip.animOut !== 'none'" class="text-[11px] font-mono text-muted">
             {{ clip.animOutDuration ?? 0.5 }}s
           </span>
         </div>
@@ -1078,9 +1078,9 @@ const saveStateLabel = computed(() => {
           @update:model-value="handleUpdate('animOut', $event as TmcutTextAnimationType)"
         />
         <div v-if="clip.animOut && clip.animOut !== 'none'" class="space-y-1 pt-1">
-          <div class="flex items-center justify-between text-[11px] text-neutral-500 dark:text-neutral-400">
+          <div class="flex items-center justify-between text-[11px] text-muted">
             <span>{{ t('tmcut.animation.duration') }}</span>
-            <span class="font-mono text-neutral-600 dark:text-neutral-300">{{ clip.animOutDuration ?? 0.5 }}s</span>
+            <span class="font-mono text-toned">{{ clip.animOutDuration ?? 0.5 }}s</span>
           </div>
           <input
             id="tmcut-insp-anim-out-duration"
@@ -1104,9 +1104,9 @@ const saveStateLabel = computed(() => {
 
     <!-- Animation presets (R112, video only). The keyframe list below is the
          shared motion editor; presets are the one-click shortcut into it. -->
-    <div v-if="currentTab === 'animation' && trackType === 'video'" class="space-y-4 pt-2 border-t border-neutral-300 dark:border-neutral-800">
+    <div v-if="currentTab === 'animation' && trackType === 'video'" class="space-y-4 pt-2 border-t border-default">
       <div class="flex items-center justify-between">
-        <span class="font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-[10px]">
+        <span class="font-semibold text-muted uppercase tracking-wider text-[10px]">
           {{ t('tmcut.fxLib.animPresets') }}
         </span>
         <span
@@ -1131,7 +1131,7 @@ const saveStateLabel = computed(() => {
           {{ p.label }}
         </UButton>
       </div>
-      <p class="text-[10px] text-neutral-500 dark:text-neutral-500 leading-snug">
+      <p class="text-[10px] text-muted leading-snug">
         {{ t('tmcut.fxLib.animPresetsHint') }}
       </p>
 
@@ -1141,13 +1141,13 @@ const saveStateLabel = computed(() => {
     </div>
 
     <!-- Timing & Speed Settings -->
-    <div v-if="currentTab === 'speed'" class="space-y-3 pt-2 border-t border-neutral-300 dark:border-neutral-800">
-      <span class="font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-[10px]">{{
+    <div v-if="currentTab === 'speed'" class="space-y-3 pt-2 border-t border-default">
+      <span class="font-semibold text-muted uppercase tracking-wider text-[10px]">{{
         t('tmcut.inspectorProps.timingAndSpeed') }}</span>
 
       <div class="grid grid-cols-2 gap-2">
         <div>
-          <label for="tmcut-insp-in-point" class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.inPoint') }}</label>
+          <label for="tmcut-insp-in-point" class="text-[10px] text-muted">{{ t('tmcut.inspectorProps.inPoint') }}</label>
           <UInput
             id="tmcut-insp-in-point"
             type="number"
@@ -1158,7 +1158,7 @@ const saveStateLabel = computed(() => {
           />
         </div>
         <div>
-          <label for="tmcut-insp-out-point" class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.outPoint') }}</label>
+          <label for="tmcut-insp-out-point" class="text-[10px] text-muted">{{ t('tmcut.inspectorProps.outPoint') }}</label>
           <UInput
             id="tmcut-insp-out-point"
             type="number"
@@ -1172,7 +1172,7 @@ const saveStateLabel = computed(() => {
 
       <div class="grid grid-cols-2 gap-2">
         <div>
-          <label for="tmcut-insp-offset" class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.offset') }}</label>
+          <label for="tmcut-insp-offset" class="text-[10px] text-muted">{{ t('tmcut.inspectorProps.offset') }}</label>
           <UInput
             id="tmcut-insp-offset"
             type="number"
@@ -1183,7 +1183,7 @@ const saveStateLabel = computed(() => {
           />
         </div>
         <div>
-          <span class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.speed') }}</span>
+          <span class="text-[10px] text-muted">{{ t('tmcut.inspectorProps.speed') }}</span>
           <USelect
             :aria-label="t('tmcut.inspectorProps.speed')"
             :items="speedOptions"
@@ -1200,7 +1200,7 @@ const saveStateLabel = computed(() => {
            TEXT clips: a text overlay has no directional playback, so the
            toggle would change nothing anywhere (dead control). -->
       <div v-if="trackType !== 'text'" class="flex items-center justify-between">
-        <span class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.reverse') }}</span>
+        <span class="text-[10px] text-muted">{{ t('tmcut.inspectorProps.reverse') }}</span>
         <USwitch
           :model-value="!!clip.reverse"
           :aria-label="t('tmcut.inspectorProps.reverse')"
@@ -1213,11 +1213,11 @@ const saveStateLabel = computed(() => {
            every preset is mean-anchored so the timeline length survives.
            Video only — audio follows the base speed (documented v1 gap),
            text has no playback rate. -->
-      <div v-if="trackType === 'video'" class="space-y-2 pt-2 border-t border-neutral-300 dark:border-neutral-800">
+      <div v-if="trackType === 'video'" class="space-y-2 pt-2 border-t border-default">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-1.5">
             <UIcon name="i-lucide-trending-up" class="size-3.5 text-primary" />
-            <span class="font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-[10px]">
+            <span class="font-semibold text-muted uppercase tracking-wider text-[10px]">
               {{ t('tmcut.ramp.title') }}
             </span>
           </div>
@@ -1230,15 +1230,15 @@ const saveStateLabel = computed(() => {
             @update:model-value="handleRampChange(String($event))"
           />
         </div>
-        <p v-if="clip.speedPoints?.length" class="text-[10px] text-neutral-500">
+        <p v-if="clip.speedPoints?.length" class="text-[10px] text-muted">
           {{ t('tmcut.ramp.hint') }}
         </p>
       </div>
     </div>
 
     <!-- Media Fitting (Phase 2, video track only) -->
-    <div v-if="currentTab === 'visual' && trackType === 'video'" class="space-y-3 pt-2 border-t border-neutral-300 dark:border-neutral-800">
-      <span class="font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-[10px]">{{ t('tmcut.fit.label')
+    <div v-if="currentTab === 'visual' && trackType === 'video'" class="space-y-3 pt-2 border-t border-default">
+      <span class="font-semibold text-muted uppercase tracking-wider text-[10px]">{{ t('tmcut.fit.label')
       }}</span>
 
       <div>
@@ -1253,7 +1253,7 @@ const saveStateLabel = computed(() => {
 
       <div v-if="isSmartFit" class="grid grid-cols-2 gap-2">
         <div>
-          <label for="tmcut-insp-focus-x" class="text-[10px] text-neutral-500">{{ t('tmcut.fit.focusX') }}</label>
+          <label for="tmcut-insp-focus-x" class="text-[10px] text-muted">{{ t('tmcut.fit.focusX') }}</label>
           <UInput
             id="tmcut-insp-focus-x"
             type="number"
@@ -1266,7 +1266,7 @@ const saveStateLabel = computed(() => {
           />
         </div>
         <div>
-          <label for="tmcut-insp-focus-y" class="text-[10px] text-neutral-500">{{ t('tmcut.fit.focusY') }}</label>
+          <label for="tmcut-insp-focus-y" class="text-[10px] text-muted">{{ t('tmcut.fit.focusY') }}</label>
           <UInput
             id="tmcut-insp-focus-y"
             type="number"
@@ -1303,7 +1303,7 @@ const saveStateLabel = computed(() => {
         </div>
         <div class="grid grid-cols-2 gap-2">
           <div>
-            <label for="tmcut-insp-crop-x" class="text-[10px] text-neutral-500">{{ t('tmcut.fit.cropX') }}</label>
+            <label for="tmcut-insp-crop-x" class="text-[10px] text-muted">{{ t('tmcut.fit.cropX') }}</label>
             <UInput
               id="tmcut-insp-crop-x"
               type="number"
@@ -1316,7 +1316,7 @@ const saveStateLabel = computed(() => {
             />
           </div>
           <div>
-            <label for="tmcut-insp-crop-y" class="text-[10px] text-neutral-500">{{ t('tmcut.fit.cropY') }}</label>
+            <label for="tmcut-insp-crop-y" class="text-[10px] text-muted">{{ t('tmcut.fit.cropY') }}</label>
             <UInput
               id="tmcut-insp-crop-y"
               type="number"
@@ -1329,7 +1329,7 @@ const saveStateLabel = computed(() => {
             />
           </div>
           <div>
-            <label for="tmcut-insp-crop-w" class="text-[10px] text-neutral-500">{{ t('tmcut.fit.cropW') }}</label>
+            <label for="tmcut-insp-crop-w" class="text-[10px] text-muted">{{ t('tmcut.fit.cropW') }}</label>
             <UInput
               id="tmcut-insp-crop-w"
               type="number"
@@ -1342,7 +1342,7 @@ const saveStateLabel = computed(() => {
             />
           </div>
           <div>
-            <label for="tmcut-insp-crop-h" class="text-[10px] text-neutral-500">{{ t('tmcut.fit.cropH') }}</label>
+            <label for="tmcut-insp-crop-h" class="text-[10px] text-muted">{{ t('tmcut.fit.cropH') }}</label>
             <UInput
               id="tmcut-insp-crop-h"
               type="number"
@@ -1362,11 +1362,11 @@ const saveStateLabel = computed(() => {
          rotation and invert. Parameters only — the geometry math is shared in
          core mask.mjs (SVG mask in preview, geq chain on export), so the
          two paths can never disagree on the shape. -->
-    <div v-if="currentTab === 'visual' && (trackType === 'video' || trackType === 'text')" class="space-y-2 pt-2 border-t border-neutral-300 dark:border-neutral-800">
+    <div v-if="currentTab === 'visual' && (trackType === 'video' || trackType === 'text')" class="space-y-2 pt-2 border-t border-default">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-1.5">
           <UIcon name="i-lucide-shapes" class="size-3.5 text-primary" />
-          <span class="font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-[10px]">
+          <span class="font-semibold text-muted uppercase tracking-wider text-[10px]">
             {{ t('tmcut.mask.title') }}
           </span>
         </div>
@@ -1383,7 +1383,7 @@ const saveStateLabel = computed(() => {
       <template v-if="clip.mask">
         <div class="grid grid-cols-4 gap-2">
           <div>
-            <label for="tmcut-insp-x" class="text-[10px] text-neutral-500">{{ t('tmcut.mask.x') }}</label>
+            <label for="tmcut-insp-x" class="text-[10px] text-muted">{{ t('tmcut.mask.x') }}</label>
             <UInput
               id="tmcut-insp-x"
               type="number"
@@ -1396,7 +1396,7 @@ const saveStateLabel = computed(() => {
             />
           </div>
           <div>
-            <label for="tmcut-insp-y" class="text-[10px] text-neutral-500">{{ t('tmcut.mask.y') }}</label>
+            <label for="tmcut-insp-y" class="text-[10px] text-muted">{{ t('tmcut.mask.y') }}</label>
             <UInput
               id="tmcut-insp-y"
               type="number"
@@ -1409,7 +1409,7 @@ const saveStateLabel = computed(() => {
             />
           </div>
           <div>
-            <label for="tmcut-insp-w" class="text-[10px] text-neutral-500">{{ t('tmcut.mask.w') }}</label>
+            <label for="tmcut-insp-w" class="text-[10px] text-muted">{{ t('tmcut.mask.w') }}</label>
             <UInput
               id="tmcut-insp-w"
               type="number"
@@ -1422,7 +1422,7 @@ const saveStateLabel = computed(() => {
             />
           </div>
           <div>
-            <label for="tmcut-insp-h" class="text-[10px] text-neutral-500">{{ t('tmcut.mask.h') }}</label>
+            <label for="tmcut-insp-h" class="text-[10px] text-muted">{{ t('tmcut.mask.h') }}</label>
             <UInput
               id="tmcut-insp-h"
               type="number"
@@ -1437,7 +1437,7 @@ const saveStateLabel = computed(() => {
         </div>
         <div class="grid grid-cols-2 gap-2">
           <div>
-            <span class="text-[10px] text-neutral-500">{{ t('tmcut.mask.feather') }}</span>
+            <span class="text-[10px] text-muted">{{ t('tmcut.mask.feather') }}</span>
             <USlider
               :aria-label="t('tmcut.mask.feather')"
               :model-value="clip.mask.feather"
@@ -1448,7 +1448,7 @@ const saveStateLabel = computed(() => {
             />
           </div>
           <div>
-            <span class="text-[10px] text-neutral-500">{{ t('tmcut.mask.rotation') }}</span>
+            <span class="text-[10px] text-muted">{{ t('tmcut.mask.rotation') }}</span>
             <USlider
               :aria-label="t('tmcut.mask.rotation')"
               :model-value="clip.mask.rotation"
@@ -1464,7 +1464,7 @@ const saveStateLabel = computed(() => {
                bind; the row is the click target and the switch stops
                propagation so a direct click toggles once. -->
           <div
-            class="flex items-center gap-1.5 text-[10px] text-neutral-500 cursor-pointer select-none"
+            class="flex items-center gap-1.5 text-[10px] text-muted cursor-pointer select-none"
             @click="maskPatch({ invert: !clip.mask.invert })"
           >
             <USwitch
@@ -1478,7 +1478,7 @@ const saveStateLabel = computed(() => {
           </div>
           <!-- Linear wipe direction — only meaningful for the linear shape -->
           <div v-if="clip.mask.shape === 'linear'" class="flex items-center gap-1.5">
-            <span class="text-[10px] text-neutral-500">{{ t('tmcut.mask.axis') }}</span>
+            <span class="text-[10px] text-muted">{{ t('tmcut.mask.axis') }}</span>
             <USelect
               :aria-label="t('tmcut.mask.axis')"
               :items="[
@@ -1496,11 +1496,11 @@ const saveStateLabel = computed(() => {
     </div>
 
     <!-- Video Stabilizer (Roadmap E-5, desktop only) -->
-    <div v-if="currentTab === 'visual' && trackType === 'video' && isDesktop" class="space-y-3 pt-2 border-t border-neutral-300 dark:border-neutral-800">
+    <div v-if="currentTab === 'visual' && trackType === 'video' && isDesktop" class="space-y-3 pt-2 border-t border-default">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-1.5">
           <UIcon name="i-lucide-activity" class="size-3.5 text-primary" />
-          <span class="font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-[10px]">
+          <span class="font-semibold text-muted uppercase tracking-wider text-[10px]">
             {{ t('tmcut.stabilize.title') }}
           </span>
         </div>
@@ -1512,9 +1512,9 @@ const saveStateLabel = computed(() => {
         />
       </div>
 
-      <div v-if="clip.stabilize" class="space-y-2.5 p-2.5 rounded-lg bg-neutral-100/60 dark:bg-neutral-900/60 border border-neutral-300/80 dark:border-neutral-800/80">
+      <div v-if="clip.stabilize" class="space-y-2.5 p-2.5 rounded-lg bg-muted/60 border border-default/80">
         <div class="flex items-center justify-between text-[11px]">
-          <span class="text-neutral-500 dark:text-neutral-400">{{ t('tmcut.stabilize.level') }}</span>
+          <span class="text-muted">{{ t('tmcut.stabilize.level') }}</span>
           <span v-if="clip.stabilizeStatus === 'ready'" class="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-medium">
             <UIcon name="i-lucide-check-circle" class="size-3" />
             {{ t('tmcut.stabilize.ready') }}
@@ -1556,9 +1556,9 @@ const saveStateLabel = computed(() => {
     </div>
 
     <!-- Transform Settings (Video & Text) -->
-    <div v-if="currentTab === 'visual' && trackType !== 'audio'" class="space-y-3 pt-2 border-t border-neutral-300 dark:border-neutral-800">
+    <div v-if="currentTab === 'visual' && trackType !== 'audio'" class="space-y-3 pt-2 border-t border-default">
       <div class="flex items-center justify-between mb-1">
-        <span class="font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-[10px]">
+        <span class="font-semibold text-muted uppercase tracking-wider text-[10px]">
           {{ t('tmcut.inspectorProps.transform') }}
         </span>
         <span
@@ -1573,11 +1573,11 @@ const saveStateLabel = computed(() => {
       <div class="grid grid-cols-2 gap-2">
         <div>
           <div class="flex items-center justify-between">
-            <label for="tmcut-insp-scale" class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.scale') }}</label>
+            <label for="tmcut-insp-scale" class="text-[10px] text-muted">{{ t('tmcut.inspectorProps.scale') }}</label>
             <button
               type="button"
               class="rounded p-0.5 transition-colors"
-              :class="hasKfAtPlayhead('scale') ? 'text-primary bg-primary/15' : 'text-neutral-500 dark:text-neutral-600 hover:text-neutral-600 dark:hover:text-neutral-300'"
+              :class="hasKfAtPlayhead('scale') ? 'text-primary bg-primary/15' : 'text-muted hover:text-toned'"
               :title="kfTitle('scale')"
               @click="toggleKeyframe('scale')"
             >
@@ -1596,11 +1596,11 @@ const saveStateLabel = computed(() => {
         </div>
         <div>
           <div class="flex items-center justify-between">
-            <label for="tmcut-insp-opacity" class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.opacity') }}</label>
+            <label for="tmcut-insp-opacity" class="text-[10px] text-muted">{{ t('tmcut.inspectorProps.opacity') }}</label>
             <button
               type="button"
               class="rounded p-0.5 transition-colors"
-              :class="hasKfAtPlayhead('opacity') ? 'text-primary bg-primary/15' : 'text-neutral-500 dark:text-neutral-600 hover:text-neutral-600 dark:hover:text-neutral-300'"
+              :class="hasKfAtPlayhead('opacity') ? 'text-primary bg-primary/15' : 'text-muted hover:text-toned'"
               :title="kfTitle('opacity')"
               @click="toggleKeyframe('opacity')"
             >
@@ -1625,8 +1625,8 @@ const saveStateLabel = computed(() => {
            + modal toast). -->
       <div>
         <div class="flex items-center justify-between">
-          <span class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.rotation') }}</span>
-          <span class="text-[10px] font-mono text-neutral-500 dark:text-neutral-400">{{ clip.rotation || 0 }}°</span>
+          <span class="text-[10px] text-muted">{{ t('tmcut.inspectorProps.rotation') }}</span>
+          <span class="text-[10px] font-mono text-muted">{{ clip.rotation || 0 }}°</span>
         </div>
         <USlider
           :aria-label="t('tmcut.inspectorProps.rotation')"
@@ -1645,7 +1645,7 @@ const saveStateLabel = computed(() => {
            (R116); 'normal' keeps the classic overlay. Video clips only:
            a text clip already composites via drawtext/overlay. -->
       <div v-if="trackType === 'video'">
-        <span class="text-[10px] text-neutral-500 block mb-1">
+        <span class="text-[10px] text-muted block mb-1">
           {{ t('tmcut.inspectorProps.blendMode') }}
         </span>
         <USelect
@@ -1660,11 +1660,11 @@ const saveStateLabel = computed(() => {
       <div class="grid grid-cols-2 gap-2">
         <div>
           <div class="flex items-center justify-between">
-            <label for="tmcut-insp-position-x" class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.positionX') }}</label>
+            <label for="tmcut-insp-position-x" class="text-[10px] text-muted">{{ t('tmcut.inspectorProps.positionX') }}</label>
             <button
               type="button"
               class="rounded p-0.5 transition-colors"
-              :class="hasKfAtPlayhead('x') ? 'text-primary bg-primary/15' : 'text-neutral-500 dark:text-neutral-600 hover:text-neutral-600 dark:hover:text-neutral-300'"
+              :class="hasKfAtPlayhead('x') ? 'text-primary bg-primary/15' : 'text-muted hover:text-toned'"
               :title="kfTitle('x')"
               @click="toggleKeyframe('x')"
             >
@@ -1681,11 +1681,11 @@ const saveStateLabel = computed(() => {
         </div>
         <div>
           <div class="flex items-center justify-between">
-            <label for="tmcut-insp-position-y" class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.positionY') }}</label>
+            <label for="tmcut-insp-position-y" class="text-[10px] text-muted">{{ t('tmcut.inspectorProps.positionY') }}</label>
             <button
               type="button"
               class="rounded p-0.5 transition-colors"
-              :class="hasKfAtPlayhead('y') ? 'text-primary bg-primary/15' : 'text-neutral-500 dark:text-neutral-600 hover:text-neutral-600 dark:hover:text-neutral-300'"
+              :class="hasKfAtPlayhead('y') ? 'text-primary bg-primary/15' : 'text-muted hover:text-toned'"
               :title="kfTitle('y')"
               @click="toggleKeyframe('y')"
             >
@@ -1704,13 +1704,13 @@ const saveStateLabel = computed(() => {
     </div>
 
     <!-- Color Grade (EQ / Grade) -->
-    <div v-if="currentTab === 'visual' && trackType !== 'audio'" class="space-y-3 pt-2 border-t border-neutral-300 dark:border-neutral-800">
+    <div v-if="currentTab === 'visual' && trackType !== 'audio'" class="space-y-3 pt-2 border-t border-default">
       <div class="flex items-center justify-between mb-1">
-        <span class="font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-[10px]">{{ t('tmcut.inspectorProps.colorGrade') }}</span>
+        <span class="font-semibold text-muted uppercase tracking-wider text-[10px]">{{ t('tmcut.inspectorProps.colorGrade') }}</span>
       </div>
       <div class="space-y-2">
         <div>
-          <div class="flex justify-between text-[10px] text-neutral-500 mb-1">
+          <div class="flex justify-between text-[10px] text-muted mb-1">
             <label for="tmcut-eq-brightness">{{ t('tmcut.inspectorProps.brightness') }}</label>
             <span class="font-mono text-[10px]">{{ eqBrightness }}</span>
           </div>
@@ -1725,7 +1725,7 @@ const saveStateLabel = computed(() => {
           >
         </div>
         <div>
-          <div class="flex justify-between text-[10px] text-neutral-500 mb-1">
+          <div class="flex justify-between text-[10px] text-muted mb-1">
             <label for="tmcut-eq-contrast">{{ t('tmcut.inspectorProps.contrast') }}</label>
             <span class="font-mono text-[10px]">{{ eqContrast }}</span>
           </div>
@@ -1740,7 +1740,7 @@ const saveStateLabel = computed(() => {
           >
         </div>
         <div>
-          <div class="flex justify-between text-[10px] text-neutral-500 mb-1">
+          <div class="flex justify-between text-[10px] text-muted mb-1">
             <label for="tmcut-eq-saturation">{{ t('tmcut.inspectorProps.saturation') }}</label>
             <span class="font-mono text-[10px]">{{ eqSaturation }}</span>
           </div>
@@ -1758,7 +1758,7 @@ const saveStateLabel = computed(() => {
              positive = warmer (amber); export maps it to FFmpeg
              colorbalance (core), preview approximates with sepia/hue. -->
         <div>
-          <div class="flex justify-between text-[10px] text-neutral-500 mb-1">
+          <div class="flex justify-between text-[10px] text-muted mb-1">
             <label for="tmcut-eq-colorTemp">{{ t('tmcut.inspectorProps.colorTemp') }}</label>
             <span class="font-mono text-[10px]">
               {{ tempValue }}
@@ -1778,7 +1778,7 @@ const saveStateLabel = computed(() => {
         <!-- R128 grading sliders: same lazy-create + coalesced-history path
              as the sliders above (ensureEqGradeAndUpdate). -->
         <div>
-          <div class="flex justify-between text-[10px] text-neutral-500 mb-1">
+          <div class="flex justify-between text-[10px] text-muted mb-1">
             <label for="tmcut-eq-hue">{{ t('tmcut.inspectorProps.hue') }}</label>
             <span class="font-mono text-[10px]">{{ eqHue }}°</span>
           </div>
@@ -1793,7 +1793,7 @@ const saveStateLabel = computed(() => {
           >
         </div>
         <div>
-          <div class="flex justify-between text-[10px] text-neutral-500 mb-1">
+          <div class="flex justify-between text-[10px] text-muted mb-1">
             <label for="tmcut-eq-gamma">{{ t('tmcut.inspectorProps.gamma') }}</label>
             <span class="font-mono text-[10px]">{{ eqGamma }}</span>
           </div>
@@ -1808,7 +1808,7 @@ const saveStateLabel = computed(() => {
           >
         </div>
         <div>
-          <div class="flex justify-between text-[10px] text-neutral-500 mb-1">
+          <div class="flex justify-between text-[10px] text-muted mb-1">
             <label for="tmcut-eq-fade">{{ t('tmcut.inspectorProps.fade') }}</label>
             <span class="font-mono text-[10px]">{{ eqFade }}</span>
           </div>
@@ -1823,7 +1823,7 @@ const saveStateLabel = computed(() => {
           >
         </div>
         <div>
-          <div class="flex justify-between text-[10px] text-neutral-500 mb-1">
+          <div class="flex justify-between text-[10px] text-muted mb-1">
             <label for="tmcut-eq-vibrance">{{ t('tmcut.inspectorProps.vibrance') }}</label>
             <span class="font-mono text-[10px]">{{ eqVibrance }}</span>
           </div>
@@ -1841,9 +1841,9 @@ const saveStateLabel = computed(() => {
     </div>
 
     <!-- Audio / Volume Settings -->
-    <div v-if="currentTab === 'audio'" class="space-y-2 pt-2 border-t border-neutral-300 dark:border-neutral-800">
+    <div v-if="currentTab === 'audio'" class="space-y-2 pt-2 border-t border-default">
       <div class="flex items-center justify-between">
-        <span class="font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-[10px]">{{
+        <span class="font-semibold text-muted uppercase tracking-wider text-[10px]">{{
           t('tmcut.inspectorProps.volume') }}</span>
         <div class="flex items-center gap-1.5">
           <span
@@ -1867,7 +1867,7 @@ const saveStateLabel = computed(() => {
             v-if="trackType === 'video'"
             type="button"
             class="rounded p-0.5 transition-colors"
-            :class="hasKfAtPlayhead('volume') ? 'text-primary bg-primary/15' : 'text-neutral-500 dark:text-neutral-600 hover:text-neutral-600 dark:hover:text-neutral-300'"
+            :class="hasKfAtPlayhead('volume') ? 'text-primary bg-primary/15' : 'text-muted hover:text-toned'"
             :title="kfTitle('volume')"
             @click="toggleKeyframe('volume')"
           >
@@ -1876,7 +1876,7 @@ const saveStateLabel = computed(() => {
         </div>
       </div>
       <div class="flex items-center gap-3">
-        <UIcon name="i-lucide-volume-2" class="size-4 text-neutral-500 dark:text-neutral-400 shrink-0" />
+        <UIcon name="i-lucide-volume-2" class="size-4 text-muted shrink-0" />
         <input
           id="tmcut-insp-volume"
           :aria-label="t('tmcut.inspectorProps.volume')"
@@ -1899,7 +1899,7 @@ const saveStateLabel = computed(() => {
           <button
             type="button"
             class="rounded px-2 py-1 text-[11px] transition-colors shrink-0"
-            :class="fadeInTicks > 0 ? 'text-primary bg-primary/15' : 'text-neutral-500 dark:text-neutral-400 bg-neutral-200/60 dark:bg-neutral-800/60 hover:text-neutral-700 dark:hover:text-neutral-200'"
+            :class="fadeInTicks > 0 ? 'text-primary bg-primary/15' : 'text-muted bg-accented/60 hover:text-toned'"
             :title="t('tmcut.inspectorProps.fadeIn')"
             @click="toggleFade('in')"
           >
@@ -1924,7 +1924,7 @@ const saveStateLabel = computed(() => {
           <button
             type="button"
             class="rounded px-2 py-1 text-[11px] transition-colors shrink-0"
-            :class="fadeOutTicks > 0 ? 'text-primary bg-primary/15' : 'text-neutral-500 dark:text-neutral-400 bg-neutral-200/60 dark:bg-neutral-800/60 hover:text-neutral-700 dark:hover:text-neutral-200'"
+            :class="fadeOutTicks > 0 ? 'text-primary bg-primary/15' : 'text-muted bg-accented/60 hover:text-toned'"
             :title="t('tmcut.inspectorProps.fadeOut')"
             @click="toggleFade('out')"
           >
@@ -1951,15 +1951,15 @@ const saveStateLabel = computed(() => {
     <!-- Text effects tab (roadmap đợt 2): exactly the three looks the drawtext
          export renders — shadow, outline, background plate. Colours are
          optional fields, so an untouched text keeps the legacy black look. -->
-    <div v-if="currentTab === 'effects' && trackType === 'text'" class="space-y-3 pt-2 border-t border-neutral-300 dark:border-neutral-800">
-      <span class="font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-[10px]">
+    <div v-if="currentTab === 'effects' && trackType === 'text'" class="space-y-3 pt-2 border-t border-default">
+      <span class="font-semibold text-muted uppercase tracking-wider text-[10px]">
         {{ t('tmcut.textFx.title') }}
       </span>
 
       <div class="space-y-2">
-        <div class="flex items-center justify-between gap-2 p-2 rounded-lg bg-neutral-100/60 dark:bg-neutral-900/60 border border-neutral-300/80 dark:border-neutral-800/80">
+        <div class="flex items-center justify-between gap-2 p-2 rounded-lg bg-muted/60 border border-default/80">
           <div class="flex items-center gap-1.5 min-w-0">
-            <UIcon name="i-lucide-copy" class="size-3.5 shrink-0" :class="clip.shadow ? 'text-primary' : 'text-neutral-500'" />
+            <UIcon name="i-lucide-copy" class="size-3.5 shrink-0" :class="clip.shadow ? 'text-primary' : 'text-muted'" />
             <span class="text-[11px] truncate">{{ t('tmcut.textFx.shadow') }}</span>
           </div>
           <div class="flex items-center gap-1.5 shrink-0">
@@ -1968,7 +1968,7 @@ const saveStateLabel = computed(() => {
               id="tmcut-text-shadow-color"
               type="color"
               :value="clip.shadowColor || '#000000'"
-              class="w-6 h-6 rounded border border-neutral-400 dark:border-neutral-700 bg-transparent cursor-pointer"
+              class="w-6 h-6 rounded border border-accented bg-transparent cursor-pointer"
               :aria-label="t('tmcut.textFx.color')"
               @input="handleUpdate('shadowColor', ($event.target as HTMLInputElement).value)"
             >
@@ -1981,9 +1981,9 @@ const saveStateLabel = computed(() => {
           </div>
         </div>
 
-        <div class="flex items-center justify-between gap-2 p-2 rounded-lg bg-neutral-100/60 dark:bg-neutral-900/60 border border-neutral-300/80 dark:border-neutral-800/80">
+        <div class="flex items-center justify-between gap-2 p-2 rounded-lg bg-muted/60 border border-default/80">
           <div class="flex items-center gap-1.5 min-w-0">
-            <UIcon name="i-lucide-type-outline" class="size-3.5 shrink-0" :class="clip.stroke ? 'text-primary' : 'text-neutral-500'" />
+            <UIcon name="i-lucide-type-outline" class="size-3.5 shrink-0" :class="clip.stroke ? 'text-primary' : 'text-muted'" />
             <span class="text-[11px] truncate">{{ t('tmcut.textFx.stroke') }}</span>
           </div>
           <div class="flex items-center gap-1.5 shrink-0">
@@ -1992,7 +1992,7 @@ const saveStateLabel = computed(() => {
               id="tmcut-text-stroke-color"
               type="color"
               :value="clip.strokeColor || '#000000'"
-              class="w-6 h-6 rounded border border-neutral-400 dark:border-neutral-700 bg-transparent cursor-pointer"
+              class="w-6 h-6 rounded border border-accented bg-transparent cursor-pointer"
               :aria-label="t('tmcut.textFx.color')"
               @input="handleUpdate('strokeColor', ($event.target as HTMLInputElement).value)"
             >
@@ -2005,9 +2005,9 @@ const saveStateLabel = computed(() => {
           </div>
         </div>
 
-        <div class="flex items-center justify-between gap-2 p-2 rounded-lg bg-neutral-100/60 dark:bg-neutral-900/60 border border-neutral-300/80 dark:border-neutral-800/80">
+        <div class="flex items-center justify-between gap-2 p-2 rounded-lg bg-muted/60 border border-default/80">
           <div class="flex items-center gap-1.5 min-w-0">
-            <UIcon name="i-lucide-square" class="size-3.5 shrink-0" :class="clip.bgColor ? 'text-primary' : 'text-neutral-500'" />
+            <UIcon name="i-lucide-square" class="size-3.5 shrink-0" :class="clip.bgColor ? 'text-primary' : 'text-muted'" />
             <span class="text-[11px] truncate">{{ t('tmcut.textFx.plate') }}</span>
           </div>
           <div class="flex items-center gap-1.5 shrink-0">
@@ -2016,7 +2016,7 @@ const saveStateLabel = computed(() => {
               id="tmcut-text-plate-color"
               type="color"
               :value="clip.bgColor"
-              class="w-6 h-6 rounded border border-neutral-400 dark:border-neutral-700 bg-transparent cursor-pointer"
+              class="w-6 h-6 rounded border border-accented bg-transparent cursor-pointer"
               :aria-label="t('tmcut.textFx.plateColor')"
               @input="handleUpdate('bgColor', ($event.target as HTMLInputElement).value)"
             >
@@ -2030,7 +2030,7 @@ const saveStateLabel = computed(() => {
         </div>
       </div>
 
-      <p class="text-[10px] text-neutral-500 leading-snug">
+      <p class="text-[10px] text-muted leading-snug">
         {{ t('tmcut.textFx.hint') }}
       </p>
     </div>
@@ -2039,9 +2039,9 @@ const saveStateLabel = computed(() => {
          IMAGE effects (FFmpeg filter chains on the footage). Text has its own
          export-true effect panel below instead of pretending a LUT can grade
          drawtext glyphs. -->
-    <div v-if="currentTab === 'effects' && trackType === 'video'" class="space-y-4 pt-2 border-t border-neutral-300 dark:border-neutral-800">
+    <div v-if="currentTab === 'effects' && trackType === 'video'" class="space-y-4 pt-2 border-t border-default">
       <div class="flex items-center justify-between">
-        <span class="font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-[10px]">
+        <span class="font-semibold text-muted uppercase tracking-wider text-[10px]">
           {{ t('tmcut.effects.title') }}
         </span>
         <UDropdownMenu :items="effectMenuItems" :content="{ side: 'bottom', align: 'end' }">
@@ -2058,13 +2058,13 @@ const saveStateLabel = computed(() => {
       <!-- Empty State -->
       <div
         v-if="clipEffects.length === 0"
-        class="py-8 text-center text-neutral-500 space-y-2 border border-dashed border-neutral-300 dark:border-neutral-800 rounded-lg p-4"
+        class="py-8 text-center text-muted space-y-2 border border-dashed border-default rounded-lg p-4"
       >
-        <UIcon name="i-lucide-sparkles" class="size-6 mx-auto text-neutral-500 dark:text-neutral-600" />
-        <p class="text-xs text-neutral-600 dark:text-neutral-300 font-medium">
+        <UIcon name="i-lucide-sparkles" class="size-6 mx-auto text-muted" />
+        <p class="text-xs text-toned font-medium">
           {{ t('tmcut.effects.noEffects') }}
         </p>
-        <p class="text-[11px] text-neutral-500 leading-relaxed">
+        <p class="text-[11px] text-muted leading-relaxed">
           {{ t('tmcut.effects.noEffectsHint') }}
         </p>
       </div>
@@ -2074,13 +2074,13 @@ const saveStateLabel = computed(() => {
         <div
           v-for="(eff, idx) in clipEffects"
           :key="`${eff.type}-${idx}`"
-          class="rounded-lg border border-neutral-300 dark:border-neutral-800 bg-neutral-100/60 dark:bg-neutral-900/60 p-3 space-y-3"
+          class="rounded-lg border border-default bg-muted/60 p-3 space-y-3"
         >
           <!-- Card Header -->
-          <div class="flex items-center justify-between gap-2 border-b border-neutral-300/80 dark:border-neutral-800/80 pb-2">
+          <div class="flex items-center justify-between gap-2 border-b border-default/80 pb-2">
             <div class="flex items-center gap-2 min-w-0">
               <UIcon :name="effectIcon(eff.type)" class="size-4 text-primary shrink-0" />
-              <span class="font-medium text-xs text-neutral-800 dark:text-neutral-100 truncate">
+              <span class="font-medium text-xs text-highlighted truncate">
                 {{ effectLabel(eff.type) }}
               </span>
             </div>
@@ -2130,14 +2130,14 @@ const saveStateLabel = computed(() => {
                 <label
                   v-if="param.kind === 'number' || param.kind === 'color'"
                   :for="`tmcut-fx-${idx}-${param.name}`"
-                  class="text-neutral-500 dark:text-neutral-400"
+                  class="text-muted"
                 >
                   {{ paramLabel(param.name) }}
                 </label>
-                <span v-else class="text-neutral-500 dark:text-neutral-400">
+                <span v-else class="text-muted">
                   {{ paramLabel(param.name) }}
                 </span>
-                <span class="font-mono text-neutral-600 dark:text-neutral-300">
+                <span class="font-mono text-toned">
                   {{ eff.params[param.name] }}
                 </span>
               </div>
@@ -2174,7 +2174,7 @@ const saveStateLabel = computed(() => {
                   :id="`tmcut-fx-${idx}-${param.name}`"
                   type="color"
                   :value="String(eff.params[param.name] ?? param.default ?? '#00ff00')"
-                  class="size-6 rounded border border-neutral-400 dark:border-neutral-700 bg-transparent cursor-pointer p-0 shrink-0"
+                  class="size-6 rounded border border-accented bg-transparent cursor-pointer p-0 shrink-0"
                   @input="handleUpdateEffectParam(idx, param.name, ($event.target as HTMLInputElement).value)"
                 >
                 <UInput
@@ -2203,9 +2203,9 @@ const saveStateLabel = computed(() => {
     </div>
 
     <!-- Filters Tab: LUT grades for the selected media clip (right panel) -->
-    <div v-if="currentTab === 'filters' && trackType === 'video'" class="space-y-3 pt-2 border-t border-neutral-300 dark:border-neutral-800">
+    <div v-if="currentTab === 'filters' && trackType === 'video'" class="space-y-3 pt-2 border-t border-default">
       <div class="flex items-center justify-between">
-        <span class="font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-[10px]">
+        <span class="font-semibold text-muted uppercase tracking-wider text-[10px]">
           {{ t('tmcut.inspectorProps.filtersTitle') }}
         </span>
         <UButton
@@ -2226,25 +2226,25 @@ const saveStateLabel = computed(() => {
           class="flex flex-col gap-1 p-1 rounded-lg border text-left transition-colors cursor-pointer"
           :class="activeFilter === preset
             ? 'border-primary bg-primary/10'
-            : 'border-neutral-300 dark:border-neutral-800 bg-neutral-100/60 dark:bg-neutral-950/60 hover:border-primary/60'"
+            : 'border-default bg-muted/60 hover:border-primary/60'"
           @click="applyFilter(preset)"
         >
           <TmcutFxThumb kind="filter" :type="preset" :active="activeFilter === preset" />
           <span class="flex items-center gap-1 px-0.5 w-full">
-            <span class="text-[10px] font-medium text-neutral-700 dark:text-neutral-200 truncate flex-1">
+            <span class="text-[10px] font-medium text-toned truncate flex-1">
               {{ filterLabel(preset) }}
             </span>
             <UIcon v-if="activeFilter === preset" name="i-lucide-check" class="size-3 text-primary shrink-0" />
           </span>
         </button>
       </div>
-      <p class="text-[10px] text-neutral-500 leading-snug">
+      <p class="text-[10px] text-muted leading-snug">
         {{ t('tmcut.inspectorProps.filtersHint') }}
       </p>
     </div>
 
     <!-- Actions -->
-    <div class="pt-4 border-t border-neutral-300 dark:border-neutral-800">
+    <div class="pt-4 border-t border-default">
       <UButton
         icon="i-lucide-trash"
         color="error"
@@ -2260,21 +2260,21 @@ const saveStateLabel = computed(() => {
 
   <div v-else class="text-xs select-none">
     <!-- Project details header -->
-    <div class="flex items-center gap-2 pb-3 border-b border-neutral-300 dark:border-neutral-800">
+    <div class="flex items-center gap-2 pb-3 border-b border-default">
       <UIcon name="i-lucide-clapperboard" class="size-4 shrink-0 text-primary" />
-      <span class="font-medium text-neutral-800 dark:text-neutral-100 truncate text-sm">
+      <span class="font-medium text-highlighted truncate text-sm">
         {{ currentProject?.name || t('tmcut.project') }}
       </span>
     </div>
 
     <!-- Detail rows (CapCut-style details panel) -->
-    <div class="py-2 divide-y divide-neutral-200/60 dark:divide-neutral-800/60">
+    <div class="py-2 divide-y divide-default/60">
       <div v-for="row in detailRows" :key="row.label" class="flex items-start justify-between gap-3 py-1.5">
-        <span class="text-neutral-500 shrink-0">{{ row.label }}</span>
-        <span class="text-neutral-700 dark:text-neutral-200 text-right break-all font-mono text-[11px]">{{ row.value }}</span>
+        <span class="text-muted shrink-0">{{ row.label }}</span>
+        <span class="text-toned text-right break-all font-mono text-[11px]">{{ row.value }}</span>
       </div>
       <div class="flex items-start justify-between gap-3 py-1.5">
-        <span class="text-neutral-500 shrink-0">{{ t('tmcut.details.saveState') }}</span>
+        <span class="text-muted shrink-0">{{ t('tmcut.details.saveState') }}</span>
         <span class="text-right text-[11px]" :class="saveStatus === 'error' ? 'text-red-400' : 'text-emerald-400'">
           {{ saveStateLabel }}
         </span>
@@ -2282,16 +2282,16 @@ const saveStateLabel = computed(() => {
     </div>
 
     <!-- Storage path -->
-    <div v-if="storagePath" class="pt-2 border-t border-neutral-300 dark:border-neutral-800">
-      <p class="text-[10px] text-neutral-500 mb-1">
+    <div v-if="storagePath" class="pt-2 border-t border-default">
+      <p class="text-[10px] text-muted mb-1">
         {{ t('tmcut.details.storage') }}
       </p>
-      <p class="font-mono text-[10px] text-neutral-500 dark:text-neutral-400 break-all leading-relaxed">
+      <p class="font-mono text-[10px] text-muted break-all leading-relaxed">
         {{ storagePath }}
       </p>
     </div>
 
-    <p class="text-neutral-500 text-[11px] text-center pt-4">
+    <p class="text-muted text-[11px] text-center pt-4">
       {{ t('tmcut.inspectorProps.noClipSelected') }}
     </p>
   </div>

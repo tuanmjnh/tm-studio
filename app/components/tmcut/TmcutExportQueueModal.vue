@@ -81,16 +81,16 @@ function modeIcon(mode: TmcutExportJob['mode']): string {
     :ui="{ content: 'w-[calc(100%-2rem)] max-w-3xl' }"
   >
     <template #content>
-      <div class="flex flex-col max-h-[85vh] overflow-hidden rounded-xl bg-neutral-100 dark:bg-neutral-950 border border-neutral-300 dark:border-neutral-800 shadow-2xl">
+      <div class="flex flex-col max-h-[85vh] overflow-hidden rounded-xl bg-muted border border-default shadow-2xl">
         <!-- HEADER -->
-        <div class="px-5 py-4 bg-neutral-100 dark:bg-neutral-900 border-b border-neutral-300 dark:border-neutral-800 flex items-center justify-between gap-3 shrink-0">
+        <div class="px-5 py-4 bg-muted border-b border-default flex items-center justify-between gap-3 shrink-0">
           <div class="flex items-center gap-3">
             <div class="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
               <UIcon name="i-lucide-list-checks" class="size-4.5 text-primary" />
             </div>
             <div>
               <div class="flex items-center gap-2">
-                <h2 class="text-base font-semibold text-neutral-800 dark:text-neutral-100">
+                <h2 class="text-base font-semibold text-highlighted">
                   {{ t('tmcut.queue.title') }}
                 </h2>
                 <UBadge
@@ -102,7 +102,7 @@ function modeIcon(mode: TmcutExportJob['mode']): string {
                   {{ activeJobsCount }}
                 </UBadge>
               </div>
-              <p class="text-xs text-neutral-500 dark:text-neutral-400">
+              <p class="text-xs text-muted">
                 {{ t('tmcut.queue.subtitle') }}
               </p>
             </div>
@@ -160,16 +160,16 @@ function modeIcon(mode: TmcutExportJob['mode']): string {
           <!-- Empty State -->
           <div
             v-if="queue.length === 0"
-            class="py-12 flex flex-col items-center justify-center text-center gap-3 text-neutral-500 dark:text-neutral-400"
+            class="py-12 flex flex-col items-center justify-center text-center gap-3 text-muted"
           >
-            <div class="w-12 h-12 rounded-full bg-neutral-100 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-800 flex items-center justify-center">
-              <UIcon name="i-lucide-list-checks" class="size-6 text-neutral-500" />
+            <div class="w-12 h-12 rounded-full bg-muted border border-default flex items-center justify-center">
+              <UIcon name="i-lucide-list-checks" class="size-6 text-muted" />
             </div>
             <div>
-              <p class="text-sm font-medium text-neutral-700 dark:text-neutral-200">
+              <p class="text-sm font-medium text-toned">
                 {{ t('tmcut.queue.empty') }}
               </p>
-              <p class="text-xs text-neutral-500 max-w-sm mt-1">
+              <p class="text-xs text-muted max-w-sm mt-1">
                 {{ t('tmcut.queue.emptyDesc') }}
               </p>
             </div>
@@ -179,19 +179,19 @@ function modeIcon(mode: TmcutExportJob['mode']): string {
           <div
             v-for="job in queue"
             :key="job.id"
-            class="rounded-lg border border-neutral-300 dark:border-neutral-800 bg-neutral-100/60 dark:bg-neutral-900/60 p-4 space-y-2.5 transition-colors hover:border-neutral-400 dark:hover:border-neutral-700"
+            class="rounded-lg border border-default bg-muted/60 p-4 space-y-2.5 transition-colors hover:border-accented"
           >
             <!-- Top line: Title, mode, specs, status badge -->
             <div class="flex items-start justify-between gap-3">
               <div class="flex items-center gap-2.5 min-w-0">
-                <div class="w-7 h-7 rounded bg-neutral-200 dark:bg-neutral-800 flex items-center justify-center shrink-0">
-                  <UIcon :name="modeIcon(job.mode)" class="size-3.5 text-neutral-600 dark:text-neutral-300" />
+                <div class="w-7 h-7 rounded bg-accented flex items-center justify-center shrink-0">
+                  <UIcon :name="modeIcon(job.mode)" class="size-3.5 text-toned" />
                 </div>
                 <div class="min-w-0">
-                  <h3 class="text-sm font-medium text-neutral-800 dark:text-neutral-100 truncate" :title="job.projectName">
+                  <h3 class="text-sm font-medium text-highlighted truncate" :title="job.projectName">
                     {{ job.projectName }}
                   </h3>
-                  <div class="flex items-center gap-2 text-[11px] text-neutral-500 dark:text-neutral-400 font-mono">
+                  <div class="flex items-center gap-2 text-[11px] text-muted font-mono">
                     <span class="truncate">{{ job.specs }}</span>
                   </div>
                 </div>
@@ -214,14 +214,14 @@ function modeIcon(mode: TmcutExportJob['mode']): string {
             </div>
 
             <!-- Path line -->
-            <div class="flex items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400 font-mono truncate" :title="job.outputPath">
-              <UIcon name="i-lucide-folder-open" class="size-3.5 text-neutral-500 shrink-0" />
+            <div class="flex items-center gap-1.5 text-xs text-muted font-mono truncate" :title="job.outputPath">
+              <UIcon name="i-lucide-folder-open" class="size-3.5 text-muted shrink-0" />
               <span class="truncate">{{ job.outputPath }}</span>
             </div>
 
             <!-- Progress bar (when running) -->
             <div v-if="job.status === 'running'" class="space-y-1 pt-1">
-              <div class="flex items-center justify-between text-[11px] font-mono text-neutral-500 dark:text-neutral-400">
+              <div class="flex items-center justify-between text-[11px] font-mono text-muted">
                 <span class="text-primary font-medium">{{ job.progress.toFixed(1) }}%</span>
                 <span>{{ job.speed || '1.0x' }}</span>
               </div>
@@ -238,8 +238,8 @@ function modeIcon(mode: TmcutExportJob['mode']): string {
             </div>
 
             <!-- Bottom Action Row -->
-            <div class="flex items-center justify-between pt-1 border-t border-neutral-300/60 dark:border-neutral-800/60 text-xs">
-              <span class="text-[11px] text-neutral-500">
+            <div class="flex items-center justify-between pt-1 border-t border-default/60 text-xs">
+              <span class="text-[11px] text-muted">
                 {{ new Date(job.createdAt).toLocaleTimeString() }}
               </span>
 
@@ -302,10 +302,10 @@ function modeIcon(mode: TmcutExportJob['mode']): string {
         </div>
 
         <!-- FOOTER -->
-        <div class="px-5 py-3 bg-neutral-100 dark:bg-neutral-900 border-t border-neutral-300 dark:border-neutral-800 flex items-center justify-between gap-3 text-xs text-neutral-500 dark:text-neutral-400 shrink-0">
+        <div class="px-5 py-3 bg-muted border-t border-default flex items-center justify-between gap-3 text-xs text-muted shrink-0">
           <div>
             <span>{{ t('tmcut.queue.activeTasks', { n: activeJobsCount }) }}</span>
-            <span class="mx-2 text-neutral-600 dark:text-neutral-700">·</span>
+            <span class="mx-2 text-toned">·</span>
             <span>{{ t('tmcut.queue.completedTasks', { n: doneJobs.length }) }}</span>
           </div>
           <UButton

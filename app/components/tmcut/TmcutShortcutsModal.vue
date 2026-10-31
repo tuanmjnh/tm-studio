@@ -239,9 +239,9 @@ onUnmounted(() => {
 <template>
   <UModal v-model:open="open" :ui="{ content: 'w-[calc(100%-2rem)] max-w-4xl' }">
     <template #content>
-      <div class="flex flex-col max-h-[85vh] overflow-hidden rounded-xl bg-neutral-100 dark:bg-neutral-950 border border-neutral-300 dark:border-neutral-800 shadow-2xl">
+      <div class="flex flex-col max-h-[85vh] overflow-hidden rounded-xl bg-muted border border-default shadow-2xl">
         <!-- HEADER: title + version badge + close -->
-        <div class="px-5 py-4 bg-neutral-100 dark:bg-neutral-900 border-b border-neutral-300 dark:border-neutral-800 flex flex-col gap-3 shrink-0">
+        <div class="px-5 py-4 bg-muted border-b border-default flex flex-col gap-3 shrink-0">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-3 min-w-0">
               <div class="w-7 h-7 rounded bg-primary/15 flex items-center justify-center shrink-0">
@@ -251,7 +251,7 @@ onUnmounted(() => {
                 <h1 class="text-base font-bold text-primary truncate">
                   {{ t('tmcut.hotkeys.title') }}
                 </h1>
-                <span class="px-1.5 py-0.5 rounded bg-neutral-200 dark:bg-neutral-800 text-primary/80 font-mono text-[10px] shrink-0">
+                <span class="px-1.5 py-0.5 rounded bg-accented text-primary/80 font-mono text-[10px] shrink-0">
                   {{ t('tmcut.hotkeys.versionBadge') }}
                 </span>
               </div>
@@ -271,24 +271,24 @@ onUnmounted(() => {
             <div class="relative flex-1 min-w-0">
               <UIcon
                 name="i-lucide-search"
-                class="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-neutral-500 pointer-events-none"
+                class="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted pointer-events-none"
               />
               <input
                 id="tmcut-shortcuts-search"
                 ref="searchInput"
                 v-model="query"
                 type="text"
-                class="w-full h-9 pl-9 pr-16 rounded-lg bg-neutral-100 dark:bg-neutral-950 border border-neutral-300 dark:border-neutral-800 text-sm text-neutral-800 dark:text-neutral-100 placeholder:text-neutral-500 focus:outline-none focus:border-primary/60"
+                class="w-full h-9 pl-9 pr-16 rounded-lg bg-muted border border-default text-sm text-highlighted placeholder:text-muted focus:outline-none focus:border-primary/60"
                 :placeholder="t('tmcut.hotkeys.searchPlaceholder')"
                 :aria-label="t('tmcut.hotkeys.searchPlaceholder')"
               >
               <div class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none">
-                <kbd class="px-1.5 py-0.5 rounded bg-neutral-200 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400 font-mono text-[10px]">Ctrl</kbd>
-                <kbd class="px-1.5 py-0.5 rounded bg-neutral-200 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400 font-mono text-[10px]">K</kbd>
+                <kbd class="px-1.5 py-0.5 rounded bg-accented text-muted font-mono text-[10px]">Ctrl</kbd>
+                <kbd class="px-1.5 py-0.5 rounded bg-accented text-muted font-mono text-[10px]">K</kbd>
               </div>
             </div>
             <div
-              class="flex items-center gap-1.5 px-2 py-1 rounded bg-neutral-200/60 dark:bg-neutral-800/60 text-[10px] font-mono text-neutral-500 dark:text-neutral-400 shrink-0"
+              class="flex items-center gap-1.5 px-2 py-1 rounded bg-accented/60 text-[10px] font-mono text-muted shrink-0"
             >
               <span class="w-1.5 h-1.5 rounded-full bg-primary inline-block" />
               <span>{{ t('tmcut.hotkeys.defaultActions', { count: implementedCount }) }}</span>
@@ -304,7 +304,7 @@ onUnmounted(() => {
               class="px-3 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition-colors"
               :class="activeTab === tab.key
                 ? 'bg-primary/15 text-primary border border-primary/40'
-                : 'bg-neutral-200/70 dark:bg-neutral-800/70 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 border border-transparent'"
+                : 'bg-accented/70 text-muted hover:text-toned border border-transparent'"
               @click="activeTab = tab.key"
             >
               {{ tab.label }}
@@ -328,7 +328,7 @@ onUnmounted(() => {
               >
                 {{ t('tmcut.hotkeys.badges.ai') }}
               </span>
-              <span v-else class="font-mono text-[10px] text-neutral-500 dark:text-neutral-600 shrink-0">
+              <span v-else class="font-mono text-[10px] text-muted shrink-0">
                 {{ tags[section.key as 'editing' | 'playback' | 'project'] }}
               </span>
             </div>
@@ -337,29 +337,29 @@ onUnmounted(() => {
               <div
                 v-for="item in section.items"
                 :key="item.id"
-                class="flex items-center justify-between gap-3 p-3 rounded-lg bg-neutral-100 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-800 hover:bg-neutral-200/70 dark:hover:bg-neutral-800/70 transition-colors"
+                class="flex items-center justify-between gap-3 p-3 rounded-lg bg-muted border border-default hover:bg-accented/70 transition-colors"
                 :class="item.wide && 'md:col-span-2'"
               >
                 <div class="flex flex-col min-w-0">
                   <div class="flex items-center gap-1.5 min-w-0">
-                    <span class="text-sm text-neutral-800 dark:text-neutral-100 font-medium truncate">{{ item.label }}</span>
+                    <span class="text-sm text-highlighted font-medium truncate">{{ item.label }}</span>
                     <span
                       v-if="item.badge"
                       class="px-1.5 py-0.5 rounded text-[10px] font-mono shrink-0"
                       :class="item.badge === 'planned'
-                        ? 'bg-neutral-200 dark:bg-neutral-800 text-neutral-500 border border-neutral-400 dark:border-neutral-700'
+                        ? 'bg-accented text-muted border border-accented'
                         : 'bg-secondary/15 text-secondary border border-secondary/40'"
                     >
                       {{ badgeLabel(item.badge) }}
                     </span>
                   </div>
-                  <span class="text-[11px] text-neutral-500 dark:text-neutral-400 leading-snug">{{ item.desc }}</span>
+                  <span class="text-[11px] text-muted leading-snug">{{ item.desc }}</span>
                 </div>
                 <div class="flex items-center gap-1 shrink-0" :class="item.badge === 'planned' && 'opacity-50'">
                   <template v-for="(key, ki) in item.keys" :key="key">
-                    <span v-if="ki > 0 && item.keySep" class="text-neutral-500 dark:text-neutral-600 text-[10px]">/</span>
+                    <span v-if="ki > 0 && item.keySep" class="text-muted text-[10px]">/</span>
                     <kbd
-                      class="px-2 py-1 rounded bg-neutral-100 dark:bg-neutral-950 border border-neutral-300 dark:border-neutral-800 font-mono text-[11px] text-primary shadow-sm"
+                      class="px-2 py-1 rounded bg-muted border border-default font-mono text-[11px] text-primary shadow-sm"
                     >
                       {{ key }}
                     </kbd>
@@ -371,11 +371,11 @@ onUnmounted(() => {
 
           <!-- EMPTY STATE -->
           <div v-if="noResults" class="py-12 flex flex-col items-center text-center">
-            <UIcon name="i-lucide-search-x" class="size-9 text-neutral-500 dark:text-neutral-600 mb-2" />
-            <p class="text-sm font-semibold text-neutral-700 dark:text-neutral-200">
+            <UIcon name="i-lucide-search-x" class="size-9 text-muted mb-2" />
+            <p class="text-sm font-semibold text-toned">
               {{ t('tmcut.hotkeys.emptyTitle') }}
             </p>
-            <p class="text-xs text-neutral-500 mt-1">
+            <p class="text-xs text-muted mt-1">
               {{ t('tmcut.hotkeys.emptyHint') }}
             </p>
           </div>
@@ -383,7 +383,7 @@ onUnmounted(() => {
 
         <!-- FOOTER: toolbar tips toggle + language note + close -->
         <div
-          class="px-5 py-3 bg-neutral-100 dark:bg-neutral-900 border-t border-neutral-300 dark:border-neutral-800 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0"
+          class="px-5 py-3 bg-muted border-t border-default flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0"
         >
           <div
             class="flex items-center gap-2 cursor-pointer select-none"
@@ -395,10 +395,10 @@ onUnmounted(() => {
               size="sm"
               @click.stop
             />
-            <span class="text-xs text-neutral-600 dark:text-neutral-300">{{ t('tmcut.hotkeys.tipsToggle') }}</span>
+            <span class="text-xs text-toned">{{ t('tmcut.hotkeys.tipsToggle') }}</span>
           </div>
           <div class="flex items-center gap-4">
-            <span class="hidden md:inline font-mono text-[10px] text-neutral-500">
+            <span class="hidden md:inline font-mono text-[10px] text-muted">
               {{ t('tmcut.hotkeys.langNote') }}
             </span>
             <UButton

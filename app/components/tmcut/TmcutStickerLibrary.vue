@@ -77,7 +77,7 @@ function insertSticker(emoji: string) {
         class="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors cursor-pointer"
         :class="activeGroup === chip
           ? 'border-primary bg-primary/15 text-primary'
-          : 'border-neutral-300 dark:border-neutral-800 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200'"
+          : 'border-default text-muted hover:text-toned'"
         @click="activeGroup = chip"
       >
         {{ groupLabel(chip) }}
@@ -86,7 +86,7 @@ function insertSticker(emoji: string) {
 
     <div class="p-2 space-y-3 pb-3">
       <div v-for="group in visibleGroups" :key="group.id" class="space-y-1.5">
-        <span class="text-[10px] font-semibold text-neutral-500 uppercase tracking-wider px-0.5">
+        <span class="text-[10px] font-semibold text-muted uppercase tracking-wider px-0.5">
           {{ groupLabel(group.id) }}
         </span>
         <div class="grid grid-cols-5 gap-1">
@@ -105,7 +105,7 @@ function insertSticker(emoji: string) {
 
       <p
         v-if="visibleGroups.length === 0"
-        class="text-[10px] text-neutral-500 dark:text-neutral-600 text-center px-2 py-4"
+        class="text-[10px] text-muted text-center px-2 py-4"
       >
         {{ t('tmcut.stickers.empty') }}
       </p>

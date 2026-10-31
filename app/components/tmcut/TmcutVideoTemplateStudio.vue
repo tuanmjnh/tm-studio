@@ -284,13 +284,13 @@ function runTest() {
     <div v-if="mode === 'list'">
       <div
         v-if="families.length === 0"
-        class="border border-dashed border-neutral-300 dark:border-neutral-800 rounded-xl p-10 text-center"
+        class="border border-dashed border-default rounded-xl p-10 text-center"
       >
-        <UIcon name="i-lucide-layers" class="size-8 mx-auto text-neutral-400 mb-2" />
-        <p class="text-sm text-neutral-500 dark:text-neutral-400">
+        <UIcon name="i-lucide-layers" class="size-8 mx-auto text-dimmed mb-2" />
+        <p class="text-sm text-muted">
           {{ t('tmcut.videoTemplates.noFamilies') }}
         </p>
-        <p class="text-xs text-neutral-400 dark:text-neutral-500 mt-1">
+        <p class="text-xs text-dimmed mt-1">
           {{ t('tmcut.videoTemplates.noFamiliesDesc') }}
         </p>
       </div>
@@ -299,12 +299,12 @@ function runTest() {
         <div
           v-for="family in families"
           :key="family.templateId"
-          class="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 flex flex-col gap-3"
+          class="bg-white dark:bg-default border border-default rounded-xl p-4 flex flex-col gap-3"
         >
           <div class="flex items-start justify-between gap-2">
             <div class="min-w-0">
               <div class="flex items-center gap-2 flex-wrap">
-                <h3 class="text-sm font-semibold text-neutral-900 dark:text-white truncate">
+                <h3 class="text-sm font-semibold text-highlighted dark:text-white truncate">
                   {{ family.name }}
                 </h3>
                 <UBadge
@@ -316,7 +316,7 @@ function runTest() {
                   {{ t('tmcut.videoTemplates.builtin') }}
                 </UBadge>
               </div>
-              <p class="text-xs text-neutral-500 dark:text-neutral-400 mt-1 line-clamp-2">
+              <p class="text-xs text-muted mt-1 line-clamp-2">
                 {{ topicLabel(family.topic) }}
               </p>
             </div>
@@ -394,10 +394,10 @@ function runTest() {
       <UModal v-model:open="deleteModalOpen" :ui="{ content: 'max-w-md' }">
         <template #content>
           <div class="p-6">
-            <h3 class="text-base font-semibold text-neutral-900 dark:text-white">
+            <h3 class="text-base font-semibold text-highlighted dark:text-white">
               {{ t('tmcut.videoTemplates.deleteTitle') }}
             </h3>
-            <p class="text-sm text-neutral-500 dark:text-neutral-400 mt-2">
+            <p class="text-sm text-muted mt-2">
               {{ t('tmcut.videoTemplates.deleteDesc', { name: deleteTarget?.name || '' }) }}
             </p>
             <div class="flex items-center gap-2 mt-5">
@@ -487,21 +487,21 @@ function runTest() {
       </div>
 
       <!-- Meta -->
-      <div class="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="bg-white dark:bg-default border border-default rounded-xl p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label for="tmcut-studio-name" class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+          <label for="tmcut-studio-name" class="block text-xs font-medium text-toned mb-1.5">
             {{ t('tmcut.videoTemplates.name') }}
           </label>
           <UInput id="tmcut-studio-name" v-model="editing.name" class="w-full" />
         </div>
         <div>
-          <label for="tmcut-studio-topic" class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+          <label for="tmcut-studio-topic" class="block text-xs font-medium text-toned mb-1.5">
             {{ t('tmcut.videoTemplates.topic') }}
           </label>
           <UInput id="tmcut-studio-topic" v-model="editing.topic" class="w-full" />
         </div>
         <div class="md:col-span-2">
-          <label for="tmcut-studio-description" class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+          <label for="tmcut-studio-description" class="block text-xs font-medium text-toned mb-1.5">
             {{ t('tmcut.videoTemplates.description') }}
           </label>
           <UTextarea
@@ -514,13 +514,13 @@ function runTest() {
       </div>
 
       <!-- Input schema -->
-      <div class="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl p-4">
+      <div class="bg-white dark:bg-default border border-default rounded-xl p-4">
         <div class="flex items-center justify-between mb-3">
           <div>
-            <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">
+            <h3 class="text-sm font-semibold text-highlighted dark:text-white">
               {{ t('tmcut.videoTemplates.inputs') }}
             </h3>
-            <p class="text-[11px] text-neutral-500 dark:text-neutral-400">
+            <p class="text-[11px] text-muted">
               {{ t('tmcut.videoTemplates.inputsHint') }}
             </p>
           </div>
@@ -581,7 +581,7 @@ function runTest() {
           </div>
           <p
             v-if="editing.inputSchema.length === 0"
-            class="text-xs text-neutral-400 dark:text-neutral-500"
+            class="text-xs text-dimmed"
           >
             {{ t('tmcut.videoTemplates.inputsEmpty') }}
           </p>
@@ -589,13 +589,13 @@ function runTest() {
       </div>
 
       <!-- Scenes -->
-      <div class="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl p-4">
+      <div class="bg-white dark:bg-default border border-default rounded-xl p-4">
         <div class="flex items-center justify-between mb-3">
           <div>
-            <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">
+            <h3 class="text-sm font-semibold text-highlighted dark:text-white">
               {{ t('tmcut.videoTemplates.scenes') }}
             </h3>
-            <p class="text-[11px] text-neutral-500 dark:text-neutral-400">
+            <p class="text-[11px] text-muted">
               {{ t('tmcut.videoTemplates.scenesHint') }}
             </p>
           </div>
@@ -614,7 +614,7 @@ function runTest() {
           <div
             v-for="scene in editing.sceneBlueprints"
             :key="scene.id"
-            class="border border-neutral-200 dark:border-neutral-800 rounded-lg p-3 flex flex-col gap-2"
+            class="border border-default rounded-lg p-3 flex flex-col gap-2"
           >
             <div class="flex items-center gap-2">
               <UBadge color="neutral" variant="subtle" size="xs">
@@ -687,7 +687,7 @@ function runTest() {
           </div>
           <p
             v-if="editing.sceneBlueprints.length === 0"
-            class="text-xs text-neutral-400 dark:text-neutral-500"
+            class="text-xs text-dimmed"
           >
             {{ t('tmcut.videoTemplates.scenesEmpty') }}
           </p>
@@ -695,13 +695,13 @@ function runTest() {
       </div>
 
       <!-- Prompt blocks -->
-      <div class="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl p-4">
+      <div class="bg-white dark:bg-default border border-default rounded-xl p-4">
         <div class="flex items-center justify-between mb-3">
           <div>
-            <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">
+            <h3 class="text-sm font-semibold text-highlighted dark:text-white">
               {{ t('tmcut.videoTemplates.promptBlocks') }}
             </h3>
-            <p class="text-[11px] text-neutral-500 dark:text-neutral-400">
+            <p class="text-[11px] text-muted">
               {{ t('tmcut.videoTemplates.promptBlocksHint') }}
             </p>
           </div>
@@ -719,7 +719,7 @@ function runTest() {
           <div
             v-for="block in editing.promptBlocks"
             :key="block.id"
-            class="border border-neutral-200 dark:border-neutral-800 rounded-lg p-3 flex flex-col gap-2"
+            class="border border-default rounded-lg p-3 flex flex-col gap-2"
           >
             <div class="flex items-center gap-2">
               <UInput
@@ -757,7 +757,7 @@ function runTest() {
           </div>
           <p
             v-if="editing.promptBlocks.length === 0"
-            class="text-xs text-neutral-400 dark:text-neutral-500"
+            class="text-xs text-dimmed"
           >
             {{ t('tmcut.videoTemplates.promptBlocksEmpty') }}
           </p>
@@ -765,13 +765,13 @@ function runTest() {
       </div>
 
       <!-- Test run -->
-      <div class="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl p-4">
+      <div class="bg-white dark:bg-default border border-default rounded-xl p-4">
         <div class="flex items-center justify-between mb-3">
           <div>
-            <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">
+            <h3 class="text-sm font-semibold text-highlighted dark:text-white">
               {{ t('tmcut.videoTemplates.testRun') }}
             </h3>
-            <p class="text-[11px] text-neutral-500 dark:text-neutral-400">
+            <p class="text-[11px] text-muted">
               {{ t('tmcut.videoTemplates.testRunHint') }}
             </p>
           </div>
@@ -793,7 +793,7 @@ function runTest() {
               :key="field.id"
               class="block"
             >
-              <span class="text-[11px] font-medium text-neutral-600 dark:text-neutral-300">
+              <span class="text-[11px] font-medium text-toned">
                 {{ field.label }}
                 <span v-if="field.required" class="text-red-400">*</span>
               </span>
@@ -814,15 +814,15 @@ function runTest() {
                 @update:model-value="(value: string) => setRecord(field.id, value)"
               />
             </label>
-            <p v-if="editing.inputSchema.length === 0" class="text-xs text-neutral-400 dark:text-neutral-500">
+            <p v-if="editing.inputSchema.length === 0" class="text-xs text-dimmed">
               {{ t('tmcut.videoTemplates.inputsEmpty') }}
             </p>
           </div>
 
           <div class="min-w-0">
-            <div v-if="!testResult" class="border border-dashed border-neutral-300 dark:border-neutral-800 rounded-lg p-6 text-center">
-              <UIcon name="i-lucide-flask-conical" class="size-6 mx-auto text-neutral-400 mb-1.5" />
-              <p class="text-xs text-neutral-400 dark:text-neutral-500">
+            <div v-if="!testResult" class="border border-dashed border-default rounded-lg p-6 text-center">
+              <UIcon name="i-lucide-flask-conical" class="size-6 mx-auto text-dimmed mb-1.5" />
+              <p class="text-xs text-dimmed">
                 {{ t('tmcut.videoTemplates.testEmpty') }}
               </p>
             </div>
@@ -853,21 +853,21 @@ function runTest() {
                 <div
                   v-for="scene in testResult.storyboard"
                   :key="scene.sceneId"
-                  class="border border-neutral-200 dark:border-neutral-800 rounded-lg p-2.5"
+                  class="border border-default rounded-lg p-2.5"
                 >
                   <div class="flex items-center gap-2 flex-wrap">
                     <UBadge color="neutral" variant="subtle" size="xs">
                       {{ scene.order + 1 }}
                     </UBadge>
-                    <span class="text-xs font-semibold text-neutral-800 dark:text-neutral-100">
+                    <span class="text-xs font-semibold text-highlighted">
                       {{ tr(`tmcut.videoTemplates.roles.${scene.role}`, scene.role) }}
                     </span>
-                    <span class="text-[11px] text-neutral-500">{{ scene.durationSec }}s</span>
+                    <span class="text-[11px] text-muted">{{ scene.durationSec }}s</span>
                     <span v-if="scene.onScreenText" class="text-[11px] text-primary-400 truncate">
                       “{{ scene.onScreenText }}”
                     </span>
                   </div>
-                  <p class="text-[11px] font-mono text-neutral-500 dark:text-neutral-400 mt-1 line-clamp-3">
+                  <p class="text-[11px] font-mono text-muted mt-1 line-clamp-3">
                     {{ scene.prompt }}
                   </p>
                 </div>

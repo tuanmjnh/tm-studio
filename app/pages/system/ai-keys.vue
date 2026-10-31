@@ -192,10 +192,10 @@ const testResults = ref<Record<string, TestResult>>({})
 
 const vaultBanner = computed(() => {
   const v = vault.value
-  if (!v) return { icon: 'i-lucide-loader', color: 'text-neutral-500 dark:text-neutral-400', title: '', desc: '' }
+  if (!v) return { icon: 'i-lucide-loader', color: 'text-muted', title: '', desc: '' }
   if (!v.exists) return {
     icon: 'i-lucide-file-x',
-    color: 'text-neutral-500 dark:text-neutral-400',
+    color: 'text-muted',
     title: t('settings.aiKeysVaultEmpty'),
     desc: t('settings.aiKeysVaultEmptyDesc')
   }
@@ -1496,7 +1496,7 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
       <!-- ============ Metric Cards ======================================== -->
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div
-          class="p-3.5 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 flex items-center justify-between">
+          class="p-3.5 rounded-xl border border-default bg-white dark:bg-default flex items-center justify-between">
           <div>
             <p class="text-xs text-muted">
               {{ t('aiProviders.total_providers') }}
@@ -1511,7 +1511,7 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
         </div>
 
         <div
-          class="p-3.5 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 flex items-center justify-between">
+          class="p-3.5 rounded-xl border border-default bg-white dark:bg-default flex items-center justify-between">
           <div>
             <p class="text-xs text-muted">
               {{ t('aiProviders.total_credentials') }}
@@ -1527,7 +1527,7 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
         </div>
 
         <div
-          class="p-3.5 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 flex items-center justify-between">
+          class="p-3.5 rounded-xl border border-default bg-white dark:bg-default flex items-center justify-between">
           <div>
             <p class="text-xs text-muted">
               {{ t('aiProviders.total_models') }}
@@ -1543,7 +1543,7 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
         </div>
 
         <div
-          class="p-3.5 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 flex items-center justify-between">
+          class="p-3.5 rounded-xl border border-default bg-white dark:bg-default flex items-center justify-between">
           <div class="min-w-0 flex-1 pr-2">
             <p class="text-xs text-muted truncate">
               {{ t('settings.aiKeysTitle') }}
@@ -1552,18 +1552,18 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
               {{ vault?.available ? t('settings.aiKeysVaultOn') : t('settings.aiKeysVaultOff') }}
             </p>
           </div>
-          <div class="size-9 rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0">
+          <div class="size-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
             <UIcon :name="vaultBanner.icon" class="size-5" :class="vaultBanner.color" />
           </div>
         </div>
       </div>
 
       <!-- ============ Tab Switcher ======================================== -->
-      <div class="flex items-center gap-1 border-b border-neutral-200 dark:border-neutral-800 pb-2">
+      <div class="flex items-center gap-1 border-b border-default pb-2">
         <button type="button"
           class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors" :class="activeTab === 'providers'
             ? 'bg-primary/10 text-primary font-semibold'
-            : 'text-muted hover:text-highlighted hover:bg-neutral-100 dark:hover:bg-neutral-800/50'"
+            : 'text-muted hover:text-highlighted hover:bg-muted'"
           @click="activeTab = 'providers'">
           <UIcon name="i-lucide-server" class="size-4" />
           <span>{{ t('aiProviders.tab_providers') }}</span>
@@ -1575,7 +1575,7 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
         <button type="button"
           class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors" :class="activeTab === 'models'
             ? 'bg-primary/10 text-primary font-semibold'
-            : 'text-muted hover:text-highlighted hover:bg-neutral-100 dark:hover:bg-neutral-800/50'"
+            : 'text-muted hover:text-highlighted hover:bg-muted'"
           @click="activeTab = 'models'">
           <UIcon name="i-lucide-cpu" class="size-4" />
           <span>{{ t('aiProviders.tab_models') }}</span>
@@ -1587,7 +1587,7 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
         <button type="button"
           class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors" :class="activeTab === 'surfaces'
             ? 'bg-primary/10 text-primary font-semibold'
-            : 'text-muted hover:text-highlighted hover:bg-neutral-100 dark:hover:bg-neutral-800/50'"
+            : 'text-muted hover:text-highlighted hover:bg-muted'"
           @click="activeTab = 'surfaces'">
           <UIcon name="i-lucide-shield-check" class="size-4" />
           <span>{{ t('aiProviders.tab_surfaces') }}</span>
@@ -1635,7 +1635,7 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
         </div>
 
         <div v-else-if="filteredProviders.length === 0"
-          class="rounded-xl border border-neutral-200 dark:border-neutral-800 p-10 text-center">
+          class="rounded-xl border border-default p-10 text-center">
           <UIcon :name="totalConnectedProviders === 0 ? 'i-lucide-plug' : 'i-lucide-bot'"
             class="size-10 text-muted mx-auto mb-2" />
           <p class="text-sm font-medium text-highlighted">
@@ -1655,13 +1655,13 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
 
         <div v-else class="space-y-3">
           <div v-for="p in filteredProviders" :key="p.definition.key"
-            class="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 overflow-hidden shadow-xs">
+            class="rounded-xl border border-default bg-white dark:bg-default overflow-hidden shadow-xs">
             <!-- Provider Card Header -->
             <div
-              class="flex items-center justify-between gap-3 px-4 py-3 bg-neutral-50/70 dark:bg-neutral-800/40 border-b border-neutral-200 dark:border-neutral-800">
+              class="flex items-center justify-between gap-3 px-4 py-3 bg-muted/70 border-b border-default">
               <div class="flex items-center gap-2.5 min-w-0">
                 <div
-                  class="size-7 rounded-lg bg-neutral-200/60 dark:bg-neutral-700/60 flex items-center justify-center shrink-0">
+                  class="size-7 rounded-lg bg-accented/60 flex items-center justify-center shrink-0">
                   <UIcon :name="providerIcon(p.definition.key)" class="size-4 text-highlighted" />
                 </div>
                 <div class="min-w-0">
@@ -1684,9 +1684,9 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
               {{ t('aiProviders.no_credentials') }}
             </div>
 
-            <div v-else class="divide-y divide-neutral-200 dark:divide-neutral-800">
+            <div v-else class="divide-y divide-default">
               <div v-for="c in p.connections" :key="c.id"
-                class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 hover:bg-neutral-50/50 dark:hover:bg-neutral-800/20 transition-colors">
+                class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 hover:bg-muted/50 transition-colors">
                 <div class="min-w-0 flex-1">
                   <div class="flex items-center gap-2 flex-wrap">
                     <span class="text-sm font-semibold text-highlighted truncate">{{ c.name
@@ -1795,7 +1795,7 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
         </div>
 
         <div v-else-if="filteredModels.length === 0"
-          class="rounded-xl border border-neutral-200 dark:border-neutral-800 p-10 text-center">
+          class="rounded-xl border border-default p-10 text-center">
           <UIcon name="i-lucide-cpu" class="size-10 text-muted mx-auto mb-2" />
           <p class="text-sm font-medium text-highlighted">
             {{ t('aiProviders.models_empty') }}
@@ -1813,11 +1813,11 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
 
         <!-- Models Table -->
         <div v-else
-          class="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 overflow-hidden shadow-xs">
+          class="rounded-xl border border-default bg-white dark:bg-default overflow-hidden shadow-xs">
           <div class="overflow-x-auto">
             <table class="w-full text-left text-xs">
               <thead
-                class="bg-neutral-50/80 dark:bg-neutral-800/50 border-b border-neutral-200 dark:border-neutral-800 text-muted uppercase text-[10px]">
+                class="bg-muted/80 border-b border-default text-muted uppercase text-[10px]">
                 <tr>
                   <th class="py-2.5 px-3 font-semibold">
                     {{ t('aiProviders.model_id') }}
@@ -1839,9 +1839,9 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
                   </th>
                 </tr>
               </thead>
-              <tbody class="divide-y divide-neutral-200 dark:border-neutral-800">
+              <tbody class="divide-y divide-default dark:border-default">
                 <tr v-for="m in displayedModels" :key="m.id"
-                  class="hover:bg-neutral-50/50 dark:hover:bg-neutral-800/20 transition-colors">
+                  class="hover:bg-muted/50 transition-colors">
                   <td class="py-2 px-3 font-mono text-[11px] text-highlighted max-w-xs truncate">
                     <span class="cursor-pointer hover:underline" :title="'Click to copy ' + m.modelId"
                       @click="copy(m.modelId); notify.success(t('aiProviders.model_id_copied', [m.modelId]))">
@@ -1853,7 +1853,7 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
                   </td>
                   <td class="py-2 px-3 whitespace-nowrap">
                     <span
-                      class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-neutral-100 dark:bg-neutral-800 text-highlighted text-[11px]">
+                      class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-muted text-highlighted text-[11px]">
                       <UIcon :name="providerIcon(m.provider)" class="size-3.5" />
                       <span>{{ m.provider }}</span>
                     </span>
@@ -1905,7 +1905,7 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
             </table>
           </div>
           <div
-            class="px-3 py-2 bg-neutral-50/50 dark:bg-neutral-800/30 border-t border-neutral-200 dark:border-neutral-800 text-[11px] text-muted flex items-center justify-between flex-wrap gap-2">
+            class="px-3 py-2 bg-muted/50 border-t border-default text-[11px] text-muted flex items-center justify-between flex-wrap gap-2">
             <span>{{ t('global.showingCount', { count: displayedModels.length, total: filteredModels.length }) }} ({{ hubAllModels.length }} total)</span>
             <div v-if="filteredModels.length > displayedModels.length" class="flex items-center gap-2">
               <UButton size="xs" variant="soft" color="neutral"
@@ -1930,7 +1930,7 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
         <template v-else>
           <!-- At-rest encryption banner -->
           <div
-            class="rounded-xl border border-neutral-200 dark:border-neutral-800 p-4 bg-white dark:bg-neutral-900 shadow-xs">
+            class="rounded-xl border border-default p-4 bg-white dark:bg-default shadow-xs">
             <div class="flex items-center justify-between gap-3 flex-wrap">
               <div class="flex items-center gap-2.5 min-w-0">
                 <UIcon :name="vaultBanner.icon" class="size-5 shrink-0" :class="vaultBanner.color" />
@@ -1964,8 +1964,8 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
 
           <!-- Global connection -->
           <div
-            class="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 divide-y divide-neutral-200 dark:divide-neutral-800 shadow-xs overflow-hidden">
-            <div class="flex items-center justify-between gap-2 px-3 py-2.5 bg-neutral-50/70 dark:bg-neutral-800/30">
+            class="rounded-xl border border-default bg-white dark:bg-default divide-y divide-default shadow-xs overflow-hidden">
+            <div class="flex items-center justify-between gap-2 px-3 py-2.5 bg-muted/70">
               <span class="text-xs font-semibold text-highlighted uppercase tracking-wide">
                 {{ t('tmcut.aiConnect.globalLabel') }}
               </span>
@@ -2000,7 +2000,7 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
 
           <!-- Per-surface rows -->
           <div
-            class="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 divide-y divide-neutral-200 dark:divide-neutral-800 shadow-xs overflow-hidden">
+            class="rounded-xl border border-default bg-white dark:bg-default divide-y divide-default shadow-xs overflow-hidden">
             <div v-for="row in surfaceRows" :key="row.key" class="flex items-center justify-between gap-2 px-3 py-2.5">
               <span class="text-[11px] text-highlighted">{{ row.label }}</span>
               <span class="flex items-center gap-1.5 min-w-0">
@@ -2020,7 +2020,7 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
             </div>
             <!-- Last test verdict per surface -->
             <div v-for="tested in testedRows" :key="`res-${tested.task}`"
-              class="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-50/50 dark:bg-neutral-800/20">
+              class="flex items-center gap-1.5 px-3 py-1.5 bg-muted/50">
               <UBadge :color="testStateColor(tested.res)" variant="subtle" size="xs">
                 {{ tested.label }}
               </UBadge>
@@ -2035,7 +2035,7 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
 
           <!-- How-to note -->
           <div
-            class="p-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/30 text-xs space-y-1.5 text-muted">
+            class="p-4 rounded-xl border border-default bg-muted/50 text-xs space-y-1.5 text-muted">
             <div class="flex items-center gap-2 font-medium text-highlighted">
               <UIcon name="i-lucide-info" class="w-4 h-4 text-primary" />
               <span>{{ t('settings.aiKeysWhereTitle') }}</span>
@@ -2073,7 +2073,7 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
           </div>
 
           <div v-if="isDiscoveringConnectionModels"
-            class="p-8 text-center border border-dashed border-neutral-200 dark:border-neutral-800 rounded-xl space-y-3">
+            class="p-8 text-center border border-dashed border-default rounded-xl space-y-3">
             <UIcon name="i-lucide-loader-2" class="size-8 text-primary animate-spin mx-auto" />
             <p class="text-sm font-medium text-highlighted animate-pulse">
               {{ t('aiProviders.testing_connection') }}
@@ -2084,7 +2084,7 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
           </div>
 
           <div v-else-if="filteredConnectionModels.length === 0"
-            class="p-8 text-center border border-dashed border-neutral-200 dark:border-neutral-800 rounded-xl space-y-2">
+            class="p-8 text-center border border-dashed border-default rounded-xl space-y-2">
             <UIcon name="i-lucide-cpu" class="size-8 text-muted mx-auto" />
             <p class="text-sm text-muted">
               {{ t('aiProviders.models_empty') }}
@@ -2096,9 +2096,9 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
 
           <!-- Models List -->
           <div v-else
-            class="max-h-[50vh] divide-y divide-neutral-200 dark:divide-neutral-800 overflow-y-auto rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
+            class="max-h-[50vh] divide-y divide-default overflow-y-auto rounded-xl border border-default bg-white dark:bg-default">
             <div v-for="m in displayedConnectionModels" :key="m.id"
-              class="flex items-center gap-2.5 px-3.5 py-2.5 hover:bg-neutral-50/50 dark:hover:bg-neutral-800/20 transition-colors">
+              class="flex items-center gap-2.5 px-3.5 py-2.5 hover:bg-muted/50 transition-colors">
               <UIcon :name="connectionModelsTarget?.config?.AI_MODEL === m.modelId ? 'i-lucide-star' : 'i-lucide-box'"
                 class="size-4 shrink-0"
                 :class="connectionModelsTarget?.config?.AI_MODEL === m.modelId ? 'text-warning fill-warning' : 'text-muted'" />
@@ -2160,7 +2160,7 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
 
           <!-- Load more pagination for Connection Models -->
           <div v-if="filteredConnectionModels.length > displayedConnectionModels.length"
-            class="flex items-center justify-between p-2.5 mt-2 bg-neutral-50 dark:bg-neutral-800/40 rounded-lg text-xs text-muted flex-wrap gap-2">
+            class="flex items-center justify-between p-2.5 mt-2 bg-muted rounded-lg text-xs text-muted flex-wrap gap-2">
             <span>{{ t('global.showingCount', { count: displayedConnectionModels.length, total: filteredConnectionModels.length }) }}</span>
             <div class="flex items-center gap-2">
               <UButton size="xs" variant="soft" color="neutral"
@@ -2173,7 +2173,7 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
           </div>
 
           <!-- Bottom: Add Manual Model input row (like tm-trading) -->
-          <div class="flex flex-wrap items-center gap-2 border-t border-neutral-200 dark:border-neutral-800 pt-3">
+          <div class="flex flex-wrap items-center gap-2 border-t border-default pt-3">
             <UInput
               id="ai-keys-inline-model-id"
               v-model="inlineNewModelId"
@@ -2240,7 +2240,7 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
           </div>
           <div v-else class="max-h-80 space-y-1 overflow-y-auto pr-1">
             <button v-for="p in connectableProviders" :key="p.definition.key" type="button"
-              class="flex w-full items-center gap-3 rounded-lg border border-neutral-200 dark:border-neutral-800 px-3 py-2 text-left hover:bg-neutral-50 dark:hover:bg-neutral-800/40"
+              class="flex w-full items-center gap-3 rounded-lg border border-default px-3 py-2 text-left hover:bg-muted"
               @click="connectProvider(p)">
               <UIcon :name="providerIcon(p.definition.key)" class="size-4 shrink-0 text-muted" />
               <span class="min-w-0 flex-1">
@@ -2274,14 +2274,14 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
         <div class="grid grid-cols-2 gap-2">
           <button type="button"
             class="flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors"
-            :class="providerForm.type === 'cloud' ? 'border-primary bg-primary-50 dark:bg-primary-950/30 text-primary font-medium' : 'border-neutral-200 dark:border-neutral-800 text-muted hover:bg-neutral-50 dark:hover:bg-neutral-800/40'"
+            :class="providerForm.type === 'cloud' ? 'border-primary bg-primary-50 dark:bg-primary-950/30 text-primary font-medium' : 'border-default text-muted hover:bg-muted'"
             @click="providerForm.type = 'cloud'">
             <UIcon name="i-lucide-cloud" class="size-4 shrink-0" />
             <span>{{ t('aiProviders.provider_type_cloud') }}</span>
           </button>
           <button type="button"
             class="flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors"
-            :class="providerForm.type === 'local' ? 'border-primary bg-primary-50 dark:bg-primary-950/30 text-primary font-medium' : 'border-neutral-200 dark:border-neutral-800 text-muted hover:bg-neutral-50 dark:hover:bg-neutral-800/40'"
+            :class="providerForm.type === 'local' ? 'border-primary bg-primary-50 dark:bg-primary-950/30 text-primary font-medium' : 'border-default text-muted hover:bg-muted'"
             @click="providerForm.type = 'local'">
             <UIcon name="i-lucide-hard-drive" class="size-4 shrink-0" />
             <span>{{ t('aiProviders.provider_type_local') }}</span>
@@ -2356,7 +2356,7 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
                   :label="t('aiProviders.reveal_key')" @click="revealStoredKey" />
                 <template v-if="revealedKey">
                   <code
-                    class="max-w-[260px] truncate rounded bg-neutral-100 dark:bg-neutral-800 px-2 py-1 font-mono text-xs text-muted"
+                    class="max-w-[260px] truncate rounded bg-muted px-2 py-1 font-mono text-xs text-muted"
                     :title="revealedKey">{{ revealedKey }}</code>
                   <UButton icon="i-lucide-copy" color="neutral" variant="ghost" size="xs"
                     :aria-label="t('aiProviders.copy_key')" :title="t('aiProviders.copy_key')"
