@@ -61,7 +61,7 @@ tm-studio(4003)  TMCut standalone (repo này): editor · template · autocut · 
 | 1 | Bootstrap skeleton tm-studio + seed app `studio` trên tm-hub | `pnpm typecheck` + `pnpm lint` PASS; dev server 4003 render shell; đăng nhập qua hub OK | **PASS** (2026-10-31)¹ |
 | 2 | Lift & shift toàn bộ code TMCut (+ absorb `packages/core`) | typecheck + lint + test suite tmcut PASS; editor mở project, render smoke PASS | PENDING |
 | 3 | Tích hợp hub cho tm-studio: connections, AI catalog, adoption bridge, local vault, RBAC | Duyệt golden path bằng browser: login · connections list · AI model picker · editor | PENDING |
-| 4 | Gỡ TMCut khỏi tm-tools (code, IPC, i18n, scripts, resources, seed routes) | typecheck + lint PASS; các module còn lại chạy tốt trên dev | PENDING |
+| 4 | Gỡ TMCut khỏi tm-tools (code, IPC, i18n, scripts, resources, seed routes) + tuyển chọn lại agent files (`AGENTS.md`, `CLAUDE.md`, `.agents/`) bỏ các mục TMCut | typecheck + lint PASS; các module còn lại chạy tốt trên dev; agent files đồng nhất | PENDING |
 | 5 | Viết lại `tm-tools/docs`: archive v1 → `docs/archive/`, viết docs v2 | Link check PASS; không còn doc mô tả TMCut là tính năng của tm-tools | PENDING |
 | 6 | Verification tổng cả 3 repo + báo cáo cuối | Toàn bộ gates PASS, báo cáo cuối appended vào tài liệu này | PENDING |
 
@@ -90,3 +90,5 @@ tm-studio(4003)  TMCut standalone (repo này): editor · template · autocut · 
   - Đăng nhập qua hub (API-level): POST `/api/v1/auth/login` với `appId=tm-studio_749app`, user `studio-root@example.com` → JWT hợp lệ; `GET /api/v1/auth/routes?appId=tm-studio_749app` trả đủ 4 nhóm route (home · group_tmcut ×8 · group_resources ×3 · group_system ×5).
   - ¹Đăng nhập qua UI trình duyệt (golden path) chuyển sang gate Phase 3.
   - Lưu ý kỹ thuật: pnpm 12.15.0 version-manager hỏng trên Windows — chạy pnpm qua `node <tools>/pnpm/12.15.0/node_modules/pnpm/bin/pnpm.mjs`.
+- **2026-10-31** — Quy ước vận hành theo yêu cầu user: **commit + push mỗi phase PASS** (tm-studio `5a4390a` → github.com/tuanmjnh/tm-studio; tm-hub `38b53ed` → origin/main). Phong cách commit: tiêu đề ngày `2026.10.31` + body tóm tắt.
+- **2026-10-31** — **Tuyển chọn agent files (đồng nhất):** tm-tools có 3 bản AGENTS.md lệch nhau (port 4002/4002/3000, quy tắc dần mòn, `types/` stale, typo tab). Chuẩn hoá: root `AGENTS.md` là bản canonical (sửa structure block → `shared/types/`, sửa typo `@tailwindcss`); `CLAUDE.md` và `.agents/AGENTS.md` trở thành pointer trỏ về canonical. tm-studio nhận bộ tương đương: `AGENTS.md` canonical (port 4003, app id `tm-studio_749app`, modules TMCut + Connections + AI keys, AI 3-layer, `packages/core`), `CLAUDE.md` + `.agents/AGENTS.md` pointer, copy 5 skills generic (`9router`, `button-variants`, `error-handling`, `loading-button`, `pagination-gridlist`) — `nuxt-ui` đã có ở user-scope nên không nhân bản. Việc bỏ mô tả TMCut khỏi agent files của tm-tools thực hiện ở Phase 4 (trước đó TMCut vẫn còn trong tm-tools).
