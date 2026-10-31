@@ -187,7 +187,7 @@ function cardMenuItems(project: TmcutProject): DropdownMenuItem[] {
         <div class="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
           <div class="min-w-0">
             <div class="flex items-center gap-2 mb-2">
-              <span class="inline-flex items-center justify-center w-2 h-2 rounded-full bg-primary animate-pulse" />
+              <span class="inline-flex items-center justify-center w-2 h-2 rounded-full bg-primary" />
               <span class="text-xs uppercase tracking-wider text-primary font-semibold">
                 {{ t('tmcut.home.heroEyebrow') }}
               </span>

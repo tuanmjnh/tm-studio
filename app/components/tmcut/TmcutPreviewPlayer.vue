@@ -1715,7 +1715,7 @@ onUnmounted(() => {
           class="absolute inset-0 z-40 flex flex-col items-center justify-center gap-2 bg-red-950/70 backdrop-blur-xs p-4 text-center select-none"
           data-canvas-hit
         >
-          <UIcon name="i-lucide-alert-triangle" class="size-8 text-red-400 animate-pulse" />
+          <UIcon name="i-lucide-alert-triangle" class="size-8 text-red-400" />
           <p class="text-xs font-semibold text-red-200">
             {{ t('tmcut.player.loadError') }}
           </p>

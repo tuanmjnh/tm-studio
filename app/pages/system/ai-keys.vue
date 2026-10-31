@@ -1692,7 +1692,12 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
                     <span class="text-sm font-semibold text-highlighted truncate">{{ c.name
                       || t('aiProviders.default_name')
                     }}</span>
-                    <UBadge v-if="hubBusyKey === c.id" color="info" variant="subtle" size="sm" class="animate-pulse">
+                    <UBadge
+                      v-if="hubBusyKey === c.id"
+                      color="info"
+                      variant="subtle"
+                      size="sm"
+                    >
                       <UIcon name="i-lucide-loader-2" class="size-3.5 animate-spin mr-1" />
                       {{ t('aiProviders.testing_connection') }}
                     </UBadge>
@@ -2099,7 +2104,7 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
           <div v-if="isDiscoveringConnectionModels"
             class="p-8 text-center border border-dashed border-default rounded-xl space-y-3">
             <UIcon name="i-lucide-loader-2" class="size-8 text-primary animate-spin mx-auto" />
-            <p class="text-sm font-medium text-highlighted animate-pulse">
+            <p class="text-sm font-medium text-highlighted">
               {{ t('aiProviders.testing_connection') }}
             </p>
             <p class="text-xs text-muted">

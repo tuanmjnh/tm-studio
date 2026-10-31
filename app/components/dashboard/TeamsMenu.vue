@@ -39,7 +39,7 @@ const appUpdater = useAppUpdater()
               color="primary"
               variant="solid"
               size="xs"
-              class="animate-pulse px-1 py-0 text-[9px]"
+              class="px-1 py-0 text-[9px]"
             >
               Update
             </UBadge>

@@ -972,7 +972,7 @@ function previewResultDirectly() {
               </div>
               <div class="flex flex-col min-w-0">
                 <div class="flex items-center gap-1.5">
-                  <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" />
+                  <span class="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
                   <span class="text-xs text-highlighted font-medium truncate">{{ hwInfo.label }}</span>
                 </div>
                 <span class="text-[10px] text-muted">
@@ -1180,7 +1180,7 @@ function previewResultDirectly() {
                       <div class="flex items-center gap-1.5 truncate">
                         <span
                           class="w-1.5 h-1.5 rounded-full shrink-0"
-                          :class="activeEncoder.includes('nvenc') ? 'bg-primary animate-pulse' : gpuSupport.nvenc ? 'bg-emerald-400' : 'bg-accented'"
+                          :class="activeEncoder.includes('nvenc') ? 'bg-primary' : gpuSupport.nvenc ? 'bg-emerald-400' : 'bg-accented'"
                         />
                         <span class="font-medium truncate">NVIDIA NVENC</span>
                       </div>
@@ -1205,7 +1205,7 @@ function previewResultDirectly() {
                       <div class="flex items-center gap-1.5 truncate">
                         <span
                           class="w-1.5 h-1.5 rounded-full shrink-0"
-                          :class="activeEncoder.includes('qsv') ? 'bg-primary animate-pulse' : gpuSupport.qsv ? 'bg-emerald-400' : 'bg-accented'"
+                          :class="activeEncoder.includes('qsv') ? 'bg-primary' : gpuSupport.qsv ? 'bg-emerald-400' : 'bg-accented'"
                         />
                         <span class="font-medium truncate">Intel QuickSync (QSV)</span>
                       </div>
@@ -1230,7 +1230,7 @@ function previewResultDirectly() {
                       <div class="flex items-center gap-1.5 truncate">
                         <span
                           class="w-1.5 h-1.5 rounded-full shrink-0"
-                          :class="activeEncoder.includes('amf') ? 'bg-primary animate-pulse' : gpuSupport.amf ? 'bg-emerald-400' : 'bg-accented'"
+                          :class="activeEncoder.includes('amf') ? 'bg-primary' : gpuSupport.amf ? 'bg-emerald-400' : 'bg-accented'"
                         />
                         <span class="font-medium truncate">AMD AMF</span>
                       </div>

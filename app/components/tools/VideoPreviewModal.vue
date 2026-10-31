@@ -70,7 +70,7 @@ async function openDefaultPlayer() {
           >
             <UIcon
               name="i-lucide-music"
-              class="size-16 mb-4 text-primary animate-pulse"
+              class="size-16 mb-4 text-primary"
             />
             <audio
               :key="mediaUrl"

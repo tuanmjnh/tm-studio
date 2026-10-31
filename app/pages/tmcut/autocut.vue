@@ -1326,7 +1326,7 @@ async function handleAccept() {
               class="sticky bottom-0 z-40 px-3 py-2.5 bg-white/95 dark:bg-studio-canvas/95 backdrop-blur border-t border-default rounded-b-xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg"
             >
               <div class="flex items-center gap-2 text-sm">
-                <span class="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                <span class="w-2 h-2 rounded-full bg-primary" />
                 <span class="font-medium text-highlighted">
                   {{ t('tmcut.wizard.selectedSummary', { selected: included.length, total: segmentCount }) }}
                 </span>
