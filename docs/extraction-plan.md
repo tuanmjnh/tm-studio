@@ -61,8 +61,8 @@ tm-studio(4003)  TMCut standalone (repo này): editor · template · autocut · 
 | 1 | Bootstrap skeleton tm-studio + seed app `studio` trên tm-hub | `pnpm typecheck` + `pnpm lint` PASS; dev server 4003 render shell; đăng nhập qua hub OK | **PASS** (2026-10-31)¹ |
 | 2 | Lift & shift toàn bộ code TMCut (+ absorb `packages/core`) | typecheck + lint + test suite tmcut PASS; editor mở project, render smoke PASS | **PASS** (2026-10-31)² |
 | 3 | Tích hợp hub cho tm-studio: connections, AI catalog, adoption bridge, local vault, RBAC | Duyệt golden path bằng browser: login · connections list · AI model picker · editor | **PASS** (2026-10-31) |
-| 4 | Gỡ TMCut khỏi tm-tools (code, IPC, i18n, scripts, resources, seed routes) + tuyển chọn lại agent files (`AGENTS.md`, `CLAUDE.md`, `.agents/`) bỏ các mục TMCut | typecheck + lint PASS; các module còn lại chạy tốt trên dev; agent files đồng nhất | PENDING |
-| 5 | Viết lại `tm-tools/docs`: archive v1 → `docs/archive/`, viết docs v2 | Link check PASS; không còn doc mô tả TMCut là tính năng của tm-tools | PENDING |
+| 4 | Gỡ TMCut khỏi tm-tools (code, IPC, i18n, scripts, resources, seed routes) + tuyển chọn lại agent files (`AGENTS.md`, `CLAUDE.md`, `.agents/`) bỏ các mục TMCut | typecheck + lint PASS; các module còn lại chạy tốt trên dev; agent files đồng nhất | **PASS** (2026-10-31)³ |
+| 5 | Viết lại `tm-tools/docs`: archive v1 → `docs/archive/`, viết docs v2 | Link check PASS; không còn doc mô tả TMCut là tính năng của tm-tools | **PASS** (2026-10-31)⁴ |
 | 6 | Verification tổng cả 3 repo + báo cáo cuối | Toàn bộ gates PASS, báo cáo cuối appended vào tài liệu này | PENDING |
 
 ## 6. Coupling phải cắt (ghi nhận từ audit 2026-10-31)
@@ -109,3 +109,17 @@ tm-studio(4003)  TMCut standalone (repo này): editor · template · autocut · 
   - Đã fix `.env`: `APP_URL` 4002 → 4003 (port cũ tm-tools).
   - Việc còn lại là vận hành: seed AI models per-app + (tuỳ chọn) đăng ký app studio trên hub production — ghi nhận cho Phase 6.
   - Phát hiện UI cần xử lý ở đợt redesign: sidebar vẫn hiển thị brand "TM TOOLS", tiêu đề trang "TM Studio" tốt nhưng brand block chưa đổi.
+
+- **2026-10-31** — **Phase 4 PASS.** TMCut rời tm-tools (commit `f6e9899`, tm-hub `66f3a8b`). Kết quả cổng nghiệm thu:
+  - Xoá 273 file: 8 route `/tmcut/*`, 41 component, 30 util, 27 composable, types/assets templates; Electron `tmcut.controller`, `html-video-renderer`, `asset-center`, `process-store`, `stock-proxy`, `media-download`, `recordings`, `ai-gateway`, `key-migrate`, `video-generation/`, `mcp/`; Nitro `api/v1/{media,process,stock,ai/relay}` + `server/utils/{aiRelay,htmlVideoRender,renderJobs,tts,uploads,processStore}`.
+  - `electron/main.cjs` 821→430 dòng, `preload.cjs` chỉ còn namespace youtube/ffmpeg/profiles/dialog/fileManager/appUpdater/system/browser/events, `ipcPolicy.cjs` PUSH_CHANNELS thu về eventbus/app-updater/profiles/task-events, `OUTBOUND_CHANNELS = []` (spec đảo assertion âm cho `tmcut:*` và MCP). `shared/types/electron.ts` 1160→688 dòng.
+  - Dashboard viết lại thành hub-tools console; `/system/ai-keys` hub-only (bỏ vault, test/local probe); `/system/settings/production` (phụ thuộc composable đã xoá) được gỡ cùng key i18n.
+  - Dependencies: bỏ `@tmcut/core`, `playwright-core`, `web-push`, `reka-ui`, `@modelcontextprotocol/sdk`, `@types/web-push`; scripts per-feature gộp về `test`/`test:unit`. i18n: bỏ `tmcut`, `vc`, `seed` + `nav.tmcut_*`; bổ sung 24 key còn thiếu (`notifications.*`, `settings.hubVersion…`, `auth.invalidEmail`, `tools.startingUpdate`, `media.file_uploaded_title`).
+  - tm-hub seed: `createToolsRoutes` bỏ nhóm `group_tmcut` + 6 route con; role tools bỏ `allowed_routes` tmcut. **Chưa chạy seed** (ghi trực tiếp Supabase/MongoDB dùng chung) — cần chủ repo bấm chạy `pnpm seed --app=tools`.
+  - Gate: `pnpm typecheck` PASS; `pnpm test:unit` 9/9 specs PASS; dev smoke 4002 `/api/health` 200 + `/` 200; `node --check` các file Electron chính PASS; `build:electron:main` PASS (971.9 kb).
+  - Lint: baseline vốn không xanh (lỗi stylistic toàn repo); file bị sửa giảm lỗi (ai-keys 603→540 problems), không thêm category mới. Ghi nhận là tech-debt sẵn có, không phải regression của phase này.
+  - Bảo mật: phát hiện `AUTH_JWT_SECRET` thật hard-code trong `app/pages/system/hub-integration.vue` (snippet `.env` hiển thị cho user) và trong docs setup — đã thay bằng placeholder. Nên rotate shared secret nếu bản build cũ từng phát hành ra ngoài.
+- **2026-10-31** — **Phase 5 PASS.** Docs tm-tools viết lại:
+  - Archive v1 tại `docs/archive/2026-10-31-v1-pre-tmcut-extraction/` (22 file + README mô tả nguồn gốc và nơi chuyển): 6 tài liệu TMCut architecture/roadmap/MCP, CapCut UI reference, fx audit, generation-adapters audit, 3 guide (user, marketplace, Runway assets), AI key ownership (local vault đã bỏ), 3 production-process SOP.
+  - Docs v2: `docs/README.md` (index mới), `docs/guides/user-guide.md` (Browser Hub, downloader, FFmpeg, media, utilities, AI console, settings, troubleshooting), `docs/guides/system-setup-and-configuration-guide.md` (port 4000/4001/4002/4003, `.env` 3 app, seed, gates), `docs/ai-and-hub-connections.md` (tm-tools không giữ AI key), root `README.md` mới.
+  - Link check (live docs, bỏ archive frozen): **0 broken link**. Archive giữ nguyên `file:///` path lịch sử theo chủ đích.
