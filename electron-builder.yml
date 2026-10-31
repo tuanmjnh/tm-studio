@@ -1,5 +1,5 @@
 appId: com.tm.studio
-productName: TM Studio
+productName: TMCut Studio
 directories:
   output: release
   buildResources: public
@@ -33,7 +33,7 @@ extraResources:
       - "tmcut-catalog/**"
 win:
   icon: public/icon.ico
-  executableName: TM Studio
+  executableName: TMCut Studio
   target:
     - nsis
 nsis:

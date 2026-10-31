@@ -72,7 +72,7 @@
     position: absolute;
     inset: -0.75rem;
     border-radius: 1.5rem;
-    background: rgba(59, 130, 246, 0.25);
+    background: rgba(124, 58, 237, 0.35);
     filter: blur(20px);
     animation: spa-glow-pulse 2.5s ease-in-out infinite;
   }
@@ -81,31 +81,14 @@
     position: relative;
     width: 4.5rem;
     height: 4.5rem;
-    border-radius: 1.125rem;
-    overflow: hidden;
-    background: #ffffff;
-    border: 1px solid rgba(148, 163, 184, 0.25);
-    box-shadow:
-      0 0 0 1px rgba(255, 255, 255, 0.05) inset,
-      0 8px 32px -8px rgba(15, 23, 42, 0.12);
     display: flex;
     align-items: center;
     justify-content: center;
   }
 
-  @media (prefers-color-scheme: dark) {
-    .spa-logo-box {
-      background: #1e293b;
-      border-color: rgba(148, 163, 184, 0.15);
-      box-shadow:
-        0 0 0 1px rgba(255, 255, 255, 0.04) inset,
-        0 8px 32px -8px rgba(0, 0, 0, 0.4);
-    }
-  }
-
   .spa-logo-box img {
-    width: 2.75rem;
-    height: 2.75rem;
+    width: 4.5rem;
+    height: 4.5rem;
     display: block;
     object-fit: contain;
   }

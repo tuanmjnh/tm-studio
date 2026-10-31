@@ -11,9 +11,9 @@ onMounted(async () => {
 
 useHead({
   titleTemplate: (titleChunk) => {
-    if (!titleChunk) return 'TM Studio'
-    if (titleChunk.endsWith('TM Studio')) return titleChunk
-    return `${titleChunk} - TM Studio`
+    if (!titleChunk) return 'TMCut Studio'
+    if (titleChunk.endsWith('TMCut Studio')) return titleChunk
+    return `${titleChunk} - TMCut Studio`
   },
   meta: [
     { charset: 'utf-8' },
@@ -28,7 +28,7 @@ useHead({
   }
 })
 
-const description = 'TM Studio - TMCut standalone video creation suite'
+const description = 'TMCut Studio - standalone video creation suite'
 
 useSeoMeta({
   description,

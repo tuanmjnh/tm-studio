@@ -57,7 +57,7 @@ export default defineNuxtConfig({
     hubAppSecret: process.env.NUXT_HUB_APP_SECRET || '',
     public: {
       hubUrl: process.env.NUXT_PUBLIC_HUB_URL || 'http://localhost:4000',
-      hubAppId: process.env.NUXT_PUBLIC_HUB_APP_ID || 'tm-studio'
+      hubAppId: process.env.NUXT_PUBLIC_HUB_APP_ID || 'tm-studio_749app'
     }
   },
 
