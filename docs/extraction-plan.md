@@ -163,3 +163,7 @@ tm-studio(4003)  TMCut standalone (repo này): editor · template · autocut · 
   - i18n: thêm `tmcut.workspace.resizeMedia|resizeInspector|resizeTimeline` (en + vi) cho aria-label.
   - Gate: eslint editor.vue PASS; `nuxt typecheck` exit 0; `nuxt build` PASS 1m19s; CSS build sinh đúng `max-height:55vh` và `--tmcut-*-w`.
 - **2026-10-31** — **UI-2 PASS (workspace chrome).** Tổng kết: token hoá 39 file + CTA Export + 3 divider resize có persistence + i18n aria-label. Hoãn có chủ đích (ghi nợ kỹ thuật): tách `editor.vue` (~2.5k dòng) thành TopBar/MediaPanel/PreviewStage/InspectorDock/TimelineDock — refactor cơ học lớn, không đổi hành vi, nên làm thành commit riêng khi có visual QA; audit aria-label toàn bộ 119 `UButton` icon-only ngoài editor (đa số nằm trong video factory/template studio) để UI-3. Visual QA bằng browser vẫn **BLOCKED** vì phiên browser chưa đăng nhập (không được yêu cầu nhập credential vào chat); thay bằng typecheck/build/CSS-output proof.
+- **2026-10-31** — **UI-3 (slice 1): phân cấp action bar.** Dọn nhiễu màu ở top bar editor:
+  - Nhóm 4 công cụ AI (Scriptwriter, Edit Plan, Agent, Audio orchestration) thống nhất `primary/soft` (violet) làm "intelligence family"; trước đó Edit/Agent/Audio dùng `secondary` (indigo) lẫn với primary.
+  - Save chuyển `primary/soft` → `neutral/soft` để **Export** là hành động primary duy nhất (solid) khi mắt quét thanh công cụ; thêm divider dọc `bg-accented` trước nhóm AI ở breakpoint ≥2xl.
+  - Gate: eslint editor.vue PASS; `nuxt typecheck` exit 0.

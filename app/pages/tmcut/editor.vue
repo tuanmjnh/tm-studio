@@ -1299,7 +1299,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
       <UButton
         icon="i-lucide-save"
         size="sm"
-        color="primary"
+        color="neutral"
         variant="soft"
         @click="saveProject()"
       >
@@ -1324,6 +1324,10 @@ function handleEditorKeydown(e: KeyboardEvent) {
           {{ activeJobsCount }}
         </UBadge>
       </UButton>
+      <!-- AI tools share one violet "intelligence" family; Export stays the
+           only solid primary action in the bar. -->
+      <div class="hidden 2xl:block w-px h-5 shrink-0 bg-accented" />
+
       <!-- AI Scriptwriter & Storyboard modal trigger (Alt+A) -->
       <UButton
         icon="i-lucide-sparkles"
@@ -1341,7 +1345,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
         icon="i-lucide-wand-sparkles"
         size="sm"
         variant="soft"
-        color="secondary"
+        color="primary"
         :title="t('tmcut.aiEditor.buttonTooltip')"
         @click="aiEditorModalOpen = true"
       >
@@ -1353,7 +1357,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
         icon="i-lucide-terminal"
         size="sm"
         variant="soft"
-        color="secondary"
+        color="primary"
         :title="t('tmcut.agent.buttonTooltip')"
         @click="agentPanelOpen = true"
       >
@@ -1374,7 +1378,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
         icon="i-lucide-music-2"
         size="sm"
         variant="soft"
-        color="secondary"
+        color="primary"
         :title="t('tmcut.audioOrchestration.buttonTooltip')"
         @click="audioOrchestrationOpen = true"
       >
