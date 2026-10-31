@@ -177,25 +177,25 @@ function cardMenuItems(project: TmcutProject): DropdownMenuItem[] {
 
     <div class="space-y-6">
       <!-- Hero Section -->
-      <div class="relative overflow-hidden rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-gradient-to-br from-primary-50 via-white to-secondary-50 dark:from-primary-900/20 dark:via-neutral-950 dark:to-secondary-900/20 p-8 shadow-xl">
+      <div class="relative overflow-hidden rounded-2xl border border-default bg-gradient-to-br from-primary-50 via-white to-secondary-50 dark:from-primary-900/20 dark:via-studio-canvas dark:to-secondary-900/20 p-8 shadow-xl">
         <div class="absolute inset-0 overflow-hidden pointer-events-none">
-          <div class="absolute -right-24 -top-24 w-72 h-72 bg-primary-500/10 rounded-full blur-3xl" />
+          <div class="absolute -right-24 -top-24 w-72 h-72 bg-primary/10 rounded-full blur-3xl" />
           <div class="absolute left-1/4 -bottom-24 w-64 h-64 bg-secondary-500/10 rounded-full blur-3xl" />
-          <div class="absolute right-1/4 top-1/3 w-48 h-48 bg-primary-500/5 rounded-full blur-2xl" />
+          <div class="absolute right-1/4 top-1/3 w-48 h-48 bg-primary/5 rounded-full blur-2xl" />
         </div>
 
         <div class="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
           <div class="min-w-0">
             <div class="flex items-center gap-2 mb-2">
-              <span class="inline-flex items-center justify-center w-2 h-2 rounded-full bg-primary-500 animate-pulse" />
-              <span class="text-xs uppercase tracking-wider text-primary-600 dark:text-primary-400 font-semibold">
+              <span class="inline-flex items-center justify-center w-2 h-2 rounded-full bg-primary animate-pulse" />
+              <span class="text-xs uppercase tracking-wider text-primary font-semibold">
                 {{ t('tmcut.home.heroEyebrow') }}
               </span>
             </div>
-            <h1 class="text-3xl lg:text-4xl font-bold tracking-tight text-neutral-900 dark:text-neutral-100 max-w-2xl">
+            <h1 class="text-3xl lg:text-4xl font-bold tracking-tight text-highlighted max-w-2xl">
               {{ t('tmcut.home.heroTitle') }}
             </h1>
-            <p class="text-base lg:text-lg text-neutral-600 dark:text-neutral-400 mt-2 max-w-2xl leading-relaxed">
+            <p class="text-base lg:text-lg text-toned mt-2 max-w-2xl leading-relaxed">
               {{ t('tmcut.home.heroDesc') }}
             </p>
           </div>
@@ -206,21 +206,21 @@ function cardMenuItems(project: TmcutProject): DropdownMenuItem[] {
         </div>
 
         <!-- Quick Actions Dock -->
-        <div class="relative z-10 mt-8 pt-6 border-t border-neutral-200/50 dark:border-neutral-800/50">
+        <div class="relative z-10 mt-8 pt-6 border-t border-default/60">
           <div class="flex items-center justify-between mb-4">
-            <span class="text-xs uppercase tracking-wider text-neutral-500 font-semibold">
+            <span class="text-xs uppercase tracking-wider text-muted font-semibold">
               {{ t('tmcut.home.quickTools') }}
             </span>
           </div>
 
           <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
             <!-- Import Video -->
-            <button type="button" class="group relative p-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm hover:border-primary-300 dark:hover:border-primary-700 hover:shadow-md transition-all duration-200 text-left cursor-pointer flex flex-col items-start">
-              <div class="w-10 h-10 rounded-lg bg-primary-500/10 flex items-center justify-center text-primary-500 group-hover:bg-primary-500 group-hover:text-white transition-colors">
+            <button type="button" class="group relative p-4 rounded-xl border border-default bg-elevated/80 backdrop-blur-sm hover:border-primary/50 hover:shadow-md transition-all duration-200 text-left cursor-pointer flex flex-col items-start">
+              <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors">
                 <UIcon name="i-lucide-video" class="w-5 h-5" />
               </div>
-              <span class="text-sm font-semibold text-neutral-900 dark:text-neutral-100 mt-3">{{ t('tmcut.home.actionImport') }}</span>
-              <span class="text-xs text-neutral-500 mt-1">{{ t('tmcut.home.actionImportDesc') }}</span>
+              <span class="text-sm font-semibold text-highlighted mt-3">{{ t('tmcut.home.actionImport') }}</span>
+              <span class="text-xs text-muted mt-1">{{ t('tmcut.home.actionImportDesc') }}</span>
             </button>
 
             <!-- Quick Presets -->
@@ -228,32 +228,32 @@ function cardMenuItems(project: TmcutProject): DropdownMenuItem[] {
               v-for="preset in quickPresets"
               :key="preset.id"
               type="button"
-              class="group relative p-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm hover:border-primary-300 dark:hover:border-primary-700 hover:shadow-md transition-all duration-200 text-left cursor-pointer flex flex-col items-start"
+              class="group relative p-4 rounded-xl border border-default bg-elevated/80 backdrop-blur-sm hover:border-primary/50 hover:shadow-md transition-all duration-200 text-left cursor-pointer flex flex-col items-start"
               @click="applyQuickPreset(preset)"
             >
-              <div :class="['w-10 h-10 rounded-lg flex items-center justify-center transition-colors', 'group-hover:bg-' + preset.color + '-500 group-hover:text-white', 'bg-' + preset.color + '-500/10 text-' + preset.color + '-500']">
+              <div :class="['w-10 h-10 rounded-lg flex items-center justify-center transition-colors group-hover:text-white', preset.color === 'primary' ? 'bg-primary/10 text-primary group-hover:bg-primary' : 'bg-secondary/10 text-secondary group-hover:bg-secondary']">
                 <UIcon :name="preset.icon" class="w-5 h-5" />
               </div>
-              <span class="text-sm font-semibold text-neutral-900 dark:text-neutral-100 mt-3">{{ t(preset.label) }}</span>
-              <span class="text-xs text-neutral-500 mt-1">{{ t(preset.desc) }}</span>
+              <span class="text-sm font-semibold text-highlighted mt-3">{{ t(preset.label) }}</span>
+              <span class="text-xs text-muted mt-1">{{ t(preset.desc) }}</span>
             </button>
 
             <!-- AutoCut -->
-            <button type="button" class="group relative p-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm hover:border-secondary-300 dark:hover:border-secondary-700 hover:shadow-md transition-all duration-200 text-left cursor-pointer flex flex-col items-start" @click="router.push('/tmcut/autocut')">
-              <div class="w-10 h-10 rounded-lg bg-secondary-500/10 flex items-center justify-center text-secondary-500 group-hover:bg-secondary-500 group-hover:text-white transition-colors">
+            <button type="button" class="group relative p-4 rounded-xl border border-default bg-elevated/80 backdrop-blur-sm hover:border-secondary/50 hover:shadow-md transition-all duration-200 text-left cursor-pointer flex flex-col items-start" @click="router.push('/tmcut/autocut')">
+              <div class="w-10 h-10 rounded-lg bg-secondary/10 flex items-center justify-center text-secondary group-hover:bg-secondary group-hover:text-white transition-colors">
                 <UIcon name="i-lucide-sparkles" class="w-5 h-5" />
               </div>
-              <span class="text-sm font-semibold text-neutral-900 dark:text-neutral-100 mt-3">{{ t('tmcut.shortcuts.autocutTitle') }}</span>
-              <span class="text-xs text-neutral-500 mt-1">{{ t('tmcut.shortcuts.autocutDesc') }}</span>
+              <span class="text-sm font-semibold text-highlighted mt-3">{{ t('tmcut.shortcuts.autocutTitle') }}</span>
+              <span class="text-xs text-muted mt-1">{{ t('tmcut.shortcuts.autocutDesc') }}</span>
             </button>
 
             <!-- Templates -->
-            <button type="button" class="group relative p-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm hover:border-primary-300 dark:hover:border-primary-700 hover:shadow-md transition-all duration-200 text-left cursor-pointer flex flex-col items-start" @click="router.push('/tmcut/templates')">
-              <div class="w-10 h-10 rounded-lg bg-primary-500/10 flex items-center justify-center text-primary-500 group-hover:bg-primary-500 group-hover:text-white transition-colors">
+            <button type="button" class="group relative p-4 rounded-xl border border-default bg-elevated/80 backdrop-blur-sm hover:border-primary/50 hover:shadow-md transition-all duration-200 text-left cursor-pointer flex flex-col items-start" @click="router.push('/tmcut/templates')">
+              <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors">
                 <UIcon name="i-lucide-layout-template" class="w-5 h-5" />
               </div>
-              <span class="text-sm font-semibold text-neutral-900 dark:text-neutral-100 mt-3">{{ t('nav.tmcut_templates') }}</span>
-              <span class="text-xs text-neutral-500 mt-1">{{ t('tmcut.templatesDesc') }}</span>
+              <span class="text-sm font-semibold text-highlighted mt-3">{{ t('nav.tmcut_templates') }}</span>
+              <span class="text-xs text-muted mt-1">{{ t('tmcut.templatesDesc') }}</span>
             </button>
           </div>
         </div>
@@ -265,7 +265,7 @@ function cardMenuItems(project: TmcutProject): DropdownMenuItem[] {
            and view toggles fell off the right edge.) -->
       <div class="flex flex-col xl:flex-row items-center justify-between gap-4">
         <div class="relative w-full xl:w-80">
-          <UIcon name="i-lucide-search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+          <UIcon name="i-lucide-search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
           <input
             id="tmcut-project-search"
             v-model="search"
@@ -273,7 +273,7 @@ function cardMenuItems(project: TmcutProject): DropdownMenuItem[] {
             type="text"
             :aria-label="t('tmcut.home.searchPlaceholder')"
             :placeholder="t('tmcut.home.searchPlaceholder')"
-            class="w-full bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
+            class="w-full bg-elevated/80 backdrop-blur-sm border border-default rounded-xl pl-10 pr-4 py-2.5 text-sm text-highlighted placeholder:text-muted focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
           >
         </div>
 
@@ -290,7 +290,7 @@ function cardMenuItems(project: TmcutProject): DropdownMenuItem[] {
             :label="t('tmcut.home.sortLabel')"
             size="sm"
           />
-          <div class="flex items-center bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-800 rounded-xl p-0.5">
+          <div class="flex items-center bg-elevated/80 backdrop-blur-sm border border-default rounded-xl p-0.5">
             <TmcutButton
               size="xs"
               icon="i-lucide-grid-2x2"
@@ -315,18 +315,18 @@ function cardMenuItems(project: TmcutProject): DropdownMenuItem[] {
       <div class="space-y-6">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-3">
-            <h2 class="text-xl font-bold text-neutral-900 dark:text-neutral-100">
+            <h2 class="text-xl font-bold text-highlighted">
               {{ t('tmcut.recentProjects') }}
             </h2>
           </div>
         </div>
 
-        <div v-if="projects.length === 0" class="text-center py-16 rounded-2xl border-2 border-dashed border-neutral-300 dark:border-neutral-700 bg-white/50 dark:bg-neutral-900/50">
-          <UIcon name="i-lucide-film" class="w-16 h-16 text-neutral-300 dark:text-neutral-600 mx-auto mb-4" />
-          <h3 class="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-1">
+        <div v-if="projects.length === 0" class="text-center py-16 rounded-2xl border-2 border-dashed border-default bg-elevated/50">
+          <UIcon name="i-lucide-film" class="w-16 h-16 text-dimmed mx-auto mb-4" />
+          <h3 class="text-lg font-semibold text-highlighted mb-1">
             {{ t('tmcut.noProjects') }}
           </h3>
-          <p class="text-sm text-neutral-500 max-w-sm mx-auto mb-6">
+          <p class="text-sm text-muted max-w-sm mx-auto mb-6">
             {{ t('tmcut.noProjectsDesc') }}
           </p>
           <TmcutButton icon="i-lucide-plus" variant="solid" @click="handleNewProject">
@@ -334,7 +334,7 @@ function cardMenuItems(project: TmcutProject): DropdownMenuItem[] {
           </TmcutButton>
         </div>
 
-        <div v-else-if="filteredProjects.length === 0" class="text-center py-12 text-neutral-500">
+        <div v-else-if="filteredProjects.length === 0" class="text-center py-12 text-muted">
           {{ t('tmcut.home.noMatches') }}
         </div>
 
@@ -343,12 +343,12 @@ function cardMenuItems(project: TmcutProject): DropdownMenuItem[] {
           <div
             v-for="project in filteredProjects"
             :key="project.id"
-            class="group relative bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-800 rounded-2xl overflow-hidden hover:border-primary-300 dark:hover:border-primary-700 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 flex flex-col"
+            class="group relative bg-elevated/80 backdrop-blur-sm border border-default rounded-2xl overflow-hidden hover:border-primary/50 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 flex flex-col"
             @click="router.push(`/tmcut/editor?project=${project.id}`)"
           >
-            <div class="aspect-video bg-neutral-100 dark:bg-neutral-800 relative overflow-hidden">
+            <div class="aspect-video bg-muted relative overflow-hidden">
               <img v-if="project.cover" :src="project.cover" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105">
-              <UIcon v-else name="i-lucide-film" class="w-12 h-12 text-neutral-300 dark:text-neutral-600 absolute inset-0 m-auto" />
+              <UIcon v-else name="i-lucide-film" class="w-12 h-12 text-dimmed absolute inset-0 m-auto" />
 
               <!-- Badges -->
               <div class="absolute bottom-3 left-3 flex items-center gap-1.5">
@@ -381,8 +381,8 @@ function cardMenuItems(project: TmcutProject): DropdownMenuItem[] {
               </TmcutBadge>
 
               <!-- Play Overlay -->
-              <div class="absolute inset-0 bg-primary-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                <div class="w-14 h-14 rounded-full bg-primary-500 text-white flex items-center justify-center shadow-xl transform group-hover:scale-105 transition-transform">
+              <div class="absolute inset-0 bg-primary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                <div class="w-14 h-14 rounded-full bg-primary text-white flex items-center justify-center shadow-xl transform group-hover:scale-105 transition-transform">
                   <UIcon name="i-lucide-play" class="w-6 h-6 ml-1" />
                 </div>
               </div>
@@ -390,7 +390,7 @@ function cardMenuItems(project: TmcutProject): DropdownMenuItem[] {
 
             <div class="p-4 flex-1 flex flex-col justify-between">
               <div class="flex items-start justify-between gap-2">
-                <h4 class="font-semibold text-sm text-neutral-900 dark:text-neutral-100 truncate flex-1 pr-2">
+                <h4 class="font-semibold text-sm text-highlighted truncate flex-1 pr-2">
                   {{ project.name }}
                 </h4>
                 <UDropdownMenu :items="cardMenuItems(project)" :content="{ align: 'end' }">
@@ -404,10 +404,10 @@ function cardMenuItems(project: TmcutProject): DropdownMenuItem[] {
                   />
                 </UDropdownMenu>
               </div>
-              <p class="text-xs text-neutral-500 mt-2 flex items-center gap-1.5">
+              <p class="text-xs text-muted mt-2 flex items-center gap-1.5">
                 <span class="truncate">{{ editedLabel(project) }}</span>
               </p>
-              <p v-if="project.canvas?.fps" class="text-xs font-mono text-neutral-400 mt-1">
+              <p v-if="project.canvas?.fps" class="text-xs font-mono text-muted mt-1">
                 {{ canvasFpsValue(project.canvas) }}fps · {{ project.canvas.width }}×{{ project.canvas.height }}
               </p>
             </div>
@@ -415,14 +415,14 @@ function cardMenuItems(project: TmcutProject): DropdownMenuItem[] {
         </div>
 
         <!-- List View -->
-        <div v-else class="bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-800 rounded-2xl overflow-hidden divide-y divide-neutral-200/50 dark:divide-neutral-800/50">
+        <div v-else class="bg-elevated/80 backdrop-blur-sm border border-default rounded-2xl overflow-hidden divide-y divide-default/60">
           <div
             v-for="project in filteredProjects"
             :key="project.id"
-            class="flex items-center gap-4 px-5 py-4 bg-white/50 dark:bg-neutral-900/50 hover:bg-primary-50/50 dark:hover:bg-primary-900/10 transition-colors cursor-pointer"
+            class="flex items-center gap-4 px-5 py-4 bg-elevated/50 hover:bg-primary/5 transition-colors cursor-pointer"
             @click="router.push(`/tmcut/editor?project=${project.id}`)"
           >
-            <UIcon name="i-lucide-film" class="w-5 h-5 text-neutral-400 shrink-0" />
+            <UIcon name="i-lucide-film" class="w-5 h-5 text-muted shrink-0" />
             <TmcutBadge
               v-if="project.pinned"
               variant="primary"
@@ -431,12 +431,12 @@ function cardMenuItems(project: TmcutProject): DropdownMenuItem[] {
               dot-color="#f59e0b"
               class="shrink-0"
             />
-            <span class="text-sm font-medium text-neutral-900 dark:text-neutral-100 truncate flex-1">{{ project.name }}</span>
+            <span class="text-sm font-medium text-highlighted truncate flex-1">{{ project.name }}</span>
             <TmcutBadge variant="neutral" size="xs" class="font-mono shrink-0">
               {{ ratioLabel(project.canvas?.width || 1920, project.canvas?.height || 1080) }}
             </TmcutBadge>
-            <span v-if="fmtDuration(project)" class="text-xs font-mono text-neutral-400 w-16 text-right shrink-0">{{ fmtDuration(project) }}</span>
-            <span class="text-xs text-neutral-500 w-40 text-right shrink-0 hidden lg:block">{{ editedLabel(project) }}</span>
+            <span v-if="fmtDuration(project)" class="text-xs font-mono text-muted w-16 text-right shrink-0">{{ fmtDuration(project) }}</span>
+            <span class="text-xs text-muted w-40 text-right shrink-0 hidden lg:block">{{ editedLabel(project) }}</span>
             <UDropdownMenu :items="cardMenuItems(project)" :content="{ align: 'end' }">
               <TmcutButton
                 variant="ghost"
@@ -452,16 +452,16 @@ function cardMenuItems(project: TmcutProject): DropdownMenuItem[] {
       </div>
 
       <!-- Template Presets Strip -->
-      <div class="bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-800 rounded-2xl p-6 shadow-sm">
+      <div class="bg-elevated/80 backdrop-blur-sm border border-default rounded-2xl p-6 shadow-sm">
         <div class="flex items-center justify-between mb-4">
           <div>
             <div class="flex items-center gap-2">
-              <UIcon name="i-lucide-flame" class="w-5 h-5 text-primary-500" />
-              <h3 class="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
+              <UIcon name="i-lucide-flame" class="w-5 h-5 text-primary" />
+              <h3 class="text-lg font-semibold text-highlighted">
                 {{ t('tmcut.presetSizes') }}
               </h3>
             </div>
-            <p class="text-xs text-neutral-500 mt-0.5">
+            <p class="text-xs text-muted mt-0.5">
               {{ t('tmcut.templatesDesc') }}
             </p>
           </div>
@@ -481,14 +481,14 @@ function cardMenuItems(project: TmcutProject): DropdownMenuItem[] {
             v-for="preset in templatePresets"
             :key="preset.id"
             type="button"
-            class="group flex items-center gap-4 p-4 rounded-xl border border-neutral-200 dark:border-neutral-800 hover:border-primary-300 dark:hover:border-primary-700 transition-all duration-200 text-left cursor-pointer"
+            class="group flex items-center gap-4 p-4 rounded-xl border border-default hover:border-primary/50 transition-all duration-200 text-left cursor-pointer"
             @click="applyTemplatePreset(preset)"
           >
-            <div class="w-12 h-12 rounded-xl bg-primary-500/10 flex items-center justify-center text-primary-500 group-hover:bg-primary-500 group-hover:text-white transition-colors shrink-0">
+            <div class="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors shrink-0">
               <UIcon :name="preset.icon" class="w-6 h-6" />
             </div>
             <div class="min-w-0 flex-1">
-              <p class="text-sm font-semibold text-neutral-900 dark:text-neutral-100 truncate">
+              <p class="text-sm font-semibold text-highlighted truncate">
                 {{ preset.name }}
               </p>
               <div class="flex items-center gap-3 mt-1">
@@ -504,7 +504,7 @@ function cardMenuItems(project: TmcutProject): DropdownMenuItem[] {
               size="xs"
               color="primary"
               variant="soft"
-              class="shrink-0 group-hover:bg-primary-500 group-hover:text-white transition-colors"
+              class="shrink-0 group-hover:bg-primary group-hover:text-white transition-colors"
             >
               {{ t('tmcut.apply') }}
             </TmcutButton>
@@ -521,7 +521,7 @@ function cardMenuItems(project: TmcutProject): DropdownMenuItem[] {
             :aria-label="t('tmcut.home.renameTitle')"
             type="text"
             :placeholder="t('tmcut.home.renameTitle')"
-            class="w-full border border-neutral-200 dark:border-neutral-800 rounded-xl p-2.5 text-sm text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
+            class="w-full border border-default rounded-xl p-2.5 text-sm text-highlighted placeholder:text-muted focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
             @keydown.enter="confirmRename"
           >
         </template>
@@ -537,7 +537,7 @@ function cardMenuItems(project: TmcutProject): DropdownMenuItem[] {
 
       <LazyTmcutModal v-model:open="deleteModalOpen" :title="t('tmcut.home.deleteTitle')" color="error">
         <template #body>
-          <p class="text-sm text-neutral-500">
+          <p class="text-sm text-muted">
             {{ t('tmcut.home.deleteDesc', { name: deleteTarget?.name || '' }) }}
           </p>
         </template>

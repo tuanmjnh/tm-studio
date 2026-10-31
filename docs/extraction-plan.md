@@ -146,3 +146,8 @@ tm-studio(4003)  TMCut standalone (repo này): editor · template · autocut · 
   - Shell: brand block sidebar bỏ uppercase/tracking rộng → sentence case, tracking-tight; xoá mục command palette "View source" trỏ về repo template `nuxt-ui-templates/dashboard` (rác từ template, đồng thời giảm 1 icon khỏi bundle).
   - Verify trên dev 4003: `--ui-primary` = `oklch(70.2% 0.183 293.541)` (violet), neutral zinc, `document.fonts` đăng ký đủ Inter + JetBrains Mono, Inter load thành công, login title đúng.
   - Gate: `nuxt typecheck` exit 0; eslint các file chạm PASS; không còn file `.js` sinh tự động trong source (dọn 178 artifact do typecheck chạy song song dev server).
+- **2026-10-31** — **UI-1 (slice 1): token hoá project home + primitives.** Chưa đóng phase (còn IA/hero refinement), nhưng loại bỏ phần lớn màu hard-code ở màn hình đầu:
+  - `tmcut/index.vue`: border/text/surface chuyển sang token Nuxt UI (`border-default`, `text-highlighted/toned/muted/dimmed`, `bg-elevated`, `bg-muted`, `hover:border-primary/50`), hero dùng `dark:via-studio-canvas`.
+  - Fix lỗi tiềm ẩn: class Tailwind dựng động `'bg-' + preset.color + '-500/10'` không được Tailwind sinh ra → thay bằng nhánh class tĩnh primary/secondary.
+  - Primitives: `TmcutCard` (default/elevated/interactive/glass) và badge `neutral` chuyển sang token (`bg-elevated`, `border-default`, `bg-muted`, `text-toned`), nhờ đó mọi card/badge trong editor đồng bộ theo zinc/violet.
+  - Gate: eslint các file chạm PASS (đã auto-fix 6 lỗi stylistic có sẵn trong 2 primitive); `nuxt typecheck` exit 0; `nuxt build` PASS (1m20s, xác nhận toàn bộ utility token mới biên dịch được).

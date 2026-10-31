@@ -11,14 +11,14 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   variant: 'neutral',
-  size: 'sm',
+  size: 'sm'
 })
 
 const baseClass = 'inline-flex items-center gap-1 font-medium rounded-full'
 const sizeClasses = {
   xs: 'px-1.5 py-0.5 text-[10px]',
   sm: 'px-2 py-0.5 text-xs',
-  md: 'px-2.5 py-1 text-sm',
+  md: 'px-2.5 py-1 text-sm'
 }
 const variantClasses = {
   primary: 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300',
@@ -26,7 +26,7 @@ const variantClasses = {
   success: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
   warning: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
   error: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
-  neutral: 'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300',
+  neutral: 'bg-muted text-toned'
 }
 
 const computedClass = computed(() => cn(
