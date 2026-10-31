@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, protocol } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, protocol, session } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const http = require('http')
@@ -40,16 +40,105 @@ const isDev = !app.isPackaged
 // Both ports come from the ONE resolver in tools/ports.cjs; only a real
 // TCP port wins, anything else falls back.
 const { parsePort, resolveDevPort } = require('./tools/ports.cjs')
+const { resolveOrigins } = require('./tools/renderer-origin.cjs')
+
 const PORT = parsePort(process.env.APP_PORT) ?? 3456
 // Dev renderer is served by `pnpm dev` (nuxt dev --port 4003). Keep the
 // wait-on URL in the `dev:electron` script in sync with this default.
 const DEV_PORT = resolveDevPort(process.env)
 
+// The renderer origin (see tools/renderer-origin.cjs). Packaged builds load
+// from localhost, never the IP literal: WebAuthn rejects an IP address as a
+// relying party ID, so every passkey ceremony threw on 127.0.0.1. localhost
+// is also the RP ID the hub issues for the browser build, so one credential
+// works in both. The legacy IP origin survives only for the one-time
+// localStorage/cookie migration and media:// CORS.
+const RENDERER_ORIGINS = resolveOrigins({ isDev, port: PORT, devPort: DEV_PORT })
+const RENDERER_ORIGIN = RENDERER_ORIGINS.primary
+const LEGACY_ORIGIN = RENDERER_ORIGINS.legacy
+// Static, script-free page only used to reach localStorage of an origin
+// without booting the Nuxt app there.
+const MIGRATION_PAGE = '/__origin-migration.html'
+const ORIGIN_MIGRATION_MARKER = '__origin_migration_v1'
+
 // Origins the renderer legitimately runs from; media-protocol uses this
 // to decide whether a fetch() gets CORS headers (webSecurity:true).
 function appOrigins() {
-  if (isDev) return [`http://localhost:${DEV_PORT}`, `http://127.0.0.1:${DEV_PORT}`]
-  return [`http://127.0.0.1:${PORT}`, `http://localhost:${PORT}`]
+  return RENDERER_ORIGINS.allowed
+}
+
+// Users upgrading from a build that ran on 127.0.0.1 would otherwise open the
+// app logged out, with their project index and media bin empty: localStorage
+// and cookies are per-origin. Move both across once, copy-only, right before
+// the app window loads. Best effort — any failure leaves a clean first-run.
+async function migrateLegacyOrigin() {
+  if (isDev) return
+  const ses = session.defaultSession
+
+  const readMarker = async () => {
+    const probe = new BrowserWindow({ show: false, webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true } })
+    try {
+      await probe.loadURL(`${RENDERER_ORIGIN}${MIGRATION_PAGE}`)
+      return await probe.webContents.executeJavaScript(
+        `localStorage.getItem(${JSON.stringify(ORIGIN_MIGRATION_MARKER)})`,
+        true
+      )
+    } finally {
+      probe.destroy()
+    }
+  }
+
+  if (await readMarker()) return
+
+  let legacyStorage
+  const legacy = new BrowserWindow({ show: false, webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true } })
+  try {
+    await legacy.loadURL(`${LEGACY_ORIGIN}${MIGRATION_PAGE}`)
+    legacyStorage = await legacy.webContents.executeJavaScript(`(() => {
+      const out = {}
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key !== null) out[key] = localStorage.getItem(key)
+      }
+      return out
+    })()`, true) || {}
+  } catch {
+    legacyStorage = {}
+  } finally {
+    legacy.destroy()
+  }
+
+  // Cookies are hidden from the renderer, so copy them through the session.
+  try {
+    const cookies = await ses.cookies.get({ domain: '127.0.0.1' })
+    for (const cookie of cookies) {
+      const details = { url: RENDERER_ORIGIN, name: cookie.name, value: cookie.value, path: cookie.path || '/' }
+      if (cookie.secure) details.secure = true
+      if (cookie.httpOnly) details.httpOnly = true
+      if (typeof cookie.expirationDate === 'number') details.expirationDate = cookie.expirationDate
+      if (cookie.sameSite && cookie.sameSite !== 'unspecified') details.sameSite = cookie.sameSite
+      await ses.cookies.set(details).catch(() => {})
+    }
+  } catch {
+    // no legacy cookies
+  }
+
+  const entries = Object.entries(legacyStorage)
+  const target = new BrowserWindow({ show: false, webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true } })
+  try {
+    await target.loadURL(`${RENDERER_ORIGIN}${MIGRATION_PAGE}`)
+    await target.webContents.executeJavaScript(`(() => {
+      const entries = ${JSON.stringify(entries)}
+      for (const [key, value] of entries) {
+        try { if (localStorage.getItem(key) === null) localStorage.setItem(key, value) } catch {}
+      }
+      localStorage.setItem(${JSON.stringify(ORIGIN_MIGRATION_MARKER)}, '1')
+    })()`, true)
+  } catch {
+    // leave the new origin empty
+  } finally {
+    target.destroy()
+  }
 }
 
 let win = null
@@ -135,7 +224,7 @@ async function createWindow() {
   })
 
   if (isDev) {
-    win.loadURL(`http://localhost:${DEV_PORT}`)
+    win.loadURL(RENDERER_ORIGIN)
     win.webContents.openDevTools()
   } else {
     try {
@@ -146,12 +235,13 @@ async function createWindow() {
       win.show()
       return
     }
-    win.loadURL(`http://127.0.0.1:${PORT}`)
+    await migrateLegacyOrigin().catch(err => console.error('[Electron] Origin migration failed:', err))
+    win.loadURL(RENDERER_ORIGIN)
   }
 
   // Navigation lockdown (Electron security checklist #17): the main
   // frame must never navigate to a foreign origin.
-  const appOrigin = isDev ? `http://localhost:${DEV_PORT}` : `http://127.0.0.1:${PORT}`
+  const appOrigin = RENDERER_ORIGIN
   win.webContents.on('will-navigate', (event, url) => {
     if (!url.startsWith(appOrigin) && !url.startsWith('devtools://')) {
       event.preventDefault()
@@ -503,6 +593,9 @@ app.whenReady().then(() => {
 
   // MCP server — spawn child process with IPC channel
   let mcpServerProcess = null
+  // Scaffolding for the MCP server lifecycle; the renderer-driven IPC handlers
+  // below are the live path today, so the spawn is intentionally idle.
+  // eslint-disable-next-line no-unused-vars
   function spawnMcpServer() {
     if (mcpServerProcess) return mcpServerProcess
     const serverPath = path.join(__dirname, 'tools', 'mcp', 'server.mjs')
@@ -590,109 +683,109 @@ app.whenReady().then(() => {
   ipcMain.handle('mcp:asset:list_catalog', async (event, { projectId, params }) => {
     if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
     if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('asset.list_catalog', { params, projectId }, event)
+    return forwardToRenderer('asset.list_catalog', { params, projectId })
   })
 
   ipcMain.handle('mcp:asset:install', async (event, { projectId, params }) => {
     if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
     if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('asset.install', { params, projectId }, event)
+    return forwardToRenderer('asset.install', { params, projectId })
   })
 
   ipcMain.handle('mcp:asset:uninstall', async (event, { projectId, params }) => {
     if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
     if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('asset.uninstall', { params, projectId }, event)
+    return forwardToRenderer('asset.uninstall', { params, projectId })
   })
 
   ipcMain.handle('mcp:asset:install_status', async (event, { projectId, params }) => {
     if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
     if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('asset.install_status', { params, projectId }, event)
+    return forwardToRenderer('asset.install_status', { params, projectId })
   })
 
   // Templates
   ipcMain.handle('mcp:template:list', async (event, { projectId, params }) => {
     if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
     if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('template.list', { params, projectId }, event)
+    return forwardToRenderer('template.list', { params, projectId })
   })
 
   ipcMain.handle('mcp:template:apply', async (event, { projectId, params }) => {
     if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
     if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('template.apply', { params, projectId }, event)
+    return forwardToRenderer('template.apply', { params, projectId })
   })
 
   ipcMain.handle('mcp:template:save_as', async (event, { projectId, params }) => {
     if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
     if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('template.save_as', { params, projectId }, event)
+    return forwardToRenderer('template.save_as', { params, projectId })
   })
 
   ipcMain.handle('mcp:template:delete', async (event, { projectId, params }) => {
     if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
     if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('template.delete', { params, projectId }, event)
+    return forwardToRenderer('template.delete', { params, projectId })
   })
 
   ipcMain.handle('mcp:template:import', async (event, { projectId, params }) => {
     if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
     if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('template.import', { params, projectId }, event)
+    return forwardToRenderer('template.import', { params, projectId })
   })
 
   ipcMain.handle('mcp:template:export', async (event, { projectId, params }) => {
     if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
     if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('template.export', { params, projectId }, event)
+    return forwardToRenderer('template.export', { params, projectId })
   })
 
   // Export Queue
   ipcMain.handle('mcp:export:list_jobs', async (event, { projectId, params }) => {
     if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
     if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('export.list_jobs', { params, projectId }, event)
+    return forwardToRenderer('export.list_jobs', { params, projectId })
   })
 
   ipcMain.handle('mcp:export:add_job', async (event, { projectId, params }) => {
     if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
     if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('export.add_job', { params, projectId }, event)
+    return forwardToRenderer('export.add_job', { params, projectId })
   })
 
   ipcMain.handle('mcp:export:pause_job', async (event, { projectId, params }) => {
     if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
     if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('export.pause_job', { params, projectId }, event)
+    return forwardToRenderer('export.pause_job', { params, projectId })
   })
 
   ipcMain.handle('mcp:export:resume_job', async (event, { projectId, params }) => {
     if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
     if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('export.resume_job', { params, projectId }, event)
+    return forwardToRenderer('export.resume_job', { params, projectId })
   })
 
   ipcMain.handle('mcp:export:cancel_job', async (event, { projectId, params }) => {
     if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
     if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('export.cancel_job', { params, projectId }, event)
+    return forwardToRenderer('export.cancel_job', { params, projectId })
   })
 
   ipcMain.handle('mcp:export:retry_job', async (event, { projectId, params }) => {
     if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
     if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('export.retry_job', { params, projectId }, event)
+    return forwardToRenderer('export.retry_job', { params, projectId })
   })
 
   ipcMain.handle('mcp:export:clear_history', async (event, { projectId, params }) => {
     if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
     if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('export.clear_history', { params, projectId }, event)
+    return forwardToRenderer('export.clear_history', { params, projectId })
   })
 
   // Forward helper: sends mcp:forward to renderer, waits for mcp:forward:respond
-  function forwardToRenderer(tool, payload, event) {
+  function forwardToRenderer(tool, payload) {
     return new Promise((resolve) => {
       const requestId = `mcp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
       const responseChannel = 'mcp:forward:respond'

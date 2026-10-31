@@ -1,0 +1,14 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+    <title>Origin migration</title>
+    <style>body { margin: 0; background: #0f0f0f }</style>
+  </head>
+  <body>
+    <!-- Empty on purpose: the Electron main process loads this hidden page
+         only to read or seed localStorage for an origin without booting the
+         Nuxt app there. Never add scripts or markup here. -->
+  </body>
+</html>
