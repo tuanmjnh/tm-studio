@@ -1,7 +1,3 @@
-@theme {
-  --font-sans: 'Public Sans', sans-serif;
-}
-
 html.dark .tiptap .shiki,
 html.dark .tiptap .shiki span {
   color: var(--shiki-dark) !important;

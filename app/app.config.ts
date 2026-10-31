@@ -10,9 +10,9 @@ export default defineAppConfig({
   // },
   ui: {
     colors: {
-      primary: 'blue',
+      primary: 'violet',
       secondary: 'indigo',
-      neutral: 'slate',
+      neutral: 'zinc',
       info: 'cyan',
       success: 'teal',
       warning: 'yellow',

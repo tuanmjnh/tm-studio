@@ -5,7 +5,6 @@ const route = useRoute()
 const { t } = useI18n()
 const auth = useAuth()
 const nav = useNavMenu()
-const appConfig = useAppConfig()
 const appUpdater = useAppUpdater()
 const open = ref(false)
 
@@ -33,16 +32,6 @@ const groups = computed<CommandPaletteGroup[]>(() => [{
   id: 'links',
   label: t('nav.goTo'),
   items: links.value.flat() as unknown as CommandPaletteGroup['items']
-}, {
-  id: 'code',
-  label: t('nav.code'),
-  items: [{
-    id: 'source',
-    label: t('nav.viewSource'),
-    icon: 'i-simple-icons-github',
-    to: `https://github.com/nuxt-ui-templates/dashboard/blob/main/app/pages${route.path === '/' ? '/index' : route.path}.vue`,
-    target: '_blank'
-  }]
 }])
 </script>
 

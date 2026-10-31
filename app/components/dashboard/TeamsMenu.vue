@@ -24,7 +24,7 @@ const appUpdater = useAppUpdater()
         leave-to-class="opacity-0"
       >
         <div v-if="!collapsed" class="flex flex-col min-w-0">
-          <span class="text-sm font-bold text-highlighted truncate leading-tight tracking-wide uppercase">
+          <span class="text-sm font-semibold text-highlighted truncate leading-tight tracking-tight">
             {{ appConfig.system.app_name }}
           </span>
           <button

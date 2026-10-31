@@ -41,6 +41,12 @@ export default defineNuxtConfig({
   css: ['~/assets/css/main.css'],
   spaLoadingTemplate: 'spa-loading-template.html',
 
+  // Creative tools open dark first; the toggle still lets users choose light.
+  colorMode: {
+    preference: 'dark',
+    fallback: 'dark'
+  },
+
   // Include TypeScript icon maps so local controls do not depend on runtime API requests.
   icon: {
     clientBundle: {

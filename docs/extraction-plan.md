@@ -138,3 +138,11 @@ tm-studio(4003)  TMCut standalone (repo này): editor · template · autocut · 
   - Đồng nhất tên hiển thị "TMCut Studio": title template, PWA name/short_name, Electron `productName`/`executableName`; manifest dùng `theme_color #6D28D9`, `background_color #1E1B4B`, icon maskable riêng.
   - Sửa fallback `runtimeConfig.public.hubAppId` `tm-studio` → `tm-studio_749app` (khớp composables, tránh trỏ nhầm app khi thiếu env).
   - Gates: `nuxt typecheck` PASS; dev smoke 4003 phục vụ đúng `logo.svg`, `icon.png`, `favicon.ico`, `pwa-192x192.png`, `manifest.webmanifest` (200); manifest JSON hợp lệ; ICO parse đúng 7 entries; trang login render title "Sign in - TMCut Studio". Lint `nuxt.config.ts` còn 1 lỗi `nuxt/nuxt-config-keys-order` có sẵn từ trước, không liên quan thay đổi này.
+- **2026-10-31** — **UI-0 PASS (design foundation).** Bắt đầu lộ trình UI pro (4 phase) theo hướng đã tư vấn: violet brand + dark-first.
+  - Palette: `primary` blue → **violet**, `secondary` indigo, `neutral` slate → **zinc** ([app.config.ts](../app/app.config.ts)).
+  - Typography: self-host **Inter Variable** + **JetBrains Mono Variable** (`@fontsource-variable/*`, không phụ thuộc Google Fonts lúc chạy); `--font-sans` / `--font-mono` trong `@theme`; bỏ khai báo `Public Sans` trùng lặp (font này trước đây chưa từng được load).
+  - Studio tokens: thêm `--color-studio-{canvas,panel,raised,border,mint}` để editor chrome dùng ở UI-2.
+  - Dark-first: `colorMode.preference/fallback = 'dark'` (người dùng vẫn toggle được).
+  - Shell: brand block sidebar bỏ uppercase/tracking rộng → sentence case, tracking-tight; xoá mục command palette "View source" trỏ về repo template `nuxt-ui-templates/dashboard` (rác từ template, đồng thời giảm 1 icon khỏi bundle).
+  - Verify trên dev 4003: `--ui-primary` = `oklch(70.2% 0.183 293.541)` (violet), neutral zinc, `document.fonts` đăng ký đủ Inter + JetBrains Mono, Inter load thành công, login title đúng.
+  - Gate: `nuxt typecheck` exit 0; eslint các file chạm PASS; không còn file `.js` sinh tự động trong source (dọn 178 artifact do typecheck chạy song song dev server).
