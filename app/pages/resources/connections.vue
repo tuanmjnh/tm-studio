@@ -674,6 +674,7 @@ useHead({ title: t('connections.title') })
               icon="i-lucide-search"
               size="xs"
               class="w-full sm:w-56"
+              :aria-label="t('common.search')"
               :placeholder="t('common.search')"
             />
           </div>

@@ -128,6 +128,7 @@ mobileBar.registerInfo(computed(() => ({
             <UInput
               v-model="searchQuery"
               icon="i-lucide-search"
+              :aria-label="t('docs.searchPlaceholder')"
               :placeholder="t('docs.searchPlaceholder')"
               size="sm"
               class="flex-1 min-w-0 sm:flex-none sm:w-64"
@@ -137,6 +138,7 @@ mobileBar.registerInfo(computed(() => ({
               :items="modulesList.map(m => ({ label: m === 'ALL' ? t('docs.allModules') : m, value: m }))"
               size="sm"
               class="w-36 shrink-0 sm:w-40"
+              :aria-label="t('docs.moduleFilter')"
             />
           </div>
         </template>

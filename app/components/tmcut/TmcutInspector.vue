@@ -887,12 +887,14 @@ const saveStateLabel = computed(() => {
            main-process font scanner. Empty on web (no IPC) or when the
            addon fails — hidden rather than a fake or dead list. -->
       <div v-if="fontChoices.length" class="pt-1">
-        <label class="text-[10px] text-muted">{{ t('tmcut.inspectorProps.font') }}</label>
+        <label for="tmcut-clip-font" class="text-[10px] text-muted">{{ t('tmcut.inspectorProps.font') }}</label>
         <USelectMenu
+          id="tmcut-clip-font"
           :items="fontChoices"
           value-key="family"
           label-key="family"
           class="w-full"
+          :aria-label="t('tmcut.inspectorProps.font')"
           :model-value="clip.fontFamily ?? undefined"
           :placeholder="t('tmcut.inspectorProps.fontDefault')"
           size="xs"

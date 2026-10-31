@@ -259,6 +259,7 @@ function formatDate(dateStr: string | null) {
             variant="none"
             required
             autoresize
+            :aria-label="t('inbox.replyPlaceholder')"
             :placeholder="t('inbox.replyPlaceholder')"
             :rows="3"
             :disabled="sending || !thread.length"

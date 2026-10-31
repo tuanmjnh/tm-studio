@@ -347,7 +347,7 @@ async function exportNow() {
 
         <template v-else>
           <div class="flex items-start gap-3">
-            <USwitch v-model="includeSecrets" :disabled="!canExportSecrets" />
+            <USwitch v-model="includeSecrets" :aria-label="t('aiProviders.include_secrets')" :disabled="!canExportSecrets" />
             <div>
               <p class="text-sm font-medium text-highlighted">
                 {{ t('aiProviders.include_secrets') }}

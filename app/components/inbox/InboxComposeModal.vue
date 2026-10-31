@@ -64,11 +64,12 @@ async function handleSend() {
   >
     <form id="compose-form" class="space-y-4" @submit.prevent="handleSend">
       <div class="space-y-1.5">
-        <label class="text-xs font-medium text-highlighted flex items-center justify-between">
+        <label for="compose-to" class="text-xs font-medium text-highlighted flex items-center justify-between">
           <span>{{ t('inbox.to') }}</span>
           <span class="text-muted text-[11px]">*</span>
         </label>
         <UInput
+          id="compose-to"
           v-model="to"
           type="email"
           required
@@ -80,11 +81,12 @@ async function handleSend() {
       </div>
 
       <div class="space-y-1.5">
-        <label class="text-xs font-medium text-highlighted flex items-center justify-between">
+        <label for="compose-subject" class="text-xs font-medium text-highlighted flex items-center justify-between">
           <span>{{ t('inbox.subject') }}</span>
           <span class="text-muted text-[11px]">*</span>
         </label>
         <UInput
+          id="compose-subject"
           v-model="subject"
           required
           icon="i-lucide-heading"
@@ -95,11 +97,12 @@ async function handleSend() {
       </div>
 
       <div class="space-y-1.5">
-        <label class="text-xs font-medium text-highlighted flex items-center justify-between">
-          <span>{{ t('inbox.replyPlaceholder') }}</span>
+        <label for="compose-body" class="text-xs font-medium text-highlighted flex items-center justify-between">
+          <span>{{ t('inbox.body') }}</span>
           <span class="text-muted text-[11px]">*</span>
         </label>
         <UTextarea
+          id="compose-body"
           v-model="body"
           required
           autoresize

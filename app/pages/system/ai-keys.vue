@@ -1766,18 +1766,42 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
                 :placeholder="t('aiProviders.search_models_placeholder')"
               />
             </div>
-            <USelect v-model="filterModelProvider" :items="providerOptions" size="sm" class="w-40" />
-            <USelect v-model="filterModelConnection" :items="connectionOptions" size="sm" class="w-44" />
-            <USelect v-model="filterModelStatus" :items="[
-              { label: t('aiProviders.filter_status_all'), value: 'all' },
-              { label: t('aiProviders.filter_status_enabled'), value: 'enabled' },
-              { label: t('aiProviders.filter_status_disabled'), value: 'disabled' }
-            ]" size="sm" class="w-36" />
-            <USelect v-model="filterModelSource" :items="[
-              { label: t('aiProviders.filter_all_sources'), value: 'all' },
-              { label: t('aiProviders.filter_source_discovered'), value: 'discovered' },
-              { label: t('aiProviders.filter_source_manual'), value: 'manual' }
-            ]" size="sm" class="w-32" />
+            <USelect
+              v-model="filterModelProvider"
+              :items="providerOptions"
+              size="sm"
+              class="w-40"
+              :aria-label="t('aiProviders.filter_provider')"
+            />
+            <USelect
+              v-model="filterModelConnection"
+              :items="connectionOptions"
+              size="sm"
+              class="w-44"
+              :aria-label="t('aiProviders.filter_connection')"
+            />
+            <USelect
+              v-model="filterModelStatus"
+              :items="[
+                { label: t('aiProviders.filter_status_all'), value: 'all' },
+                { label: t('aiProviders.filter_status_enabled'), value: 'enabled' },
+                { label: t('aiProviders.filter_status_disabled'), value: 'disabled' }
+              ]"
+              size="sm"
+              class="w-36"
+              :aria-label="t('aiProviders.filter_status')"
+            />
+            <USelect
+              v-model="filterModelSource"
+              :items="[
+                { label: t('aiProviders.filter_all_sources'), value: 'all' },
+                { label: t('aiProviders.filter_source_discovered'), value: 'discovered' },
+                { label: t('aiProviders.filter_source_manual'), value: 'manual' }
+              ]"
+              size="sm"
+              class="w-32"
+              :aria-label="t('aiProviders.filter_source')"
+            />
           </div>
 
           <div class="flex items-center gap-2">

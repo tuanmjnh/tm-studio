@@ -237,7 +237,12 @@ useHead({ title: computed(() => t('settings.production')) })
           </p>
 
           <div class="flex items-start gap-3">
-            <USwitch v-model="telemetry.enabled" class="mt-0.5" @update:model-value="telemetry.setEnabled" />
+            <USwitch
+              v-model="telemetry.enabled"
+              class="mt-0.5"
+              :aria-label="t('settings.telemetryEnabled')"
+              @update:model-value="telemetry.setEnabled"
+            />
             <div>
               <p class="text-sm font-medium text-highlighted">
                 {{ t('settings.telemetryEnabled') }}

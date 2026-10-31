@@ -230,6 +230,7 @@ async function handleDecision(id: string, decision: 'approved' | 'revise' | 'rej
             v-model="newRunId"
             class="w-full"
             size="sm"
+            :aria-label="t('tmcut.process.runIdLabel')"
             :placeholder="t('tmcut.process.runIdPlaceholder')"
             @keydown.enter="handleCreateRun"
           />
@@ -445,6 +446,7 @@ async function handleDecision(id: string, decision: 'approved' | 'revise' | 'rej
             class="w-full"
             :rows="2"
             size="sm"
+            :aria-label="t('tmcut.process.gateNoteLabel')"
             :placeholder="t('tmcut.process.gate.notePlaceholder')"
           />
         </div>
@@ -501,6 +503,7 @@ async function handleDecision(id: string, decision: 'approved' | 'revise' | 'rej
             v-model="artifactDraft"
             :rows="14"
             size="sm"
+            :aria-label="t('tmcut.process.artifactLabel')"
             :placeholder="t('tmcut.process.editor.placeholder')"
             class="w-full font-mono text-[11px]"
           />

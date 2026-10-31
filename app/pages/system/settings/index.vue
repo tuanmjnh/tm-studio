@@ -49,6 +49,7 @@ useHead({ title: computed(() => t('settings.appearance')) })
                 :items="languageItems"
                 size="lg"
                 class="w-full sm:w-48"
+                :aria-label="t('settings.language')"
                 @update:model-value="onLanguageChange"
               />
             </div>

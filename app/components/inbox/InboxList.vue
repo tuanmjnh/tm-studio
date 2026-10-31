@@ -207,6 +207,7 @@ defineShortcuts({
         <UCheckbox
           :model-value="isAllSelected"
           :indeterminate="isIndeterminate"
+          :aria-label="t('inbox.selectAll')"
           @update:model-value="toggleSelectAll"
         />
         <UBadge
@@ -270,7 +271,12 @@ defineShortcuts({
       <!-- Normal Row: Master Checkbox + Quick Filter Tabs + Refresh -->
       <div v-else class="flex items-center justify-between gap-1 pt-0.5">
         <div class="flex items-center gap-1.5 min-w-0">
-          <UCheckbox :model-value="false" :disabled="!messages.length" @update:model-value="toggleSelectAll" />
+          <UCheckbox
+            :model-value="false"
+            :disabled="!messages.length"
+            :aria-label="t('inbox.selectAll')"
+            @update:model-value="toggleSelectAll"
+          />
           <div class="flex items-center gap-1">
             <button
               v-for="tab in filterTabs"
@@ -334,7 +340,7 @@ defineShortcuts({
         <div class="flex items-start gap-2.5">
           <!-- Selection Checkbox -->
           <div class="pt-0.5 shrink-0" @click.stop>
-            <UCheckbox :model-value="selectedIds.includes(mail.id)" @update:model-value="toggleSelectItem(mail.id)" />
+            <UCheckbox :model-value="selectedIds.includes(mail.id)" :aria-label="t('inbox.selectMessage')" @update:model-value="toggleSelectItem(mail.id)" />
           </div>
 
           <!-- Star Button -->

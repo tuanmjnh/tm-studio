@@ -263,7 +263,12 @@ const actionsClass = computed(() => {
 
       <!-- Checkbox Column -->
       <div v-if="selectable" class="w-8 shrink-0 flex items-center justify-center mr-2">
-        <UCheckbox :model-value="isAllSelected" :indeterminate="isIndeterminate" @update:model-value="toggleAll" />
+        <UCheckbox
+          :model-value="isAllSelected"
+          :indeterminate="isIndeterminate"
+          :aria-label="t('common.selectAll')"
+          @update:model-value="toggleAll"
+        />
       </div>
 
       <!-- Columns -->
@@ -385,7 +390,11 @@ const actionsClass = computed(() => {
                 <div v-if="viewMode === 'list'" class="hidden lg:flex items-center py-3 h-full w-full overflow-hidden">
                   <!-- Checkbox (Moved here for alignment) -->
                   <div v-if="selectable" class="w-8 shrink-0 flex items-center justify-center mr-2" @click.stop>
-                    <UCheckbox :model-value="isSelected(item)" @update:model-value="(val) => toggleSelect(item, val)" />
+                    <UCheckbox
+                      :model-value="isSelected(item)"
+                      :aria-label="t('common.selectRow')"
+                      @update:model-value="(val) => toggleSelect(item, val)"
+                    />
                   </div>
 
                   <!-- Columns Loop -->

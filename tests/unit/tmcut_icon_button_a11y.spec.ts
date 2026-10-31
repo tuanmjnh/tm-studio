@@ -98,3 +98,49 @@ describe('icon-only buttons expose an accessible name', () => {
     assert.ok(sample, 'the scanner must see buttons in the editor page')
   })
 })
+
+/** Open/close balance of a tag pair before `index`, i.e. "are we inside it?". */
+function inside(src: string, index: number, open: RegExp, close: string): boolean {
+  const before = src.slice(0, index)
+  return (before.match(open) || []).length > (before.match(new RegExp(close, 'g')) || []).length
+}
+
+const CONTROLS = /<(UInput|USelect|USelectMenu|UTextarea|USwitch|UCheckbox|URadioGroup)\b/g
+
+describe('form controls expose an accessible name', () => {
+  const controls: { at: string, tag: string, named: boolean }[] = []
+  for (const file of files) {
+    const src = readFileSync(join(ROOT, file), 'utf8')
+    for (const match of src.matchAll(CONTROLS)) {
+      const end = tagEnd(src, match.index + match[0].length)
+      if (end === -1) continue
+      const tag = src.slice(match.index, end + 1)
+      const selfClosing = tag.trimEnd().endsWith('/>')
+      let slot = ''
+      if (!selfClosing) {
+        const close = src.indexOf(`</${match[1]}>`, end)
+        slot = close === -1 ? '' : src.slice(end + 1, close).trim()
+      }
+      // A visible label can come from four places: an attribute on the control,
+      // an enclosing UFormField, a native <label> wrapper, or slot text.
+      const byAttribute = /\s(aria-label|:aria-label|aria-labelledby|:aria-labelledby|label|:label|id|:id)=/.test(tag)
+      const byFormField = inside(src, match.index, /<UFormField\b/g, '</UFormField>')
+      const byNativeLabel = inside(src, match.index, /<label\b/g, '</label>')
+      const bySlot = slot.length > 0
+      const line = src.slice(0, match.index).split('\n').length
+      controls.push({ at: `${file}:${line}`, tag, named: byAttribute || byFormField || byNativeLabel || bySlot })
+    }
+  }
+
+  it('scans a meaningful surface (the guard is not vacuous)', () => {
+    assert.ok(controls.length > 150, `expected many form controls, found ${controls.length}`)
+    assert.ok(controls.filter(c => c.named).length > 120, 'expected most controls to be named')
+  })
+
+  it('every form control has a label, aria-label, or UFormField wrapper', () => {
+    const missing = controls
+      .filter(control => !control.named)
+      .map(control => `${control.at} ${control.tag.replace(/\s+/g, ' ').slice(0, 110)}`)
+    assert.deepEqual(missing, [], `form controls without an accessible name:\n${missing.join('\n')}`)
+  })
+})

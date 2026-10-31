@@ -61,8 +61,14 @@ const cleanedSrc = computed(() => {
         v-if="isSpecialImage(cleanedSrc)"
         :src="ensureForwardSlash(cleanedSrc)"
         :class="['w-full h-full object-contain', innerClass]"
+        alt=""
       >
-      <NuxtImg v-else :src="cleanedSrc" :class="['w-full h-full object-contain', innerClass]" />
+      <NuxtImg
+        v-else
+        :src="cleanedSrc"
+        :class="['w-full h-full object-contain', innerClass]"
+        alt=""
+      />
     </template>
 
     <template v-else>

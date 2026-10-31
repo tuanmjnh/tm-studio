@@ -168,7 +168,7 @@ async function onSubmit(event: FormSubmitEvent<Record<string, unknown>>) {
           v-if="state.screenshot"
           class="relative w-full max-h-40 rounded-lg overflow-hidden border border-default bg-muted/10 flex items-center justify-center p-1"
         >
-          <img :src="state.screenshot" class="max-w-full max-h-36 object-contain rounded">
+          <img :src="state.screenshot" :alt="t('feedback.screenshotPreview')" class="max-w-full max-h-36 object-contain rounded">
           <UButton
             icon="i-lucide-x"
             size="xs"
