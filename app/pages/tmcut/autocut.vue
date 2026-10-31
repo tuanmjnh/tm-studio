@@ -1066,6 +1066,8 @@ async function handleAccept() {
                         :src="segmentThumbs[index] || sourceThumbUrl"
                         class="w-full h-full object-cover"
                         alt=""
+                        loading="lazy"
+                        decoding="async"
                       >
                       <UIcon v-else name="i-lucide-film" class="w-6 h-6 text-dimmed absolute inset-0 m-auto" />
                       <span class="absolute bottom-1 right-1 px-1 rounded bg-black/70 text-white font-mono text-[9px]">

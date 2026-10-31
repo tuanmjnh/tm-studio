@@ -1646,7 +1646,9 @@ onUnmounted(() => {
           :src="isCurrentClipImage ? currentMediaSrc : undefined"
           class="relative w-full h-full pointer-events-none object-contain select-none"
           :style="{ ...videoObjectStyle, ...videoTransformStyle }"
+          alt=""
           draggable="false"
+          decoding="async"
           @error="onMediaError('image')"
         >
 

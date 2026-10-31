@@ -167,3 +167,6 @@ tm-studio(4003)  TMCut standalone (repo này): editor · template · autocut · 
   - Nhóm 4 công cụ AI (Scriptwriter, Edit Plan, Agent, Audio orchestration) thống nhất `primary/soft` (violet) làm "intelligence family"; trước đó Edit/Agent/Audio dùng `secondary` (indigo) lẫn với primary.
   - Save chuyển `primary/soft` → `neutral/soft` để **Export** là hành động primary duy nhất (solid) khi mắt quét thanh công cụ; thêm divider dọc `bg-accented` trước nhóm AI ở breakpoint ≥2xl.
   - Gate: eslint editor.vue PASS; `nuxt typecheck` exit 0.
+- **2026-10-31** — **UI-3 (slice 2): ảnh thumbnail có ngữ nghĩa + tải lười.** Rà toàn bộ `<img>` trong TMCut:
+  - Media bin (2 chỗ), poster export, still layer của preview, cover project home, thumbnail stock và autocut segment: thêm `alt=""` (ảnh trang trí — tên asset đã nằm ở nhãn/title xung quanh) để screen reader không đọc URL ảnh; thêm `decoding="async"` cho các ảnh đang thiếu; bổ sung `loading="lazy"` cho cover project và thumbnail autocut (media bin/stock đã có sẵn).
+  - Không đổi bố cục/màu; gate: eslint 5 file PASS, `nuxt typecheck` exit 0.

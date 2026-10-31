@@ -1726,9 +1726,11 @@ function handleEditorKeydown(e: KeyboardEvent) {
                     <img
                       v-if="assetKind(asset) !== 'audio' && asset.thumbPath && !thumbErrors[asset.id]"
                       :src="getThumbUrl(asset)"
+                      alt=""
                       draggable="false"
                       class="absolute inset-0 w-full h-full object-cover"
                       loading="lazy"
+                      decoding="async"
                       @error="thumbErrors[asset.id] = true"
                     >
                     <div
@@ -1908,9 +1910,11 @@ function handleEditorKeydown(e: KeyboardEvent) {
                     <img
                       v-if="assetKind(asset) !== 'audio' && asset.thumbPath && !thumbErrors[asset.id]"
                       :src="getThumbUrl(asset)"
+                      alt=""
                       draggable="false"
                       class="absolute inset-0 w-full h-full object-cover"
                       loading="lazy"
+                      decoding="async"
                       @error="thumbErrors[asset.id] = true"
                     >
                     <div

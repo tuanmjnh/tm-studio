@@ -225,6 +225,7 @@ function durationLabel(item: StockItem): string {
             :alt="item.title"
             class="w-full h-full object-cover"
             loading="lazy"
+            decoding="async"
           >
           <span
             v-if="item.kind !== 'image'"

@@ -347,7 +347,14 @@ function cardMenuItems(project: TmcutProject): DropdownMenuItem[] {
             @click="router.push(`/tmcut/editor?project=${project.id}`)"
           >
             <div class="aspect-video bg-muted relative overflow-hidden">
-              <img v-if="project.cover" :src="project.cover" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105">
+              <img
+                v-if="project.cover"
+                :src="project.cover"
+                alt=""
+                loading="lazy"
+                decoding="async"
+                class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+              >
               <UIcon v-else name="i-lucide-film" class="w-12 h-12 text-dimmed absolute inset-0 m-auto" />
 
               <!-- Badges -->
