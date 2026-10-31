@@ -122,6 +122,80 @@ const voiceStudioOpen = ref(false)
 const showSnapshotModal = ref(false)
 const showCustomCanvasModal = ref(false)
 const compactPanel = ref<'media' | 'inspector' | null>(null)
+
+// Desktop dock sizes persist per browser; mobile overlays ignore them.
+type LayoutPanel = 'media' | 'inspector' | 'timeline'
+const LAYOUT_DEFAULTS: Record<LayoutPanel, number> = { media: 384, inspector: 288, timeline: 288 }
+const LAYOUT_LIMITS: Record<LayoutPanel, readonly [number, number]> = {
+  media: [264, 560],
+  inspector: [264, 480],
+  timeline: [200, 560]
+}
+const mediaWidth = ref(LAYOUT_DEFAULTS.media)
+const inspectorWidth = ref(LAYOUT_DEFAULTS.inspector)
+const timelineHeight = ref(LAYOUT_DEFAULTS.timeline)
+const layoutVars = computed(() => ({
+  '--tmcut-media-w': `${mediaWidth.value}px`,
+  '--tmcut-inspector-w': `${inspectorWidth.value}px`
+}))
+
+function layoutValue(panel: LayoutPanel) {
+  if (panel === 'media') return mediaWidth.value
+  if (panel === 'inspector') return inspectorWidth.value
+  return timelineHeight.value
+}
+
+function setLayout(panel: LayoutPanel, value: number) {
+  const [min, max] = LAYOUT_LIMITS[panel]
+  const upper = panel === 'timeline' ? Math.min(max, Math.round(window.innerHeight * 0.55)) : max
+  const next = Math.round(Math.min(upper, Math.max(min, value)))
+  if (panel === 'media') mediaWidth.value = next
+  else if (panel === 'inspector') inspectorWidth.value = next
+  else timelineHeight.value = next
+}
+
+function persistLayout(panel: LayoutPanel) {
+  localStorage.setItem(`tmcut:layout:${panel}`, String(layoutValue(panel)))
+}
+
+function startLayoutResize(panel: LayoutPanel, event: PointerEvent) {
+  event.preventDefault()
+  const startX = event.clientX
+  const startY = event.clientY
+  const startValue = layoutValue(panel)
+  const move = (e: PointerEvent) => {
+    const delta = panel === 'timeline' ? startY - e.clientY : panel === 'inspector' ? startX - e.clientX : e.clientX - startX
+    setLayout(panel, startValue + delta)
+  }
+  const finish = () => {
+    window.removeEventListener('pointermove', move)
+    window.removeEventListener('pointerup', finish)
+    persistLayout(panel)
+  }
+  window.addEventListener('pointermove', move)
+  window.addEventListener('pointerup', finish, { once: true })
+}
+
+function nudgeLayoutResize(panel: LayoutPanel, event: KeyboardEvent) {
+  const step = event.shiftKey ? 40 : 16
+  const grow = panel === 'timeline'
+    ? event.key === 'ArrowUp'
+    : event.key === (panel === 'inspector' ? 'ArrowLeft' : 'ArrowRight')
+  const shrink = panel === 'timeline'
+    ? event.key === 'ArrowDown'
+    : event.key === (panel === 'inspector' ? 'ArrowRight' : 'ArrowLeft')
+  if (!grow && !shrink) return
+  event.preventDefault()
+  event.stopPropagation()
+  setLayout(panel, layoutValue(panel) + (grow ? step : -step))
+  persistLayout(panel)
+}
+
+function resetLayout(panel: LayoutPanel) {
+  setLayout(panel, LAYOUT_DEFAULTS[panel])
+  persistLayout(panel)
+}
+
 const thumbErrors = ref<Record<string, boolean>>({})
 const waveformMap = ref<Record<string, number[]>>({})
 
@@ -749,6 +823,10 @@ async function handleDeleteSnapshot(ts: number) {
 
 onMounted(async () => {
   hasWebGPU.value = typeof navigator !== 'undefined' && 'gpu' in navigator
+  for (const panel of ['media', 'inspector', 'timeline'] as const) {
+    const stored = Number(localStorage.getItem(`tmcut:layout:${panel}`))
+    if (Number.isFinite(stored) && stored > 0) setLayout(panel, stored)
+  }
   window.addEventListener('keydown', handleEditorKeydown)
   await loadProject(projectId.value)
   refreshProjects()
@@ -1326,6 +1404,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
     <!-- Full viewport Workspace (flush p-0) -->
     <div
       class="flex-1 flex flex-col min-h-0 bg-muted dark:bg-studio-canvas text-highlighted overflow-hidden select-none"
+      :style="layoutVars"
     >
       <!-- Recovery banner -->
       <div
@@ -1359,7 +1438,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
              Whole panel is the external-drop target (roadmap G-2). -->
         <aside
           id="tmcut-media-panel"
-          class="@container absolute inset-y-0 left-0 z-20 w-[min(90%,22.5rem)] xl:static xl:w-[32%] xl:min-w-72 xl:max-w-140 border-r border-default bg-default flex-col shrink-0"
+          class="@container absolute inset-y-0 left-0 z-20 w-[min(90%,22.5rem)] xl:static xl:w-[var(--tmcut-media-w)] xl:min-w-66 xl:max-w-140 border-r border-default bg-default flex-col shrink-0"
           :class="[compactPanel === 'media' ? 'flex' : 'hidden xl:flex', dropActive ? 'ring-2 ring-primary/60' : '']"
           @dragenter="onMediaPanelDragEnter"
           @dragover="onMediaPanelDragOver"
@@ -2031,6 +2110,20 @@ function handleEditorKeydown(e: KeyboardEvent) {
           </div>
         </aside>
 
+        <!-- Media dock resize handle (desktop only) -->
+        <div
+          class="hidden xl:flex w-1 shrink-0 cursor-col-resize group relative z-10"
+          role="separator"
+          aria-orientation="vertical"
+          :aria-label="t('tmcut.workspace.resizeMedia')"
+          tabindex="0"
+          @pointerdown="startLayoutResize('media', $event)"
+          @keydown="nudgeLayoutResize('media', $event)"
+          @dblclick="resetLayout('media')"
+        >
+          <span class="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-transparent group-hover:bg-primary/60 group-focus-visible:bg-primary transition-colors" />
+        </div>
+
         <!-- Center Player Preview (compact, CapCut-style). The column spans
              the whole center panel so the HUD and the transport deck stretch
              edge to edge; only the monitor inside the stage is fitted, so the
@@ -2043,10 +2136,24 @@ function handleEditorKeydown(e: KeyboardEvent) {
           </div>
         </main>
 
+        <!-- Inspector dock resize handle (desktop only) -->
+        <div
+          class="hidden xl:flex w-1 shrink-0 cursor-col-resize group relative z-10"
+          role="separator"
+          aria-orientation="vertical"
+          :aria-label="t('tmcut.workspace.resizeInspector')"
+          tabindex="0"
+          @pointerdown="startLayoutResize('inspector', $event)"
+          @keydown="nudgeLayoutResize('inspector', $event)"
+          @dblclick="resetLayout('inspector')"
+        >
+          <span class="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-transparent group-hover:bg-primary/60 group-focus-visible:bg-primary transition-colors" />
+        </div>
+
         <!-- Right Inspector Panel -->
         <aside
           id="tmcut-inspector-panel"
-          class="absolute inset-y-0 right-0 z-20 xl:static w-72 max-w-full border-l border-default bg-default flex-col overflow-y-auto p-4 shrink-0"
+          class="absolute inset-y-0 right-0 z-20 xl:static w-72 xl:w-[var(--tmcut-inspector-w)] max-w-full border-l border-default bg-default flex-col overflow-y-auto p-4 shrink-0"
           :class="compactPanel === 'inspector' ? 'flex' : 'hidden xl:flex'"
         >
           <div class="flex items-center justify-between gap-2 pb-2 border-b border-default mb-3">
@@ -2068,9 +2175,24 @@ function handleEditorKeydown(e: KeyboardEvent) {
         </aside>
       </div>
 
-      <!-- Bottom Timeline (h-72) -->
+      <!-- Timeline resize handle -->
       <div
-        class="h-72 border-t border-default bg-default flex flex-col shrink-0 z-10"
+        class="h-1.5 shrink-0 cursor-row-resize group relative z-20"
+        role="separator"
+        aria-orientation="horizontal"
+        :aria-label="t('tmcut.workspace.resizeTimeline')"
+        tabindex="0"
+        @pointerdown="startLayoutResize('timeline', $event)"
+        @keydown="nudgeLayoutResize('timeline', $event)"
+        @dblclick="resetLayout('timeline')"
+      >
+        <span class="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-transparent group-hover:bg-primary/60 group-focus-visible:bg-primary transition-colors" />
+      </div>
+
+      <!-- Bottom Timeline (resizable, persisted) -->
+      <div
+        class="border-t border-default bg-default flex flex-col shrink-0 z-10 max-h-[55vh]"
+        :style="{ height: `${timelineHeight}px` }"
       >
         <TmcutTimeline
           @open-export="showExportModal = true"

@@ -156,3 +156,9 @@ tm-studio(4003)  TMCut standalone (repo này): editor · template · autocut · 
   - Editor top bar: nút **Export** chuyển từ `secondary/soft` → `primary/solid` để thành CTA duy nhất nổi bật; các nút AI/agent/audio giữ `secondary/soft`.
   - Giữ nguyên màu cố ý: code block/textarea HTML (`bg-neutral-900/950` + emerald text), thumbnail FX, status dot (đỏ/vàng/xanh), ruler tick `bg-neutral-500` — đây là màu dữ liệu, không phải surface.
   - Không đổi logic/script; diff thuần class (949 dòng đổi, cân bằng +/−). Lint các file chạm không phát sinh lỗi mới (TmcutTimeline 276 lỗi và `system/ai-keys` 603 lỗi là debt có sẵn, số lượng y hệt HEAD); `nuxt typecheck` exit 0; `nuxt build` PASS 1m21s; CSS build chứa đủ `.bg-muted`, `.text-dimmed`, `.border-accented`, token `studio-canvas`.
+- **2026-10-31** — **UI-2 (slice 2): dock resizing + persistence.** Editor workspace giờ chỉnh được kích thước như NLE chuyên nghiệp:
+  - Ba divider có thể kéo: media panel (264–560px), inspector (264–480px), timeline cao (200–560px, tự chặn 55% viewport). Mỗi divider là `role="separator"` + `tabindex="0"`: kéo bằng chuột/pen, chỉnh bằng Arrow khi focus (Shift = bước 40px), double-click để reset; `stopPropagation` để không kích hoạt phím tắt seek toàn cục.
+  - Kích thước lưu vào `localStorage` (`tmcut:layout:{media|inspector|timeline}`), đọc lại trong `onMounted` để tránh lệch hydration; panel mobile dạng overlay giữ nguyên kích thước cũ, timeline có `max-h-[55vh]` bảo vệ viewport nhỏ.
+  - Dùng CSS variable (`--tmcut-media-w`, `--tmcut-inspector-w`) trên workspace root để đổi kích thước không phải re-render component con.
+  - i18n: thêm `tmcut.workspace.resizeMedia|resizeInspector|resizeTimeline` (en + vi) cho aria-label.
+  - Gate: eslint editor.vue PASS; `nuxt typecheck` exit 0; `nuxt build` PASS 1m19s; CSS build sinh đúng `max-height:55vh` và `--tmcut-*-w`.

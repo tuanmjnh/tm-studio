@@ -1257,7 +1257,10 @@
       "shortcutsBtn": "Phím tắt",
       "hardwareStatus": "Phần cứng phát hiện được & engine xuất video",
       "clipCount": "{count} clip",
-      "previewOnly": "Xem trước web"
+      "previewOnly": "Xem trước web",
+      "resizeMedia": "Đổi rộng panel media",
+      "resizeInspector": "Đổi rộng panel thuộc tính",
+      "resizeTimeline": "Đổi cao timeline"
     },
     "home": {
       "heroEyebrow": "Không gian sáng tạo TMCut",

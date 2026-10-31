@@ -1257,7 +1257,10 @@
       "shortcutsBtn": "Shortcuts",
       "hardwareStatus": "Detected hardware & export engine",
       "clipCount": "{count} clips",
-      "previewOnly": "Web preview"
+      "previewOnly": "Web preview",
+      "resizeMedia": "Resize media panel",
+      "resizeInspector": "Resize inspector panel",
+      "resizeTimeline": "Resize timeline"
     },
     "home": {
       "heroEyebrow": "TMCut creative space",
