@@ -17,6 +17,7 @@ export interface User {
   username?: string
   name: string
   avatar?: string
+  avatarUrl?: string
   role: string
   password?: string
   platform: LoginPlatform

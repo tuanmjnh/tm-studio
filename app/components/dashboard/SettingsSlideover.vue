@@ -120,7 +120,7 @@ function navigateAndClose(to: string) {
             color="primary"
             block
             class="justify-start text-xs rounded-xl"
-            @click="navigateAndClose('/system')"
+            @click="navigateAndClose('/system/settings')"
           >
             {{ $t('settings.openFullSettings') }}
           </UButton>

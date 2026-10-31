@@ -6,6 +6,7 @@ interface HubUserData {
   email: string
   name: string
   username?: string
+  avatarUrl?: string
   roles?: string[]
   permissions?: string[]
   platform?: LoginPlatform
@@ -31,6 +32,7 @@ interface HubMeData {
   email: string
   name: string
   username?: string
+  avatarUrl?: string
   roles?: string[]
   permissions?: string[]
   allowedRoutes?: string[]
@@ -103,6 +105,7 @@ export const useAuth = () => {
       email: data.user.email,
       name: data.user.name,
       username: data.user.username,
+      avatarUrl: data.user.avatarUrl,
       role: data.user.roles?.[0] || 'user',
       permissions: data.user.permissions || [],
       platform: data.user.platform || 'web',
@@ -475,6 +478,7 @@ export const useAuth = () => {
         email: data.email,
         name: data.name,
         username: data.username,
+        avatarUrl: data.avatarUrl,
         role: data.roles?.[0] || 'user',
         permissions: data.permissions || [],
         platform: data.platform || 'web',

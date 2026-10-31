@@ -17,28 +17,20 @@ const profileForm = reactive({
 watch(() => auth.user.value, (u) => {
   if (u) {
     profileForm.name = u.name || ''
-    profileForm.avatarUrl = (u as any).avatarUrl || ''
+    profileForm.avatarUrl = u.avatarUrl || ''
   }
 }, { immediate: true })
 
 const isAvatarPickerOpen = ref(false)
-const tempAvatarUrl = ref('')
+const tempAvatarUrl = ref<string | null>('')
 
 const openAvatarPicker = () => {
-  tempAvatarUrl.value = profileForm.avatarUrl
+  tempAvatarUrl.value = profileForm.avatarUrl || null
   isAvatarPickerOpen.value = true
 }
 
-const onAvatarPicked = (val: Cloudinary.IFileAttach | Cloudinary.IFileAttach[] | null) => {
-  if (Array.isArray(val)) {
-    if (val[0]) tempAvatarUrl.value = val[0].url || val[0].secure_url || ''
-    return
-  }
-  tempAvatarUrl.value = val?.url || val?.secure_url || ''
-}
-
 const applyAvatar = () => {
-  profileForm.avatarUrl = tempAvatarUrl.value
+  profileForm.avatarUrl = tempAvatarUrl.value ?? ''
   isAvatarPickerOpen.value = false
 }
 
@@ -169,13 +161,10 @@ useHead({ title: computed(() => t('profile.title')) })
       :ui="{ body: 'min-h-[300px]', footer: 'justify-end' }"
     >
       <template #body>
-        <LazyMediaGallery
-          :model-value="tempAvatarUrl || null"
-          :multiple="false"
-          size="200px"
-          accept="image/*"
+        <LazyMediaAvatarPicker
+          v-model="tempAvatarUrl"
           folder="avatars"
-          @update:model-value="onAvatarPicked"
+          :alt="profileForm.name"
         />
       </template>
       <template #footer>
