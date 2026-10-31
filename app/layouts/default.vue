@@ -8,22 +8,6 @@ const nav = useNavMenu()
 const appUpdater = useAppUpdater()
 const open = ref(false)
 
-// The editor is a full-screen NLE: start with the shell sidebar collapsed so
-// the canvas gets the width, while the in-app toggle still lets users pin it.
-// The stored sidebar cookie outranks the model on first paint, so the mount
-// path also drives the same runtime hook the built-in toggle uses.
-const isEditorRoute = (path: string) => path.startsWith('/tmcut/editor')
-const sidebarCollapsed = ref(isEditorRoute(route.path))
-const nuxtApp = useNuxtApp()
-
-onMounted(() => {
-  nuxtApp.hooks.callHook('dashboard:sidebar:collapse', isEditorRoute(route.path))
-})
-
-watch(() => route.path, (path) => {
-  sidebarCollapsed.value = isEditorRoute(path)
-})
-
 onMounted(() => {
   if (appUpdater.isElectron.value) {
     appUpdater.checkForUpdates(true)
@@ -56,7 +40,6 @@ const groups = computed<CommandPaletteGroup[]>(() => [{
     <UDashboardSidebar
       id="default"
       v-model:open="open"
-      v-model:collapsed="sidebarCollapsed"
       collapsible
       resizable
       class="bg-elevated/25"

@@ -20,6 +20,8 @@ import { effectiveAssetKind } from '~/utils/tmcut/assetKind'
 import { parseTemplateFile } from '~/utils/tmcut/templateIo'
 import type { TmcutTrack } from '~/composables/useTmcutProject'
 
+definePageMeta({ layout: 'studio' })
+
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
@@ -1193,7 +1195,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
   >
     <template #left>
       <div class="flex min-w-0 items-center gap-2">
-        <UDashboardSidebarCollapse />
+        <TmcutNavPopover />
         <UButton
           to="/tmcut"
           icon="i-lucide-arrow-left"

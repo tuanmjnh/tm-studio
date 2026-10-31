@@ -209,6 +209,15 @@
     "hub_integration": "TM Hub Integration",
     "content": "Content & Docs"
   },
+  "studio": {
+    "nav": {
+      "openMenu": "Open studio navigation",
+      "home": "Home",
+      "workspace": "TMCut workspace",
+      "app": "App",
+      "toggleTheme": "Toggle light / dark"
+    }
+  },
   "tmcut": {
     "title": "TMCut Video Studio",
     "subtitle": "Professional desktop video editor inspired by CapCut Desktop",

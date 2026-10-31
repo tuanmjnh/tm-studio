@@ -209,6 +209,15 @@
     "hub_integration": "Kết Nối TM Hub",
     "content": "Nội dung & Tài liệu"
   },
+  "studio": {
+    "nav": {
+      "openMenu": "Mở menu điều hướng TMCut Studio",
+      "home": "Trang chủ",
+      "workspace": "Không gian TMCut",
+      "app": "Ứng dụng",
+      "toggleTheme": "Chuyển đổi giao diện Sáng / Tối"
+    }
+  },
   "tmcut": {
     "title": "Trình tạo video TMCut",
     "subtitle": "Trình chỉnh sửa và biên tập video chuyên nghiệp kiểu CapCut Desktop",

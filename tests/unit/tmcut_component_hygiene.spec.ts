@@ -141,9 +141,11 @@ describe('editor header keeps navigation and accessible project naming', () => {
   const editor = read('app/pages/tmcut/editor.vue')
   const leftSlot = editor.match(/<template #left>([\s\S]*?)<\/template>/)?.[1] ?? ''
 
-  it('renders back navigation and sidebar collapse inside the active left slot', () => {
+  it('renders back navigation and the studio nav popover inside the active left slot', () => {
     assert.match(leftSlot, /<UButton\b[^>]*\bto="\/tmcut"/)
-    assert.match(leftSlot, /<UDashboardSidebarCollapse\b/)
+    assert.match(leftSlot, /<TmcutNavPopover\b/)
+    // The editor runs on the full-bleed studio layout, which has no shell sidebar to collapse.
+    assert.doesNotMatch(leftSlot, /<UDashboardSidebarCollapse\b/)
   })
 
   it('labels the editable project name', () => {
