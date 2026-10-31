@@ -139,6 +139,9 @@ describe('TMCut button delegates navigation and state to Nuxt UI', () => {
 
 describe('editor header keeps navigation and accessible project naming', () => {
   const editor = read('app/pages/tmcut/editor.vue')
+  // The right-side controls live in the extracted toolbar; the panels they
+  // toggle stay in the page, so both halves of the contract are still checked.
+  const toolbar = read('app/components/tmcut/TmcutEditorToolbar.vue')
   const leftSlot = editor.match(/<template #left>([\s\S]*?)<\/template>/)?.[1] ?? ''
 
   it('renders back navigation and the studio nav popover inside the active left slot', () => {
@@ -156,9 +159,9 @@ describe('editor header keeps navigation and accessible project naming', () => {
 
   it('keeps collapsed workspace panels reachable through labelled controls', () => {
     for (const panel of ['media', 'inspector']) {
-      assert.ok(editor.includes(`aria-controls="tmcut-${panel}-panel"`), `${panel} has an accessible toggle`)
+      assert.ok(toolbar.includes(`aria-controls="tmcut-${panel}-panel"`), `${panel} has an accessible toggle`)
       assert.ok(editor.includes(`id="tmcut-${panel}-panel"`), `${panel} has a matching panel`)
-      assert.ok(editor.includes(`:aria-expanded="compactPanel === '${panel}'"`))
+      assert.ok(toolbar.includes(`:aria-expanded="compactPanel === '${panel}'"`))
     }
   })
 })

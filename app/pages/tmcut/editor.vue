@@ -6,6 +6,7 @@ import { useTmcutMedia } from '~/composables/useTmcutMedia'
 import { useTmcutRecorder } from '~/composables/useTmcutRecorder'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { useTmcutUiPrefs } from '~/composables/useTmcutUiPrefs'
+import { useTmcutEditorLayout } from '~/composables/useTmcutEditorLayout'
 import { useAgentProposalCount } from '~/composables/useTmcutAgentTools'
 import { useMcpRendererBridge } from '~/composables/useMcpRendererBridge'
 import { useFileSystem } from '~/composables/useFileSystem'
@@ -126,77 +127,8 @@ const showCustomCanvasModal = ref(false)
 const compactPanel = ref<'media' | 'inspector' | null>(null)
 
 // Desktop dock sizes persist per browser; mobile overlays ignore them.
-type LayoutPanel = 'media' | 'inspector' | 'timeline'
-const LAYOUT_DEFAULTS: Record<LayoutPanel, number> = { media: 384, inspector: 288, timeline: 288 }
-const LAYOUT_LIMITS: Record<LayoutPanel, readonly [number, number]> = {
-  media: [264, 560],
-  inspector: [264, 480],
-  timeline: [200, 560]
-}
-const mediaWidth = ref(LAYOUT_DEFAULTS.media)
-const inspectorWidth = ref(LAYOUT_DEFAULTS.inspector)
-const timelineHeight = ref(LAYOUT_DEFAULTS.timeline)
-const layoutVars = computed(() => ({
-  '--tmcut-media-w': `${mediaWidth.value}px`,
-  '--tmcut-inspector-w': `${inspectorWidth.value}px`
-}))
-
-function layoutValue(panel: LayoutPanel) {
-  if (panel === 'media') return mediaWidth.value
-  if (panel === 'inspector') return inspectorWidth.value
-  return timelineHeight.value
-}
-
-function setLayout(panel: LayoutPanel, value: number) {
-  const [min, max] = LAYOUT_LIMITS[panel]
-  const upper = panel === 'timeline' ? Math.min(max, Math.round(window.innerHeight * 0.55)) : max
-  const next = Math.round(Math.min(upper, Math.max(min, value)))
-  if (panel === 'media') mediaWidth.value = next
-  else if (panel === 'inspector') inspectorWidth.value = next
-  else timelineHeight.value = next
-}
-
-function persistLayout(panel: LayoutPanel) {
-  localStorage.setItem(`tmcut:layout:${panel}`, String(layoutValue(panel)))
-}
-
-function startLayoutResize(panel: LayoutPanel, event: PointerEvent) {
-  event.preventDefault()
-  const startX = event.clientX
-  const startY = event.clientY
-  const startValue = layoutValue(panel)
-  const move = (e: PointerEvent) => {
-    const delta = panel === 'timeline' ? startY - e.clientY : panel === 'inspector' ? startX - e.clientX : e.clientX - startX
-    setLayout(panel, startValue + delta)
-  }
-  const finish = () => {
-    window.removeEventListener('pointermove', move)
-    window.removeEventListener('pointerup', finish)
-    persistLayout(panel)
-  }
-  window.addEventListener('pointermove', move)
-  window.addEventListener('pointerup', finish, { once: true })
-}
-
-function nudgeLayoutResize(panel: LayoutPanel, event: KeyboardEvent) {
-  const step = event.shiftKey ? 40 : 16
-  const grow = panel === 'timeline'
-    ? event.key === 'ArrowUp'
-    : event.key === (panel === 'inspector' ? 'ArrowLeft' : 'ArrowRight')
-  const shrink = panel === 'timeline'
-    ? event.key === 'ArrowDown'
-    : event.key === (panel === 'inspector' ? 'ArrowRight' : 'ArrowLeft')
-  if (!grow && !shrink) return
-  event.preventDefault()
-  event.stopPropagation()
-  setLayout(panel, layoutValue(panel) + (grow ? step : -step))
-  persistLayout(panel)
-}
-
-function resetLayout(panel: LayoutPanel) {
-  setLayout(panel, LAYOUT_DEFAULTS[panel])
-  persistLayout(panel)
-}
+// The resize handles read the same refs through the shared composable.
+const { layoutVars, timelineHeight, hydrateLayout } = useTmcutEditorLayout()
 
 const thumbErrors = ref<Record<string, boolean>>({})
 const waveformMap = ref<Record<string, number[]>>({})
@@ -212,6 +144,14 @@ const saveLabel = computed(() => {
   if (saveStatus.value === 'saved') return t('tmcut.save.saved')
   if (saveStatus.value === 'error') return t('tmcut.save.error')
   return ''
+})
+
+const staleRevision = computed(() => revisionAtLoad.value !== null && currentRevision() > revisionAtLoad.value)
+
+const statusCanvasLabel = computed(() => {
+  const canvas = currentProject.value?.canvas
+  if (!canvas) return null
+  return `${canvas.width}x${canvas.height} · ${canvasFpsValue(canvas)}fps`
 })
 
 // Direct file preview state
@@ -825,10 +765,7 @@ async function handleDeleteSnapshot(ts: number) {
 
 onMounted(async () => {
   hasWebGPU.value = typeof navigator !== 'undefined' && 'gpu' in navigator
-  for (const panel of ['media', 'inspector', 'timeline'] as const) {
-    const stored = Number(localStorage.getItem(`tmcut:layout:${panel}`))
-    if (Number.isFinite(stored) && stored > 0) setLayout(panel, stored)
-  }
+  hydrateLayout()
   window.addEventListener('keydown', handleEditorKeydown)
   await loadProject(projectId.value)
   refreshProjects()
@@ -877,6 +814,12 @@ const currentRatioLabel = computed(() => {
   if (!currentProject.value?.canvas) return ''
   const { width, height } = currentProject.value.canvas
   return ratioLabel(width, height)
+})
+
+const canvasLabel = computed(() => {
+  const canvas = currentProject.value?.canvas
+  if (!canvas) return ''
+  return `${currentRatioLabel.value} (${canvasFpsValue(canvas)}fps)`
 })
 
 function applyCanvasPreset(preset: { ratio: string, width: number, height: number }) {
@@ -1218,194 +1161,28 @@ function handleEditorKeydown(e: KeyboardEvent) {
     </template>
 
     <template #right>
-      <UButton
-        class="xl:hidden"
-        icon="i-lucide-library"
-        size="sm"
-        variant="ghost"
-        color="neutral"
-        :aria-label="t('tmcut.media.library')"
-        aria-controls="tmcut-media-panel"
-        :aria-expanded="compactPanel === 'media'"
-        @click="compactPanel = compactPanel === 'media' ? null : 'media'"
+      <TmcutEditorToolbar
+        :compact-panel="compactPanel"
+        :has-canvas="Boolean(currentProject?.canvas)"
+        :canvas-label="canvasLabel"
+        :canvas-menu-items="canvasMenuItems"
+        :save-label="saveLabel"
+        :save-status="saveStatus"
+        :last-saved-at="lastSavedAt"
+        :stale-revision="staleRevision"
+        :active-jobs-count="activeJobsCount"
+        :pending-agent-ops="pendingAgentOps"
+        :extra-actions="editorExtraActions"
+        @toggle-panel="compactPanel = compactPanel === $event ? null : $event"
+        @shortcuts="shortcutsOpen = true"
+        @queue="queueModalOpen = true"
+        @ai-script="aiScriptModalOpen = true"
+        @ai-editor="aiEditorModalOpen = true"
+        @agent="agentPanelOpen = true"
+        @audio="audioOrchestrationOpen = true"
+        @export="showExportModal = true"
+        @save="saveProject()"
       />
-      <UButton
-        class="xl:hidden"
-        icon="i-lucide-sliders-horizontal"
-        size="sm"
-        variant="ghost"
-        color="neutral"
-        :aria-label="t('tmcut.inspector')"
-        aria-controls="tmcut-inspector-panel"
-        :aria-expanded="compactPanel === 'inspector'"
-        @click="compactPanel = compactPanel === 'inspector' ? null : 'inspector'"
-      />
-      <!-- Shortcuts help (shared overlay with the timeline Ctrl+K / ?) -->
-      <UButton
-        icon="i-lucide-keyboard"
-        size="sm"
-        variant="soft"
-        color="neutral"
-        :title="t('tmcut.workspace.shortcutsBtn')"
-        @click="shortcutsOpen = true"
-      >
-        <span class="sr-only 2xl:not-sr-only">{{ t('tmcut.workspace.shortcutsBtn') }}</span>
-      </UButton>
-
-      <!-- Honest hardware status chip (WebGPU detection + export engine) -->
-      <!-- <span
-        class="hidden xl:inline-flex items-center gap-1 px-2 py-1 rounded-md bg-default border border-default text-[11px] font-mono text-muted"
-        :title="t('tmcut.workspace.hardwareStatus')">
-        <UIcon name="i-lucide-cpu" class="size-3 text-primary" />
-        {{ hardwareLabel }}
-      </span> -->
-
-      <!-- Aspect Ratio & Resolution Preset Dropdown -->
-      <UDropdownMenu :items="canvasMenuItems" :content="{ side: 'bottom', align: 'end' }">
-        <UButton
-          v-if="currentProject?.canvas"
-          icon="i-lucide-proportions"
-          size="sm"
-          variant="soft"
-          color="neutral"
-          :title="t('tmcut.canvasRatio')"
-        >
-          <span class="font-mono text-xs">
-            {{ currentRatioLabel }} ({{ canvasFpsValue(currentProject.canvas) }}fps)
-          </span>
-          <UIcon name="i-lucide-chevron-down" class="size-3 text-muted" />
-        </UButton>
-      </UDropdownMenu>
-
-      <span
-        v-if="saveLabel"
-        class="hidden lg:inline text-[11px] font-mono text-muted"
-        :class="saveStatus === 'error' ? 'text-red-400' : ''"
-        :title="lastSavedAt ? new Date(lastSavedAt).toLocaleString() : ''"
-      >
-        {{ saveLabel }}
-      </span>
-      <!-- R132: the project revision is the single honest answer to
-           "was this file written outside this session while I held it
-           open". It is advisory, not a lock — the app is still the
-           single writer. -->
-      <UButton
-        v-if="revisionAtLoad !== null && currentRevision() > revisionAtLoad"
-        icon="i-lucide-file-pen"
-        size="xs"
-        color="warning"
-        variant="soft"
-        :title="t('tmcut.save.staleRevision')"
-      >
-        <span class="hidden md:inline">{{ t('tmcut.save.staleRevision') }}</span>
-      </UButton>
-      <UButton
-        icon="i-lucide-save"
-        size="sm"
-        color="neutral"
-        variant="soft"
-        @click="saveProject()"
-      >
-        <span class="sr-only 2xl:not-sr-only">{{ t('global.save') }}</span>
-      </UButton>
-      <UButton
-        icon="i-lucide-list-checks"
-        size="sm"
-        variant="soft"
-        :color="activeJobsCount > 0 ? 'primary' : 'neutral'"
-        :title="t('tmcut.queue.title')"
-        @click="queueModalOpen = true"
-      >
-        <span class="sr-only 2xl:not-sr-only">{{ t('tmcut.queue.title') }}</span>
-        <UBadge
-          v-if="activeJobsCount > 0"
-          color="primary"
-          variant="solid"
-          size="xs"
-          class="ml-0.5"
-        >
-          {{ activeJobsCount }}
-        </UBadge>
-      </UButton>
-      <!-- AI tools share one violet "intelligence" family; Export stays the
-           only solid primary action in the bar. -->
-      <div class="hidden 2xl:block w-px h-5 shrink-0 bg-accented" />
-
-      <!-- AI Scriptwriter & Storyboard modal trigger (Alt+A) -->
-      <UButton
-        icon="i-lucide-sparkles"
-        size="sm"
-        variant="soft"
-        color="primary"
-        :title="t('tmcut.aiScript.buttonTooltip')"
-        @click="aiScriptModalOpen = true"
-      >
-        <span class="sr-only 2xl:not-sr-only">{{ t('tmcut.aiScript.buttonLabel') }}</span>
-      </UButton>
-
-      <!-- AI Edit Plan modal trigger (Alt+E) — proposes, core validates, user applies -->
-      <UButton
-        icon="i-lucide-wand-sparkles"
-        size="sm"
-        variant="soft"
-        color="primary"
-        :title="t('tmcut.aiEditor.buttonTooltip')"
-        @click="aiEditorModalOpen = true"
-      >
-        <span class="sr-only 2xl:not-sr-only">{{ t('tmcut.aiEditor.buttonLabel') }}</span>
-      </UButton>
-
-      <!-- Agent & voice commands (roadmap v1 §4): draft → review → apply as one undo group -->
-      <UButton
-        icon="i-lucide-terminal"
-        size="sm"
-        variant="soft"
-        color="primary"
-        :title="t('tmcut.agent.buttonTooltip')"
-        @click="agentPanelOpen = true"
-      >
-        <span class="sr-only 2xl:not-sr-only">{{ t('tmcut.agent.buttonLabel') }}</span>
-        <UBadge
-          v-if="pendingAgentOps > 0"
-          color="primary"
-          variant="solid"
-          size="xs"
-          class="ml-0.5"
-        >
-          {{ pendingAgentOps }}
-        </UBadge>
-      </UButton>
-
-      <!-- Audio orchestration (Phase 8 §24): music bed and SFX cue planner -->
-      <UButton
-        icon="i-lucide-music-2"
-        size="sm"
-        variant="soft"
-        color="primary"
-        :title="t('tmcut.audioOrchestration.buttonTooltip')"
-        @click="audioOrchestrationOpen = true"
-      >
-        <span class="sr-only 2xl:not-sr-only">{{ t('tmcut.audioOrchestration.buttonLabel') }}</span>
-      </UButton>
-
-      <UButton
-        icon="i-lucide-download"
-        size="sm"
-        color="primary"
-        variant="solid"
-        @click="showExportModal = true"
-      >
-        <span class="sr-only 2xl:not-sr-only">{{ t('tmcut.exportVideo') }}</span>
-      </UButton>
-      <UDropdownMenu :items="editorExtraActions" :content="{ side: 'bottom', align: 'end' }">
-        <UButton
-          icon="i-lucide-ellipsis-vertical"
-          color="neutral"
-          variant="soft"
-          size="sm"
-          :aria-label="t('common.more')"
-        />
-      </UDropdownMenu>
     </template>
 
     <!-- Full viewport Workspace (flush p-0) -->
@@ -2122,18 +1899,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
         </aside>
 
         <!-- Media dock resize handle (desktop only) -->
-        <div
-          class="hidden xl:flex w-1 shrink-0 cursor-col-resize group relative z-10"
-          role="separator"
-          aria-orientation="vertical"
-          :aria-label="t('tmcut.workspace.resizeMedia')"
-          tabindex="0"
-          @pointerdown="startLayoutResize('media', $event)"
-          @keydown="nudgeLayoutResize('media', $event)"
-          @dblclick="resetLayout('media')"
-        >
-          <span class="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-transparent group-hover:bg-primary/60 group-focus-visible:bg-primary transition-colors" />
-        </div>
+        <TmcutResizeHandle panel="media" :label="t('tmcut.workspace.resizeMedia')" />
 
         <!-- Center Player Preview (compact, CapCut-style). The column spans
              the whole center panel so the HUD and the transport deck stretch
@@ -2148,18 +1914,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
         </main>
 
         <!-- Inspector dock resize handle (desktop only) -->
-        <div
-          class="hidden xl:flex w-1 shrink-0 cursor-col-resize group relative z-10"
-          role="separator"
-          aria-orientation="vertical"
-          :aria-label="t('tmcut.workspace.resizeInspector')"
-          tabindex="0"
-          @pointerdown="startLayoutResize('inspector', $event)"
-          @keydown="nudgeLayoutResize('inspector', $event)"
-          @dblclick="resetLayout('inspector')"
-        >
-          <span class="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-transparent group-hover:bg-primary/60 group-focus-visible:bg-primary transition-colors" />
-        </div>
+        <TmcutResizeHandle panel="inspector" :label="t('tmcut.workspace.resizeInspector')" />
 
         <!-- Right Inspector Panel -->
         <aside
@@ -2187,18 +1942,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
       </div>
 
       <!-- Timeline resize handle -->
-      <div
-        class="h-1.5 shrink-0 cursor-row-resize group relative z-20"
-        role="separator"
-        aria-orientation="horizontal"
-        :aria-label="t('tmcut.workspace.resizeTimeline')"
-        tabindex="0"
-        @pointerdown="startLayoutResize('timeline', $event)"
-        @keydown="nudgeLayoutResize('timeline', $event)"
-        @dblclick="resetLayout('timeline')"
-      >
-        <span class="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-transparent group-hover:bg-primary/60 group-focus-visible:bg-primary transition-colors" />
-      </div>
+      <TmcutResizeHandle panel="timeline" :label="t('tmcut.workspace.resizeTimeline')" />
 
       <!-- Bottom Timeline (resizable, persisted) -->
       <div
@@ -2212,26 +1956,13 @@ function handleEditorKeydown(e: KeyboardEvent) {
       </div>
 
       <!-- Status footer (design #2): honest project/engine info -->
-      <div
-        class="h-7 shrink-0 border-t border-default bg-default/70 px-4 flex items-center justify-between text-[11px] text-muted"
-      >
-        <div class="flex items-center gap-3 min-w-0">
-          <span class="text-toned font-medium truncate">{{ currentProject?.name }}</span>
-          <span v-if="currentProject?.canvas" class="font-mono shrink-0">
-            {{ currentProject.canvas.width }}x{{ currentProject.canvas.height }} · {{
-              canvasFpsValue(currentProject.canvas)
-            }}fps
-          </span>
-          <span class="font-mono shrink-0">{{ formatTimecode(contentDuration) }}</span>
-        </div>
-        <div class="flex items-center gap-3 shrink-0">
-          <span>{{ t('tmcut.workspace.clipCount', { count: clipCount }) }}</span>
-          <span class="flex items-center gap-1">
-            <UIcon name="i-lucide-cpu" class="size-3" />
-            {{ hardwareLabel }}
-          </span>
-        </div>
-      </div>
+      <TmcutEditorStatusBar
+        :project-name="currentProject?.name"
+        :canvas-label="statusCanvasLabel"
+        :timecode="formatTimecode(contentDuration)"
+        :clip-count="clipCount"
+        :hardware-label="hardwareLabel"
+      />
 
       <!-- Export Modal -->
       <LazyTmcutExportModal v-model:open="showExportModal" />
