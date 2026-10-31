@@ -1,7 +1,6 @@
 import type { ApiResponse } from '~~/shared/contracts/common'
 import type { SystemInfoResponse, OpenDirectoryInput, StorageUsage } from '~~/shared/contracts/system.ipc'
 import type { EventBusContracts } from '~~/shared/contracts/events'
-import type { BrowserItem, AddCustomBrowserInput, TestExecutableInput, TestExecutableResult } from '~~/shared/contracts/browser.ipc'
 
 export interface TaskStatus {
   total: number
@@ -1133,13 +1132,6 @@ export interface ElectronAPI {
     getInfo(): Promise<ApiResponse<SystemInfoResponse>>
     openDirectory(input: OpenDirectoryInput): Promise<ApiResponse<void>>
     getStorageUsage(): Promise<ApiResponse<StorageUsage>>
-  }
-  browser: {
-    list(): Promise<ApiResponse<BrowserItem[]>>
-    detect(): Promise<ApiResponse<BrowserItem[]>>
-    addCustom(input: AddCustomBrowserInput): Promise<ApiResponse<BrowserItem>>
-    remove(id: string): Promise<ApiResponse<void>>
-    testExecutable(input: TestExecutableInput): Promise<ApiResponse<TestExecutableResult>>
   }
   events: {
     on<K extends keyof EventBusContracts>(

@@ -19,8 +19,8 @@ const content = ref<HubDocsContent>(HUB_DOCS_CONTENT)
 const reloading = ref(false)
 const { hubFetch, appId } = useHub()
 
-const appBaseName = computed(() => String(appId ?? '').split('_')[0] || 'tm-tools')
-const appDisplayId = computed(() => String(appId ?? '') || 'tm-tools')
+const appBaseName = computed(() => String(appId ?? '').split('_')[0] || 'tm-studio')
+const appDisplayId = computed(() => String(appId ?? '') || 'tm-studio')
 
 async function fetchDocsContent() {
   if (import.meta.server) return

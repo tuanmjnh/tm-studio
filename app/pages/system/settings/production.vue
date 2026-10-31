@@ -46,7 +46,7 @@ const clearCrashLog = () => {
 }
 
 const downloadSupportBundle = () => {
-  const bundle = recovery.generateSupportBundle('tm-tools')
+  const bundle = recovery.generateSupportBundle('tm-studio')
   const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')

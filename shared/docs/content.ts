@@ -1,7 +1,7 @@
 // SATELLITE COPY of tm-hub/shared/docs/content.ts — serves as frozen fallback when the Hub is unreachable. Refresh by copying the hub file.
 // =============================================================================
 //  Docs reference content — SINGLE SOURCE OF TRUTH for the /admin-system (docs)
-//  page across the TM platform (tm-hub + satellites tm-tools / tm-trading).
+//  page across the TM platform (tm-hub + satellites tm-studio / tm-trading).
 //
 //  Served to satellites via GET /api/v1/apps/:appId/docs, so a content update
 //  here is enough — satellite pages fetch at runtime and only fall back to
@@ -217,8 +217,8 @@ export const HUB_DOCS_CONTENT: HubDocsContent = {
       steps: [
         {
           title: '1. Ports & Ecosystem Architecture',
-          desc: 'TM Hub runs on Port 4000 as the central IAM & Control Plane. Satellite apps (TM Tools on 4002, TM Trading on 4001) connect via tm-hub-client.',
-          code: `# TM Hub Control Plane: http://localhost:4000\n# TM Tools Desktop:     http://localhost:4002\n# TM Trading Engine:    http://localhost:4001`
+          desc: 'TM Hub runs on Port 4000 as the central IAM & Control Plane. Satellite apps (TMCut Studio on 4003, TM Trading on 4001) connect via tm-hub-client.',
+          code: `# TM Hub Control Plane: http://localhost:4000\n# TMCut Studio:        http://localhost:4003\n# TM Trading Engine:    http://localhost:4001`
         },
         {
           title: '2. TM Hub Environment (.env)',
@@ -227,8 +227,8 @@ export const HUB_DOCS_CONTENT: HubDocsContent = {
         },
         {
           title: '3. Satellite Client Configuration (.env)',
-          desc: 'Configure satellite apps (e.g. tm-tools) to point to TM Hub with their registered appId and matching AUTH_JWT_SECRET.',
-          code: `# tm-tools/.env\nPORT=4002\nAUTH_PROVIDER=hub\nNUXT_PUBLIC_HUB_URL=http://localhost:4000\nNUXT_PUBLIC_HUB_APP_ID=tm-tools_bbx58v\nAUTH_JWT_SECRET=super-secure-shared-secret-key-32-chars-min\n\n# Video Generation (Runway Gen-3):\nRUNWAY_API_KEY=key_your_runway_api_key\nRUNWAY_BASE_URL=https://api.runwayml.com/v1`
+          desc: 'Configure satellite apps (e.g. tm-studio) to point to TM Hub with their registered appId and matching AUTH_JWT_SECRET.',
+          code: `# tm-studio/.env\nPORT=4003\nAUTH_PROVIDER=hub\nNUXT_PUBLIC_HUB_URL=http://localhost:4000\nNUXT_PUBLIC_HUB_APP_ID=tm-studio_749app\nAUTH_JWT_SECRET=super-secure-shared-secret-key-32-chars-min\n\n# AI relay secret issued per-app by tm-hub:\nNUXT_HUB_APP_SECRET=your-hub-app-secret\n\n# Optional local AI vault (Electron config.env):\nAI_PROVIDER=openai\nAI_BASE_URL=\nAI_API_KEY=\nAI_MODEL=`
         },
         {
           title: '4. Database Provisioning & Seed',
@@ -237,8 +237,8 @@ export const HUB_DOCS_CONTENT: HubDocsContent = {
         },
         {
           title: '5. Launching Applications',
-          desc: 'Start the TM Hub dev server, then start TM Tools desktop application.',
-          code: `# Terminal 1 - Start TM Hub:\ncd tm-hub && pnpm dev\n\n# Terminal 2 - Start TM Tools:\ncd tm-tools && pnpm dev:electron`
+          desc: 'Start the TM Hub dev server, then start TMCut Studio desktop application.',
+          code: `# Terminal 1 - Start TM Hub:\ncd tm-hub && pnpm dev\n\n# Terminal 2 - Start TMCut Studio:\ncd tm-studio && pnpm dev:electron`
         }
       ]
     },
@@ -385,8 +385,8 @@ export const HUB_DOCS_CONTENT: HubDocsContent = {
       steps: [
         {
           title: '1. Kiến Trúc & Cổng Dịch Vụ',
-          desc: 'TM Hub chạy trên Port 4000 đóng vai trò là Control Plane trung tâm. Các app vệ tinh (TM Tools chạy trên 4002, TM Trading trên 4001) kết nối qua tm-hub-client.',
-          code: `# TM Hub Control Plane: http://localhost:4000\n# TM Tools Desktop:     http://localhost:4002\n# TM Trading Engine:    http://localhost:4001`
+          desc: 'TM Hub chạy trên Port 4000 đóng vai trò là Control Plane trung tâm. Các app vệ tinh (TMCut Studio chạy trên 4003, TM Trading trên 4001) kết nối qua tm-hub-client.',
+          code: `# TM Hub Control Plane: http://localhost:4000\n# TMCut Studio:        http://localhost:4003\n# TM Trading Engine:    http://localhost:4001`
         },
         {
           title: '2. Cấu Hình TM Hub (.env)',
@@ -394,9 +394,9 @@ export const HUB_DOCS_CONTENT: HubDocsContent = {
           code: `# tm-hub/.env\nPORT=4000\nAPP_ID=tm-hub_hqmnrn\nSUPABASE_URL=https://your-project.supabase.co\nSUPABASE_KEY=your-supabase-service-role-key\nAUTH_JWT_SECRET=super-secure-shared-secret-key-32-chars-min\n\n# MongoDB Audit Logging:\nMONGODB_LOG_URI=mongodb://admin:pass@host:27017/...\nMONGODB_LOG_DB_NAME=tm-hub-logs\n\n# MongoDB App Data & Custom Documents:\nMONGODB_APP_URI=mongodb+srv://admin:pass@cluster0...mongodb.net\nMONGODB_APP_DB_NAME=tm-hub-app`
         },
         {
-          title: '3. Cấu Hình Ứng Dụng Vệ Tinh (tm-tools/.env)',
+          title: '3. Cấu Hình Ứng Dụng Vệ Tinh (tm-studio/.env)',
           desc: 'Cấu hình client vệ tinh trỏ về TM Hub với đúng appId đã đăng ký, AUTH_JWT_SECRET khớp với Hub và các API key dịch vụ media/AI.',
-          code: `# tm-tools/.env\nPORT=4002\nAUTH_PROVIDER=hub\nNUXT_PUBLIC_HUB_URL=http://localhost:4000\nNUXT_PUBLIC_HUB_APP_ID=tm-tools_bbx58v\nAUTH_JWT_SECRET=super-secure-shared-secret-key-32-chars-min\n\n# Video Generation (Runway Gen-3):\nRUNWAY_API_KEY=key_your_runway_api_key\nRUNWAY_BASE_URL=https://api.runwayml.com/v1`
+          code: `# tm-studio/.env\nPORT=4003\nAUTH_PROVIDER=hub\nNUXT_PUBLIC_HUB_URL=http://localhost:4000\nNUXT_PUBLIC_HUB_APP_ID=tm-studio_749app\nAUTH_JWT_SECRET=super-secure-shared-secret-key-32-chars-min\n\n# AI relay secret issued per-app by tm-hub:\nNUXT_HUB_APP_SECRET=your-hub-app-secret\n\n# Optional local AI vault (Electron config.env):\nAI_PROVIDER=openai\nAI_BASE_URL=\nAI_API_KEY=\nAI_MODEL=`
         },
         {
           title: '4. Khởi Tạo & Seed Dữ Liệu',
@@ -405,8 +405,8 @@ export const HUB_DOCS_CONTENT: HubDocsContent = {
         },
         {
           title: '5. Khởi Chạy Hệ Thống',
-          desc: 'Khởi động dev server TM Hub trước, sau đó khởi chạy ứng dụng Electron Desktop TM Tools.',
-          code: `# Terminal 1 - Chạy TM Hub:\ncd tm-hub && pnpm dev\n\n# Terminal 2 - Chạy TM Tools (Desktop):\ncd tm-tools && pnpm dev:electron`
+          desc: 'Khởi động dev server TM Hub trước, sau đó khởi chạy ứng dụng Electron Desktop TMCut Studio.',
+          code: `# Terminal 1 - Chạy TM Hub:\ncd tm-hub && pnpm dev\n\n# Terminal 2 - Chạy TMCut Studio (Desktop):\ncd tm-studio && pnpm dev:electron`
         }
       ]
     },

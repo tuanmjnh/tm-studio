@@ -7,7 +7,7 @@ import { relayUpstreamError } from '../../../../utils/aiRelay'
  * the hub relay with X-App-Id + X-App-Secret server-side. Decrypted provider
  * credentials live and die inside the hub process.
  *
- * Auth: server/middleware/auth.ts already requires a valid tm-tools user JWT
+ * Auth: server/middleware/auth.ts already requires a valid tm-studio user JWT
  * for every /api/** route, so nobody anonymous reaches the secret-backed call.
  *
  * Body: { connectionId, messages: [{role, content}], model?, maxTokens?, temperature? }

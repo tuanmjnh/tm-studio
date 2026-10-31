@@ -171,7 +171,7 @@ export const useCloudinary = () => {
             connected: !!cloudName,
             cloudName,
             uploadPreset,
-            folder: 'tm-tools'
+            folder: 'tm-studio'
           }
         }
       }

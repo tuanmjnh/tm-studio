@@ -12,7 +12,7 @@ import { uploadKindForName } from '../../../utils/uploads'
  * `config.uploads.dir`. The response URL (/uploads/<stored name>) is what
  * the media library keeps as the asset path.
  *
- * Auth: server/middleware/auth.ts already requires a valid tm-tools user JWT
+ * Auth: server/middleware/auth.ts already requires a valid tm-studio user JWT
  * for every /api/** route, so only logged-in users reach the disk write.
  * RBAC: the permission map carries no prefix for this route — same posture
  * as the other v1 media endpoints (editor is a workspace feature).

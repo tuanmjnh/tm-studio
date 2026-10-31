@@ -21,7 +21,7 @@ function downloadFile(url, destPath, onProgress, maxRedirects = 10) {
       hostname: parsedUrl.hostname,
       path: parsedUrl.pathname + parsedUrl.search,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) tm-tools-updater/1.0',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) tm-studio-updater/1.0',
         'Accept': '*/*'
       }
     }
@@ -109,7 +109,7 @@ function fetchText(url, maxRedirects = 10) {
       hostname: parsedUrl.hostname,
       path: parsedUrl.pathname + parsedUrl.search,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) tm-tools/1.0',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) tm-studio/1.0',
         'Accept': 'application/json, text/plain, */*'
       }
     }

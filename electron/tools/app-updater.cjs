@@ -44,9 +44,9 @@ function fetchLatestGitHubRelease() {
   return new Promise((resolve, reject) => {
     const options = {
       hostname: 'api.github.com',
-      path: '/repos/tuanmjnh/tm-tools-public/releases/latest',
+      path: '/repos/tuanmjnh/tm-studio/releases/latest',
       headers: {
-        'User-Agent': 'tm-tools-updater/1.0',
+        'User-Agent': 'tm-studio-updater/1.0',
         'Accept': 'application/vnd.github.v3+json'
       }
     }

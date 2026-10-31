@@ -21,7 +21,7 @@ import { activeJobId, createJob, failJob, finishJob, reportOutTime } from '../..
  * a time (`error.renderBusy`).
  *
  * Trust model: the client is the app itself (auth middleware requires a valid
- * tm-tools JWT for every /api/** route). The endpoint still refuses to read
+ * tm-studio JWT for every /api/** route). The endpoint still refuses to read
  * anything outside the uploads dir:
  *   - every `-i <src>` must be a flat `/uploads/<name>.<ext>` asset the server
  *     itself stored (traversal-safe resolveUploadFilePath + media-ext

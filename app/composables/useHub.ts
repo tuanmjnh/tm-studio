@@ -7,7 +7,7 @@ export const useHub = () => {
   const tokenCookie = useCookie('accessToken')
 
   const hubUrl = (config.public.hubUrl as string) || 'http://localhost:4000'
-  const appId = (config.public.hubAppId as string) || 'tm-tools'
+  const appId = (config.public.hubAppId as string) || 'tm-studio_749app'
 
   const client = new HubClient({
     baseUrl: hubUrl,

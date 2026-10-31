@@ -279,7 +279,7 @@ async function relayStatus(): Promise<AiGatewayStatus | null> {
  * gateway (electron/tools/ai-gateway.cjs), never in the renderer.
  * Web: identical call shapes served by the TM Hub AI relay through the
  * local Nitro proxy (/api/v1/ai/relay/*, R151) — the app secret stays on
- * the tm-tools server, provider credentials stay on the hub.
+ * the tm-studio server, provider credentials stay on the hub.
  */
 export function useTmcutAi() {
   const isDesktop = computed(() => !!aiApi())

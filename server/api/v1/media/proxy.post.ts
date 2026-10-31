@@ -22,7 +22,7 @@ import { resolveUploadFilePath } from '../../../utils/uploads'
  * fragmented-MP4 (movflags frag_keyframe+empty_moov) stream piped through
  * a node WriteStream — no direct ffmpeg file creation anywhere.
  *
- * Auth: server/middleware/auth.ts already requires a valid tm-tools user
+ * Auth: server/middleware/auth.ts already requires a valid tm-studio user
  * JWT for every /api/** route. The endpoint itself validates that the
  * source is a server-stored upload (traversal-safe resolveUploadFilePath
  * + media-ext whitelist).

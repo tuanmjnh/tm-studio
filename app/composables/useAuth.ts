@@ -66,7 +66,7 @@ export const useAuth = () => {
 
   const config = useRuntimeConfig()
   const hubUrl = (config.public.hubUrl as string) || 'http://localhost:4000'
-  const appId = (config.public.hubAppId as string) || 'tm-tools'
+  const appId = (config.public.hubAppId as string) || 'tm-studio_749app'
 
   // Capturing the toast binding while the setup context is still active lets
   // the async session-expiry path show toasts without the inject() warning.

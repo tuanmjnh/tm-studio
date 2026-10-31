@@ -3,7 +3,7 @@
 // Why this module exists: the main window used to run with
 // webSecurity:false purely so media:// loads and canvas readback kept
 // working. With webSecurity:true a cross-origin fetch() from the app page
-// (http://localhost:4002 / loopback nitro) needs CORS on the media
+// (http://localhost:4003 / loopback nitro) needs CORS on the media
 // responses. We echo Access-Control-Allow-Origin ONLY for the app's own
 // origins — a remote page (OAuth popup etc.) gets no ACAO, so it cannot
 // exfiltrate arbitrary local files through this handler, which it COULD

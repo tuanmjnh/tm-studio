@@ -83,8 +83,8 @@ async function runLiveTest() {
   notify.success(t('common.success'), t('hub_integration.test_success'))
 }
 
-const envSnippet = `# tm-tools/.env - Cấu hình kết nối Control Plane
-PORT=4002
+const envSnippet = `# tm-studio/.env - Cấu hình kết nối Control Plane
+PORT=4003
 APP_PORT=3456
 AUTH_PROVIDER=hub
 
@@ -94,8 +94,8 @@ NUXT_PUBLIC_HUB_URL=${hubUrl}
 # 2. Định danh AppId đã đăng ký trong bảng apps của TM Hub
 NUXT_PUBLIC_HUB_APP_ID=${appId}
 
-# 3. Khóa bí mật JWT dùng chung (phải trùng khớp với AUTH_JWT_SECRET của Hub)
-AUTH_JWT_SECRET=24481429ddef2654285b4906225e7f159e6d08a58105dd1231da4d5d07af90d5`
+# 3. Khóa bí mật JWT dùng chung (phải trùng khớp với AUTH_JWT_SECRET của Hub — copy từ tm-hub/.env)
+AUTH_JWT_SECRET=<copy từ tm-hub/.env>`
 
 const codeUseHubSnippet = `import { useHub } from '~/composables/useHub'
 
@@ -114,7 +114,7 @@ const docsResponse = await hubFetch(\`/api/v1/apps/\${appId}/docs\`)
 // 5. Lấy danh sách kết nối dịch vụ bên thứ ba (AI, Cloudinary, Mail)
 const connections = await client.connections.list(appId)`
 
-const codeNavMenuSnippet = `// Tải động Navigation Tree trong tm-tools (app/composables/useNavMenu.ts)
+const codeNavMenuSnippet = `// Tải động Navigation Tree trong tm-studio (app/composables/useNavMenu.ts)
 export function useNavMenu() {
   const { hubFetch, appId } = useHub()
   const routes = ref([])
@@ -258,7 +258,7 @@ mobileBar.registerActions(computed(() => [
         </template>
         <div class="space-y-3">
           <p class="text-xs text-muted leading-relaxed">
-            {{ t('hub_integration.step1_desc') }} <code class="font-mono text-primary font-semibold">d:\Applications\tm-tools\.env</code>:
+            {{ t('hub_integration.step1_desc') }} <code class="font-mono text-primary font-semibold">d:\Applications\tm-studio\.env</code>:
           </p>
           <div class="overflow-hidden rounded-lg bg-neutral-900 text-neutral-100">
             <pre class="p-4 text-xs font-mono overflow-x-auto leading-relaxed"><code>{{ envSnippet }}</code></pre>

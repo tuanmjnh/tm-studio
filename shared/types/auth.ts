@@ -1,4 +1,3 @@
-export type AuthProvider = 'hub' | 'mongodb' | 'supabase'
 export type LoginPlatform = 'web' | 'desktop' | 'mobile'
 
 export interface PushSubscriptionData {
@@ -112,12 +111,4 @@ export interface TokenPayload {
   permissions: string[]
   allowedRoutes?: string[]
   appId?: string
-}
-
-export interface AuthConfig {
-  provider: AuthProvider
-  accessTokenSecret: string
-  refreshTokenSecret: string
-  accessTokenExpiry: number
-  refreshTokenExpiry: number
 }

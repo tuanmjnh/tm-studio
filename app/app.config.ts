@@ -66,7 +66,7 @@ export default defineAppConfig({
     }
   },
   system: {
-    app_name: 'TM Tools',
+    app_name: 'TMCut Studio',
     app_version: version,
     app_description: description
   }
