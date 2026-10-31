@@ -17,6 +17,10 @@ export default defineNuxtConfig({
     ]
   },
 
+  alias: {
+    '@tmcut-core': fileURLToPath(new URL('./packages/core/src/index.mjs', import.meta.url))
+  },
+
   devtools: {
     enabled: false
   },
@@ -76,6 +80,13 @@ export default defineNuxtConfig({
   compatibilityDate: '2026-06-30',
 
   vite: {
+    server: {
+      fs: {
+        // packages/core is a workspace package consumed via source alias;
+        // allow Vite dev to serve it directly.
+        allow: [fileURLToPath(new URL('./packages/core', import.meta.url))]
+      }
+    },
     optimizeDeps: {
       include: [
         'tm-hub-client',
@@ -84,6 +95,7 @@ export default defineNuxtConfig({
     },
     resolve: {
       alias: {
+        '@tmcut-core': fileURLToPath(new URL('./packages/core/src/index.mjs', import.meta.url)),
         'striptags': 'striptags/src/striptags.js'
       },
       dedupe: [

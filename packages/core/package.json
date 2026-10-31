@@ -1,0 +1,58 @@
+{
+  "name": "tmcut-core",
+  "version": "0.1.0",
+  "description": "TMCut pure editing engine (zero dependencies, runs on plain Node)",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./generationAdapter": {
+      "types": "./dist/generationAdapter.d.ts",
+      "import": "./dist/generationAdapter.js",
+      "require": "./dist/generationAdapter.cjs"
+    },
+    "./providerAdapter": {
+      "types": "./dist/providerAdapter.d.ts",
+      "import": "./dist/providerAdapter.js",
+      "require": "./dist/providerAdapter.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup && node scripts/prepare-dist.mjs",
+    "dev": "tsup --watch",
+    "test": "node --test \"test/*.test.mjs\"",
+    "check": "node tools/check-boundaries.mjs",
+    "prepublishOnly": "pnpm test && pnpm check && pnpm build",
+    "typecheck": "tsc --noEmit",
+    "login": "npm login",
+    "publish": "npm run build && npm publish ./dist",
+    "git:cache": "git rm -r --cached . && git add ."
+  },
+  "keywords": [
+    "tmcut",
+    "tmcut-core",
+    "video-editor",
+    "timeline",
+    "editing-engine",
+    "video-production"
+  ],
+  "author": "tuanmjnh",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "tsup": "^9.0.0",
+    "typescript": "^5.7.2"
+  }
+}

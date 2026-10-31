@@ -1,0 +1,847 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-21T00:00:00.000Z",
+  "note": "Starter catalog shipped with the installer (roadmap v3 section 5: the installer carries only a small starter set; the full catalog is fetched on demand). Entries with source.type 'embedded' carry their payload inline; 'sample' entries install from files bundled beside this JSON; 'remote' entries download over HTTPS when the user requests them. License review follows section 5: status 'review'/'unknown' must never render as approved and blocks download.",
+  "entries": [
+    {
+      "id": "starter-lut-teal-orange",
+      "title": "Teal & Orange Grade",
+      "description": "Cinematic teal-orange color grade as a ready-to-apply LUT 3D preset.",
+      "category": "filters",
+      "assetKind": "effect-preset",
+      "tags": ["cinematic", "color", "grade"],
+      "version": "1.0.0",
+      "sizeBytes": 0,
+      "sha256": "",
+      "source": {
+        "type": "embedded",
+        "payload": {
+          "effectType": "lut3d",
+          "params": { "lut": "teal-orange" }
+        }
+      },
+      "creator": "TMCut",
+      "license": {
+        "status": "approved",
+        "name": "TMCut Built-in",
+        "url": "",
+        "attribution": "",
+        "commercialUse": true,
+        "redistrbutable": false,
+        "reviewer": "tmcut-team",
+        "reviewedAt": "2026-10-20T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "starter-title-neon-pop",
+      "title": "Neon Pop Title",
+      "description": "High-energy neon title preset for hook lines and section cards.",
+      "category": "titles",
+      "assetKind": "title-preset",
+      "tags": ["title", "neon", "hook"],
+      "version": "1.0.0",
+      "sizeBytes": 0,
+      "sha256": "",
+      "source": {
+        "type": "embedded",
+        "payload": {
+          "text": "YOUR HOOK",
+          "color": "#22d3ee",
+          "fontSize": 64
+        }
+      },
+      "creator": "TMCut",
+      "license": {
+        "status": "approved",
+        "name": "TMCut Built-in",
+        "url": "",
+        "attribution": "",
+        "commercialUse": true,
+        "redistrbutable": false,
+        "reviewer": "tmcut-team",
+        "reviewedAt": "2026-10-20T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "starter-sfx-sweep",
+      "title": "Whoosh Sweep SFX",
+      "description": "Descending sine sweep for transitions. Bundled sample: installed on demand with checksum verification, works fully offline.",
+      "category": "sound-effects",
+      "assetKind": "media",
+      "tags": ["sfx", "transition", "whoosh"],
+      "version": "1.0.0",
+      "sizeBytes": 132344,
+      "sha256": "68475cf7481cdd6ff136cf32d4a25a50039b07b0b8ab72c260840895dd2e20a9",
+      "source": {
+        "type": "sample",
+        "sampleId": "sample-sfx-sweep"
+      },
+      "creator": "TMCut",
+      "license": {
+        "status": "approved",
+        "name": "TMCut Built-in",
+        "url": "",
+        "attribution": "",
+        "commercialUse": true,
+        "redistrbutable": false,
+        "reviewer": "tmcut-team",
+        "reviewedAt": "2026-10-20T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "starter-lut-pack-cinematic",
+      "title": "Cinematic LUT Pack (preview)",
+      "description": "Twelve film-emulation LUTs. Rights are still under review — download stays blocked until the license is approved.",
+      "category": "filters",
+      "assetKind": "effect-preset",
+      "tags": ["lut", "film", "pack"],
+      "version": "0.9.0",
+      "sizeBytes": 4194304,
+      "sha256": "",
+      "source": {
+        "type": "remote",
+        "url": "https://assets.example.org/tmcut/lut-pack-cinematic-0.9.0.json"
+      },
+      "creator": "Example Labs",
+      "license": {
+        "status": "review",
+        "name": "Proprietary (under review)",
+        "url": "https://example.org/license",
+        "attribution": "Example Labs",
+        "commercialUse": false,
+        "redistrbutable": false
+      }
+    },
+    {
+      "id": "starter-music-ambient-loop",
+      "title": "Ambient Loop 90s",
+      "description": "Licensed ambient background loop, fetched from the remote CDN on first use.",
+      "category": "music",
+      "assetKind": "media",
+      "tags": ["music", "ambient", "loop"],
+      "version": "1.0.0",
+      "sizeBytes": 8388608,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": {
+        "type": "remote",
+        "url": "https://assets.example.org/tmcut/ambient-loop-90s-1.0.0.wav"
+      },
+      "creator": "Field Tone",
+      "license": {
+        "status": "approved",
+        "name": "CC-BY-4.0",
+        "url": "https://creativecommons.org/licenses/by/4.0/",
+        "attribution": "Field Tone",
+        "commercialUse": true,
+        "redistrbutable": false,
+        "reviewer": "tmcut-team",
+        "reviewedAt": "2026-10-20T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "marketplace-music-lofi-chill",
+      "title": "Lo-Fi Chill Loop",
+      "description": "Relaxed lo-fi hip hop beat, perfect for vlogs and study videos. Seamless loop.",
+      "category": "music",
+      "assetKind": "media",
+      "tags": ["lofi", "chill", "hip-hop", "loop", "vlog", "marketplace"],
+      "version": "1.0.0",
+      "sizeBytes": 2048000,
+      "sha256": "sample-placeholder",
+      "source": {
+        "type": "sample",
+        "sampleId": "music-lofi-chill"
+      },
+      "creator": "TM Tools Music Library",
+      "license": {
+        "status": "approved",
+        "name": "Royalty-Free (TM Tools)",
+        "url": "https://tmtools.dev/licenses/royalty-free",
+        "attribution": "Royalty-free via TM Tools",
+        "commercialUse": true,
+        "redistrbutable": true,
+        "reviewer": "tmcut-publisher",
+        "reviewedAt": "2026-10-21T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "marketplace-music-upbeat-pop",
+      "title": "Upbeat Pop Groove",
+      "description": "Energetic pop instrumental with catchy melody. Great for intros and promos.",
+      "category": "music",
+      "assetKind": "media",
+      "tags": ["pop", "upbeat", "energetic", "promo", "intro", "marketplace"],
+      "version": "1.0.0",
+      "sizeBytes": 2048000,
+      "sha256": "sample-placeholder",
+      "source": {
+        "type": "sample",
+        "sampleId": "music-upbeat-pop"
+      },
+      "creator": "TM Tools Music Library",
+      "license": {
+        "status": "approved",
+        "name": "Royalty-Free (TM Tools)",
+        "url": "https://tmtools.dev/licenses/royalty-free",
+        "attribution": "Royalty-free via TM Tools",
+        "commercialUse": true,
+        "redistrbutable": true,
+        "reviewer": "tmcut-publisher",
+        "reviewedAt": "2026-10-21T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "marketplace-music-cinematic-ambient",
+      "title": "Cinematic Ambient",
+      "description": "Atmospheric cinematic bed for documentaries and storytelling. Slow evolving pads.",
+      "category": "music",
+      "assetKind": "media",
+      "tags": ["cinematic", "ambient", "documentary", "storytelling", "emotional", "marketplace"],
+      "version": "1.0.0",
+      "sizeBytes": 2048000,
+      "sha256": "sample-placeholder",
+      "source": {
+        "type": "sample",
+        "sampleId": "music-cinematic-ambient"
+      },
+      "creator": "TM Tools Music Library",
+      "license": {
+        "status": "approved",
+        "name": "Royalty-Free (TM Tools)",
+        "url": "https://tmtools.dev/licenses/royalty-free",
+        "attribution": "Royalty-free via TM Tools",
+        "commercialUse": true,
+        "redistrbutable": true,
+        "reviewer": "tmcut-publisher",
+        "reviewedAt": "2026-10-21T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "marketplace-music-corporate-inspire",
+      "title": "Corporate Inspire",
+      "description": "Positive corporate track with piano and light percussion. Professional and uplifting.",
+      "category": "music",
+      "assetKind": "media",
+      "tags": ["corporate", "inspire", "piano", "professional", "business", "marketplace"],
+      "version": "1.0.0",
+      "sizeBytes": 2048000,
+      "sha256": "sample-placeholder",
+      "source": {
+        "type": "sample",
+        "sampleId": "music-corporate-inspire"
+      },
+      "creator": "TM Tools Music Library",
+      "license": {
+        "status": "approved",
+        "name": "Royalty-Free (TM Tools)",
+        "url": "https://tmtools.dev/licenses/royalty-free",
+        "attribution": "Royalty-free via TM Tools",
+        "commercialUse": true,
+        "redistrbutable": true,
+        "reviewer": "tmcut-publisher",
+        "reviewedAt": "2026-10-21T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "marketplace-music-trap-beat",
+      "title": "Trap Beat Loop",
+      "description": "Modern trap beat with 808s and hi-hats. Ideal for TikTok/Reels transitions.",
+      "category": "music",
+      "assetKind": "media",
+      "tags": ["trap", "beat", "808", "short-form", "transition", "marketplace"],
+      "version": "1.0.0",
+      "sizeBytes": 2048000,
+      "sha256": "sample-placeholder",
+      "source": {
+        "type": "sample",
+        "sampleId": "music-trap-beat"
+      },
+      "creator": "TM Tools Music Library",
+      "license": {
+        "status": "approved",
+        "name": "Royalty-Free (TM Tools)",
+        "url": "https://tmtools.dev/licenses/royalty-free",
+        "attribution": "Royalty-free via TM Tools",
+        "commercialUse": true,
+        "redistrbutable": true,
+        "reviewer": "tmcut-publisher",
+        "reviewedAt": "2026-10-21T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "marketplace-music-acoustic-folk",
+      "title": "Acoustic Folk",
+      "description": "Warm acoustic guitar melody. Intimate and authentic feel for personal videos.",
+      "category": "music",
+      "assetKind": "media",
+      "tags": ["acoustic", "folk", "guitar", "intimate", "personal", "marketplace"],
+      "version": "1.0.0",
+      "sizeBytes": 2048000,
+      "sha256": "sample-placeholder",
+      "source": {
+        "type": "sample",
+        "sampleId": "music-acoustic-folk"
+      },
+      "creator": "TM Tools Music Library",
+      "license": {
+        "status": "approved",
+        "name": "Royalty-Free (TM Tools)",
+        "url": "https://tmtools.dev/licenses/royalty-free",
+        "attribution": "Royalty-free via TM Tools",
+        "commercialUse": true,
+        "redistrbutable": true,
+        "reviewer": "tmcut-publisher",
+        "reviewedAt": "2026-10-21T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "marketplace-sfx-whoosh-fast",
+      "title": "Fast Whoosh",
+      "description": "Quick whoosh for rapid transitions and scene changes.",
+      "category": "sound-effects",
+      "assetKind": "media",
+      "tags": ["whoosh", "transition", "fast", "swish", "marketplace"],
+      "version": "1.0.0",
+      "sizeBytes": 256000,
+      "sha256": "sample-placeholder",
+      "source": {
+        "type": "sample",
+        "sampleId": "sfx-whoosh-fast"
+      },
+      "creator": "TM Tools SFX Library",
+      "license": {
+        "status": "approved",
+        "name": "Royalty-Free (TM Tools)",
+        "url": "https://tmtools.dev/licenses/royalty-free",
+        "attribution": "Royalty-free via TM Tools",
+        "commercialUse": true,
+        "redistrbutable": true,
+        "reviewer": "tmcut-publisher",
+        "reviewedAt": "2026-10-21T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "marketplace-sfx-whoosh-slow",
+      "title": "Slow Whoosh",
+      "description": "Long sweeping whoosh for dramatic reveals and montages.",
+      "category": "sound-effects",
+      "assetKind": "media",
+      "tags": ["whoosh", "transition", "slow", "sweep", "cinematic", "marketplace"],
+      "version": "1.0.0",
+      "sizeBytes": 256000,
+      "sha256": "sample-placeholder",
+      "source": {
+        "type": "sample",
+        "sampleId": "sfx-whoosh-slow"
+      },
+      "creator": "TM Tools SFX Library",
+      "license": {
+        "status": "approved",
+        "name": "Royalty-Free (TM Tools)",
+        "url": "https://tmtools.dev/licenses/royalty-free",
+        "attribution": "Royalty-free via TM Tools",
+        "commercialUse": true,
+        "redistrbutable": true,
+        "reviewer": "tmcut-publisher",
+        "reviewedAt": "2026-10-21T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "marketplace-sfx-impact-punch",
+      "title": "Impact Punch",
+      "description": "Hard impact sound for text reveals, logos, and emphasis.",
+      "category": "sound-effects",
+      "assetKind": "media",
+      "tags": ["impact", "punch", "hit", "reveal", "logo", "marketplace"],
+      "version": "1.0.0",
+      "sizeBytes": 256000,
+      "sha256": "sample-placeholder",
+      "source": {
+        "type": "sample",
+        "sampleId": "sfx-impact-punch"
+      },
+      "creator": "TM Tools SFX Library",
+      "license": {
+        "status": "approved",
+        "name": "Royalty-Free (TM Tools)",
+        "url": "https://tmtools.dev/licenses/royalty-free",
+        "attribution": "Royalty-free via TM Tools",
+        "commercialUse": true,
+        "redistrbutable": true,
+        "reviewer": "tmcut-publisher",
+        "reviewedAt": "2026-10-21T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "marketplace-sfx-pop-bubble",
+      "title": "Pop Bubble",
+      "description": "Light pop for UI interactions, checkmarks, and playful moments.",
+      "category": "sound-effects",
+      "assetKind": "media",
+      "tags": ["pop", "bubble", "ui", "playful", "notification", "marketplace"],
+      "version": "1.0.0",
+      "sizeBytes": 256000,
+      "sha256": "sample-placeholder",
+      "source": {
+        "type": "sample",
+        "sampleId": "sfx-pop-bubble"
+      },
+      "creator": "TM Tools SFX Library",
+      "license": {
+        "status": "approved",
+        "name": "Royalty-Free (TM Tools)",
+        "url": "https://tmtools.dev/licenses/royalty-free",
+        "attribution": "Royalty-free via TM Tools",
+        "commercialUse": true,
+        "redistrbutable": true,
+        "reviewer": "tmcut-publisher",
+        "reviewedAt": "2026-10-21T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "marketplace-sfx-glitch-digital",
+      "title": "Digital Glitch",
+      "description": "Short digital glitch for tech videos, transitions, and effects.",
+      "category": "sound-effects",
+      "assetKind": "media",
+      "tags": ["glitch", "digital", "tech", "error", "distortion", "marketplace"],
+      "version": "1.0.0",
+      "sizeBytes": 256000,
+      "sha256": "sample-placeholder",
+      "source": {
+        "type": "sample",
+        "sampleId": "sfx-glitch-digital"
+      },
+      "creator": "TM Tools SFX Library",
+      "license": {
+        "status": "approved",
+        "name": "Royalty-Free (TM Tools)",
+        "url": "https://tmtools.dev/licenses/royalty-free",
+        "attribution": "Royalty-free via TM Tools",
+        "commercialUse": true,
+        "redistrbutable": true,
+        "reviewer": "tmcut-publisher",
+        "reviewedAt": "2026-10-21T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "marketplace-sfx-riser-sweep",
+      "title": "Riser Sweep",
+      "description": "Building riser for energy buildup before drops and reveals.",
+      "category": "sound-effects",
+      "assetKind": "media",
+      "tags": ["riser", "sweep", "buildup", "energy", "drop", "marketplace"],
+      "version": "1.0.0",
+      "sizeBytes": 256000,
+      "sha256": "sample-placeholder",
+      "source": {
+        "type": "sample",
+        "sampleId": "sfx-riser-sweep"
+      },
+      "creator": "TM Tools SFX Library",
+      "license": {
+        "status": "approved",
+        "name": "Royalty-Free (TM Tools)",
+        "url": "https://tmtools.dev/licenses/royalty-free",
+        "attribution": "Royalty-free via TM Tools",
+        "commercialUse": true,
+        "redistrbutable": true,
+        "reviewer": "tmcut-publisher",
+        "reviewedAt": "2026-10-21T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "marketplace-sfx-camera-shutter",
+      "title": "Camera Shutter",
+      "description": "Classic camera shutter click for photo transitions and snapshots.",
+      "category": "sound-effects",
+      "assetKind": "media",
+      "tags": ["camera", "shutter", "photo", "click", "snapshot", "marketplace"],
+      "version": "1.0.0",
+      "sizeBytes": 256000,
+      "sha256": "sample-placeholder",
+      "source": {
+        "type": "sample",
+        "sampleId": "sfx-camera-shutter"
+      },
+      "creator": "TM Tools SFX Library",
+      "license": {
+        "status": "approved",
+        "name": "Royalty-Free (TM Tools)",
+        "url": "https://tmtools.dev/licenses/royalty-free",
+        "attribution": "Royalty-free via TM Tools",
+        "commercialUse": true,
+        "redistrbutable": true,
+        "reviewer": "tmcut-publisher",
+        "reviewedAt": "2026-10-21T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "marketplace-sfx-typewriter",
+      "title": "Typewriter Keys",
+      "description": "Mechanical typewriter sounds for text animations and captions.",
+      "category": "sound-effects",
+      "assetKind": "media",
+      "tags": ["typewriter", "keys", "text", "animation", "retro", "marketplace"],
+      "version": "1.0.0",
+      "sizeBytes": 256000,
+      "sha256": "sample-placeholder",
+      "source": {
+        "type": "sample",
+        "sampleId": "sfx-typewriter"
+      },
+      "creator": "TM Tools SFX Library",
+      "license": {
+        "status": "approved",
+        "name": "Royalty-Free (TM Tools)",
+        "url": "https://tmtools.dev/licenses/royalty-free",
+        "attribution": "Royalty-free via TM Tools",
+        "commercialUse": true,
+        "redistrbutable": true,
+        "reviewer": "tmcut-publisher",
+        "reviewedAt": "2026-10-21T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "marketplace-font-inter",
+      "title": "Inter",
+      "description": "Clean, modern variable font optimized for UI and captions. Multiple weights.",
+      "category": "fonts",
+      "assetKind": "media",
+      "tags": ["sans-serif", "variable", "ui", "caption", "modern", "clean", "marketplace"],
+      "version": "1.0.0",
+      "sizeBytes": 102400,
+      "sha256": "sample-placeholder",
+      "source": {
+        "type": "sample",
+        "sampleId": "font-inter"
+      },
+      "creator": "TM Tools Font Library",
+      "license": {
+        "status": "approved",
+        "name": "Royalty-Free (TM Tools)",
+        "url": "https://tmtools.dev/licenses/royalty-free",
+        "attribution": "Royalty-free via TM Tools",
+        "commercialUse": true,
+        "redistrbutable": true,
+        "reviewer": "tmcut-publisher",
+        "reviewedAt": "2026-10-21T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "marketplace-font-montserrat",
+      "title": "Montserrat",
+      "description": "Geometric sans-serif with strong personality. Excellent for titles and headlines.",
+      "category": "fonts",
+      "assetKind": "media",
+      "tags": ["sans-serif", "geometric", "title", "headline", "bold", "marketplace"],
+      "version": "1.0.0",
+      "sizeBytes": 102400,
+      "sha256": "sample-placeholder",
+      "source": {
+        "type": "sample",
+        "sampleId": "font-montserrat"
+      },
+      "creator": "TM Tools Font Library",
+      "license": {
+        "status": "approved",
+        "name": "Royalty-Free (TM Tools)",
+        "url": "https://tmtools.dev/licenses/royalty-free",
+        "attribution": "Royalty-free via TM Tools",
+        "commercialUse": true,
+        "redistrbutable": true,
+        "reviewer": "tmcut-publisher",
+        "reviewedAt": "2026-10-21T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "marketplace-font-poppins",
+      "title": "Poppins",
+      "description": "Geometric sans-serif with rounded corners. Friendly and readable at all sizes.",
+      "category": "fonts",
+      "assetKind": "media",
+      "tags": ["sans-serif", "geometric", "rounded", "friendly", "readable", "marketplace"],
+      "version": "1.0.0",
+      "sizeBytes": 102400,
+      "sha256": "sample-placeholder",
+      "source": {
+        "type": "sample",
+        "sampleId": "font-poppins"
+      },
+      "creator": "TM Tools Font Library",
+      "license": {
+        "status": "approved",
+        "name": "Royalty-Free (TM Tools)",
+        "url": "https://tmtools.dev/licenses/royalty-free",
+        "attribution": "Royalty-free via TM Tools",
+        "commercialUse": true,
+        "redistrbutable": true,
+        "reviewer": "tmcut-publisher",
+        "reviewedAt": "2026-10-21T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "marketplace-font-roboto-mono",
+      "title": "Roboto Mono",
+      "description": "Monospace font for code, timestamps, and technical overlays.",
+      "category": "fonts",
+      "assetKind": "media",
+      "tags": ["monospace", "code", "technical", "timestamp", "mono", "marketplace"],
+      "version": "1.0.0",
+      "sizeBytes": 102400,
+      "sha256": "sample-placeholder",
+      "source": {
+        "type": "sample",
+        "sampleId": "font-roboto-mono"
+      },
+      "creator": "TM Tools Font Library",
+      "license": {
+        "status": "approved",
+        "name": "Royalty-Free (TM Tools)",
+        "url": "https://tmtools.dev/licenses/royalty-free",
+        "attribution": "Royalty-free via TM Tools",
+        "commercialUse": true,
+        "redistrbutable": true,
+        "reviewer": "tmcut-publisher",
+        "reviewedAt": "2026-10-21T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "marketplace-font-playfair-display",
+      "title": "Playfair Display",
+      "description": "Elegant serif with high contrast. Perfect for cinematic titles and quotes.",
+      "category": "fonts",
+      "assetKind": "media",
+      "tags": ["serif", "elegant", "cinematic", "title", "quote", "high-contrast", "marketplace"],
+      "version": "1.0.0",
+      "sizeBytes": 102400,
+      "sha256": "sample-placeholder",
+      "source": {
+        "type": "sample",
+        "sampleId": "font-playfair-display"
+      },
+      "creator": "TM Tools Font Library",
+      "license": {
+        "status": "approved",
+        "name": "Royalty-Free (TM Tools)",
+        "url": "https://tmtools.dev/licenses/royalty-free",
+        "attribution": "Royalty-free via TM Tools",
+        "commercialUse": true,
+        "redistrbutable": true,
+        "reviewer": "tmcut-publisher",
+        "reviewedAt": "2026-10-21T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "marketplace-font-jetbrains-mono",
+      "title": "JetBrains Mono",
+      "description": "Developer-focused monospace with ligatures. Great for coding tutorials.",
+      "category": "fonts",
+      "assetKind": "media",
+      "tags": ["monospace", "code", "ligatures", "developer", "programming", "marketplace"],
+      "version": "1.0.0",
+      "sizeBytes": 102400,
+      "sha256": "sample-placeholder",
+      "source": {
+        "type": "sample",
+        "sampleId": "font-jetbrains-mono"
+      },
+      "creator": "TM Tools Font Library",
+      "license": {
+        "status": "approved",
+        "name": "Royalty-Free (TM Tools)",
+        "url": "https://tmtools.dev/licenses/royalty-free",
+        "attribution": "Royalty-free via TM Tools",
+        "commercialUse": true,
+        "redistrbutable": true,
+        "reviewer": "tmcut-publisher",
+        "reviewedAt": "2026-10-21T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "marketplace-font-be-vietnam-pro-regular",
+      "title": "Be Vietnam Pro (Regular)",
+      "description": "Standard modern Vietnamese typography by Google Fonts, optimized for video subtitles and UI captions.",
+      "category": "fonts",
+      "assetKind": "media",
+      "tags": ["font", "vietnamese", "typography", "subtitles", "google-fonts", "marketplace"],
+      "version": "1.0.0",
+      "sizeBytes": 132948,
+      "sha256": "cd1ef6e9d7db28ad5cdb88a65ccbe693870e60d340b791f349d248342b4fe4c3",
+      "source": {
+        "type": "remote",
+        "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/bevietnampro/BeVietnamPro-Regular.ttf"
+      },
+      "sourceUrl": "https://fonts.google.com/specimen/Be+Vietnam+Pro",
+      "previewRef": null,
+      "creator": "The Be Vietnam Pro Project Authors",
+      "priceUsd": 0,
+      "salesChannel": "bundled",
+      "license": {
+        "status": "approved",
+        "name": "SIL Open Font License 1.1",
+        "url": "https://openfontlicense.org/",
+        "attribution": "Copyright 2019 The Be Vietnam Pro Project Authors",
+        "commercialUse": true,
+        "redistrbutable": true,
+        "territories": ["worldwide"],
+        "reviewer": "tmcut-publisher",
+        "reviewedAt": "2026-10-24T00:00:00.000Z",
+        "review": {
+          "decision": "approved",
+          "by": "tmcut-publisher",
+          "at": "2026-10-24T00:00:00.000Z",
+          "note": "Verified SIL OFL from official Google Fonts repo"
+        }
+      }
+    },
+    {
+      "id": "marketplace-font-be-vietnam-pro-bold",
+      "title": "Be Vietnam Pro (Bold)",
+      "description": "High-contrast bold Vietnamese typography, perfect for high-impact hook titles and headline banners.",
+      "category": "fonts",
+      "assetKind": "media",
+      "tags": ["font", "vietnamese", "bold", "titles", "headlines", "google-fonts", "marketplace"],
+      "version": "1.0.0",
+      "sizeBytes": 140300,
+      "sha256": "7f738fe5c43c8872807b20e2d30d42163618de8a4daf7f48a939adac32c16847",
+      "source": {
+        "type": "remote",
+        "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/bevietnampro/BeVietnamPro-Bold.ttf"
+      },
+      "sourceUrl": "https://fonts.google.com/specimen/Be+Vietnam+Pro",
+      "previewRef": null,
+      "creator": "The Be Vietnam Pro Project Authors",
+      "priceUsd": 0,
+      "salesChannel": "bundled",
+      "license": {
+        "status": "approved",
+        "name": "SIL Open Font License 1.1",
+        "url": "https://openfontlicense.org/",
+        "attribution": "Copyright 2019 The Be Vietnam Pro Project Authors",
+        "commercialUse": true,
+        "redistrbutable": true,
+        "territories": ["worldwide"],
+        "reviewer": "tmcut-publisher",
+        "reviewedAt": "2026-10-24T00:00:00.000Z",
+        "review": {
+          "decision": "approved",
+          "by": "tmcut-publisher",
+          "at": "2026-10-24T00:00:00.000Z",
+          "note": "Verified SIL OFL from official Google Fonts repo"
+        }
+      }
+    },
+    {
+      "id": "marketplace-font-be-vietnam-pro-extrabold",
+      "title": "Be Vietnam Pro (ExtraBold)",
+      "description": "Maximum weight Vietnamese typography for thumbnails, viral shorts hooks and bold lower-thirds.",
+      "category": "fonts",
+      "assetKind": "media",
+      "tags": ["font", "vietnamese", "extrabold", "thumbnails", "hooks", "google-fonts", "marketplace"],
+      "version": "1.0.0",
+      "sizeBytes": 139680,
+      "sha256": "44dbfa01553d227bec76ba6446c5618870a76a4a3297f41630dde859d0650d02",
+      "source": {
+        "type": "remote",
+        "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/bevietnampro/BeVietnamPro-ExtraBold.ttf"
+      },
+      "sourceUrl": "https://fonts.google.com/specimen/Be+Vietnam+Pro",
+      "previewRef": null,
+      "creator": "The Be Vietnam Pro Project Authors",
+      "priceUsd": 0,
+      "salesChannel": "bundled",
+      "license": {
+        "status": "approved",
+        "name": "SIL Open Font License 1.1",
+        "url": "https://openfontlicense.org/",
+        "attribution": "Copyright 2019 The Be Vietnam Pro Project Authors",
+        "commercialUse": true,
+        "redistrbutable": true,
+        "territories": ["worldwide"],
+        "reviewer": "tmcut-publisher",
+        "reviewedAt": "2026-10-24T00:00:00.000Z",
+        "review": {
+          "decision": "approved",
+          "by": "tmcut-publisher",
+          "at": "2026-10-24T00:00:00.000Z",
+          "note": "Verified SIL OFL from official Google Fonts repo"
+        }
+      }
+    },
+    {
+      "id": "marketplace-music-viper-groove",
+      "title": "Viper Groove Track",
+      "description": "Energetic electronic groove track by MDN Open Audio project, licensed for commercial media production.",
+      "category": "music",
+      "assetKind": "media",
+      "tags": ["music", "electronic", "groove", "upbeat", "vlog", "marketplace"],
+      "version": "1.0.0",
+      "sizeBytes": 654942,
+      "sha256": "2850fdcd9b90b8de55acf01856bbfc39ff8b704edc522cadace27af5ba17224b",
+      "source": {
+        "type": "remote",
+        "url": "https://raw.githubusercontent.com/mdn/webaudio-examples/main/audio-analyser/viper.mp3"
+      },
+      "sourceUrl": "https://github.com/mdn/webaudio-examples",
+      "previewRef": null,
+      "creator": "Mozilla Open Audio",
+      "priceUsd": 0,
+      "salesChannel": "bundled",
+      "license": {
+        "status": "approved",
+        "name": "Creative Commons Zero (CC0 1.0)",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "attribution": "Public Domain / CC0 via Mozilla Audio",
+        "commercialUse": true,
+        "redistrbutable": true,
+        "territories": ["worldwide"],
+        "reviewer": "tmcut-publisher",
+        "reviewedAt": "2026-10-24T00:00:00.000Z",
+        "review": {
+          "decision": "approved",
+          "by": "tmcut-publisher",
+          "at": "2026-10-24T00:00:00.000Z",
+          "note": "Verified CC0 open audio"
+        }
+      }
+    },
+    {
+      "id": "marketplace-sfx-concert-cheer",
+      "title": "Concert Crowd Cheer SFX",
+      "description": "Authentic audience applause and cheer for energetic intros, victories and live reactions.",
+      "category": "sound-effects",
+      "assetKind": "media",
+      "tags": ["sfx", "cheer", "applause", "crowd", "reaction", "marketplace"],
+      "version": "1.0.0",
+      "sizeBytes": 240574,
+      "sha256": "36847f6adb468d8f24ebcb53e9c2c5a453dd744ffb5b03dc1c2bd81e2f7cfd97",
+      "source": {
+        "type": "remote",
+        "url": "https://raw.githubusercontent.com/mdn/webaudio-examples/main/voice-change-o-matic/audio/concert-crowd.ogg"
+      },
+      "sourceUrl": "https://github.com/mdn/webaudio-examples",
+      "previewRef": null,
+      "creator": "Mozilla Open Audio",
+      "priceUsd": 0,
+      "salesChannel": "bundled",
+      "license": {
+        "status": "approved",
+        "name": "Creative Commons Zero (CC0 1.0)",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "attribution": "Public Domain / CC0 via Mozilla Audio",
+        "commercialUse": true,
+        "redistrbutable": true,
+        "territories": ["worldwide"],
+        "reviewer": "tmcut-publisher",
+        "reviewedAt": "2026-10-24T00:00:00.000Z",
+        "review": {
+          "decision": "approved",
+          "by": "tmcut-publisher",
+          "at": "2026-10-24T00:00:00.000Z",
+          "note": "Verified CC0 open audio"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+appId: com.tm.studio
+productName: TM Studio
+directories:
+  output: release
+  buildResources: public
+publish:
+  provider: github
+  owner: tuanmjnh
+  repo: tm-studio
+  releaseType: release
+files:
+  - electron/**/*
+  # The main process requires shared/utils/detection-args.cjs (the AutoCut
+  # ffmpeg argv, also used by server/api/v1/media/analyze.post.ts); without it
+  # the packaged app throws MODULE_NOT_FOUND on the first AutoCut analysis.
+  - shared/**/*
+  - packages/core/dist/**/*
+  - .output/**/*
+  - public/icon.ico
+  - public/icon.png
+  - package.json
+asarUnpack:
+  - .output/server/**
+extraResources:
+  - from: resources
+    to: resources
+    filter:
+      - "**/*.exe"
+      - "**/*.json"
+      - "**/*.node"
+      # Asset Center starter catalog sample media:
+      # bundled starter files install offline with checksum verification.
+      - "tmcut-catalog/**"
+win:
+  icon: public/icon.ico
+  executableName: TM Studio
+  target:
+    - nsis
+nsis:
+  oneClick: false
+  installerIcon: public/icon.ico
+  uninstallerIcon: public/icon.ico
+  installerHeaderIcon: public/icon.ico
+  artifactName: ${name}-${version}-setup.${ext}
+  shortcutName: ${productName}
+  uninstallDisplayName: ${productName}
+  createDesktopShortcut: always
+  allowToChangeInstallationDirectory: true
+mac:
+  target:
+    - dmg
+linux:
+  icon: public/icon.png
+  target:
+    - AppImage
+    - deb
+  maintainer: electronjs.org
+  category: Video
+npmRebuild: false
