@@ -60,7 +60,7 @@ tm-studio(4003)  TMCut standalone (repo này): editor · template · autocut · 
 |---|---|---|---|
 | 1 | Bootstrap skeleton tm-studio + seed app `studio` trên tm-hub | `pnpm typecheck` + `pnpm lint` PASS; dev server 4003 render shell; đăng nhập qua hub OK | **PASS** (2026-10-31)¹ |
 | 2 | Lift & shift toàn bộ code TMCut (+ absorb `packages/core`) | typecheck + lint + test suite tmcut PASS; editor mở project, render smoke PASS | **PASS** (2026-10-31)² |
-| 3 | Tích hợp hub cho tm-studio: connections, AI catalog, adoption bridge, local vault, RBAC | Duyệt golden path bằng browser: login · connections list · AI model picker · editor | PENDING |
+| 3 | Tích hợp hub cho tm-studio: connections, AI catalog, adoption bridge, local vault, RBAC | Duyệt golden path bằng browser: login · connections list · AI model picker · editor | **PASS** (2026-10-31) |
 | 4 | Gỡ TMCut khỏi tm-tools (code, IPC, i18n, scripts, resources, seed routes) + tuyển chọn lại agent files (`AGENTS.md`, `CLAUDE.md`, `.agents/`) bỏ các mục TMCut | typecheck + lint PASS; các module còn lại chạy tốt trên dev; agent files đồng nhất | PENDING |
 | 5 | Viết lại `tm-tools/docs`: archive v1 → `docs/archive/`, viết docs v2 | Link check PASS; không còn doc mô tả TMCut là tính năng của tm-tools | PENDING |
 | 6 | Verification tổng cả 3 repo + báo cáo cuối | Toàn bộ gates PASS, báo cáo cuối appended vào tài liệu này | PENDING |
@@ -100,3 +100,12 @@ tm-studio(4003)  TMCut standalone (repo này): editor · template · autocut · 
   - Dev smoke: cả 10 trang chính HTTP 200 (`/tmcut`, `/tmcut/editor`, `/resources/{connections,notifications,inbox}`, `/system/{ai-keys,docs,hub-integration}`, `/system/profile/security`, `/system/settings`).
   - Bổ sung trong lúc đóng phase: `app/components/inbox/` (4 component), `app/components/notifications/SendSlideover.vue`, composables/utils phụ thuộc (`useAdminPageChrome`, `useAdminRowActions`, `admin/useModuleExport`, `usePasskey`, `utils/inboxHtml`).
   - ²Editor mở project + render smoke qua browser (golden path Electron) là gate của Phase 3; gate Phase 2 xác nhận ở mức test suite (render graph, video assembly, playback duration… trong 60 specs) + HTTP shell 200.
+- **2026-10-31** — **Phase 3 PASS.** Tích hợp hub hoạt động end-to-end (test với hub local `localhost:4000` qua override `NUXT_PUBLIC_HUB_URL`; `.env` giữ mặc định Vercel như tm-tools). Golden paths duyệt bằng browser (Chrome thật, tab do user đăng nhập):
+  - **Login**: `/` redirect `/login` đúng middleware; user đăng nhập qua hub, sidebar render route tree động lấy từ hub DB (`group_tmcut` 8 routes, `group_resources` 3, `group_system` 5) — RBAC/permission theo app `tm-studio_749app`.
+  - **Connections list**: `/resources/connections` render 7 provider từ hub (Cloudinary, Cloudflare R2, Amazon S3, Supabase Storage, Google OAuth, Pexels, Pixabay) + trạng thái/action kết nối.
+  - **AI catalog**: `/system/ai-keys` hiển thị 21 provider definitions (builtin R147 sync) qua hub.
+  - **AI model picker + editor**: tạo dự án mới từ `/tmcut` → editor mở (`?project=wwy8yoha`, đủ media panel/timeline/toolbar); modal AI Kịch bản có `tmcut-ai-model-picker`, hiển thị đúng trạng thái hub-driven "Chưa có model nào được kết nối" (per-app models là cấu hình vận hành, không phải gate code).
+  - API-level: `GET /apps/tm-studio_749app/{connections,ai/providers}` non-empty; `ai/models` `[]` (chưa cấu hình per-app).
+  - Đã fix `.env`: `APP_URL` 4002 → 4003 (port cũ tm-tools).
+  - Việc còn lại là vận hành: seed AI models per-app + (tuỳ chọn) đăng ký app studio trên hub production — ghi nhận cho Phase 6.
+  - Phát hiện UI cần xử lý ở đợt redesign: sidebar vẫn hiển thị brand "TM TOOLS", tiêu đề trang "TM Studio" tốt nhưng brand block chưa đổi.
