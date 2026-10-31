@@ -60,29 +60,16 @@ function toggleTheme() {
       color="neutral"
       variant="ghost"
       size="sm"
-      class="group rounded-xl border border-default bg-elevated/60 hover:bg-primary/10 hover:border-primary/40 px-2.5 py-1.5"
+      square
+      class="rounded-xl border border-default bg-elevated/60 hover:bg-primary/10 hover:border-primary/40"
       :aria-label="t('studio.nav.openMenu')"
+      :title="currentLabel"
     >
-      <div class="flex items-center gap-2">
-        <img
-          src="/logo.svg"
-          alt=""
-          class="size-5 shrink-0"
-          decoding="async"
-        >
-        <UIcon
-          name="i-lucide-layout-grid"
-          class="size-4 text-muted group-hover:text-primary transition-colors"
-        />
-        <span class="hidden sm:inline text-xs font-medium text-highlighted tracking-tight max-w-40 truncate">
-          {{ currentLabel }}
-        </span>
-        <UIcon
-          name="i-lucide-chevron-down"
-          class="size-3.5 text-dimmed group-hover:text-toned transition-transform duration-200"
-          :class="{ 'rotate-180 text-primary': isNavOpen }"
-        />
-      </div>
+      <UIcon
+        name="i-lucide-menu"
+        class="size-4 transition-colors"
+        :class="isNavOpen ? 'text-primary' : 'text-muted'"
+      />
     </UButton>
 
     <template #content>

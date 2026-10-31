@@ -1192,10 +1192,10 @@ function handleEditorKeydown(e: KeyboardEvent) {
     :description="currentProject?.canvas ? `${currentProject.canvas.width}x${currentProject.canvas.height} (${canvasFpsValue(currentProject.canvas)}fps)` : undefined"
     :navbar-ui="{ root: 'h-auto min-h-(--ui-header-height) flex-wrap py-2', left: 'min-w-0', right: 'min-w-0 max-w-full overflow-x-auto' }"
     flush
+    hide-default-actions
   >
     <template #left>
       <div class="flex min-w-0 items-center gap-2">
-        <TmcutNavPopover />
         <UButton
           to="/tmcut"
           icon="i-lucide-arrow-left"
@@ -1204,6 +1204,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
           color="neutral"
           :title="t('tmcut.back')"
         />
+        <TmcutNavPopover />
         <UIcon name="i-lucide-clapperboard" class="size-5 text-primary shrink-0" />
         <input
           v-if="currentProject"

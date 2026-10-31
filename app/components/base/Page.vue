@@ -5,6 +5,8 @@ const props = defineProps<{
   description?: string
   navbarUi?: Record<string, unknown>
   flush?: boolean
+  /** Full-bleed workspaces own their chrome — no global bell/settings buttons. */
+  hideDefaultActions?: boolean
 }>()
 
 const { t } = useI18n()
@@ -50,17 +52,19 @@ useHead(() => ({
           <template #right>
             <div class="flex items-center gap-2">
               <slot name="right" />
-              <LazyDashboardBellButton />
-              <UButton
-                v-if="auth.isAuthenticated.value"
-                icon="i-lucide-settings"
-                color="neutral"
-                variant="ghost"
-                square
-                :aria-label="t('settings.title')"
-                :ui="{ leadingIcon: 'text-dimmed' }"
-                @click="isSettingsSlideoverOpen = !isSettingsSlideoverOpen"
-              />
+              <template v-if="!hideDefaultActions">
+                <LazyDashboardBellButton />
+                <UButton
+                  v-if="auth.isAuthenticated.value"
+                  icon="i-lucide-settings"
+                  color="neutral"
+                  variant="ghost"
+                  square
+                  :aria-label="t('settings.title')"
+                  :ui="{ leadingIcon: 'text-dimmed' }"
+                  @click="isSettingsSlideoverOpen = !isSettingsSlideoverOpen"
+                />
+              </template>
             </div>
           </template>
         </UDashboardNavbar>

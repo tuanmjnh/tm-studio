@@ -126,15 +126,41 @@ function durationLabel(item: StockItem): string {
       >
         {{ entry.label }}
       </button>
-    </div>
 
-    <p v-if="hiddenProviders.length" class="text-[10px] leading-snug text-muted flex flex-wrap items-center gap-1">
-      <UIcon name="i-lucide-plug-zap" class="size-3 shrink-0" />
-      <span>{{ t('tmcut.stock.connectHint', { providers: hiddenLabels }) }}</span>
-      <NuxtLink to="/resources/connections" class="underline hover:text-primary">
-        {{ t('tmcut.stock.connectAction') }}
-      </NuxtLink>
-    </p>
+      <!-- Locked providers stay out of the list; one info icon explains why. -->
+      <UPopover
+        v-if="hiddenProviders.length"
+        :content="{ side: 'bottom', align: 'end' }"
+        :ui="{ content: 'p-3 w-64' }"
+      >
+        <UButton
+          icon="i-lucide-circle-help"
+          size="xs"
+          variant="ghost"
+          color="warning"
+          square
+          class="ml-auto shrink-0"
+          :aria-label="t('tmcut.stock.connectHint', { providers: hiddenLabels })"
+        />
+        <template #content>
+          <div class="space-y-2.5">
+            <p class="text-[11px] leading-snug text-toned flex items-start gap-1.5">
+              <UIcon name="i-lucide-plug-zap" class="size-3.5 shrink-0 mt-px text-amber-500" />
+              <span>{{ t('tmcut.stock.connectHint', { providers: hiddenLabels }) }}</span>
+            </p>
+            <UButton
+              to="/resources/connections"
+              size="xs"
+              variant="soft"
+              color="primary"
+              icon="i-lucide-plug"
+              :label="t('tmcut.stock.connectAction')"
+              block
+            />
+          </div>
+        </template>
+      </UPopover>
+    </div>
 
     <!-- Media kind -->
     <div class="flex items-center gap-1">

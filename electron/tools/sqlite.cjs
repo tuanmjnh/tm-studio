@@ -79,8 +79,22 @@ function repairHistoryFileNames() {
   }
 }
 
-const dbPath = resolve(app.getPath('userData'), 'tools.sqlite')
-const db = new Database(dbPath)
+// This module is required while the main process is still loading, before
+// Chromium initialises the profile — so on a fresh machine userData may not
+// exist yet and better-sqlite3 cannot create parent directories. Creating it
+// here keeps a first `pnpm dev:electron` from dying with "unable to open
+// database file"; if the file still cannot be opened we degrade to an
+// in-memory DB instead of taking the whole app down.
+const userDataDir = app.getPath('userData')
+const dbPath = resolve(userDataDir, 'tools.sqlite')
+let db
+try {
+  fs.mkdirSync(userDataDir, { recursive: true })
+  db = new Database(dbPath)
+} catch (err) {
+  console.error('[SQLite] Falling back to in-memory database:', dbPath, err && err.message)
+  db = new Database(':memory:')
+}
 
 function init() {
   const tableCheck = db.prepare('SELECT sql FROM sqlite_master WHERE type=\'table\' AND name=\'youtube_configs\'').get()
