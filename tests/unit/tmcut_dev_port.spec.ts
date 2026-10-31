@@ -14,7 +14,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { join, dirname, isAbsolute } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 
@@ -132,7 +132,10 @@ describe('CDP port picker (dev-electron-launcher, R149)', () => {
   it('skips ports that are already bound (the reported bind() failure)', async () => {
     const taken = new Set([9222, 9223, 9224])
     const ports: number[] = []
-    const port = await pickCdpPort(p => { ports.push(p); return Promise.resolve(taken.has(p)) }, 9222)
+    const port = await pickCdpPort((p) => {
+      ports.push(p)
+      return Promise.resolve(taken.has(p))
+    }, 9222)
     assert.equal(port, 9225)
     assert.deepEqual(ports, [9222, 9223, 9224, 9225], 'probes in order, stops at the first free port')
   })
@@ -140,5 +143,27 @@ describe('CDP port picker (dev-electron-launcher, R149)', () => {
   it('gives up after the span so the caller can fall back to Chromium error path', async () => {
     const port = await pickCdpPort(() => Promise.resolve(true), 9222, 3)
     assert.equal(port, null)
+  })
+})
+
+describe('dev Electron profile directory (dev-electron-launcher)', () => {
+  const { resolveUserDataDir } = require('../../electron/tools/dev-electron-launcher.cjs') as {
+    resolveUserDataDir: (env?: Record<string, string | undefined>, root?: string) => string
+  }
+
+  it('keeps dev state in a repo-local folder so it is ours to create', () => {
+    const dir = resolveUserDataDir({}, 'D:/repo')
+    assert.equal(dir.replace(/\\/g, '/'), 'D:/repo/.dev-user-data')
+  })
+
+  it('honours ELECTRON_USER_DATA_DIR, resolved to an absolute path', () => {
+    const dir = resolveUserDataDir({ ELECTRON_USER_DATA_DIR: 'D:/tmp/prof' }, 'D:/repo')
+    assert.equal(dir.replace(/\\/g, '/'), 'D:/tmp/prof')
+    assert.equal(isAbsolute(resolveUserDataDir({ ELECTRON_USER_DATA_DIR: 'prof' }, 'D:/repo')), true)
+  })
+
+  it('ignores a blank override', () => {
+    const dir = resolveUserDataDir({ ELECTRON_USER_DATA_DIR: '   ' }, 'D:/repo')
+    assert.equal(dir.replace(/\\/g, '/'), 'D:/repo/.dev-user-data')
   })
 })

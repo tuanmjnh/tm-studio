@@ -13,7 +13,16 @@
  * with it and announce the chosen endpoint on stdout as
  * "[dev-electron] CDP: http://127.0.0.1:<port>" so tooling can attach.
  * Extra CLI arguments are forwarded to Electron unchanged.
+ *
+ * The dev profile is a repo-local directory (ELECTRON_USER_DATA_DIR to
+ * override). Chromium initialises the profile BEFORE the app's main script
+ * runs, so a `%APPDATA%/<app>` it cannot create aborts startup with nothing
+ * but "crashpad ... not connected" and an opaque exit code — sqlite.cjs's
+ * mkdir never gets a chance to run. Creating the directory here and passing
+ * --user-data-dir keeps dev state writable and isolated from the packaged
+ * build's profile.
  */
+const fs = require('node:fs')
 const net = require('node:net')
 const path = require('node:path')
 const { spawn } = require('node:child_process')
@@ -21,10 +30,10 @@ const { parsePort } = require('./ports.cjs')
 
 /** Resolve a loopback connect attempt: taken === true, rejected/refused === false. */
 function probePort(port, host = '127.0.0.1', timeoutMs = 400) {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     const socket = net.connect({ port, host })
     let settled = false
-    const done = taken => {
+    const done = (taken) => {
       if (settled) return
       settled = true
       socket.destroy()
@@ -33,7 +42,7 @@ function probePort(port, host = '127.0.0.1', timeoutMs = 400) {
     socket.once('connect', () => done(true))
     // ECONNREFUSED = nobody listening = free. Other errors count as taken so a
     // probe failure never silently hands out a bound port.
-    socket.once('error', _err => done(false))
+    socket.once('error', () => done(false))
     socket.setTimeout(timeoutMs, () => done(true))
   })
 }
@@ -51,35 +60,55 @@ async function pickCdpPort(isTaken, start, span = 21) {
 
 const ROOT = path.join(__dirname, '..', '..')
 
+/**
+ * Directory the dev Electron profile lives in. Kept pure so the resolution
+ * contract is unit-testable; the caller owns the mkdir.
+ */
+function resolveUserDataDir(env = process.env, root = ROOT) {
+  const override = env.ELECTRON_USER_DATA_DIR
+  if (override && override.trim()) return path.resolve(override.trim())
+  return path.join(root, '.dev-user-data')
+}
+
 async function main() {
   const preferred = parsePort(process.env.ELECTRON_CDP_PORT) ?? 9222
   const isTaken = port => probePort(port)
   const port = (await pickCdpPort(isTaken, preferred)) ?? preferred
 
+  const userDataDir = resolveUserDataDir()
+  fs.mkdirSync(userDataDir, { recursive: true })
+
   process.stdout.write(`[dev-electron] CDP: http://127.0.0.1:${port}\n`)
+  process.stdout.write(`[dev-electron] user-data: ${userDataDir}\n`)
+
+  // A caller-supplied --user-data-dir wins over the dev default.
+  const forwardArgs = process.argv.slice(2)
+  const hasUserDataArg = forwardArgs.some(arg => arg.startsWith('--user-data-dir'))
+  const userDataArgs = hasUserDataArg ? [] : [`--user-data-dir=${userDataDir}`]
 
   const electronCli = path.join(
-    'node_modules', 'electron', 'cli.js', // resolved relative to ROOT via spawn cwd
+    'node_modules', 'electron', 'cli.js' // resolved relative to ROOT via spawn cwd
   )
   const child = spawn(process.execPath, [
     electronCli,
     '.',
     '--no-sandbox',
     `--remote-debugging-port=${port}`,
-    ...process.argv.slice(2),
+    ...userDataArgs,
+    ...forwardArgs
   ], {
     cwd: ROOT,
     stdio: 'inherit',
-    windowsHide: false,
+    windowsHide: false
   })
   child.on('exit', code => process.exit(code ?? 1))
 }
 
 if (require.main === module) {
-  main().catch(err => {
-    process.stderr.write(`[dev-electron] launcher failed: ${err && err.stack || err}\n`)
+  main().catch((err) => {
+    process.stderr.write(`[dev-electron] launcher failed: ${(err && err.stack) || err}\n`)
     process.exit(1)
   })
 }
 
-module.exports = { pickCdpPort, probePort }
+module.exports = { pickCdpPort, probePort, resolveUserDataDir }

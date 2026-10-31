@@ -127,39 +127,62 @@ function durationLabel(item: StockItem): string {
         {{ entry.label }}
       </button>
 
-      <!-- Locked providers stay out of the list; one info icon explains why. -->
-      <UPopover
-        v-if="hiddenProviders.length"
-        :content="{ side: 'bottom', align: 'end' }"
-        :ui="{ content: 'p-3 w-64' }"
-      >
-        <UButton
-          icon="i-lucide-circle-help"
-          size="xs"
-          variant="ghost"
-          color="warning"
-          square
-          class="ml-auto shrink-0"
-          :aria-label="t('tmcut.stock.connectHint', { providers: hiddenLabels })"
-        />
-        <template #content>
-          <div class="space-y-2.5">
+      <!-- Licence + locked-source notes stay behind compact icons so the
+           source row keeps its full width for provider chips. -->
+      <div class="ml-auto flex items-center gap-0.5 shrink-0">
+        <UPopover
+          :content="{ side: 'bottom', align: 'end' }"
+          :ui="{ content: 'p-3 w-64' }"
+        >
+          <UButton
+            icon="i-lucide-scale"
+            size="xs"
+            variant="ghost"
+            color="neutral"
+            square
+            :aria-label="currentProvider?.licenseNote"
+            :title="currentProvider?.label"
+          />
+          <template #content>
             <p class="text-[11px] leading-snug text-toned flex items-start gap-1.5">
-              <UIcon name="i-lucide-plug-zap" class="size-3.5 shrink-0 mt-px text-amber-500" />
-              <span>{{ t('tmcut.stock.connectHint', { providers: hiddenLabels }) }}</span>
+              <UIcon name="i-lucide-scale" class="size-3.5 shrink-0 mt-px text-emerald-500" />
+              <span>{{ currentProvider?.licenseNote }}</span>
             </p>
-            <UButton
-              to="/resources/connections"
-              size="xs"
-              variant="soft"
-              color="primary"
-              icon="i-lucide-plug"
-              :label="t('tmcut.stock.connectAction')"
-              block
-            />
-          </div>
-        </template>
-      </UPopover>
+          </template>
+        </UPopover>
+
+        <UPopover
+          v-if="hiddenProviders.length"
+          :content="{ side: 'bottom', align: 'end' }"
+          :ui="{ content: 'p-3 w-64' }"
+        >
+          <UButton
+            icon="i-lucide-circle-help"
+            size="xs"
+            variant="ghost"
+            color="warning"
+            square
+            :aria-label="t('tmcut.stock.connectHint', { providers: hiddenLabels })"
+          />
+          <template #content>
+            <div class="space-y-2.5">
+              <p class="text-[11px] leading-snug text-toned flex items-start gap-1.5">
+                <UIcon name="i-lucide-plug-zap" class="size-3.5 shrink-0 mt-px text-amber-500" />
+                <span>{{ t('tmcut.stock.connectHint', { providers: hiddenLabels }) }}</span>
+              </p>
+              <UButton
+                to="/resources/connections"
+                size="xs"
+                variant="soft"
+                color="primary"
+                icon="i-lucide-plug"
+                :label="t('tmcut.stock.connectAction')"
+                block
+              />
+            </div>
+          </template>
+        </UPopover>
+      </div>
     </div>
 
     <!-- Media kind -->
@@ -178,12 +201,6 @@ function durationLabel(item: StockItem): string {
         {{ option.label }}
       </button>
     </div>
-
-    <!-- Licence guarantee -->
-    <p class="text-[10px] leading-snug text-muted flex items-start gap-1">
-      <UIcon name="i-lucide-scale" class="size-3 shrink-0 mt-0.5 text-emerald-500" />
-      <span>{{ currentProvider?.licenseNote }}</span>
-    </p>
 
     <!-- Search -->
     <div class="flex items-center gap-1.5">
