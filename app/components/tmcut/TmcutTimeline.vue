@@ -1083,10 +1083,26 @@ onUnmounted(() => {
       class="min-h-10 px-3 py-1 gap-2 border-b border-default flex flex-wrap items-center justify-between bg-muted/90 shrink-0">
       <!-- Left: History + Tools (Undo, Redo, Split, Delete, Add Media) -->
       <div class="flex items-center gap-1.5 max-w-full overflow-x-auto whitespace-nowrap *:shrink-0">
-        <UButton icon="i-lucide-undo-2" size="xs" variant="ghost" color="neutral" :disabled="!canUndo"
-          :title="tip(t('tmcut.timelineActions.undo'), 'Ctrl+Z')" @click="undo" />
-        <UButton icon="i-lucide-redo-2" size="xs" variant="ghost" color="neutral" :disabled="!canRedo"
-          :title="tip(t('tmcut.timelineActions.redo'), 'Ctrl+Shift+Z')" @click="redo" />
+        <UButton
+          icon="i-lucide-undo-2"
+          size="xs"
+          variant="ghost"
+          color="neutral"
+          :disabled="!canUndo"
+          :aria-label="t('tmcut.timelineActions.undo')"
+          :title="tip(t('tmcut.timelineActions.undo'), 'Ctrl+Z')"
+          @click="undo"
+        />
+        <UButton
+          icon="i-lucide-redo-2"
+          size="xs"
+          variant="ghost"
+          color="neutral"
+          :disabled="!canRedo"
+          :aria-label="t('tmcut.timelineActions.redo')"
+          :title="tip(t('tmcut.timelineActions.redo'), 'Ctrl+Shift+Z')"
+          @click="redo"
+        />
 
         <div class="h-4 w-px bg-accented mx-1" />
 
@@ -1098,18 +1114,53 @@ onUnmounted(() => {
           :title="tip(t('tmcut.timelineActions.delete'), 'Del')" @click="handleDelete">
           {{ t('tmcut.timelineActions.delete') }}
         </UButton>
-        <UButton icon="i-lucide-copy" size="xs" variant="soft" color="neutral" :disabled="!selectedClipId"
-          :title="tip(t('tmcut.timelineActions.duplicate'), 'Ctrl+D')" @click="handleDuplicate" />
-        <UButton icon="i-lucide-clipboard-paste" size="xs" variant="soft" color="neutral" :disabled="!clipboard"
-          :title="tip(t('tmcut.timelineActions.paste'), 'Ctrl+V')" @click="handlePaste" />
-        <UButton icon="i-lucide-fold-horizontal" size="xs" :variant="rippleMode ? 'solid' : 'soft'"
-          :color="rippleMode ? 'primary' : 'neutral'" :title="tip(t('tmcut.timelineActions.ripple'), 'R')"
-          @click="rippleMode = !rippleMode" />
-        <UButton icon="i-lucide-magnet" size="xs" :variant="snapOn ? 'solid' : 'soft'"
-          :color="snapOn ? 'primary' : 'neutral'" :title="tip(t('tmcut.timelineActions.magnet'), 'N')"
-          @click="snapOn = !snapOn" />
-        <UButton icon="i-lucide-chevrons-left" size="xs" variant="soft" color="neutral"
-          :title="t('tmcut.timelineActions.closeGaps')" @click="handleCloseGaps" />
+        <UButton
+          icon="i-lucide-copy"
+          size="xs"
+          variant="soft"
+          color="neutral"
+          :disabled="!selectedClipId"
+          :aria-label="t('tmcut.timelineActions.duplicate')"
+          :title="tip(t('tmcut.timelineActions.duplicate'), 'Ctrl+D')"
+          @click="handleDuplicate"
+        />
+        <UButton
+          icon="i-lucide-clipboard-paste"
+          size="xs"
+          variant="soft"
+          color="neutral"
+          :disabled="!clipboard"
+          :aria-label="t('tmcut.timelineActions.paste')"
+          :title="tip(t('tmcut.timelineActions.paste'), 'Ctrl+V')"
+          @click="handlePaste"
+        />
+        <UButton
+          icon="i-lucide-fold-horizontal"
+          size="xs"
+          :variant="rippleMode ? 'solid' : 'soft'"
+          :color="rippleMode ? 'primary' : 'neutral'"
+          :aria-label="t('tmcut.timelineActions.ripple')"
+          :title="tip(t('tmcut.timelineActions.ripple'), 'R')"
+          @click="rippleMode = !rippleMode"
+        />
+        <UButton
+          icon="i-lucide-magnet"
+          size="xs"
+          :variant="snapOn ? 'solid' : 'soft'"
+          :color="snapOn ? 'primary' : 'neutral'"
+          :aria-label="t('tmcut.timelineActions.magnet')"
+          :title="tip(t('tmcut.timelineActions.magnet'), 'N')"
+          @click="snapOn = !snapOn"
+        />
+        <UButton
+          icon="i-lucide-chevrons-left"
+          size="xs"
+          variant="soft"
+          color="neutral"
+          :aria-label="t('tmcut.timelineActions.closeGaps')"
+          :title="t('tmcut.timelineActions.closeGaps')"
+          @click="handleCloseGaps"
+        />
 
         <div class="h-4 w-px bg-accented mx-1" />
 
@@ -1165,16 +1216,30 @@ onUnmounted(() => {
 
       <!-- Right: Shortcuts help + Timeline Zoom Slider -->
       <div class="flex items-center gap-2">
-        <UButton icon="i-lucide-keyboard" size="xs" variant="ghost" color="neutral"
-          :title="tip(t('tmcut.hotkeys.title'), '?, F1')" @click="shortcutsOpen = true" />
+        <UButton
+          icon="i-lucide-keyboard"
+          size="xs"
+          variant="ghost"
+          color="neutral"
+          :aria-label="t('tmcut.hotkeys.title')"
+          :title="tip(t('tmcut.hotkeys.title'), '?, F1')"
+          @click="shortcutsOpen = true"
+        />
         <UIcon name="i-lucide-zoom-out" class="size-3.5 text-muted" />
         <input id="tmcut-timeline-zoom" v-model.number="zoom" :aria-label="t('tmcut.timelineActions.zoom')" type="range"
           min="15" max="200" step="5" class="w-24 accent-primary cursor-pointer"
           :title="t('tmcut.timelineActions.zoom')">
         <UIcon name="i-lucide-zoom-in" class="size-3.5 text-muted" />
         <span class="text-[10px] font-mono text-muted w-11 text-right">{{ zoom }}px</span>
-        <UButton icon="i-lucide-maximize-2" size="xs" variant="ghost" color="neutral"
-          :title="t('tmcut.timelineActions.zoomFit')" @click="zoomToFit" />
+        <UButton
+          icon="i-lucide-maximize-2"
+          size="xs"
+          variant="ghost"
+          color="neutral"
+          :aria-label="t('tmcut.timelineActions.zoomFit')"
+          :title="t('tmcut.timelineActions.zoomFit')"
+          @click="zoomToFit"
+        />
       </div>
     </div>
 
@@ -1199,8 +1264,14 @@ onUnmounted(() => {
           class="h-6 border-b border-default flex items-center justify-between px-2 text-[10px] font-mono text-muted">
           <span>TRACKS</span>
           <UDropdownMenu :items="addTrackMenuItems" :content="{ align: 'end' }">
-            <UButton icon="i-lucide-plus" size="xs" variant="ghost" color="neutral"
-              :title="t('tmcut.tracks.addTrack')" />
+            <UButton
+              icon="i-lucide-plus"
+              size="xs"
+              variant="ghost"
+              color="neutral"
+              :aria-label="t('tmcut.tracks.addTrack')"
+              :title="t('tmcut.tracks.addTrack')"
+            />
           </UDropdownMenu>
         </div>
 
@@ -1244,23 +1315,53 @@ onUnmounted(() => {
                   { label: t('tmcut.tracks.moveUp'), icon: 'i-lucide-arrow-up-to-line', onSelect: () => moveTrackInProject(track.id, 'up') },
                   { label: t('tmcut.tracks.moveDown'), icon: 'i-lucide-arrow-down-to-line', onSelect: () => moveTrackInProject(track.id, 'down') }
                 ]]" :content="{ align: 'end' }">
-                  <UButton icon="i-lucide-layers" size="xs" variant="ghost" color="neutral"
-                    :title="t('tmcut.tracks.order')" />
+                  <UButton
+                    icon="i-lucide-layers"
+                    size="xs"
+                    variant="ghost"
+                    color="neutral"
+                    :aria-label="t('tmcut.tracks.order')"
+                    :title="t('tmcut.tracks.order')"
+                  />
                 </UDropdownMenu>
-                <UButton :icon="track.hidden ? 'i-lucide-eye-off' : 'i-lucide-eye'" size="xs" variant="ghost"
+                <UButton
+                  :icon="track.hidden ? 'i-lucide-eye-off' : 'i-lucide-eye'"
+                  size="xs"
+                  variant="ghost"
                   :color="track.hidden ? 'warning' : 'neutral'"
+                  :aria-label="track.hidden ? t('tmcut.tracks.show') : t('tmcut.tracks.hide')"
                   :title="track.hidden ? t('tmcut.tracks.show') : t('tmcut.tracks.hide')"
-                  @click="toggleTrackHidden(track.id)" />
-                <UButton :icon="track.locked ? 'i-lucide-lock' : 'i-lucide-lock-open'" size="xs" variant="ghost"
+                  @click="toggleTrackHidden(track.id)"
+                />
+                <UButton
+                  :icon="track.locked ? 'i-lucide-lock' : 'i-lucide-lock-open'"
+                  size="xs"
+                  variant="ghost"
                   :color="track.locked ? 'warning' : 'neutral'"
+                  :aria-label="track.locked ? t('tmcut.tracks.unlock') : t('tmcut.tracks.lock')"
                   :title="track.locked ? t('tmcut.tracks.unlock') : t('tmcut.tracks.lock')"
-                  @click="toggleTrackLock(track.id)" />
-                <UButton v-if="track.type !== 'text'" :icon="track.muted ? 'i-lucide-volume-x' : 'i-lucide-volume-2'"
-                  size="xs" variant="ghost" :color="track.muted ? 'warning' : 'neutral'"
+                  @click="toggleTrackLock(track.id)"
+                />
+                <UButton
+                  v-if="track.type !== 'text'"
+                  :icon="track.muted ? 'i-lucide-volume-x' : 'i-lucide-volume-2'"
+                  size="xs"
+                  variant="ghost"
+                  :color="track.muted ? 'warning' : 'neutral'"
+                  :aria-label="track.muted ? t('tmcut.tracks.unmute') : t('tmcut.tracks.mute')"
                   :title="track.muted ? t('tmcut.tracks.unmute') : t('tmcut.tracks.mute')"
-                  @click="toggleTrackMute(track.id)" />
-                <UButton icon="i-lucide-trash-2" size="xs" variant="ghost" color="neutral" :disabled="track.locked"
-                  :title="t('tmcut.tracks.removeTrack')" @click="removeTrackFromProject(track.id)" />
+                  @click="toggleTrackMute(track.id)"
+                />
+                <UButton
+                  icon="i-lucide-trash-2"
+                  size="xs"
+                  variant="ghost"
+                  color="neutral"
+                  :disabled="track.locked"
+                  :aria-label="t('tmcut.tracks.removeTrack')"
+                  :title="t('tmcut.tracks.removeTrack')"
+                  @click="removeTrackFromProject(track.id)"
+                />
               </div>
             </div>
             <!-- R124 A1 → refit: track-level volume/pan for audio tracks

@@ -535,6 +535,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
           size="sm"
           variant="ghost"
           color="neutral"
+          :aria-label="t('tmcut.back')"
           :title="t('tmcut.back')"
         />
         <TmcutNavPopover />

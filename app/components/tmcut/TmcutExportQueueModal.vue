@@ -150,6 +150,7 @@ function modeIcon(mode: TmcutExportJob['mode']): string {
               size="xs"
               color="neutral"
               variant="ghost"
+              :aria-label="t('common.close')"
               @click="open = false"
             />
           </div>
@@ -251,6 +252,7 @@ function modeIcon(mode: TmcutExportJob['mode']): string {
                     size="xs"
                     color="neutral"
                     variant="soft"
+                    :aria-label="t('tmcut.queue.openFolder')"
                     :title="t('tmcut.queue.openFolder')"
                     @click="openFolder(job.outputPath)"
                   />
@@ -259,6 +261,7 @@ function modeIcon(mode: TmcutExportJob['mode']): string {
                     size="xs"
                     color="neutral"
                     variant="soft"
+                    :aria-label="t('tmcut.queue.openResult')"
                     :title="t('tmcut.queue.openResult')"
                     @click="openFile(job.outputPath)"
                   />
@@ -271,6 +274,7 @@ function modeIcon(mode: TmcutExportJob['mode']): string {
                   size="xs"
                   color="neutral"
                   variant="soft"
+                  :aria-label="t('tmcut.queue.retryJob')"
                   :title="t('tmcut.queue.retryJob')"
                   @click="retryJob(job.id)"
                 />
@@ -282,6 +286,7 @@ function modeIcon(mode: TmcutExportJob['mode']): string {
                   size="xs"
                   color="error"
                   variant="soft"
+                  :aria-label="t('tmcut.queue.cancelJob')"
                   :title="t('tmcut.queue.cancelJob')"
                   @click="cancelJob(job.id)"
                 />
@@ -293,6 +298,7 @@ function modeIcon(mode: TmcutExportJob['mode']): string {
                   size="xs"
                   color="neutral"
                   variant="ghost"
+                  :aria-label="t('tmcut.queue.removeJob')"
                   :title="t('tmcut.queue.removeJob')"
                   @click="removeJob(job.id)"
                 />

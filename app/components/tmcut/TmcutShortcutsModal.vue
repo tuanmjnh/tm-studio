@@ -261,6 +261,7 @@ onUnmounted(() => {
               size="xs"
               color="neutral"
               variant="ghost"
+              :aria-label="t('tmcut.hotkeys.closeAria')"
               :title="t('tmcut.hotkeys.closeAria')"
               @click="open = false"
             />

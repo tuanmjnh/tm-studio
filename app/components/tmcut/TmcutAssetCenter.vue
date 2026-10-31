@@ -410,6 +410,7 @@ function handleApply(entryId: string, assetKind: string) {
                 size="xs"
                 variant="ghost"
                 color="neutral"
+                :aria-label="t('tmcut.assetCenter.cancel')"
                 :title="t('tmcut.assetCenter.cancel')"
                 @click="handleCancel(entry.id)"
               />
@@ -439,6 +440,7 @@ function handleApply(entryId: string, assetKind: string) {
                   size="xs"
                   variant="ghost"
                   color="neutral"
+                  :aria-label="t('tmcut.assetCenter.uninstall')"
                   :title="t('tmcut.assetCenter.uninstall')"
                 />
               </UDropdownMenu>

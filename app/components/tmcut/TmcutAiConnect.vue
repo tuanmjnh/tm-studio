@@ -685,6 +685,7 @@ const testedRows = computed(() => {
                 size="xs"
                 icon="i-lucide-refresh-cw"
                 :loading="loading"
+                :aria-label="t('tmcut.aiConnect.loadModels')"
                 :title="t('tmcut.aiConnect.loadModels')"
                 @click="handleLoadModels('global')"
               />

@@ -293,6 +293,7 @@ function durationLabel(item: StockItem): string {
               color="neutral"
               icon="i-lucide-arrow-right-to-line"
               :disabled="!!importingId"
+              :aria-label="t('tmcut.stock.addToTimeline')"
               :title="t('tmcut.stock.addToTimeline')"
               @click="onImport(item, true)"
             />
@@ -301,6 +302,7 @@ function durationLabel(item: StockItem): string {
               variant="ghost"
               color="neutral"
               icon="i-lucide-quote"
+              :aria-label="t('tmcut.stock.copyCredit')"
               :title="t('tmcut.stock.copyCredit')"
               @click="copyCredit(item)"
             />

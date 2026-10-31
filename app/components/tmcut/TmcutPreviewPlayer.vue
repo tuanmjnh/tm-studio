@@ -1513,6 +1513,7 @@ onUnmounted(() => {
             size="xs"
             variant="soft"
             :color="isCropActive ? 'primary' : 'neutral'"
+            :aria-label="t('tmcut.crop.tool')"
             :title="t('tmcut.crop.tool')"
             @click="triggerCropTool"
           />
@@ -1522,6 +1523,7 @@ onUnmounted(() => {
             size="xs"
             variant="soft"
             :color="proxyPreview ? (isCurrentClipProxy ? 'warning' : 'primary') : 'neutral'"
+            :aria-label="proxyPreview ? t('tmcut.proxy.disable') : t('tmcut.proxy.enable')"
             :title="proxyPreview ? t('tmcut.proxy.disable') : t('tmcut.proxy.enable')"
             @click="proxyPreview = !proxyPreview"
           />
@@ -1535,6 +1537,7 @@ onUnmounted(() => {
             size="xs"
             variant="soft"
             :color="toggle.active ? 'primary' : 'neutral'"
+            :aria-label="toggle.label"
             :title="toggle.label"
             @click="toggle.onSelect()"
           />
@@ -1547,6 +1550,7 @@ onUnmounted(() => {
               size="xs"
               variant="soft"
               :color="canvasZoom !== 'fit' ? 'primary' : 'neutral'"
+              :aria-label="t('tmcut.player.zoom')"
               :title="t('tmcut.player.zoom')"
             />
           </UDropdownMenu>
@@ -1556,6 +1560,7 @@ onUnmounted(() => {
               size="xs"
               variant="soft"
               :color="ratioGuideId ? 'primary' : 'neutral'"
+              :aria-label="t('tmcut.safeArea.ratioGuide')"
               :title="t('tmcut.safeArea.ratioGuide')"
             />
           </UDropdownMenu>
@@ -1566,6 +1571,7 @@ onUnmounted(() => {
             variant="soft"
             color="neutral"
             :loading="snapshotBusy"
+            :aria-label="t('tmcut.player.snapshot')"
             :title="t('tmcut.player.snapshot')"
             @click="snapshotFrame"
           />
@@ -1574,6 +1580,7 @@ onUnmounted(() => {
             size="xs"
             variant="soft"
             color="neutral"
+            :aria-label="t('tmcut.player.fullscreen')"
             :title="t('tmcut.player.fullscreen')"
             @click="toggleFullscreen"
           />
@@ -1900,6 +1907,7 @@ onUnmounted(() => {
               variant="ghost"
               color="neutral"
               class="shrink-0"
+              :aria-label="t('tmcut.crop.reset')"
               :title="t('tmcut.crop.reset')"
               @click.stop="resetCropRect"
             />
@@ -2023,6 +2031,7 @@ onUnmounted(() => {
             :variant="loopPlayback ? 'solid' : 'soft'"
             :color="loopPlayback ? 'primary' : 'neutral'"
             :disabled="!hasTimelineClips"
+            :aria-label="t('tmcut.player.loop')"
             :title="t('tmcut.player.loop')"
             @click="loopPlayback = !loopPlayback"
           />
@@ -2053,6 +2062,7 @@ onUnmounted(() => {
             variant="soft"
             color="neutral"
             :disabled="!hasTimelineClips"
+            :aria-label="t('tmcut.player.jumpToStart')"
             :title="t('tmcut.player.jumpToStart')"
             @click="seek(0)"
           />
@@ -2062,6 +2072,7 @@ onUnmounted(() => {
             variant="soft"
             color="neutral"
             :disabled="!hasTimelineClips"
+            :aria-label="t('tmcut.player.stepBackward')"
             :title="t('tmcut.player.stepBackward')"
             @click="stepBackward(1)"
           />
@@ -2075,6 +2086,7 @@ onUnmounted(() => {
           variant="solid"
           class="justify-self-center rounded-full w-9 h-9 p-0 flex items-center justify-center shadow-lg shadow-primary/20"
           :disabled="!hasTimelineClips"
+          :aria-label="isPlaying ? t('tmcut.player.pause') : t('tmcut.player.play')"
           :title="isPlaying ? t('tmcut.player.pause') : t('tmcut.player.play')"
           @click="togglePlayPause"
         />
@@ -2087,6 +2099,7 @@ onUnmounted(() => {
             variant="soft"
             color="neutral"
             :disabled="!hasTimelineClips"
+            :aria-label="t('tmcut.player.stepForward')"
             :title="t('tmcut.player.stepForward')"
             @click="stepForward(1)"
           />
@@ -2096,6 +2109,7 @@ onUnmounted(() => {
             variant="soft"
             color="neutral"
             :disabled="!hasTimelineClips"
+            :aria-label="t('tmcut.player.jumpToEnd')"
             :title="t('tmcut.player.jumpToEnd')"
             @click="seek(contentDuration)"
           />
@@ -2105,6 +2119,7 @@ onUnmounted(() => {
             size="xs"
             variant="soft"
             color="neutral"
+            :aria-label="t('tmcut.player.mute')"
             :title="t('tmcut.player.mute')"
             @click="previewMuted = !previewMuted"
           />

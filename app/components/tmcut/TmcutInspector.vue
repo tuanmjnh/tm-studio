@@ -911,6 +911,7 @@ const saveStateLabel = computed(() => {
           size="xs"
           :color="clip.bold ? 'primary' : 'neutral'"
           :variant="clip.bold ? 'soft' : 'ghost'"
+          :aria-label="t('tmcut.inspectorProps.bold')"
           :title="t('tmcut.inspectorProps.bold')"
           @click="handleStyleToggle('bold')"
         />
@@ -919,6 +920,7 @@ const saveStateLabel = computed(() => {
           size="xs"
           :color="clip.italic ? 'primary' : 'neutral'"
           :variant="clip.italic ? 'soft' : 'ghost'"
+          :aria-label="t('tmcut.inspectorProps.italic')"
           :title="t('tmcut.inspectorProps.italic')"
           @click="handleStyleToggle('italic')"
         />
@@ -941,6 +943,7 @@ const saveStateLabel = computed(() => {
           size="xs"
           :color="clip.shadow ? 'primary' : 'neutral'"
           :variant="clip.shadow ? 'soft' : 'ghost'"
+          :aria-label="t('tmcut.inspectorProps.shadow')"
           :title="t('tmcut.inspectorProps.shadow')"
           @click="handleStyleToggle('shadow')"
         />
@@ -949,6 +952,7 @@ const saveStateLabel = computed(() => {
           size="xs"
           :color="clip.stroke ? 'primary' : 'neutral'"
           :variant="clip.stroke ? 'soft' : 'ghost'"
+          :aria-label="t('tmcut.inspectorProps.stroke')"
           :title="t('tmcut.inspectorProps.stroke')"
           @click="handleStyleToggle('stroke')"
         />
@@ -1302,6 +1306,7 @@ const saveStateLabel = computed(() => {
             size="xs"
             variant="soft"
             color="neutral"
+            :aria-label="t('tmcut.crop.reset')"
             :title="t('tmcut.crop.reset')"
             @click="handleUpdate('cropRect', { x: 0, y: 0, w: 1, h: 1 })"
           />
@@ -2126,6 +2131,7 @@ const saveStateLabel = computed(() => {
                 size="xs"
                 color="neutral"
                 variant="ghost"
+                :aria-label="t('tmcut.effects.reset')"
                 :title="t('tmcut.effects.reset')"
                 @click="handleResetEffect(idx)"
               />
@@ -2134,6 +2140,7 @@ const saveStateLabel = computed(() => {
                 size="xs"
                 color="error"
                 variant="ghost"
+                :aria-label="t('tmcut.effects.remove')"
                 :title="t('tmcut.effects.remove')"
                 @click="handleRemoveEffect(idx)"
               />
@@ -2250,6 +2257,7 @@ const saveStateLabel = computed(() => {
           size="xs"
           color="neutral"
           variant="ghost"
+          :aria-label="t('tmcut.inspectorProps.filtersClear')"
           :title="t('tmcut.inspectorProps.filtersClear')"
           @click="clearFilter"
         />

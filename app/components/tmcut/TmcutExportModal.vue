@@ -1303,6 +1303,7 @@ function previewResultDirectly() {
                     size="xs"
                     variant="ghost"
                     color="neutral"
+                    :aria-label="t('tmcut.export.lutClear')"
                     :title="t('tmcut.export.lutClear')"
                     @click="lut3dPath = null"
                   />
@@ -1466,6 +1467,7 @@ function previewResultDirectly() {
                     size="xs"
                     color="primary"
                     variant="soft"
+                    :aria-label="t('tmcut.export.previewNow')"
                     :title="t('tmcut.export.previewNow')"
                     @click="previewResultDirectly"
                   />
@@ -1474,6 +1476,7 @@ function previewResultDirectly() {
                     size="xs"
                     variant="soft"
                     color="neutral"
+                    :aria-label="t('tmcut.export.openWithApp')"
                     :title="t('tmcut.export.openWithApp')"
                     @click="openResultFile"
                   />
@@ -1482,6 +1485,7 @@ function previewResultDirectly() {
                     size="xs"
                     variant="soft"
                     color="neutral"
+                    :aria-label="t('tmcut.export.openFolder')"
                     :title="t('tmcut.export.openFolder')"
                     @click="openResultFolder"
                   />
