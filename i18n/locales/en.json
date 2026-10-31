@@ -256,7 +256,7 @@
       "label": "Marker label"
     },
     "animation": {
-      "tab": "Animation",
+      "tab": "Motion",
       "presets": "Quick Presets",
       "animIn": "Intro Animation (In)",
       "animOut": "Outro Animation (Out)",
@@ -400,14 +400,14 @@
       "effects": "Effects",
       "transitions": "Transitions",
       "filters": "Filters",
-      "assets": "Asset Store",
+      "assets": "Asset Market",
       "stock": "Free stock",
       "textHint": "Click a style to add it to the timeline at the playhead",
       "soonTitle": "Coming soon",
       "soonDesc": "This category is planned for a future update"
     },
     "stock": {
-      "tab": "Stock",
+      "tab": "Free stock",
       "kind_image": "Photos",
       "kind_video": "Video",
       "kind_audio": "Music",
@@ -424,15 +424,13 @@
       "creditCopied": "Credit copied",
       "creditCopyFailed": "Could not copy the credit",
       "attributionHint": "This licence requires credit: paste the credit line into your description.",
-      "keyLabel": "{provider} API key",
-      "keyPlaceholder": "Paste your free {provider} API key",
-      "keySaved": "{provider} API key saved on this device",
-      "keySavedShort": "Key saved — paste a new one to replace it",
-      "keyCleared": "API key removed",
-      "keyRequired": "This source needs a free API key — paste one above to search.",
-      "saveKey": "Save",
-      "getKey": "Get a free {provider} key",
-      "toggleKey": "Show or hide the key"
+      "suggested": "Trending picks",
+      "results": "Search results",
+      "connectHint": "{providers} not connected — enable it in Connections to use this source.",
+      "connectAction": "Open Connections",
+      "retry": "Try again",
+      "loading": "Loading stock media…",
+      "emptyFeed": "No trending picks yet — search for something."
     },
     "assetCenter": {
       "search": "Search the asset catalog",

@@ -35,6 +35,9 @@
   --studio-glass-border: color-mix(in oklab, var(--ui-border) 85%, white 15%);
   --studio-glass-specular: rgba(255, 255, 255, 0.75);
   --studio-glass-shadow: 0 12px 32px -4px rgba(9, 9, 11, 0.06);
+  --studio-ambient-primary: 18%;
+  --studio-ambient-secondary: 14%;
+  --studio-ambient-tertiary: 10%;
 }
 
 .dark {
@@ -42,6 +45,9 @@
   --studio-glass-border: color-mix(in oklab, var(--ui-border) 80%, white 20%);
   --studio-glass-specular: rgba(255, 255, 255, 0.16);
   --studio-glass-shadow: 0 20px 50px -8px rgba(0, 0, 0, 0.65);
+  --studio-ambient-primary: 26%;
+  --studio-ambient-secondary: 20%;
+  --studio-ambient-tertiary: 14%;
 }
 
 @utility glass-surface {
@@ -52,6 +58,35 @@
   box-shadow:
     var(--studio-glass-shadow),
     inset 0 1px 0 0 var(--studio-glass-specular);
+}
+
+/* Ambient layer: pure CSS so the console keeps its depth cue without shipping
+   a bitmap backdrop. Alphas are tuned per theme through the custom properties
+   above; the palette comes from Nuxt UI semantic colors. */
+@utility studio-ambient {
+  background-color: var(--ui-bg);
+  background-image:
+    radial-gradient(72rem 46rem at 8% -10%, color-mix(in oklab, var(--ui-primary) var(--studio-ambient-primary), transparent), transparent 64%),
+    radial-gradient(58rem 40rem at 102% -4%, color-mix(in oklab, var(--ui-secondary) var(--studio-ambient-secondary), transparent), transparent 60%),
+    radial-gradient(80rem 52rem at 50% 118%, color-mix(in oklab, var(--ui-info) var(--studio-ambient-tertiary), transparent), transparent 70%);
+  background-repeat: no-repeat;
+}
+
+/* Square icon plate for bento cards. Set --tile-accent to recolor. */
+@utility studio-icon-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  inline-size: 3rem;
+  block-size: 3rem;
+  border-radius: 0.875rem;
+  color: var(--tile-accent, var(--ui-primary));
+  background:
+    radial-gradient(120% 120% at 20% 0%, color-mix(in oklab, var(--tile-accent, var(--ui-primary)) 32%, transparent), transparent 72%),
+    color-mix(in oklab, var(--tile-accent, var(--ui-primary)) 12%, transparent);
+  border: 1px solid color-mix(in oklab, var(--tile-accent, var(--ui-primary)) 26%, transparent);
+  box-shadow: inset 0 1px 0 0 var(--studio-glass-specular);
 }
 
 @keyframes slide-in-right {

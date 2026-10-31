@@ -14,12 +14,15 @@ import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import {
   STOCK_PROVIDERS,
+  buildStockFeedRequest,
   buildStockRequest,
   isCommercialSafeLicense,
   parseStockResponse,
   providerKinds,
   requiresAttribution,
   stockFileName,
+  stockHasMore,
+  stockPageSize,
   supportsKind
 } from '../../app/utils/tmcut/stockProviders'
 import {
@@ -91,6 +94,47 @@ check('pixabay puts the key in the query, not a header', () => {
 check('unsupported kind and empty query are refused before any request', () => {
   assert.throws(() => buildStockRequest({ provider: 'openverse', kind: 'video', query: 'x' }), /does not provide/)
   assert.throws(() => buildStockRequest({ provider: 'openverse', kind: 'image', query: '   ' }), /search term/)
+})
+
+check('keyed requests can defer auth to the hub', () => {
+  const pexels = buildStockRequest({ provider: 'pexels', kind: 'image', query: 'dog' }, { deferAuth: true })
+  assert.equal(new URL(pexels.url).searchParams.get('query'), 'dog')
+  assert.deepEqual(pexels.headers, {})
+  const pixabay = buildStockRequest({ provider: 'pixabay', kind: 'video', query: 'sea' }, { deferAuth: true })
+  assert.equal(new URL(pixabay.url).searchParams.has('key'), false)
+  assert.throws(() => buildStockRequest({ provider: 'pixabay', kind: 'image', query: 'x' }), /API key/)
+})
+
+check('feed requests use curated/popular endpoints and carry no key', () => {
+  const pexelsPhoto = new URL(buildStockFeedRequest({ provider: 'pexels', kind: 'image' }).url)
+  assert.equal(pexelsPhoto.pathname, '/v1/curated')
+  const pexelsVideo = new URL(buildStockFeedRequest({ provider: 'pexels', kind: 'video', page: 2 }).url)
+  assert.equal(pexelsVideo.pathname, '/videos/popular')
+  assert.equal(pexelsVideo.searchParams.get('page'), '2')
+
+  const pixabay = new URL(buildStockFeedRequest({ provider: 'pixabay', kind: 'image' }).url)
+  assert.equal(pixabay.searchParams.get('editors_choice'), 'true')
+  assert.equal(pixabay.searchParams.get('order'), 'popular')
+  assert.equal(pixabay.searchParams.has('key'), false)
+
+  const openverse = new URL(buildStockFeedRequest({ provider: 'openverse', kind: 'image' }).url)
+  assert.equal(openverse.searchParams.get('license_type'), 'commercial,modification')
+  assert.equal(openverse.searchParams.get('ordering'), '-created_on')
+  assert.equal(openverse.searchParams.get('page_size'), '20')
+})
+
+check('page size matches each provider and raw payloads drive hasMore', () => {
+  assert.equal(stockPageSize('openverse'), 20)
+  assert.equal(stockPageSize('pexels'), 24)
+  assert.equal(stockPageSize('pixabay'), 24)
+
+  assert.equal(stockHasMore('openverse', { page_count: 3, results: [] }, 2, 20), true)
+  assert.equal(stockHasMore('openverse', { page_count: 2, results: [] }, 2, 20), false)
+  assert.equal(stockHasMore('pexels', { next_page: 'https://api.pexels.com/v1/curated?page=2' }, 1, 24), true)
+  assert.equal(stockHasMore('pexels', { next_page: undefined }, 1, 24), false)
+  assert.equal(stockHasMore('pixabay', { totalHits: 100 }, 4, 24), true)
+  assert.equal(stockHasMore('pixabay', { totalHits: 90 }, 4, 24), false)
+  assert.equal(stockHasMore('openverse', null, 1, 20), false)
 })
 
 // --- Licence gate ------------------------------------------------------------

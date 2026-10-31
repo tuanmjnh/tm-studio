@@ -1,35 +1,37 @@
 // =============================================================================
 //  Stock media search composable (kho tài nguyên).
 //
-//  Same code path on desktop and web:
-//    - request  : main-process `tmcut:stockSearch` on desktop (the host
-//                 allowlist lives there); on web `/api/v1/stock/proxy`, the
-//                 Nitro twin of that proxy — a plain browser fetch is NOT
-//                 enough because Pexels answers a preflight without CORS
-//                 headers, so the search used to fail outright on the web;
-//    - import   : desktop downloads into <base>/downloads then runs the normal
-//                 import pipeline; web fetches the bytes, uploads them to
-//                 /api/v1/media/upload and imports the served copy, falling
-//                 back to `/api/v1/stock/download` when the provider CDN sends
-//                 no CORS headers for the media file itself.
+//  Sources are gated by the app's hub connections: Openverse is keyless and
+//  always available; Pexels and Pixabay appear only when their connection is
+//  `connected` in Connections. Their API keys live in the hub and never reach
+//  the renderer — searches go through
+//  `POST /v1/apps/:id/connections/:provider/stock-search`, which adds the
+//  credential server-side and forwards the provider JSON back.
 //
-//  API keys for Pexels/Pixabay (free, read-only search keys) live in
-//  localStorage per provider. Openverse needs no key.
+//  Openverse still uses the local trust boundary on both runtimes: the
+//  main-process `tmcut:stockSearch` on desktop, `/api/v1/stock/proxy` on web.
+//
+//  Imports: desktop downloads into <base>/downloads and runs the normal import
+//  pipeline; web fetches the bytes, uploads to /api/v1/media/upload and imports
+//  the served copy, falling back to `/api/v1/stock/download` when the CDN sends
+//  no CORS headers for the file itself.
 // =============================================================================
 import { computed, ref } from 'vue'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
 import {
   STOCK_PROVIDERS,
+  buildStockFeedRequest,
   buildStockRequest,
   parseStockResponse,
   providerKinds,
   stockFileName,
+  stockHasMore,
+  stockPageSize,
   stockProvider,
   supportsKind
 } from '~/utils/tmcut/stockProviders'
-import type { StockItem, StockKind, StockProviderId } from '~/utils/tmcut/stockProviders'
+import type { StockItem, StockKind, StockProviderId, StockRequest } from '~/utils/tmcut/stockProviders'
 
-const KEY_PREFIX = 'tmcut_stock_key_'
 const PROXY_ENDPOINT = '/api/v1/stock/proxy'
 const DOWNLOAD_ENDPOINT = '/api/v1/stock/download'
 
@@ -46,7 +48,7 @@ function proxyError(err: unknown, fallback: string): string {
  * no CORS headers), so the request is forwarded to the Nitro proxy, which
  * re-validates host + headers exactly like the Electron main process does.
  */
-async function searchThroughServer(request: { url: string, headers: Record<string, string> }): Promise<unknown> {
+async function searchThroughServer(request: StockRequest): Promise<unknown> {
   try {
     const response = await $fetch<{ ok: boolean, data: unknown }>(PROXY_ENDPOINT, {
       method: 'POST',
@@ -78,13 +80,9 @@ async function fetchStockBytes(url: string): Promise<Blob> {
   }
 }
 
-function readKey(provider: StockProviderId): string {
-  if (typeof window === 'undefined') return ''
-  try {
-    return window.localStorage.getItem(KEY_PREFIX + provider) || ''
-  } catch {
-    return ''
-  }
+type HubProviderRow = {
+  key?: string
+  connection?: { status?: string } | null
 }
 
 export function useTmcutStock() {
@@ -94,117 +92,168 @@ export function useTmcutStock() {
   const kind = ref<StockKind>('image')
   const query = ref('')
   const items = ref<StockItem[]>([])
+  const mode = ref<'feed' | 'search'>('feed')
   const loading = ref(false)
   const error = ref<string | null>(null)
   const page = ref(0)
   const hasMore = ref(false)
   const importingId = ref<string | null>(null)
-  const keys = ref<Record<StockProviderId, string>>({
-    openverse: '',
-    pexels: readKey('pexels'),
-    pixabay: readKey('pixabay')
+  const availability = ref<Record<StockProviderId, boolean>>({
+    openverse: true,
+    pexels: false,
+    pixabay: false
   })
 
-  const providers = STOCK_PROVIDERS
+  const providers = computed(() => STOCK_PROVIDERS.filter(entry => availability.value[entry.id]))
+  const hiddenProviders = computed(() => STOCK_PROVIDERS.filter(entry => !availability.value[entry.id]))
   const currentProvider = computed(() => stockProvider(provider.value))
   const kinds = computed(() => providerKinds(provider.value))
-  const apiKey = computed(() => keys.value[provider.value] || '')
-  const needsKey = computed(() => !!currentProvider.value?.requiresKey && !apiKey.value)
-  const canSearch = computed(() => !!query.value.trim() && !loading.value && !needsKey.value)
+  const canSearch = computed(() => !!query.value.trim() && !loading.value)
 
-  function setKey(value: string) {
-    const next = value.trim()
-    keys.value[provider.value] = next
-    if (typeof window === 'undefined') return
+  let requestToken = 0
+
+  /**
+   * Keyed sources are shown only when their hub connection is connected, so
+   * the panel never offers a provider that would answer 401.
+   */
+  async function refreshProviders() {
+    const next: Record<StockProviderId, boolean> = { openverse: true, pexels: false, pixabay: false }
     try {
-      if (next) window.localStorage.setItem(KEY_PREFIX + provider.value, next)
-      else window.localStorage.removeItem(KEY_PREFIX + provider.value)
+      const hub = useHub()
+      const res = await hub.connections.list(hub.appId)
+      for (const row of ((res.data || []) as HubProviderRow[])) {
+        if (row.key === 'pexels' || row.key === 'pixabay') {
+          next[row.key] = row.connection?.status === 'connected'
+        }
+      }
     } catch {
-      // Private mode / quota: the key still works for this session.
+      // Hub offline or signed out: the keyless source still works.
+    }
+    availability.value = next
+    if (!next[provider.value]) {
+      provider.value = 'openverse'
+      if (!supportsKind(provider.value, kind.value)) kind.value = 'image'
     }
   }
 
-  function selectProvider(next: StockProviderId) {
-    provider.value = next
-    error.value = null
-    items.value = []
-    page.value = 0
-    hasMore.value = false
-    if (!supportsKind(next, kind.value)) kind.value = providerKinds(next)[0] || 'image'
-  }
-
-  function selectKind(next: StockKind) {
-    if (!supportsKind(provider.value, next)) return
-    kind.value = next
-    items.value = []
-    page.value = 0
-    hasMore.value = false
-    error.value = null
-  }
-
-  async function requestPage(targetPage: number): Promise<StockItem[]> {
-    const args = {
-      provider: provider.value,
-      kind: kind.value,
-      query: query.value,
-      page: targetPage,
-      perPage: 24,
-      apiKey: apiKey.value
+  /** Hub-side search: the credential is added by the hub, never sent here. */
+  async function searchThroughHub(request: StockRequest): Promise<unknown> {
+    const hub = useHub()
+    try {
+      const response = await hub.hubFetch<{ success?: boolean, data?: unknown }>(
+        `/v1/apps/${hub.appId}/connections/${provider.value}/stock-search`,
+        { method: 'POST', body: { url: request.url } }
+      )
+      if (!response?.success) throw new Error('Stock request failed')
+      return response.data
+    } catch (err) {
+      throw new Error(proxyError(err, 'Stock request failed'), { cause: err })
     }
-    const request = buildStockRequest(args)
-    const ipc = typeof window !== 'undefined' ? window.electronAPI?.tmcut : undefined
+  }
+
+  async function requestPage(targetPage: number, source: 'feed' | 'search'): Promise<StockItem[]> {
+    const perPage = stockPageSize(provider.value)
+    const request = source === 'feed'
+      ? buildStockFeedRequest({ provider: provider.value, kind: kind.value, page: targetPage, perPage })
+      : buildStockRequest(
+          { provider: provider.value, kind: kind.value, query: query.value, page: targetPage, perPage },
+          { deferAuth: provider.value !== 'openverse' }
+        )
 
     let payload: unknown
-    if (ipc?.stockSearch) {
-      const response = await ipc.stockSearch({ url: request.url, headers: request.headers })
-      if (!response?.ok) {
-        throw new Error(response?.error || `Stock request failed${response?.status ? ` (HTTP ${response.status})` : ''}`)
+    if (provider.value === 'openverse') {
+      const ipc = typeof window !== 'undefined' ? window.electronAPI?.tmcut : undefined
+      if (ipc?.stockSearch) {
+        const response = await ipc.stockSearch({ url: request.url, headers: request.headers })
+        if (!response?.ok) {
+          throw new Error(response?.error || `Stock request failed${response?.status ? ` (HTTP ${response.status})` : ''}`)
+        }
+        payload = response.data
+      } else {
+        payload = await searchThroughServer(request)
       }
-      payload = response.data
     } else {
-      payload = await searchThroughServer(request)
+      payload = await searchThroughHub(request)
     }
 
-    const parsed = parseStockResponse({ provider: args.provider, kind: args.kind }, payload)
-    hasMore.value = parsed.length >= 24
-    return parsed
+    // Page size comes from the raw payload, not the normalised list: the
+    // licence gate can drop entries and would otherwise end pagination early.
+    hasMore.value = stockHasMore(provider.value, payload, targetPage, perPage)
+    return parseStockResponse({ provider: provider.value, kind: kind.value }, payload)
+  }
+
+  async function firstPage() {
+    const token = ++requestToken
+    loading.value = true
+    error.value = null
+    try {
+      const parsed = await requestPage(1, mode.value)
+      if (token !== requestToken) return
+      items.value = parsed
+      page.value = 1
+    } catch (err) {
+      if (token !== requestToken) return
+      items.value = []
+      hasMore.value = false
+      error.value = String((err as Error)?.message || err)
+    } finally {
+      if (token === requestToken) loading.value = false
+    }
+  }
+
+  /** "Hot right now" grid loaded when the panel opens. */
+  async function loadFeed() {
+    mode.value = 'feed'
+    await firstPage()
   }
 
   async function search() {
     if (!query.value.trim()) {
-      error.value = 'Enter a search term'
+      await loadFeed()
       return
     }
-    if (needsKey.value) {
-      error.value = `Add a ${currentProvider.value?.label} API key first`
-      return
-    }
-    loading.value = true
-    error.value = null
-    page.value = 1
-    try {
-      items.value = await requestPage(1)
-    } catch (err) {
-      items.value = []
-      error.value = String((err as Error)?.message || err)
-    } finally {
-      loading.value = false
-    }
+    mode.value = 'search'
+    await firstPage()
+  }
+
+  function retry() {
+    return firstPage()
   }
 
   async function loadMore() {
     if (loading.value || !hasMore.value) return
+    const token = requestToken
     loading.value = true
     try {
       const next = page.value + 1
-      const more = await requestPage(next)
+      const more = await requestPage(next, mode.value)
+      if (token !== requestToken) return
       page.value = next
       items.value = [...items.value, ...more]
     } catch (err) {
-      error.value = String((err as Error)?.message || err)
+      if (token === requestToken) error.value = String((err as Error)?.message || err)
     } finally {
-      loading.value = false
+      if (token === requestToken) loading.value = false
     }
+  }
+
+  /** Resolve which sources are connected, then preload suggestions. */
+  async function initialize() {
+    await refreshProviders()
+    await loadFeed()
+  }
+
+  function selectProvider(next: StockProviderId) {
+    if (next === provider.value) return
+    provider.value = next
+    if (!supportsKind(next, kind.value)) kind.value = providerKinds(next)[0] || 'image'
+    void loadFeed()
+  }
+
+  function selectKind(next: StockKind) {
+    if (!supportsKind(provider.value, next) || next === kind.value) return
+    kind.value = next
+    void loadFeed()
   }
 
   /**
@@ -256,24 +305,26 @@ export function useTmcutStock() {
 
   return {
     providers,
+    hiddenProviders,
     provider,
     kind,
     kinds,
     query,
     items,
+    mode,
     loading,
     error,
     hasMore,
     page,
     importingId,
     currentProvider,
-    apiKey,
-    needsKey,
     canSearch,
-    setKey,
+    initialize,
+    refreshProviders,
     selectProvider,
     selectKind,
     search,
+    retry,
     loadMore,
     importItem,
     importToTimeline,

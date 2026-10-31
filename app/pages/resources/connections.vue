@@ -79,7 +79,7 @@ async function refresh() {
     // code-registry providers (cloudinary, google) + DB-backed AI
     // providers flagged `ai: true` with all credentials in `connections`.
     const res = await connections.list(appId)
-    providers.value = ((res.data || []) as ConnectionProvider[]).filter(p => !p.ai && p.category !== "exchange" && p.category !== "market_data")
+    providers.value = ((res.data || []) as ConnectionProvider[]).filter(p => !p.ai && p.category !== 'exchange' && p.category !== 'market_data')
   } catch (err: unknown) {
     toast.add({ title: getErrorMessage(err, key => t(key)), color: 'error' })
   } finally {
@@ -326,7 +326,6 @@ function backToProvider() {
   addStep.value = 'provider'
 }
 
-
 async function saveAddConnection() {
   const p = addProvider.value
   if (!p) return
@@ -417,11 +416,11 @@ useHead({ title: t('connections.title') })
         <div
           v-for="p in providers"
           :key="p.key"
-          class="rounded-xl border border-primary/30 p-4 flex flex-col gap-3 shadow-xs"
+          class="glass-surface flex flex-col gap-3 rounded-2xl p-5"
         >
           <div class="flex items-start justify-between gap-2">
             <div class="flex items-center gap-3 min-w-0">
-              <div class="flex items-center justify-center size-10 rounded-lg bg-elevated/50 shrink-0">
+              <div class="studio-icon-tile" style="--tile-accent: var(--ui-secondary)">
                 <UIcon :name="p.icon" class="size-6" />
               </div>
               <div class="min-w-0">
@@ -448,7 +447,7 @@ useHead({ title: t('connections.title') })
               <span class="text-toned">{{ t('connections.account') }}: </span>
               <span class="text-highlighted">{{ accountOf(p) }}</span>
             </p>
-                        <p>
+            <p>
               <span class="text-toned">{{ t('connections.last_test') }}: </span>
               <span :class="p.connection?.lastTestOk === false ? 'text-error' : 'text-highlighted'">
                 {{ p.connection?.lastTestAt ? new Date(p.connection.lastTestAt).toLocaleString() : t('connections.never') }}
@@ -521,7 +520,7 @@ useHead({ title: t('connections.title') })
               size="sm"
               @click="openManual(p)"
             />
-                        <UButton
+            <UButton
               v-if="hasRow(p)"
               :label="t('connections.test')"
               icon="i-lucide-activity"

@@ -2,16 +2,19 @@
 // =============================================================================
 //  Stock media panel (kho tài nguyên) — free-for-commercial sources.
 //
-//  Openverse needs no key (CC0 / CC BY / CC BY-SA only); Pexels and Pixabay
-//  take a free search API key the user pastes here (stored in localStorage,
-//  never in the project). Every result shows its licence and credit line, and
-//  the panel refuses to search a keyed provider without a key instead of
-//  failing with a 401.
+//  Sources mirror the app's Connections: Openverse is keyless and always on;
+//  Pexels and Pixabay appear only when their hub connection is connected.
+//  There is no API-key field here — the hub holds the credential and injects it
+//  server-side (see useTmcutStock).
+//
+//  Opening the panel preloads a "what's hot" grid; scrolling loads the next
+//  page (IntersectionObserver sentinel) with the button kept as a fallback.
+//  Every result shows its licence and credit line.
 //
 //  Import works on both runtimes (see useTmcutStock): download on desktop,
 //  upload to /api/v1/media/upload on web.
 // =============================================================================
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useTmcutStock } from '~/composables/useTmcutStock'
 import { requiresAttribution } from '~/utils/tmcut/stockProviders'
@@ -22,35 +25,43 @@ const toast = useToast()
 
 const {
   providers,
+  hiddenProviders,
   provider,
   kind,
   kinds,
   query,
   items,
+  mode,
   loading,
   error,
   hasMore,
   importingId,
   currentProvider,
-  apiKey,
-  needsKey,
-  setKey,
+  initialize,
   selectProvider,
   selectKind,
   search,
+  retry,
   loadMore,
   importItem,
   importToTimeline
 } = useTmcutStock()
 
-const keyDraft = ref('')
-const showKey = ref(false)
+const sentinel = ref<HTMLElement | null>(null)
+let observer: IntersectionObserver | null = null
 
-watch(provider, () => {
-  keyDraft.value = apiKey.value
-})
 onMounted(() => {
-  keyDraft.value = apiKey.value
+  void initialize()
+  if (typeof IntersectionObserver === 'undefined') return
+  observer = new IntersectionObserver((entries) => {
+    if (entries.some(entry => entry.isIntersecting)) void loadMore()
+  }, { rootMargin: '240px' })
+  if (sentinel.value) observer.observe(sentinel.value)
+})
+
+onBeforeUnmount(() => {
+  observer?.disconnect()
+  observer = null
 })
 
 const kindOptions = computed(() => kinds.value.map(value => ({
@@ -59,14 +70,7 @@ const kindOptions = computed(() => kinds.value.map(value => ({
   icon: value === 'video' ? 'i-lucide-film' : value === 'audio' ? 'i-lucide-music' : 'i-lucide-image'
 })))
 
-function saveKey() {
-  setKey(keyDraft.value)
-  showKey.value = false
-  toast.add({
-    title: keyDraft.value.trim() ? t('tmcut.stock.keySaved', { provider: currentProvider.value?.label }) : t('tmcut.stock.keyCleared'),
-    color: 'success'
-  })
-}
+const hiddenLabels = computed(() => hiddenProviders.value.map(entry => entry.label).join(' · '))
 
 function onSearch() {
   void search()
@@ -107,7 +111,7 @@ function durationLabel(item: StockItem): string {
 
 <template>
   <div class="flex flex-col min-h-0 gap-2">
-    <!-- Provider chips -->
+    <!-- Provider chips: only sources connected to the hub -->
     <div class="flex items-center gap-1 overflow-x-auto pb-1">
       <button
         v-for="entry in providers"
@@ -121,9 +125,16 @@ function durationLabel(item: StockItem): string {
         @click="selectProvider(entry.id)"
       >
         {{ entry.label }}
-        <UIcon v-if="entry.requiresKey" name="i-lucide-key-round" class="size-3 inline-block ml-0.5 opacity-70" />
       </button>
     </div>
+
+    <p v-if="hiddenProviders.length" class="text-[10px] leading-snug text-muted flex flex-wrap items-center gap-1">
+      <UIcon name="i-lucide-plug-zap" class="size-3 shrink-0" />
+      <span>{{ t('tmcut.stock.connectHint', { providers: hiddenLabels }) }}</span>
+      <NuxtLink to="/resources/connections" class="underline hover:text-primary">
+        {{ t('tmcut.stock.connectAction') }}
+      </NuxtLink>
+    </p>
 
     <!-- Media kind -->
     <div class="flex items-center gap-1">
@@ -148,40 +159,6 @@ function durationLabel(item: StockItem): string {
       <span>{{ currentProvider?.licenseNote }}</span>
     </p>
 
-    <!-- API key (keyed providers only) -->
-    <div v-if="currentProvider?.requiresKey" class="space-y-1">
-      <div class="flex items-center gap-1.5">
-        <UInput
-          v-model="keyDraft"
-          :type="showKey ? 'text' : 'password'"
-          size="xs"
-          class="flex-1"
-          :placeholder="apiKey ? t('tmcut.stock.keySavedShort') : t('tmcut.stock.keyPlaceholder', { provider: currentProvider?.label })"
-          :aria-label="t('tmcut.stock.keyLabel', { provider: currentProvider?.label })"
-          @keydown.enter="saveKey"
-        />
-        <UButton
-          size="xs"
-          variant="soft"
-          :label="t('tmcut.stock.saveKey')"
-          @click="saveKey"
-        />
-      </div>
-      <div class="flex items-center justify-between text-[10px] text-muted">
-        <NuxtLink :to="currentProvider?.keyUrl" target="_blank" class="underline hover:text-primary">
-          {{ t('tmcut.stock.getKey', { provider: currentProvider?.label }) }}
-        </NuxtLink>
-        <UButton
-          size="xs"
-          color="neutral"
-          variant="ghost"
-          :icon="showKey ? 'i-lucide-eye-off' : 'i-lucide-eye'"
-          :aria-label="t('tmcut.stock.toggleKey')"
-          @click="showKey = !showKey"
-        />
-      </div>
-    </div>
-
     <!-- Search -->
     <div class="flex items-center gap-1.5">
       <UInput
@@ -198,23 +175,35 @@ function durationLabel(item: StockItem): string {
         icon="i-lucide-search"
         :aria-label="t('common.search')"
         :loading="loading"
-        :disabled="needsKey || !query.trim()"
+        :disabled="!query.trim()"
         @click="onSearch"
       />
     </div>
 
+    <!-- Result header -->
+    <div v-if="items.length" class="flex items-center justify-between text-[10px] text-muted">
+      <span>{{ mode === 'feed' ? t('tmcut.stock.suggested') : t('tmcut.stock.results') }}</span>
+      <span class="font-mono">{{ items.length }}</span>
+    </div>
+
     <!-- State messages -->
-    <p v-if="needsKey" class="text-[10px] text-amber-500 flex items-start gap-1">
-      <UIcon name="i-lucide-key-round" class="size-3 shrink-0 mt-0.5" />
-      {{ t('tmcut.stock.keyRequired', { provider: currentProvider?.label }) }}
-    </p>
-    <p v-else-if="error" class="text-[10px] text-red-400 break-words flex items-start gap-1">
-      <UIcon name="i-lucide-triangle-alert" class="size-3 shrink-0 mt-0.5" />
-      {{ error }}
-    </p>
+    <div v-if="error" class="space-y-1">
+      <p class="text-[10px] text-red-400 break-words flex items-start gap-1">
+        <UIcon name="i-lucide-triangle-alert" class="size-3 shrink-0 mt-0.5" />
+        {{ error }}
+      </p>
+      <UButton
+        size="xs"
+        variant="soft"
+        color="neutral"
+        icon="i-lucide-refresh-cw"
+        :label="t('tmcut.stock.retry')"
+        @click="retry"
+      />
+    </div>
 
     <!-- Results -->
-    <div class="grid grid-cols-2 gap-2 overflow-y-auto min-h-0">
+    <div class="grid grid-cols-2 gap-2">
       <figure
         v-for="item in items"
         :key="item.id"
@@ -285,10 +274,15 @@ function durationLabel(item: StockItem): string {
       </figure>
     </div>
 
-    <div v-if="!items.length && !loading && !error && !needsKey" class="py-6 text-center text-[11px] text-muted border border-dashed border-default rounded-lg">
-      {{ t('tmcut.stock.empty') }}
+    <div v-if="!items.length && loading" class="py-6 text-center text-[11px] text-muted border border-dashed border-default rounded-lg">
+      {{ t('tmcut.stock.loading') }}
+    </div>
+    <div v-else-if="!items.length && !error" class="py-6 text-center text-[11px] text-muted border border-dashed border-default rounded-lg">
+      {{ mode === 'feed' ? t('tmcut.stock.emptyFeed') : t('tmcut.stock.empty') }}
     </div>
 
+    <!-- Infinite-scroll sentinel + fallback button -->
+    <div ref="sentinel" class="h-px w-full" aria-hidden="true" />
     <UButton
       v-if="hasMore"
       size="xs"

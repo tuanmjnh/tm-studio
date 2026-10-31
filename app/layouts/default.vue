@@ -37,12 +37,14 @@ const groups = computed<CommandPaletteGroup[]>(() => [{
 
 <template>
   <UDashboardGroup unit="rem">
+    <StudioAmbientBackdrop />
+
     <UDashboardSidebar
       id="default"
       v-model:open="open"
       collapsible
       resizable
-      class="bg-elevated/25"
+      class="bg-elevated/55 backdrop-blur-2xl border-e border-default"
       :ui="{ footer: 'lg:border-t lg:border-default' }"
     >
       <template #header="{ collapsed }">

@@ -660,23 +660,14 @@ function getEffectParams(type: string) {
 // R128: 29 registry effects would be an unreadable flat wall in the narrow
 // panel — group them by registry category (same helper the FX Library uses),
 // in the library's category order. Unknown categories land under 'other'.
-const effectMenuItems = computed(() => {
-  const groups = groupEffectsByCategory(registryEntries(EFFECT_REGISTRY))
-  const items: Array<Record<string, unknown>> = []
-  for (const group of groups) {
-    items.push({ label: t('tmcut.fxLib.effectCategories.' + group.category, humanizeKey(group.category)), type: 'label' })
-    for (const entry of group.items) {
-      items.push({
-        label: effectLabel(entry.type),
-        icon: effectIcon(entry.type),
-        onSelect: () => handleAddEffect(entry.type)
-      })
-    }
-    items.push({ type: 'separator' })
-  }
-  items.pop() // no trailing separator
-  return items
-})
+// Cards (not a dropdown) because every effect gets a live thumbnail.
+const effectPickerOpen = ref(false)
+const effectPickerGroups = computed(() => groupEffectsByCategory(registryEntries(EFFECT_REGISTRY)))
+
+function addEffectFromPicker(type: string) {
+  effectPickerOpen.value = false
+  handleAddEffect(type)
+}
 
 function handleAddEffect(type: string) {
   if (!selectedClipId.value) return
@@ -1119,18 +1110,31 @@ const saveStateLabel = computed(() => {
           {{ t('tmcut.inspectorProps.keyframesExported') }}
         </span>
       </div>
-      <div class="grid grid-cols-3 gap-1.5">
-        <UButton
+      <div class="grid grid-cols-2 gap-2">
+        <button
           v-for="p in mediaAnimOptions"
           :key="p.value"
-          size="xs"
-          :variant="mediaAnimActive === p.value ? 'soft' : 'ghost'"
-          :color="p.value === 'reset' ? 'neutral' : mediaAnimActive === p.value ? 'primary' : 'neutral'"
-          class="justify-center text-[11px]"
+          type="button"
+          class="flex flex-col gap-1.5 rounded-lg border p-1.5 text-left transition-colors cursor-pointer"
+          :class="mediaAnimActive === p.value
+            ? 'border-primary bg-primary/10'
+            : 'border-default bg-muted/60 hover:border-primary/60'"
           @click="applyMediaAnimChoice(p.value)"
         >
-          {{ p.label }}
-        </UButton>
+          <TmcutMotionThumb
+            :preset="p.value"
+            :active="mediaAnimActive === p.value"
+          />
+          <span class="flex w-full items-center gap-1 px-0.5">
+            <UIcon
+              :name="p.value === 'reset' ? 'i-lucide-rotate-ccw' : 'i-lucide-wand-sparkles'"
+              class="size-3.5 shrink-0"
+              :class="mediaAnimActive === p.value ? 'text-primary' : 'text-muted'"
+            />
+            <span class="flex-1 truncate text-[11px] font-medium leading-tight text-toned">{{ p.label }}</span>
+            <UIcon v-if="mediaAnimActive === p.value" name="i-lucide-check" class="size-3.5 shrink-0 text-primary" />
+          </span>
+        </button>
       </div>
       <p class="text-[10px] text-muted leading-snug">
         {{ t('tmcut.fxLib.animPresetsHint') }}
@@ -2045,15 +2049,46 @@ const saveStateLabel = computed(() => {
         <span class="font-semibold text-muted uppercase tracking-wider text-[10px]">
           {{ t('tmcut.effects.title') }}
         </span>
-        <UDropdownMenu :items="effectMenuItems" :content="{ side: 'bottom', align: 'end' }">
-          <UButton
-            icon="i-lucide-plus"
-            size="xs"
-            color="primary"
-            variant="soft"
-            :label="t('tmcut.effects.addEffect')"
-          />
-        </UDropdownMenu>
+        <UButton
+          :icon="effectPickerOpen ? 'i-lucide-x' : 'i-lucide-plus'"
+          size="xs"
+          color="primary"
+          variant="soft"
+          :label="t('tmcut.effects.addEffect')"
+          @click="effectPickerOpen = !effectPickerOpen"
+        />
+      </div>
+
+      <!-- Effect picker: cards with the same live thumbnail the applied card
+           uses, grouped by registry category. -->
+      <div
+        v-if="effectPickerOpen"
+        class="space-y-2.5 rounded-lg border border-default bg-elevated/40 p-2 max-h-72 overflow-y-auto"
+      >
+        <div v-for="group in effectPickerGroups" :key="group.category" class="space-y-1.5">
+          <p class="text-[9px] uppercase tracking-wider text-muted">
+            {{ t('tmcut.fxLib.effectCategories.' + group.category, humanizeKey(group.category)) }}
+          </p>
+          <div class="grid grid-cols-2 gap-1.5">
+            <button
+              v-for="entry in group.items"
+              :key="entry.type"
+              type="button"
+              class="rounded-md border border-default bg-muted/50 p-1 text-left transition-colors cursor-pointer hover:border-primary/60"
+              @click="addEffectFromPicker(entry.type)"
+            >
+              <TmcutFxThumb
+                kind="effect"
+                :type="entry.type"
+                :show-badge="false"
+              />
+              <span class="mt-1 flex items-center gap-1 px-0.5 pb-0.5">
+                <UIcon :name="effectIcon(entry.type)" class="size-3 shrink-0 text-muted" />
+                <span class="truncate text-[10px] text-toned">{{ effectLabel(entry.type) }}</span>
+              </span>
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- Empty State -->

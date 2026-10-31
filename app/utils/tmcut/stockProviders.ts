@@ -58,6 +58,15 @@ export interface StockRequest {
   headers: Record<string, string>
 }
 
+export interface StockRequestOptions {
+  /**
+   * Build a keyed provider's request without the key. The hub injects the
+   * credential server-side (`connections/:provider/stock-search`), so the key
+   * never reaches the renderer.
+   */
+  deferAuth?: boolean
+}
+
 export interface StockProviderInfo {
   id: StockProviderId
   label: string
@@ -128,7 +137,7 @@ function clampPerPage(value: number | undefined, max: number): number {
  * recoverable cases (missing key / unsupported media kind) instead of sending
  * a request that would 401.
  */
-export function buildStockRequest(args: StockSearchArgs): StockRequest {
+export function buildStockRequest(args: StockSearchArgs, options: StockRequestOptions = {}): StockRequest {
   const provider = stockProvider(args.provider)
   if (!provider) throw new Error(`Unknown stock provider: ${args.provider}`)
   if (!supportsKind(args.provider, args.kind)) {
@@ -149,7 +158,7 @@ export function buildStockRequest(args: StockSearchArgs): StockRequest {
   }
 
   const apiKey = String(args.apiKey || '').trim()
-  if (!apiKey) throw new Error(`Add a ${provider.label} API key to search this source`)
+  if (!apiKey && !options.deferAuth) throw new Error(`Add a ${provider.label} API key to search this source`)
 
   if (args.provider === 'pexels') {
     const base = args.kind === 'video' ? `${PEXELS_API}/videos/search` : `${PEXELS_API}/v1/search`
@@ -158,19 +167,108 @@ export function buildStockRequest(args: StockSearchArgs): StockRequest {
       per_page: String(clampPerPage(args.perPage, 80)),
       page: String(clampPage(args.page))
     })
-    return { url: `${base}?${params.toString()}`, headers: { Authorization: apiKey } }
+    return {
+      url: `${base}?${params.toString()}`,
+      headers: apiKey ? { Authorization: apiKey } : {}
+    }
   }
 
   const params = new URLSearchParams({
-    key: apiKey,
     q: query,
     per_page: String(clampPerPage(args.perPage, 50)),
     page: String(clampPage(args.page)),
     safesearch: 'true'
   })
+  if (apiKey) params.set('key', apiKey)
   if (args.kind === 'video') return { url: `${PIXABAY_API}/videos/?${params.toString()}`, headers: {} }
   params.set('image_type', 'photo')
   return { url: `${PIXABAY_API}/?${params.toString()}`, headers: {} }
+}
+
+/** Broad default queries for the Openverse "suggested" feed (no popularity order). */
+const FEED_QUERY: Record<'image' | 'audio', string> = {
+  image: 'abstract background',
+  audio: 'ambient'
+}
+
+const PROVIDER_PAGE_SIZE: Record<StockProviderId, number> = {
+  openverse: 20,
+  pexels: 24,
+  pixabay: 24
+}
+
+/** The page size the provider actually returns (Openverse caps at 20). */
+export function stockPageSize(provider: StockProviderId): number {
+  return PROVIDER_PAGE_SIZE[provider] || 24
+}
+
+/**
+ * Request for the preloaded "what's hot" grid shown when the panel opens:
+ * Pexels curated/popular feeds, Pixabay editors' choice ordered by popularity,
+ * Openverse newest CC media for a broad query (the API has no popularity sort).
+ * Keyed providers are always `deferAuth` — the hub adds the credential.
+ */
+export function buildStockFeedRequest(args: {
+  provider: StockProviderId
+  kind: StockKind
+  page?: number
+  perPage?: number
+}): StockRequest {
+  const provider = stockProvider(args.provider)
+  if (!provider) throw new Error(`Unknown stock provider: ${args.provider}`)
+  if (!supportsKind(args.provider, args.kind)) {
+    throw new Error(`${provider.label} does not provide ${args.kind} results`)
+  }
+  const page = clampPage(args.page)
+
+  if (args.provider === 'pexels') {
+    const base = args.kind === 'video' ? `${PEXELS_API}/videos/popular` : `${PEXELS_API}/v1/curated`
+    const params = new URLSearchParams({
+      per_page: String(clampPerPage(args.perPage, 80)),
+      page: String(page)
+    })
+    return { url: `${base}?${params.toString()}`, headers: {} }
+  }
+
+  if (args.provider === 'pixabay') {
+    const params = new URLSearchParams({
+      order: 'popular',
+      per_page: String(clampPerPage(args.perPage, 50)),
+      page: String(page),
+      safesearch: 'true'
+    })
+    if (args.kind === 'video') return { url: `${PIXABAY_API}/videos/?${params.toString()}`, headers: {} }
+    params.set('editors_choice', 'true')
+    return { url: `${PIXABAY_API}/?${params.toString()}`, headers: {} }
+  }
+
+  const base = args.kind === 'audio' ? `${OPENVERSE_API}/audio/` : `${OPENVERSE_API}/images/`
+  const params = new URLSearchParams({
+    q: FEED_QUERY[args.kind === 'audio' ? 'audio' : 'image'],
+    license_type: 'commercial,modification',
+    ordering: '-created_on',
+    page_size: String(clampPerPage(args.perPage, 20)),
+    page: String(page)
+  })
+  return { url: `${base}?${params.toString()}`, headers: {} }
+}
+
+/**
+ * Pagination signal from the RAW payload (normalisation can drop entries, so
+ * counting parsed items would stop pagination early). Each provider reports it
+ * differently: Openverse `page_count`, Pexels `next_page`, Pixabay `totalHits`.
+ */
+export function stockHasMore(provider: StockProviderId, payload: unknown, page: number, perPage: number): boolean {
+  if (!payload || typeof payload !== 'object') return false
+  const body = payload as Record<string, unknown>
+  if (provider === 'openverse') {
+    const pages = num(body.page_count)
+    if (pages > 0) return page < pages
+    return (Array.isArray(body.results) ? body.results.length : 0) >= perPage
+  }
+  if (provider === 'pexels') return !!str(body.next_page)
+  const total = num(body.totalHits)
+  return total > 0 && page * perPage < total
 }
 
 function str(value: unknown): string {

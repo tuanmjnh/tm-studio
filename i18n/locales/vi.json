@@ -256,7 +256,7 @@
       "label": "Nhãn marker"
     },
     "animation": {
-      "tab": "Hiệu ứng động",
+      "tab": "Chuyển động",
       "presets": "Mẫu nhanh",
       "animIn": "Hiệu ứng vào (In)",
       "animOut": "Hiệu ứng ra (Out)",
@@ -400,14 +400,14 @@
       "effects": "Hiệu ứng",
       "transitions": "Chuyển tiếp",
       "filters": "Bộ lọc",
-      "assets": "Kho tài nguyên",
+      "assets": "Chợ tài nguyên",
       "stock": "Stock miễn phí",
       "textHint": "Nhấp một kiểu để thêm vào timeline tại vị trí playhead",
       "soonTitle": "Sắp ra mắt",
       "soonDesc": "Danh mục này dự kiến ở bản cập nhật sau"
     },
     "stock": {
-      "tab": "Kho tài nguyên",
+      "tab": "Stock miễn phí",
       "kind_image": "Ảnh",
       "kind_video": "Video",
       "kind_audio": "Nhạc",
@@ -424,18 +424,16 @@
       "creditCopied": "Đã copy dòng ghi công",
       "creditCopyFailed": "Không copy được dòng ghi công",
       "attributionHint": "Giấy phép này cần ghi công: dán dòng credit vào phần mô tả video.",
-      "keyLabel": "API key {provider}",
-      "keyPlaceholder": "Dán API key {provider} miễn phí",
-      "keySaved": "Đã lưu API key {provider} trên máy này",
-      "keySavedShort": "Đã lưu key — dán key mới để thay",
-      "keyCleared": "Đã xoá API key",
-      "keyRequired": "Nguồn này cần API key miễn phí — dán key ở trên để tìm.",
-      "saveKey": "Lưu",
-      "getKey": "Lấy key {provider} miễn phí",
-      "toggleKey": "Hiện/ẩn key"
+      "suggested": "Mẫu nổi bật",
+      "results": "Kết quả tìm kiếm",
+      "connectHint": "{providers} chưa kết nối — bật trong Connections để dùng kho này.",
+      "connectAction": "Mở Connections",
+      "retry": "Thử lại",
+      "loading": "Đang tải tài nguyên…",
+      "emptyFeed": "Chưa có mẫu nổi bật — nhập từ khoá để tìm."
     },
     "assetCenter": {
-      "search": "Tìm kiếm kho tài nguyên",
+      "search": "Tìm kiếm chợ tài nguyên",
       "all": "Tất cả",
       "empty": "Không có gói nào khớp với tìm kiếm.",
       "install": "Cài đặt",

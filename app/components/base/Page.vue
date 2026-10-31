@@ -16,6 +16,12 @@ const panelUi = computed(() => ({
   ...(props.flush ? { body: 'p-0 sm:p-0 gap-0 sm:gap-0' } : {})
 }))
 
+const navbarUiMerged = computed(() => ({
+  root: 'bg-elevated/40 backdrop-blur-xl',
+  title: props.description ? 'flex flex-col items-start justify-center gap-px h-full truncate' : undefined,
+  ...props.navbarUi
+}))
+
 useHead(() => ({
   title: props.title
 }))
@@ -27,10 +33,7 @@ useHead(() => ({
       <div class="shrink-0">
         <UDashboardNavbar
           :title="title"
-          :ui="{
-            title: description ? 'flex flex-col items-start justify-center gap-px h-full truncate' : undefined,
-            ...navbarUi
-          }"
+          :ui="navbarUiMerged"
         >
           <template v-if="description" #title>
             <span class="truncate font-semibold">{{ title }}</span>
