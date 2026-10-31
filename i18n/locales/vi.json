@@ -3139,8 +3139,6 @@
     "editorType": "Trình soạn thảo",
     "appSettings": "Cài đặt ứng dụng",
     "openFullSettings": "Mở toàn bộ cài đặt",
-    "openBrowserSettings": "Cấu hình trình duyệt",
-    "openToolsSettings": "Cấu hình file thực thi (yt-dlp, ffmpeg...)",
     "storage": {
       "storage_management": "Quản lý bộ nhớ",
       "storage_management_desc": "Quản lý và xóa dữ liệu đã lưu của ứng dụng.",

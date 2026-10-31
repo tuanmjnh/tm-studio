@@ -52,47 +52,24 @@ function navigateAndClose(to: string) {
           <ULocaleSelect v-model="uiLocale" :locales="locales" class="w-full" />
         </div>
 
-        <!-- Desktop Environment & Runtime Links -->
-        <div class="space-y-3">
+        <!-- R144: the vault page is Electron-only (safeStorage/IPC) — the
+             link appears exactly where the page works (honesty rule: never
+             promise a desktop-only page to web users). It is the only
+             studio-owned app setting, so the section follows it. -->
+        <div v-if="isElectron" class="space-y-3">
           <div class="text-sm font-medium text-highlighted">
             {{ $t('settings.appSettings') }}
           </div>
-          <div class="space-y-2">
-            <UButton
-              icon="i-lucide-globe"
-              variant="outline"
-              color="neutral"
-              block
-              class="justify-start text-xs rounded-xl"
-              @click="navigateAndClose('/system/browsers')"
-            >
-              {{ $t('settings.openBrowserSettings') }}
-            </UButton>
-            <UButton
-              icon="i-lucide-wrench"
-              variant="outline"
-              color="neutral"
-              block
-              class="justify-start text-xs rounded-xl"
-              @click="navigateAndClose('/system/tools')"
-            >
-              {{ $t('settings.openToolsSettings') }}
-            </UButton>
-            <!-- R144: the vault page is Electron-only (safeStorage/IPC) —
-                 the link appears exactly where the page works (honesty
-                 rule: never promise a desktop-only page to web users). -->
-            <UButton
-              v-if="isElectron"
-              icon="i-lucide-key"
-              variant="outline"
-              color="neutral"
-              block
-              class="justify-start text-xs rounded-xl"
-              @click="navigateAndClose('/system/ai-keys')"
-            >
-              {{ $t('settings.openAiKeyVault') }}
-            </UButton>
-          </div>
+          <UButton
+            icon="i-lucide-key"
+            variant="outline"
+            color="neutral"
+            block
+            class="justify-start text-xs rounded-xl"
+            @click="navigateAndClose('/system/ai-keys')"
+          >
+            {{ $t('settings.openAiKeyVault') }}
+          </UButton>
         </div>
 
         <!-- Storage Management -->

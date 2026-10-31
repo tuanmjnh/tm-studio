@@ -3139,8 +3139,6 @@
     "editorType": "Editor",
     "appSettings": "App Settings",
     "openFullSettings": "Open Full Settings",
-    "openBrowserSettings": "Browser Configuration",
-    "openToolsSettings": "Tools & Binaries (yt-dlp, ffmpeg...)",
     "storage": {
       "storage_management": "Storage Management",
       "storage_management_desc": "Manage and clear your app's stored data.",
