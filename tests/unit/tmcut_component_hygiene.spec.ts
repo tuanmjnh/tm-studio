@@ -545,4 +545,19 @@ describe('editor workspace shell lives in its own dock', () => {
       assert.ok(!new RegExp(`\\b${owned}\\b`).test(editor), `${owned} must not be wired in the page`)
     }
   })
+
+  it('Escape closes the compact overlay wherever focus sits', () => {
+    // Focus stays on the toolbar toggle, outside the overlay markup, so an
+    // inline @keydown on that markup never fires. The listener lives on the
+    // window and is torn down with the dock.
+    assert.match(workspace, /window\.addEventListener\('keydown', handleCompactEscape\)/)
+    assert.match(workspace, /window\.removeEventListener\('keydown', handleCompactEscape\)/)
+    assert.match(workspace, /event\.defaultPrevented \|\| !compactPanel\.value/)
+    assert.doesNotMatch(workspace, /@keydown\.esc/, 'an inline handler cannot see focus outside the overlay')
+
+    // The context menu consumes its own Escape first.
+    const menu = read('app/composables/useTmcutContextMenu.ts')
+    const escapeHandler = menu.match(/function onDocKeyDown[\s\S]*?\n {2}\}/)?.[0] ?? ''
+    assert.match(escapeHandler, /e\.preventDefault\(\)[\s\S]*close\(\)/, 'the menu marks Escape handled before closing')
+  })
 })

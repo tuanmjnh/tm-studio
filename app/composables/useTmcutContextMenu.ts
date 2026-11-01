@@ -72,7 +72,11 @@ export function useTmcutContextMenu() {
   }
 
   function onDocKeyDown(e: KeyboardEvent) {
-    if (e.key === 'Escape') close()
+    if (e.key !== 'Escape') return
+    // Escape belongs to the menu first: mark it handled so window-level
+    // listeners (e.g. the editor's compact overlay) do not close as well.
+    e.preventDefault()
+    close()
   }
 
   // A fixed panel anchored to viewport coordinates goes stale on scroll or

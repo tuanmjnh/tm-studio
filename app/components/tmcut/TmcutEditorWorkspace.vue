@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
@@ -52,9 +52,25 @@ async function handleDismissRecovery() {
   await dismissRecovery()
 }
 
+// Focus usually stays on the toolbar toggle, which sits outside the overlay
+// markup, so an inline keydown handler never fires. Listen on the window and
+// leave Escape to whatever already consumed it (open context menu, dialog).
+function handleCompactEscape(event: KeyboardEvent) {
+  if (event.key !== 'Escape' || event.defaultPrevented || !compactPanel.value) return
+  const target = event.target
+  if (target instanceof HTMLElement
+    && (target.isContentEditable || target.closest('input, textarea, select, [role="dialog"]'))) return
+  compactPanel.value = null
+}
+
 onMounted(() => {
   hasWebGPU.value = typeof navigator !== 'undefined' && 'gpu' in navigator
   hydrateLayout()
+  window.addEventListener('keydown', handleCompactEscape)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleCompactEscape)
 })
 </script>
 
@@ -90,7 +106,7 @@ onMounted(() => {
     </div>
 
     <!-- Center Workspace -->
-    <div class="relative flex-1 flex overflow-hidden min-h-0" @keydown.esc="compactPanel = null">
+    <div class="relative flex-1 flex overflow-hidden min-h-0">
       <TmcutMediaPanel
         :mobile-open="compactPanel === 'media'"
         @close="compactPanel = null"
