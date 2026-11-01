@@ -321,3 +321,57 @@ test('desktop bounds are the core render contract, not a second copy', async () 
   assert.equal(validateRenderOptions({ ...base, css: 'x'.repeat(HTML_VIDEO_LIMITS.maxHtmlBytes) }).ok, false)
   assert.equal(frameCountFor(base.duration, base.fps), Math.round(base.duration * base.fps), 'frame math is core frame math')
 })
+
+// ADR-021: the two HTML-video transports are not equivalent, and this is the
+// pin that says so. Measured on this machine (real Chrome, one real starter —
+// `stat-counter`, 540x960 @10fps, 1s = 10 frames):
+//   live engine (server/utils/htmlVideoRender.ts, playwright-core):
+//     10/10 distinct frame hashes, and two fresh browser contexts produced the
+//     identical 10 hashes — deterministic, and the frames really move.
+//   desktop document (`buildCompositionDocument` + `__tmcutSeek`, screenshotted
+//     through Chrome because Electron cannot be launched from this shell):
+//     the built document is 3577 bytes and holds __tmcutSeek but no __hf,
+//     because sanitizeCompositionHtml deletes every <script>. The 10 captures
+//     collapsed to one repeated hash (7aed8e5bf3bf) — a still image, encoded
+//     as video. Nothing errored: the render "succeeded" 10 times over.
+// So a JS-driven composition — every starter in
+// app/utils/tmcut/htmlVideoStarters.ts, which is the whole authoring surface —
+// must not be exported through this transport. The module is kept because the
+// CSS-only half of the contract genuinely works here; these assertions are
+// what separates the two halves.
+const JS_DRIVEN_COMPOSITION = `<div data-composition-id="counter">
+<script>
+window.__hf = {
+  duration: 1,
+  seek: function (t) { document.querySelector('.n').textContent = String(Math.round(t * 100)) }
+}
+</script>
+<p class="n">0</p>
+</div>`
+
+test('a JS-driven composition passes the core seek lint but loses that contract in the desktop document', async () => {
+  const { lintHtmlVideo } = await import('../../packages/core/src/htmlVideo.mjs')
+
+  const findings = lintHtmlVideo(JS_DRIVEN_COMPOSITION)
+  assert.equal(findings.some(f => f.code === 'missing-seek-contract'), false, 'the author did declare __hf')
+
+  const doc = buildCompositionDocument({ html: JS_DRIVEN_COMPOSITION, css: '', width: 540, height: 960 })
+  assert.match(doc, /window\.__tmcutSeek/, 'the host injects its own seek hook')
+  assert.doesNotMatch(doc, /__hf/, 'and the composition script that would answer it is gone')
+  assert.doesNotMatch(doc, /textContent/, 'including the body of the composition seek')
+  assert.match(sanitizeCompositionHtml(JS_DRIVEN_COMPOSITION), /<p class="n">0<\/p>/, 'markup survives')
+  assert.doesNotMatch(sanitizeCompositionHtml(JS_DRIVEN_COMPOSITION), /__hf|<script/i)
+})
+
+test('the desktop seek hook drives CSS/SVG/video time only — which is all it can drive', () => {
+  const doc = buildCompositionDocument({ html: '<main>frame</main>', css: 'main { animation: e 1s both }', width: 320, height: 180 })
+  const seek = /window\.__tmcutSeek[\s\S]*?<\/script>/i.exec(doc)?.[0] ?? ''
+  assert.ok(seek.length > 0, 'the runtime is inlined before </body>')
+  for (const driven of ['document.getAnimations()', 'setCurrentTime(t)', 'querySelectorAll(\'video\')']) {
+    assert.ok(seek.includes(driven), `seeks ${driven}`)
+  }
+  // Those are the only channels this transport can push a frame time through.
+  // There is no fourth one, so a script-driven composition has no way to
+  // receive a seek on this host.
+  assert.doesNotMatch(seek, /__hf|hf-seek|postMessage/)
+})

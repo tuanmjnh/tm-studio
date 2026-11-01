@@ -56,6 +56,15 @@ function validateRenderOptions(options = {}) {
       }
 }
 
+/**
+ * ADR-021: deleting every `<script>` is what makes this host safe to point at
+ * user-authored HTML, and it is also why a composition whose motion lives in a
+ * script renders here as one frame repeated. This document's seek contract is
+ * `__tmcutSeek` — CSS animations, SVG time, `<video>` time — while the
+ * `window.__hf` contract that core's lint and the live Nitro engine use cannot
+ * survive sanitization. Every app starter declares `__hf`, so none of them
+ * animates on this transport; html-video-renderer.test.mjs pins both halves.
+ */
 function sanitizeCompositionHtml(html) {
   return String(html || '')
     .replace(/<!--[\s\S]*?-->/g, '')
@@ -112,8 +121,10 @@ function writeFrame(stream, frame) {
  * One loaded composition, seeked frame by frame (the `TmcutCaptureSession`
  * of ADR-014). The renderer never plays the animation: it asks for a time,
  * screenshots, and asks for the next, so the same document always produces
- * the same frames. close() releases the window, and a document that fails to
- * load releases it the same way.
+ * the same frames. What `seek` can reach is only what `__tmcutSeek` drives
+ * (see ADR-021 above) — a script-driven composition yields the same frame
+ * every time, which is deterministic but not animated. close() releases the
+ * window, and a document that fails to load releases it the same way.
  */
 async function openCaptureSession({ html, css, width, height }, deps = {}) {
   const BrowserWindowClass = deps.BrowserWindow || BrowserWindow
@@ -243,6 +254,14 @@ async function renderHtmlVideo(options, deps = {}) {
   }
 }
 
+/**
+ * Registered on every desktop boot and reachable from preload, but no `app/`
+ * code calls it (ADR-021): `TmcutHtmlVideoStudio.vue` posts the same job to
+ * `/api/v1/media/html-video` on both hosts, so the live HTML-video engine is
+ * the Playwright one. This channel stays for the CSS-only compositions that
+ * need an in-process renderer, and it must not be wired to a job until
+ * `__tmcutSeek` can reach script-driven ones too.
+ */
 function registerHtmlVideoRenderer() {
   ipcMain.handle(CHANNEL, (event, options) => renderHtmlVideo(options, { sender: event.sender }))
 }
