@@ -50,7 +50,7 @@ const RELAY_502 = Object.assign(
 type FetchOptions = { body?: Record<string, unknown>, timeout?: number, method?: string }
 type FetchCall = { url: string, options: FetchOptions }
 
-type Mode = 'ok' | 'chat502' | 'chatTransportError' | 'catalogFails'
+type Mode = 'ok' | 'empty' | 'chat502' | 'chatTransportError' | 'catalogFails'
 
 /**
  * Install a fake $fetch. Node has no `window`, so the composable never caches
@@ -66,6 +66,18 @@ function stubFetch(mode: Mode) {
     }
     if (mode === 'chat502') throw RELAY_502
     if (mode === 'chatTransportError') throw new Error('fetch failed')
+    if (mode === 'empty') {
+      return {
+        success: true,
+        data: {
+          ok: true,
+          content: '   ',
+          provider: 'nvidia',
+          model: '01-ai/yi-large',
+          usage: { inputTokens: 6, outputTokens: 0 }
+        }
+      }
+    }
     if (mode !== 'ok') throw new Error('chat must not be reached')
     return { success: true, data: { ok: true, content: 'PONG', provider: 'nvidia', model: '01-ai/yi-large', usage: null } }
   }
@@ -195,6 +207,31 @@ async function main() {
       message = String((err as Error).message)
     }
     assert.equal(message, 'Connection c-other is not usable by this app on TM Hub')
+  })
+
+  // ---- empty completions ------------------------------------------------------
+  // Observed live: Gemini 3.5 Flash with a 24-token budget answered
+  // `{ ok: true, content: "", usage: { outputTokens: 0 } }` — the hub treats a
+  // 200 as success, so the studio must not.
+  await check('an empty relay completion fails instead of returning blank content', async () => {
+    stubFetch('empty')
+    const { complete } = useTmcutAi()
+    let message = ''
+    try {
+      await complete({ messages: [{ role: 'user', content: 'ping' }] })
+    } catch (err) {
+      message = String((err as Error).message)
+    }
+    assert.equal(message, 'AI relay returned no content (01-ai/yi-large)')
+  })
+
+  await check('a connection probe keeps enough output budget for a reasoning model', async () => {
+    const calls = stubFetch('ok')
+    const { probeConnection } = useTmcutAi()
+    await probeConnection('c-nv')
+    const chat = calls.find(c => c.url.includes('/relay/chat'))
+    assert.ok(chat, 'no chat call recorded')
+    assert.equal(chat.options.body.maxTokens, 256)
   })
 
   console.log(`\n=== All ${passed} tests passed successfully! ===`)

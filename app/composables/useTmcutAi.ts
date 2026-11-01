@@ -192,6 +192,14 @@ async function relayChat(call: {
   if (!res?.success || !res.data?.ok) {
     throw new Error(`AI relay call failed (${call.model})`)
   }
+  // A 200 with no text is not a success. Reasoning models can spend the whole
+  // maxTokens budget before emitting an answer (Gemini 3.5 Flash with 24
+  // tokens returns `outputTokens: 0`), and the hub still reports ok — treating
+  // that as a completed call turns a dead "Test" badge green and lets every
+  // parse failure downstream look like a prompt problem.
+  if (!String(res.data.content ?? '').trim()) {
+    throw new Error(`AI relay returned no content (${call.model})`)
+  }
   return { content: res.data.content, usage: res.data.usage, model: res.data.model, latencyMs: Date.now() - started }
 }
 
@@ -216,7 +224,10 @@ async function probeConnection(connectionId: string): Promise<AiCompleteResult &
     connectionId: conn.connectionId,
     model,
     messages: [{ role: 'user', content: 'Reply with exactly: OK' }],
-    maxTokens: 8,
+    // 8 tokens was enough for a plain chat model but not for a reasoning one:
+    // the thinking budget swallows the whole allowance and the answer is empty,
+    // so a working connection failed the test.
+    maxTokens: 256,
     timeoutMs: 20_000
   })
   return { ...res, connectionId: conn.connectionId, provider: conn.provider }

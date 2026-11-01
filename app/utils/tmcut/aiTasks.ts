@@ -78,16 +78,36 @@ Target duration: ${ctx.duration}`
 const PLAN_SCENE_MAX_SEC = 120
 
 /**
+ * Parse a model answer that should be JSON.
+ *
+ * The "no markdown fences / raw JSON only" instruction is advisory: Gemini 3.5
+ * Flash through the hub relay still answers with a ```json block, so strict
+ * JSON.parse discarded a perfectly good 30s script and the editor fell back to
+ * the curated preset. Unwrapping the fence (or a prose preamble) is formatting
+ * tolerance — the payload must still parse and pass the structural checks in
+ * the callers, so nothing is invented.
+ */
+function parseJsonAnswer(content: string): unknown {
+  const trimmed = String(content ?? '').trim()
+  const fenced = /^```[a-z]*\s*([\s\S]*?)\s*```$/i.exec(trimmed)
+  const body = fenced ? fenced[1]!.trim() : trimmed
+  try {
+    return JSON.parse(body)
+  } catch {
+    const opens = [body.indexOf('{'), body.indexOf('[')].filter(i => i >= 0)
+    const start = opens.length ? Math.min(...opens) : -1
+    const end = Math.max(body.lastIndexOf('}'), body.lastIndexOf(']'))
+    if (start === -1 || end <= start) throw new Error('AI returned invalid JSON')
+    return JSON.parse(body.slice(start, end + 1))
+  }
+}
+
+/**
  * Validate + normalize a plan response. Throws on unparseable / empty
  * answers — the caller owns the curated fallback (never a silent fake).
  */
 export function parsePlanScript(content: string, ctx: Pick<AiPlanContext, 'prompt' | 'platform' | 'targetSec'>): TmcutAiScript {
-  let raw: unknown
-  try {
-    raw = JSON.parse(content)
-  } catch {
-    throw new Error('AI returned invalid JSON')
-  }
+  const raw = parseJsonAnswer(content)
   const parsed = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>
   const scenesRaw = Array.isArray(parsed.scenes) ? parsed.scenes : []
   if (scenesRaw.length === 0) throw new Error('AI returned invalid script structure')
@@ -194,7 +214,7 @@ export function parseTriageItems(
 ): AiTriageItem[] {
   let raw: unknown
   try {
-    raw = JSON.parse(content)
+    raw = parseJsonAnswer(content)
   } catch {
     return []
   }

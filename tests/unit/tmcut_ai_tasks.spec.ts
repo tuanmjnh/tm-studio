@@ -68,6 +68,24 @@ check('parsePlanScript refuses garbage instead of fabricating', () => {
   assert.throws(() => parsePlanScript('{"scenes":"nope"}', planCtx))
 })
 
+check('parsePlanScript unwraps a fenced or prose-wrapped answer', () => {
+  const payload = JSON.stringify({
+    title: 'Review tai nghe',
+    scenes: [{ title: 'Hook', durationSec: 5, voiceover: 'a', onScreenText: 'A' }]
+  })
+  // Observed live: Gemini 3.5 Flash answers with a ```json block even when the
+  // system prompt forbids fences, so a strict JSON.parse rejected a good script.
+  const fenced = parsePlanScript('```json\n' + payload + '\n```', planCtx)
+  assert.equal(fenced.title, 'Review tai nghe')
+  assert.equal(fenced.scenes.length, 1)
+  const bare = parsePlanScript('```\n' + payload + '\n```', planCtx)
+  assert.equal(bare.scenes.length, 1)
+  const prose = parsePlanScript('Here is your script:\n' + payload + '\nEnjoy!', planCtx)
+  assert.equal(prose.scenes.length, 1)
+  // A fenced block with no usable scenes still has to fail.
+  assert.throws(() => parsePlanScript('```json\n{"scenes":[]}\n```', planCtx))
+})
+
 const spans: AiTriageSpan[] = [
   { start: 0, end: 4, text: 'mở đầu hay' },
   { start: 4, end: 9, text: 'ừm ờ linh tinh' },
@@ -134,6 +152,9 @@ check('parseTriageItems accepts bare arrays and direct spans, rejects junk', () 
   ])
   assert.deepEqual(parseTriageItems('broken {', spans, 15), [])
   assert.deepEqual(parseTriageItems('{"items":"x"}', spans, 15), [])
+  // Same fence tolerance as the plan parser: a wrapped answer is still an answer.
+  const fenced = parseTriageItems('```json\n{"items":[{"i":2,"interest":0.7}]}\n```', spans, 15)
+  assert.deepEqual(fenced, [{ start: 9, end: 15, interest: 0.7 }])
 })
 
 check('parseTriageItems de-duplicates overlapping reports', () => {
