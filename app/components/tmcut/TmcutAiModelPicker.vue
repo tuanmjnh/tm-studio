@@ -241,7 +241,7 @@ async function handleTest() {
         id="tmcut-ai-model-picker"
         v-model="selected"
         :aria-label="t('tmcut.aiModelPicker.label')"
-        class="w-full min-w-0 text-xs rounded-lg border border-default bg-white dark:bg-default px-2 py-1.5"
+        class="w-full min-w-0 text-xs rounded-lg px-2 py-1.5 flat-panel"
         :disabled="loading || choices.length === 0"
         @change="handleSelect"
       >
@@ -265,19 +265,19 @@ async function handleTest() {
         {{ t('tmcut.aiModelPicker.test') }}
       </UButton>
     </div>
-    <p v-if="hubError === 'signin' && !loading" class="text-[10px] text-amber-600 dark:text-amber-400">
+    <p v-if="hubError === 'signin' && !loading" class="text-[10px] text-warning">
       {{ t('tmcut.aiModelPicker.hubSignIn') }}
     </p>
-    <p v-else-if="hubError === 'unavailable' && !loading" class="text-[10px] text-amber-600 dark:text-amber-400">
+    <p v-else-if="hubError === 'unavailable' && !loading" class="text-[10px] text-warning">
       {{ t('tmcut.aiModelPicker.hubUnavailable') }}
     </p>
-    <p v-else-if="choices.length === 0 && !loading" class="text-[10px] text-amber-600 dark:text-amber-400">
+    <p v-else-if="choices.length === 0 && !loading" class="text-[10px] text-warning">
       {{ t('tmcut.aiModelPicker.empty') }}
       <NuxtLink
         to="/resources/connections"
         target="_blank"
         rel="noopener"
-        class="underline underline-offset-2 hover:text-amber-500"
+        class="underline underline-offset-2 hover:text-warning-500"
       >
         {{ t('tmcut.aiModelPicker.emptyAction') }} →
       </NuxtLink>
@@ -289,7 +289,7 @@ async function handleTest() {
     <p
       v-if="testResult"
       class="text-[10px]"
-      :class="testResult.state === 'ok' ? 'text-(--studio-mint-accent)' : 'text-red-600 dark:text-red-400'"
+      :class="testResult.state === 'ok' ? 'text-(--studio-mint-accent)' : 'text-error'"
     >
       {{ testResult.detail }}
     </p>

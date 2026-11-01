@@ -16,7 +16,7 @@ html.dark .tiptap .shiki span {
 }
 
 .collaboration-carets__label {
-  border-radius: 3px 3px 3px 0;
+  border-radius: var(--radius-md) var(--radius-md) var(--radius-md) 0;
   color: #0d0d0d;
   font-size: 12px;
   font-style: normal;

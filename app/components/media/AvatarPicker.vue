@@ -98,7 +98,7 @@ async function onFileChange(event: Event) {
       class="h-1"
     />
 
-    <p v-if="error" class="flex items-start gap-1.5 text-xs text-red-400">
+    <p v-if="error" class="flex items-start gap-1.5 text-xs text-error-400">
       <UIcon name="i-lucide-triangle-alert" class="size-3.5 shrink-0 mt-0.5" />
       <span>{{ error }}</span>
     </p>

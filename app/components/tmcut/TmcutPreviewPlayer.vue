@@ -1455,10 +1455,10 @@ onUnmounted(() => {
         </span>
         <span
           v-if="isCurrentClipProxy"
-          class="ml-auto inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-400 font-medium text-[10px] leading-none shrink-0"
+          class="ml-auto inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-warning-500/15 border border-warning-500/30 text-warning-400 font-medium text-[10px] leading-none shrink-0"
           :title="t('tmcut.proxy.activeDesc')"
         >
-          <UIcon name="i-lucide-zap" class="size-3 text-amber-400" />
+          <UIcon name="i-lucide-zap" class="size-3 text-warning-400" />
           {{ t('tmcut.proxy.active') }}
         </span>
         <span
@@ -1712,14 +1712,14 @@ onUnmounted(() => {
         <!-- Media load error overlay (only when a src was actually attempted) -->
         <div
           v-if="mediaLoadError && currentMediaSrc"
-          class="absolute inset-0 z-40 flex flex-col items-center justify-center gap-2 bg-red-950/70 backdrop-blur-xs p-4 text-center select-none"
+          class="absolute inset-0 z-40 flex flex-col items-center justify-center gap-2 bg-error-950/70 backdrop-blur-xs p-4 text-center select-none"
           data-canvas-hit
         >
-          <UIcon name="i-lucide-alert-triangle" class="size-8 text-red-400" />
-          <p class="text-xs font-semibold text-red-200">
+          <UIcon name="i-lucide-alert-triangle" class="size-8 text-error-400" />
+          <p class="text-xs font-semibold text-error-200">
             {{ t('tmcut.player.loadError') }}
           </p>
-          <p class="text-[10px] font-mono text-red-300/80 break-all max-w-full">
+          <p class="text-[10px] font-mono text-error-300/80 break-all max-w-full">
             {{ activeVideoClip?.clip?.src }}
           </p>
         </div>
@@ -1737,7 +1737,7 @@ onUnmounted(() => {
         />
         <div
           v-if="showSafeArea"
-          class="absolute pointer-events-none border border-dashed border-amber-400/60"
+          class="absolute pointer-events-none border border-dashed border-warning-400/60"
           :style="{
             left: pct(safeArea.titleSafe.x),
             top: pct(safeArea.titleSafe.y),
@@ -1764,7 +1764,7 @@ onUnmounted(() => {
           style="background-image: linear-gradient(to right, rgba(255,255,255,0.35) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.35) 1px, transparent 1px); background-size: 10% 10%;"
         />
         <div v-if="showCenter" class="absolute inset-0 pointer-events-none flex items-center justify-center">
-          <UIcon name="i-lucide-crosshair" class="size-6 text-red-400/70" />
+          <UIcon name="i-lucide-crosshair" class="size-6 text-error-400/70" />
         </div>
 
         <!-- Empty / Standby Canvas Placeholder -->

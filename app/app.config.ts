@@ -15,7 +15,7 @@ export default defineAppConfig({
       neutral: 'zinc',
       info: 'cyan',
       success: 'teal',
-      warning: 'yellow',
+      warning: 'amber',
       error: 'red',
       gray: 'gray',
       cyan: 'cyan',

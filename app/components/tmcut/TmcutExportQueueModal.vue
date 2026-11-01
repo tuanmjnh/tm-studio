@@ -233,9 +233,9 @@ function modeIcon(mode: TmcutExportJob['mode']): string {
             <!-- Error Banner (when failed) -->
             <div
               v-if="job.status === 'failed' && job.error"
-              class="rounded bg-red-950/40 border border-red-800/40 px-3 py-1.5 text-xs text-red-300 flex items-start gap-2"
+              class="rounded bg-error-950/40 border border-error-800/40 px-3 py-1.5 text-xs text-error-300 flex items-start gap-2"
             >
-              <UIcon name="i-lucide-circle-alert" class="size-3.5 text-red-400 shrink-0 mt-0.5" />
+              <UIcon name="i-lucide-circle-alert" class="size-3.5 text-error-400 shrink-0 mt-0.5" />
               <span class="truncate" :title="job.error">{{ job.error }}</span>
             </div>
 

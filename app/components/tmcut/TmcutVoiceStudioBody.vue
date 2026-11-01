@@ -334,7 +334,7 @@ onMounted(async () => {
           <UIcon :name="localOnline ? 'i-lucide-circle-check' : 'i-lucide-circle-alert'" class="mr-1 size-3.5" />{{ localOnline ? t('tmcut.voice.online') : t('tmcut.voice.offline') }}
         </UBadge>
       </div>
-      <p v-if="localError" class="text-xs text-amber-600">
+      <p v-if="localError" class="text-xs text-warning-600">
         {{ localError }}
       </p>
       <div v-if="isDesktop" class="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2 items-end">
@@ -470,7 +470,7 @@ onMounted(async () => {
             {{ t('tmcut.voice.saveKey') }}
           </UButton>
         </div>
-        <p class="text-[11px] text-amber-600">
+        <p class="text-[11px] text-warning-600">
           {{ t('tmcut.voice.geminiPrivacy') }}
         </p>
       </template>

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { useModuleExport, buildExportChildren } from '~/composables/admin/useModuleExport'
 import { formatTimeAgo } from '@vueuse/core'
-import type { GridColumn } from '~/components/gridList/Index.vue'
+import type { GridColumn } from '~/types/gridList'
+import type { NotificationItem } from '~/composables/useNotify'
 import type { HeaderAction } from '~/components/base/HeaderActions.vue'
 
 definePageMeta({
@@ -65,7 +66,7 @@ async function handleDelete() {
   deletingId.value = ''
 }
 
-async function onNotificationClick(item: any) {
+async function onNotificationClick(item: NotificationItem) {
   if (item.unread) await markAsRead(item.id)
 }
 
@@ -76,7 +77,7 @@ const columns = computed<GridColumn[]>(() => [
   { key: 'unread', label: t('common.unread'), class: 'w-24' }
 ])
 
-const rowActions = (item: any) => {
+const rowActions = (item: NotificationItem) => {
   const configs: RowActionConfig[] = []
   if (item.unread) {
     configs.push({ type: 'custom', label: t('common.read'), icon: 'i-lucide-check', onSelect: () => markAsRead(item.id) })

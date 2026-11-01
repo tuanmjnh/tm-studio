@@ -70,9 +70,9 @@ const trackStyles = computed(() => {
       }
     case 'text':
       return {
-        bg: 'bg-amber-600/20 border-amber-500/60 text-amber-200 hover:bg-amber-600/30',
-        activeBg: 'bg-amber-600/40 border-amber-400 ring-2 ring-amber-400',
-        handle: 'bg-amber-400',
+        bg: 'bg-warning-600/20 border-warning-500/60 text-warning-200 hover:bg-warning-600/30',
+        activeBg: 'bg-warning-600/40 border-warning-400 ring-2 ring-warning-400',
+        handle: 'bg-warning-400',
         icon: 'i-lucide-type'
       }
     case 'audio':
@@ -727,7 +727,7 @@ function runToggleLock() {
         >
           {{ locked ? t('tmcut.clipMenu.unlockTrack') : t('tmcut.clipMenu.lockTrack') }}
         </UButton>
-        <p v-if="locked" class="px-1.5 pt-1 text-[10px] leading-tight text-amber-400">
+        <p v-if="locked" class="px-1.5 pt-1 text-[10px] leading-tight text-warning-400">
           {{ t('tmcut.clipMenu.lockedHint') }}
         </p>
       </div>
@@ -797,7 +797,7 @@ function runToggleLock() {
 
           <p
             v-if="menuReason"
-            class="mt-1.5 rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-1 text-[10px] text-amber-300"
+            class="mt-1.5 rounded border border-warning-500/30 bg-warning-500/10 px-1.5 py-1 text-[10px] text-warning-300"
           >
             {{ t(`tmcut.clipMenu.reason.${menuReason}`) }}
           </p>

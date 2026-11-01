@@ -90,7 +90,7 @@ function navigateAndClose(to: string) {
         </div>
 
         <!-- Full Settings Link -->
-        <div class="pt-2 border-t border-gray-200 dark:border-gray-800">
+        <div class="pt-2 border-t border-default">
           <UButton
             icon="i-lucide-external-link"
             variant="subtle"

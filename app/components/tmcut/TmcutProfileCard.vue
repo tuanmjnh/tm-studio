@@ -22,7 +22,7 @@ const emit = defineEmits<{ select: [id: string] }>()
       'border-2 rounded-xl p-5 cursor-pointer transition-all duration-200 flex flex-col justify-between',
       props.selected
         ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 shadow-lg shadow-primary-500/10'
-        : 'border-default hover:border-primary-300 dark:hover:border-primary-700 bg-white/80 dark:bg-default/80'
+        : 'border-default hover:border-primary/40 bg-default/80'
     ]"
     role="button"
     tabindex="0"

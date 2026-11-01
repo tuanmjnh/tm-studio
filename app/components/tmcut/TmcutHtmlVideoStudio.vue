@@ -503,7 +503,7 @@ onBeforeUnmount(() => {
         <p class="text-xs text-muted">
           {{ t('tmcut.htmlVideo.durationHint', { duration: renderDuration.toFixed(2), frames: framesEstimate }) }}
         </p>
-        <p v-if="allowRemote" class="text-xs text-amber-600 dark:text-amber-400">
+        <p v-if="allowRemote" class="text-xs text-warning">
           {{ t('tmcut.htmlVideo.allowRemoteHint') }}
         </p>
       </UCard>
@@ -589,7 +589,7 @@ onBeforeUnmount(() => {
         <p class="text-xs text-muted">
           {{ t('tmcut.htmlVideo.previewHint') }}
         </p>
-        <p v-if="previewError" class="text-xs text-red-600 dark:text-red-400">
+        <p v-if="previewError" class="text-xs text-error">
           {{ previewError }}
         </p>
       </UCard>
@@ -663,7 +663,7 @@ onBeforeUnmount(() => {
             v-for="issue in lint"
             :key="issue.code"
             class="flex gap-2 text-xs"
-            :class="issue.level === 'error' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'"
+            :class="issue.level === 'error' ? 'text-error' : 'text-warning'"
           >
             <UIcon :name="issue.level === 'error' ? 'i-lucide-circle-x' : 'i-lucide-triangle-alert'" class="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span><span class="font-mono">{{ issue.code }}</span> — {{ issue.message }}</span>
@@ -692,7 +692,7 @@ onBeforeUnmount(() => {
       <p v-if="rendering" class="text-xs text-muted">
         {{ t('tmcut.htmlVideo.renderProgress', { frames: framesEstimate }) }}
       </p>
-      <p v-if="renderError" class="text-sm text-red-600 dark:text-red-400">
+      <p v-if="renderError" class="text-sm text-error">
         {{ renderError }}
       </p>
       <template v-if="result">

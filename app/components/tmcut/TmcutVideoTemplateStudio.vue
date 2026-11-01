@@ -299,7 +299,7 @@ function runTest() {
         <div
           v-for="family in families"
           :key="family.templateId"
-          class="bg-white dark:bg-default border border-default rounded-xl p-4 flex flex-col gap-3"
+          class="rounded-xl p-4 flex flex-col gap-3 flat-panel"
         >
           <div class="flex items-start justify-between gap-2">
             <div class="min-w-0">
@@ -468,27 +468,27 @@ function runTest() {
         v-if="validation && (validation.errors.length > 0 || validation.warnings.length > 0)"
         class="rounded-lg border p-3"
         :class="validation.errors.length > 0
-          ? 'border-red-500/40 bg-red-500/10'
-          : 'border-amber-500/40 bg-amber-500/10'"
+          ? 'border-error-500/40 bg-error-500/10'
+          : 'border-warning-500/40 bg-warning-500/10'"
       >
         <p
           class="text-xs font-semibold"
-          :class="validation.errors.length > 0 ? 'text-red-300' : 'text-amber-300'"
+          :class="validation.errors.length > 0 ? 'text-error-300' : 'text-warning-300'"
         >
           {{ describeErrors(validation.errors.length, validation.warnings.length) }}
         </p>
         <ul class="mt-1.5 space-y-1 text-[11px] font-mono max-h-32 overflow-y-auto">
-          <li v-for="error in validation.errors" :key="error.path + error.code" class="text-red-200/90">
+          <li v-for="error in validation.errors" :key="error.path + error.code" class="text-error-200/90">
             {{ error.path }} — {{ error.message }}
           </li>
-          <li v-for="warning in validation.warnings" :key="warning.path + warning.code" class="text-amber-200/90">
+          <li v-for="warning in validation.warnings" :key="warning.path + warning.code" class="text-warning-200/90">
             {{ warning.path }} — {{ warning.message }}
           </li>
         </ul>
       </div>
 
       <!-- Meta -->
-      <div class="bg-white dark:bg-default border border-default rounded-xl p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="rounded-xl p-4 grid grid-cols-1 md:grid-cols-2 gap-4 flat-panel">
         <div>
           <label for="tmcut-studio-name" class="block text-xs font-medium text-toned mb-1.5">
             {{ t('tmcut.videoTemplates.name') }}
@@ -515,7 +515,7 @@ function runTest() {
       </div>
 
       <!-- Input schema -->
-      <div class="bg-white dark:bg-default border border-default rounded-xl p-4">
+      <div class="rounded-xl p-4 flat-panel">
         <div class="flex items-center justify-between mb-3">
           <div>
             <h3 class="text-sm font-semibold text-highlighted dark:text-white">
@@ -591,7 +591,7 @@ function runTest() {
       </div>
 
       <!-- Scenes -->
-      <div class="bg-white dark:bg-default border border-default rounded-xl p-4">
+      <div class="rounded-xl p-4 flat-panel">
         <div class="flex items-center justify-between mb-3">
           <div>
             <h3 class="text-sm font-semibold text-highlighted dark:text-white">
@@ -698,7 +698,7 @@ function runTest() {
       </div>
 
       <!-- Prompt blocks -->
-      <div class="bg-white dark:bg-default border border-default rounded-xl p-4">
+      <div class="rounded-xl p-4 flat-panel">
         <div class="flex items-center justify-between mb-3">
           <div>
             <h3 class="text-sm font-semibold text-highlighted dark:text-white">
@@ -769,7 +769,7 @@ function runTest() {
       </div>
 
       <!-- Test run -->
-      <div class="bg-white dark:bg-default border border-default rounded-xl p-4">
+      <div class="rounded-xl p-4 flat-panel">
         <div class="flex items-center justify-between mb-3">
           <div>
             <h3 class="text-sm font-semibold text-highlighted dark:text-white">
@@ -799,7 +799,7 @@ function runTest() {
             >
               <span class="text-[11px] font-medium text-toned">
                 {{ field.label }}
-                <span v-if="field.required" class="text-red-400">*</span>
+                <span v-if="field.required" class="text-error-400">*</span>
               </span>
               <USwitch
                 v-if="field.type === 'boolean'"
@@ -834,9 +834,9 @@ function runTest() {
             <div v-else class="space-y-3">
               <div
                 class="rounded-lg border p-3"
-                :class="testResult.ok ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-red-500/40 bg-red-500/10'"
+                :class="testResult.ok ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-error-500/40 bg-error-500/10'"
               >
-                <p class="text-xs font-semibold" :class="testResult.ok ? 'text-emerald-300' : 'text-red-300'">
+                <p class="text-xs font-semibold" :class="testResult.ok ? 'text-emerald-300' : 'text-error-300'">
                   {{ testResult.ok
                     ? t('tmcut.videoTemplates.testSummary', {
                       count: testResult.sceneCount ?? 0,
@@ -846,7 +846,7 @@ function runTest() {
                     : t('tmcut.videoTemplates.testFailedSummary', { time: testRanAt })
                   }}
                 </p>
-                <ul v-if="!testResult.ok" class="mt-1.5 space-y-1 text-[11px] font-mono text-red-200/90 max-h-40 overflow-y-auto">
+                <ul v-if="!testResult.ok" class="mt-1.5 space-y-1 text-[11px] font-mono text-error-200/90 max-h-40 overflow-y-auto">
                   <li v-for="error in testResult.validation.errors" :key="error.path + error.code">
                     {{ error.path }} — {{ error.message }}
                   </li>

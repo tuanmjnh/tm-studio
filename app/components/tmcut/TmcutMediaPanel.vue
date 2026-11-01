@@ -778,7 +778,7 @@ function showInFolder(filePath?: string) {
           v-if="(folderCounts.unassigned ?? 0) > 0"
           type="button"
           class="px-2.5 py-1 rounded-md text-[11px] font-medium flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer border"
-          :class="selectedFolderId === '__unassigned__' ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-semibold' : 'bg-accented/60 border-default hover:border-accented text-muted'"
+          :class="selectedFolderId === '__unassigned__' ? 'bg-warning-500/20 border-warning-500 text-warning-300 font-semibold' : 'bg-accented/60 border-default hover:border-accented text-muted'"
           @click="selectedFolderId = '__unassigned__'"
           @dragover.prevent="onFolderDragOver($event)"
           @drop.prevent="onFolderDrop($event, null)"
@@ -792,7 +792,7 @@ function showInFolder(filePath?: string) {
 
     <div
       v-if="missingAssets.length > 0"
-      class="mx-3 mt-2 px-2.5 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-200"
+      class="mx-3 mt-2 px-2.5 py-2 rounded-lg bg-warning-500/10 border border-warning-500/30 text-[11px] text-warning-200"
     >
       <div class="flex items-center gap-1.5">
         <UIcon name="i-lucide-alert-triangle" class="size-3.5 shrink-0" />
@@ -873,7 +873,7 @@ function showInFolder(filePath?: string) {
             v-for="asset in visibleAssets"
             :key="asset.id"
             class="group/thumb relative flex gap-2 p-1.5 min-w-0 rounded-md bg-accented/60 cursor-pointer border transition-colors"
-            :class="asset.status === 'missing' ? 'border-amber-500/60' : 'border-transparent hover:border-primary/60'"
+            :class="asset.status === 'missing' ? 'border-warning-500/60' : 'border-transparent hover:border-primary/60'"
             :title="asset.name"
             :draggable="asset.status !== 'missing'"
             tabindex="0"
@@ -916,9 +916,9 @@ function showInFolder(filePath?: string) {
               </div>
               <div
                 v-if="asset.status === 'missing'"
-                class="absolute inset-0 bg-amber-950/60 flex items-center justify-center"
+                class="absolute inset-0 bg-warning-950/60 flex items-center justify-center"
               >
-                <UIcon name="i-lucide-alert-triangle" class="size-4 text-amber-400" />
+                <UIcon name="i-lucide-alert-triangle" class="size-4 text-warning-400" />
               </div>
 
               <!-- Duration badge (bottom-right) -->
@@ -938,7 +938,7 @@ function showInFolder(filePath?: string) {
               <!-- Proxy badge (roadmap F-4) -->
               <span
                 v-if="asset.proxyStatus === 'ready'"
-                class="absolute px-1 rounded bg-amber-500/90 text-[9px] font-bold text-black flex items-center gap-0.5"
+                class="absolute px-1 rounded bg-warning-500/90 text-[9px] font-bold text-black flex items-center gap-0.5"
                 :class="isAssetOnTimeline(asset) ? 'top-4 left-0.5' : 'top-0.5 left-0.5'"
                 :title="t('tmcut.proxy.readyDesc')"
               >
@@ -947,7 +947,7 @@ function showInFolder(filePath?: string) {
               </span>
               <span
                 v-else-if="asset.proxyStatus === 'generating'"
-                class="absolute px-1 rounded bg-amber-500/30 border border-amber-500/50 text-[9px] font-medium text-amber-200 flex items-center gap-0.5"
+                class="absolute px-1 rounded bg-warning-500/30 border border-warning-500/50 text-[9px] font-medium text-warning-200 flex items-center gap-0.5"
                 :class="isAssetOnTimeline(asset) ? 'top-4 left-0.5' : 'top-0.5 left-0.5'"
               >
                 <UIcon name="i-lucide-loader-circle" class="size-2.5 animate-spin" />
@@ -975,7 +975,7 @@ function showInFolder(filePath?: string) {
                   {{ getFolderBadge(asset)?.name }}
                 </template>
               </p>
-              <p v-if="asset.status === 'missing'" class="text-[9px] font-medium text-amber-400 truncate">
+              <p v-if="asset.status === 'missing'" class="text-[9px] font-medium text-warning-400 truncate">
                 {{ t('tmcut.media.missing') }}
               </p>
               <p v-else-if="asset.proxyStatus === 'ready'" class="text-[9px] font-mono text-emerald-400 truncate">
@@ -1064,7 +1064,7 @@ function showInFolder(filePath?: string) {
             v-for="asset in visibleAssets"
             :key="asset.id"
             class="group/thumb relative rounded-md bg-accented/60 cursor-pointer border transition-colors overflow-hidden"
-            :class="asset.status === 'missing' ? 'border-amber-500/60' : 'border-transparent hover:border-primary/60'"
+            :class="asset.status === 'missing' ? 'border-warning-500/60' : 'border-transparent hover:border-primary/60'"
             :title="asset.name"
             :draggable="asset.status !== 'missing'"
             tabindex="0"
@@ -1107,7 +1107,7 @@ function showInFolder(filePath?: string) {
                 t('tmcut.media.addedBadge') }}</span>
               <span
                 v-if="asset.proxyStatus === 'ready'"
-                class="absolute top-1 right-1 px-1 rounded bg-amber-500/90 text-[9px] font-bold text-black"
+                class="absolute top-1 right-1 px-1 rounded bg-warning-500/90 text-[9px] font-bold text-black"
               >PXY</span>
 
               <!-- Hover actions: bottom-anchored strip on the
@@ -1244,7 +1244,7 @@ function showInFolder(filePath?: string) {
               <UIcon
                 :name="track.type === 'video' ? 'i-lucide-film' : track.type === 'text' ? 'i-lucide-type' : 'i-lucide-music'"
                 class="size-3.5 shrink-0"
-                :class="track.type === 'video' ? 'text-blue-400' : track.type === 'text' ? 'text-amber-400' : 'text-emerald-400'"
+                :class="track.type === 'video' ? 'text-blue-400' : track.type === 'text' ? 'text-warning-400' : 'text-emerald-400'"
               />
               <span
                 class="truncate font-medium text-toned text-[11px]"

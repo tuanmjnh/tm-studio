@@ -175,16 +175,32 @@ const ticksPerSecond = TICKS_PER_SECOND
         <span v-if="hasRows" class="text-[10px] font-mono text-muted">
           {{ rows.length }}
         </span>
-        <UButton v-if="hasRows" icon="i-lucide-trash-2" size="xs" color="neutral" variant="ghost"
-          :title="t('tmcut.motion.clearAll')" :aria-label="t('tmcut.motion.clearAll')" @click="clearAll" />
+        <UButton
+          v-if="hasRows"
+          icon="i-lucide-trash-2"
+          size="xs"
+          color="neutral"
+          variant="ghost"
+          :title="t('tmcut.motion.clearAll')"
+          :aria-label="t('tmcut.motion.clearAll')"
+          @click="clearAll"
+        />
       </div>
     </div>
 
     <!-- Add at playhead: one button per channel the renderer evaluates. -->
     <div class="flex flex-wrap gap-1">
-      <UButton v-for="option in propOptions" :key="option.value" size="xs" variant="soft" color="neutral"
-        icon="i-lucide-plus" class="text-[10px]" :title="t('tmcut.motion.addAtPlayhead', { prop: option.label })"
-        @click="addKeyframe(option.value as KfProp)">
+      <UButton
+        v-for="option in propOptions"
+        :key="option.value"
+        size="xs"
+        variant="soft"
+        color="neutral"
+        icon="i-lucide-plus"
+        class="text-[10px]"
+        :title="t('tmcut.motion.addAtPlayhead', { prop: option.label })"
+        @click="addKeyframe(option.value as KfProp)"
+      >
         {{ option.label }}
       </UButton>
     </div>
@@ -195,24 +211,57 @@ const ticksPerSecond = TICKS_PER_SECOND
 
     <!-- One block per channel: time / value / curve / delete per row. -->
     <div v-else class="space-y-2">
-      <div v-for="option in propOptions.filter(o => rows.some(r => r.prop === o.value))" :key="option.value"
-        class="space-y-1 p-2 rounded-lg bg-muted/60 border border-default/80">
+      <div
+        v-for="option in propOptions.filter(o => rows.some(r => r.prop === o.value))"
+        :key="option.value"
+        class="space-y-1 p-2 rounded-lg flat-subpanel"
+      >
         <div class="flex items-center gap-1.5">
           <UIcon name="i-lucide-diamond" class="size-3 text-primary shrink-0" />
           <span class="text-[11px] font-medium text-toned">{{ option.label }}</span>
         </div>
-        <div v-for="row in rows.filter(r => r.prop === option.value)" :key="`${row.prop}-${row.at}`"
-          class="grid grid-cols-[1fr_1fr_auto] gap-1 items-center">
-          <UInput :model-value="row.timeSec" type="number" step="0.05" min="0" size="xs"
-            :aria-label="t('tmcut.motion.time')" :title="t('tmcut.motion.time')"
-            @update:model-value="updateRow(row, { timeSec: Number($event) })" />
-          <UInput :model-value="row.value" type="number" step="1" size="xs" :aria-label="t('tmcut.motion.value')"
-            :title="t('tmcut.motion.value')" @update:model-value="updateRow(row, { value: Number($event) })" />
-          <UButton icon="i-lucide-x" size="xs" color="neutral" variant="ghost" :title="t('tmcut.motion.remove')"
-            :aria-label="t('tmcut.motion.remove')" @click="removeRow(row)" />
-          <USelect :model-value="row.easing" :items="easingOptions" size="xs" class="col-span-2"
-            :aria-label="t('tmcut.motion.easing')" :title="t('tmcut.motion.easing')"
-            @update:model-value="updateRow(row, { easing: String($event) })" />
+        <div
+          v-for="row in rows.filter(r => r.prop === option.value)"
+          :key="`${row.prop}-${row.at}`"
+          class="grid grid-cols-[1fr_1fr_auto] gap-1 items-center"
+        >
+          <UInput
+            :model-value="row.timeSec"
+            type="number"
+            step="0.05"
+            min="0"
+            size="xs"
+            :aria-label="t('tmcut.motion.time')"
+            :title="t('tmcut.motion.time')"
+            @update:model-value="updateRow(row, { timeSec: Number($event) })"
+          />
+          <UInput
+            :model-value="row.value"
+            type="number"
+            step="1"
+            size="xs"
+            :aria-label="t('tmcut.motion.value')"
+            :title="t('tmcut.motion.value')"
+            @update:model-value="updateRow(row, { value: Number($event) })"
+          />
+          <UButton
+            icon="i-lucide-x"
+            size="xs"
+            color="neutral"
+            variant="ghost"
+            :title="t('tmcut.motion.remove')"
+            :aria-label="t('tmcut.motion.remove')"
+            @click="removeRow(row)"
+          />
+          <USelect
+            :model-value="row.easing"
+            :items="easingOptions"
+            size="xs"
+            class="col-span-2"
+            :aria-label="t('tmcut.motion.easing')"
+            :title="t('tmcut.motion.easing')"
+            @update:model-value="updateRow(row, { easing: String($event) })"
+          />
           <span class="text-[9px] font-mono text-muted text-right">
             {{ t('tmcut.motion.suffixTicks', { ticks: Math.round(row.timeSec * ticksPerSecond) }) }}
           </span>

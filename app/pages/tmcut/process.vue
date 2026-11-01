@@ -297,7 +297,7 @@ async function handleDecision(id: string, decision: 'approved' | 'revise' | 'rej
             </UBadge>
           </div>
           <UProgress :model-value="progress" size="sm" />
-          <p v-if="stale.length > 0" class="text-[11px] text-amber-600 dark:text-amber-400">
+          <p v-if="stale.length > 0" class="text-[11px] text-warning">
             {{ t('tmcut.process.staleBanner', { names: stale.join(', ') }) }}
           </p>
         </div>
@@ -339,7 +339,7 @@ async function handleDecision(id: string, decision: 'approved' | 'revise' | 'rej
                   {{ t('tmcut.process.reads') }}: {{ stage.requires.length ? stage.requires.join(', ') : '—' }}
                   → {{ t('tmcut.process.writes') }}: {{ stage.produces.join(', ') }}
                 </p>
-                <p v-if="stageOf(stage.id)?.lastError" class="text-[10px] text-red-600 dark:text-red-400 mt-1">
+                <p v-if="stageOf(stage.id)?.lastError" class="text-[10px] text-error mt-1">
                   {{ stageOf(stage.id)!.lastError }}
                 </p>
               </div>
@@ -407,8 +407,8 @@ async function handleDecision(id: string, decision: 'approved' | 'revise' | 'rej
 
       <!-- Gate + artifacts + model -->
       <section class="min-h-0 flex flex-col gap-3 overflow-auto pr-1">
-        <div v-if="lastError" class="rounded-lg border border-red-500/40 bg-red-500/5 p-2.5">
-          <p class="text-[11px] text-red-600 dark:text-red-400 break-words">
+        <div v-if="lastError" class="rounded-lg border border-error-500/40 bg-error-500/5 p-2.5">
+          <p class="text-[11px] text-error break-words">
             {{ lastError }}
           </p>
         </div>
@@ -423,7 +423,7 @@ async function handleDecision(id: string, decision: 'approved' | 'revise' | 'rej
             v-for="(issue, index) in validationIssues"
             :key="`${issue.code}-${index}`"
             class="text-[11px] break-words"
-            :class="issue.level === 'critical' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'"
+            :class="issue.level === 'critical' ? 'text-error' : 'text-warning'"
           >
             <span class="font-semibold">
               {{ issue.level === 'critical' ? t('tmcut.process.validation.critical') : t('tmcut.process.validation.warning') }}

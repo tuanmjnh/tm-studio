@@ -809,7 +809,7 @@ const saveStateLabel = computed(() => {
         <UIcon
           :name="trackType === 'video' ? 'i-lucide-film' : trackType === 'text' ? 'i-lucide-type' : 'i-lucide-music'"
           class="size-4 shrink-0"
-          :class="trackType === 'video' ? 'text-blue-400' : trackType === 'text' ? 'text-amber-400' : 'text-emerald-400'"
+          :class="trackType === 'video' ? 'text-blue-400' : trackType === 'text' ? 'text-warning-400' : 'text-emerald-400'"
         />
         <span class="font-medium text-highlighted truncate text-sm">
           {{ clip.name || clip.text || t('tmcut.project') }}
@@ -829,7 +829,7 @@ const saveStateLabel = computed(() => {
          five Vietnamese labels (Hình ảnh/Âm thanh/Tốc độ/Hoạt ảnh/Hiệu ứng)
          overflow a single row inside the 288 px panel. 3 columns wrap to a
          second line for video clips; 2-3 tab sets stay on one line. -->
-    <div class="grid gap-1 bg-muted/60 border border-default rounded-lg p-1" :class="tabItems.length === 2 ? 'grid-cols-2' : 'grid-cols-3'">
+    <div class="grid gap-1 flat-subpanel rounded-lg p-1" :class="tabItems.length === 2 ? 'grid-cols-2' : 'grid-cols-3'">
       <button
         v-for="tab in tabItems"
         :key="tab.key"
@@ -926,7 +926,7 @@ const saveStateLabel = computed(() => {
           :title="t('tmcut.inspectorProps.italic')"
           @click="handleStyleToggle('italic')"
         />
-        <div class="flex items-center gap-0.5 bg-muted/60 border border-default rounded-md p-0.5">
+        <div class="flex items-center gap-0.5 flat-subpanel rounded-md p-0.5">
           <button
             v-for="option in alignOptions"
             :key="option.key"
@@ -1015,7 +1015,7 @@ const saveStateLabel = computed(() => {
       </div>
 
       <!-- Animation In -->
-      <div class="space-y-2 p-2.5 rounded-lg bg-muted/60 border border-default/80">
+      <div class="space-y-2 p-2.5 rounded-lg flat-subpanel">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-1.5">
             <UIcon name="i-lucide-log-in" class="size-3.5 text-primary" />
@@ -1055,7 +1055,7 @@ const saveStateLabel = computed(() => {
       </div>
 
       <!-- Animation Out -->
-      <div class="space-y-2 p-2.5 rounded-lg bg-muted/60 border border-default/80">
+      <div class="space-y-2 p-2.5 rounded-lg flat-subpanel">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-1.5">
             <UIcon name="i-lucide-log-out" class="size-3.5 text-primary" />
@@ -1524,18 +1524,18 @@ const saveStateLabel = computed(() => {
         />
       </div>
 
-      <div v-if="clip.stabilize" class="space-y-2.5 p-2.5 rounded-lg bg-muted/60 border border-default/80">
+      <div v-if="clip.stabilize" class="space-y-2.5 p-2.5 rounded-lg flat-subpanel">
         <div class="flex items-center justify-between text-[11px]">
           <span class="text-muted">{{ t('tmcut.stabilize.level') }}</span>
           <span v-if="clip.stabilizeStatus === 'ready'" class="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-medium">
             <UIcon name="i-lucide-check-circle" class="size-3" />
             {{ t('tmcut.stabilize.ready') }}
           </span>
-          <span v-else-if="clip.stabilizeStatus === 'processing'" class="inline-flex items-center gap-1 text-[10px] text-amber-400 font-medium">
+          <span v-else-if="clip.stabilizeStatus === 'processing'" class="inline-flex items-center gap-1 text-[10px] text-warning-400 font-medium">
             <UIcon name="i-lucide-loader-2" class="size-3 animate-spin" />
             {{ t('tmcut.stabilize.processing') }}
           </span>
-          <span v-else-if="clip.stabilizeStatus === 'error'" class="inline-flex items-center gap-1 text-[10px] text-red-400 font-medium">
+          <span v-else-if="clip.stabilizeStatus === 'error'" class="inline-flex items-center gap-1 text-[10px] text-error-400 font-medium">
             <UIcon name="i-lucide-alert-circle" class="size-3" />
             {{ t('tmcut.stabilize.error') }}
           </span>
@@ -1868,7 +1868,7 @@ const saveStateLabel = computed(() => {
           </span>
           <span
             v-if="!isDesktop"
-            class="text-[9px] leading-none rounded bg-amber-500/15 text-amber-600 dark:text-amber-300 px-1.5 py-0.5"
+            class="text-[9px] leading-none rounded bg-warning-500/15 text-warning-600 dark:text-warning-300 px-1.5 py-0.5"
           >
             {{ t('tmcut.inspectorProps.webPreviewOnly') }}
           </span>
@@ -1969,7 +1969,7 @@ const saveStateLabel = computed(() => {
       </span>
 
       <div class="space-y-2">
-        <div class="flex items-center justify-between gap-2 p-2 rounded-lg bg-muted/60 border border-default/80">
+        <div class="flex items-center justify-between gap-2 p-2 rounded-lg flat-subpanel">
           <div class="flex items-center gap-1.5 min-w-0">
             <UIcon name="i-lucide-copy" class="size-3.5 shrink-0" :class="clip.shadow ? 'text-primary' : 'text-muted'" />
             <span class="text-[11px] truncate">{{ t('tmcut.textFx.shadow') }}</span>
@@ -1993,7 +1993,7 @@ const saveStateLabel = computed(() => {
           </div>
         </div>
 
-        <div class="flex items-center justify-between gap-2 p-2 rounded-lg bg-muted/60 border border-default/80">
+        <div class="flex items-center justify-between gap-2 p-2 rounded-lg flat-subpanel">
           <div class="flex items-center gap-1.5 min-w-0">
             <UIcon name="i-lucide-type-outline" class="size-3.5 shrink-0" :class="clip.stroke ? 'text-primary' : 'text-muted'" />
             <span class="text-[11px] truncate">{{ t('tmcut.textFx.stroke') }}</span>
@@ -2017,7 +2017,7 @@ const saveStateLabel = computed(() => {
           </div>
         </div>
 
-        <div class="flex items-center justify-between gap-2 p-2 rounded-lg bg-muted/60 border border-default/80">
+        <div class="flex items-center justify-between gap-2 p-2 rounded-lg flat-subpanel">
           <div class="flex items-center gap-1.5 min-w-0">
             <UIcon name="i-lucide-square" class="size-3.5 shrink-0" :class="clip.bgColor ? 'text-primary' : 'text-muted'" />
             <span class="text-[11px] truncate">{{ t('tmcut.textFx.plate') }}</span>
@@ -2321,7 +2321,7 @@ const saveStateLabel = computed(() => {
       </div>
       <div class="flex items-start justify-between gap-3 py-1.5">
         <span class="text-muted shrink-0">{{ t('tmcut.details.saveState') }}</span>
-        <span class="text-right text-[11px]" :class="saveStatus === 'error' ? 'text-red-400' : 'text-emerald-400'">
+        <span class="text-right text-[11px]" :class="saveStatus === 'error' ? 'text-error-400' : 'text-emerald-400'">
           {{ saveStateLabel }}
         </span>
       </div>

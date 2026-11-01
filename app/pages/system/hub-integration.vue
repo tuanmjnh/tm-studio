@@ -173,7 +173,9 @@ mobileBar.registerActions(computed(() => [
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <UIcon name="i-lucide-radio-tower" class="w-5 h-5 text-primary" />
-              <h3 class="font-semibold text-sm">{{ t('hub_integration.live_status') }}</h3>
+              <h3 class="font-semibold text-sm">
+                {{ t('hub_integration.live_status') }}
+              </h3>
             </div>
             <UBadge
               :label="auth.isAuthenticated.value ? t('hub_integration.authenticated') : t('hub_integration.guest')"
@@ -187,15 +189,21 @@ mobileBar.registerActions(computed(() => [
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div class="rounded-xl border border-default p-4 bg-elevated/40 space-y-1">
             <span class="text-xs text-muted font-medium">{{ t('hub_integration.hub_url') }}</span>
-            <p class="text-sm font-semibold font-mono text-primary truncate">{{ hubUrl }}</p>
+            <p class="text-sm font-semibold font-mono text-primary truncate">
+              {{ hubUrl }}
+            </p>
           </div>
           <div class="rounded-xl border border-default p-4 bg-elevated/40 space-y-1">
             <span class="text-xs text-muted font-medium">{{ t('hub_integration.satellite_app_id') }}</span>
-            <p class="text-sm font-semibold font-mono text-highlighted truncate">{{ appId }}</p>
+            <p class="text-sm font-semibold font-mono text-highlighted truncate">
+              {{ appId }}
+            </p>
           </div>
           <div class="rounded-xl border border-default p-4 bg-elevated/40 space-y-1">
             <span class="text-xs text-muted font-medium">{{ t('hub_integration.auth_method') }}</span>
-            <p class="text-sm font-semibold font-mono text-highlighted truncate">JWT Bearer + X-App-Id</p>
+            <p class="text-sm font-semibold font-mono text-highlighted truncate">
+              JWT Bearer + X-App-Id
+            </p>
           </div>
         </div>
 
@@ -208,7 +216,9 @@ mobileBar.registerActions(computed(() => [
                 <span class="text-muted">1. Hub Health</span>
                 <UIcon :name="testResults.health.ok ? 'i-lucide-check-circle' : 'i-lucide-x-circle'" :class="testResults.health.ok ? 'text-success' : 'text-error'" />
               </div>
-              <p class="font-mono font-medium truncate">{{ testResults.health.ok ? `${testResults.health.latencyMs}ms` : t('hub_integration.conn_error') }}</p>
+              <p class="font-mono font-medium truncate">
+                {{ testResults.health.ok ? `${testResults.health.latencyMs}ms` : t('hub_integration.conn_error') }}
+              </p>
             </div>
 
             <div class="p-3 rounded-lg border border-default space-y-1 text-xs">
@@ -216,7 +226,9 @@ mobileBar.registerActions(computed(() => [
                 <span class="text-muted">2. Public Configs</span>
                 <UIcon :name="testResults.configs.ok ? 'i-lucide-check-circle' : 'i-lucide-x-circle'" :class="testResults.configs.ok ? 'text-success' : 'text-error'" />
               </div>
-              <p class="font-mono font-medium truncate">{{ testResults.configs.ok ? t('hub_integration.configs_count', { count: testResults.configs.count }) : t('hub_integration.cannot_load') }}</p>
+              <p class="font-mono font-medium truncate">
+                {{ testResults.configs.ok ? t('hub_integration.configs_count', { count: testResults.configs.count }) : t('hub_integration.cannot_load') }}
+              </p>
             </div>
 
             <div class="p-3 rounded-lg border border-default space-y-1 text-xs">
@@ -224,7 +236,9 @@ mobileBar.registerActions(computed(() => [
                 <span class="text-muted">3. Dynamic Routes</span>
                 <UIcon :name="testResults.routes.ok ? 'i-lucide-check-circle' : 'i-lucide-x-circle'" :class="testResults.routes.ok ? 'text-success' : 'text-error'" />
               </div>
-              <p class="font-mono font-medium truncate">{{ testResults.routes.ok ? t('hub_integration.routes_count', { count: testResults.routes.count }) : t('hub_integration.cannot_load') }}</p>
+              <p class="font-mono font-medium truncate">
+                {{ testResults.routes.ok ? t('hub_integration.routes_count', { count: testResults.routes.count }) : t('hub_integration.cannot_load') }}
+              </p>
             </div>
 
             <div class="p-3 rounded-lg border border-default space-y-1 text-xs">
@@ -232,7 +246,9 @@ mobileBar.registerActions(computed(() => [
                 <span class="text-muted">4. Dynamic Docs</span>
                 <UIcon :name="testResults.docs.ok ? 'i-lucide-check-circle' : 'i-lucide-x-circle'" :class="testResults.docs.ok ? 'text-success' : 'text-error'" />
               </div>
-              <p class="font-mono font-medium truncate">{{ testResults.docs.ok ? `v${testResults.docs.version || 1} (Live)` : t('hub_integration.fallback_version') }}</p>
+              <p class="font-mono font-medium truncate">
+                {{ testResults.docs.ok ? `v${testResults.docs.version || 1} (Live)` : t('hub_integration.fallback_version') }}
+              </p>
             </div>
           </div>
         </div>
@@ -244,7 +260,9 @@ mobileBar.registerActions(computed(() => [
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <UIcon name="i-lucide-sliders" class="w-4 h-4 text-primary" />
-              <h3 class="font-semibold text-sm">{{ t('hub_integration.step1_title') }}</h3>
+              <h3 class="font-semibold text-sm">
+                {{ t('hub_integration.step1_title') }}
+              </h3>
             </div>
             <UButton
               :icon="copiedKey === 'env' ? 'i-lucide-check' : 'i-lucide-copy'"
@@ -271,7 +289,9 @@ mobileBar.registerActions(computed(() => [
         <template #header>
           <div class="flex items-center gap-2">
             <UIcon name="i-lucide-database" class="w-4 h-4 text-primary" />
-            <h3 class="font-semibold text-sm">{{ t('hub_integration.step2_title') }}</h3>
+            <h3 class="font-semibold text-sm">
+              {{ t('hub_integration.step2_title') }}
+            </h3>
           </div>
         </template>
 
@@ -300,7 +320,9 @@ mobileBar.registerActions(computed(() => [
             <div class="p-3.5 rounded-lg border border-default space-y-2">
               <div class="flex items-center gap-2">
                 <UIcon name="i-lucide-route" class="w-4 h-4 text-emerald-500" />
-                <h4 class="text-xs font-bold text-highlighted">{{ t('hub_integration.feature_routes_title') }}</h4>
+                <h4 class="text-xs font-bold text-highlighted">
+                  {{ t('hub_integration.feature_routes_title') }}
+                </h4>
               </div>
               <p class="text-xs text-muted leading-relaxed">
                 {{ t('hub_integration.feature_routes_desc') }}
@@ -310,7 +332,9 @@ mobileBar.registerActions(computed(() => [
             <div class="p-3.5 rounded-lg border border-default space-y-2">
               <div class="flex items-center gap-2">
                 <UIcon name="i-lucide-settings-2" class="w-4 h-4 text-sky-500" />
-                <h4 class="text-xs font-bold text-highlighted">{{ t('hub_integration.feature_configs_title') }}</h4>
+                <h4 class="text-xs font-bold text-highlighted">
+                  {{ t('hub_integration.feature_configs_title') }}
+                </h4>
               </div>
               <p class="text-xs text-muted leading-relaxed">
                 {{ t('hub_integration.feature_configs_desc') }}
@@ -320,7 +344,9 @@ mobileBar.registerActions(computed(() => [
             <div class="p-3.5 rounded-lg border border-default space-y-2">
               <div class="flex items-center gap-2">
                 <UIcon name="i-lucide-book-open" class="w-4 h-4 text-violet-500" />
-                <h4 class="text-xs font-bold text-highlighted">{{ t('hub_integration.feature_docs_title') }}</h4>
+                <h4 class="text-xs font-bold text-highlighted">
+                  {{ t('hub_integration.feature_docs_title') }}
+                </h4>
               </div>
               <p class="text-xs text-muted leading-relaxed">
                 {{ t('hub_integration.feature_docs_desc') }}
@@ -329,8 +355,10 @@ mobileBar.registerActions(computed(() => [
 
             <div class="p-3.5 rounded-lg border border-default space-y-2">
               <div class="flex items-center gap-2">
-                <UIcon name="i-lucide-plug" class="w-4 h-4 text-amber-500" />
-                <h4 class="text-xs font-bold text-highlighted">{{ t('hub_integration.feature_connections_title') }}</h4>
+                <UIcon name="i-lucide-plug" class="w-4 h-4 text-warning-500" />
+                <h4 class="text-xs font-bold text-highlighted">
+                  {{ t('hub_integration.feature_connections_title') }}
+                </h4>
               </div>
               <p class="text-xs text-muted leading-relaxed">
                 {{ t('hub_integration.feature_connections_desc') }}
@@ -346,7 +374,9 @@ mobileBar.registerActions(computed(() => [
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <UIcon name="i-lucide-code-xml" class="w-4 h-4 text-primary" />
-              <h3 class="font-semibold text-sm">{{ t('hub_integration.step3_title') }}</h3>
+              <h3 class="font-semibold text-sm">
+                {{ t('hub_integration.step3_title') }}
+              </h3>
             </div>
             <UButton
               :icon="copiedKey === 'nav' ? 'i-lucide-check' : 'i-lucide-copy'"

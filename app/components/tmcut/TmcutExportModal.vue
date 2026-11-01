@@ -1422,10 +1422,10 @@ function previewResultDirectly() {
              a silent surprise file. -->
         <div
           v-if="parallelTracksWarning"
-          class="mx-5 mb-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-start gap-2 shrink-0"
+          class="mx-5 mb-2 px-3 py-2 rounded-lg bg-warning-500/10 border border-warning-500/30 flex items-start gap-2 shrink-0"
         >
-          <UIcon name="i-lucide-alert-triangle" class="size-3.5 text-amber-400 shrink-0 mt-0.5" />
-          <p class="text-[11px] text-amber-200 leading-snug">
+          <UIcon name="i-lucide-alert-triangle" class="size-3.5 text-warning-400 shrink-0 mt-0.5" />
+          <p class="text-[11px] text-warning-200 leading-snug">
             {{ t('tmcut.export.parallelTracksWarning') }}
           </p>
         </div>
@@ -1516,7 +1516,7 @@ function previewResultDirectly() {
 
             <template v-else-if="exportError">
               <span
-                class="text-xs text-red-400 truncate"
+                class="text-xs text-error-400 truncate"
                 :title="exportError"
               >{{ exportError }}</span>
             </template>

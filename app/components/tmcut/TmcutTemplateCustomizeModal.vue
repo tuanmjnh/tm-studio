@@ -102,9 +102,9 @@ function handleOpenUpdate(open: boolean) {
           <h4 class="text-sm font-semibold text-highlighted uppercase tracking-wider">
             {{ $t('tmcut.templateLibrary.requiredAssetsTitle') }}
           </h4>
-          <div v-for="req in props.activeReadiness.missingAssets" :key="req.assetId" class="flex items-center justify-between gap-2 p-3 rounded-xl border border-amber-500/40 bg-amber-500/5">
+          <div v-for="req in props.activeReadiness.missingAssets" :key="req.assetId" class="flex items-center justify-between gap-2 p-3 rounded-xl border border-warning-500/40 bg-warning-500/5">
             <span class="text-sm text-toned flex items-center gap-2 min-w-0 truncate">
-              <UIcon name="i-lucide-package-x" class="w-4 h-4 text-amber-500 shrink-0" />
+              <UIcon name="i-lucide-package-x" class="w-4 h-4 text-warning-500 shrink-0" />
               {{ props.assetTitle(req.assetId) }}
             </span>
             <div class="flex items-center gap-2">

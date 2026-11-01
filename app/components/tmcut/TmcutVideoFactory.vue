@@ -686,7 +686,7 @@ function removeBatch(batchId: string) {
     <!-- Batch builder -->
     <!-- ================================================================== -->
     <div class="xl:col-span-5 flex flex-col gap-4">
-      <div class="bg-white dark:bg-default border border-default rounded-xl p-4 flex flex-col gap-4">
+      <div class="rounded-xl p-4 flex flex-col gap-4 flat-panel">
         <div>
           <h3 class="text-sm font-semibold text-highlighted dark:text-white">
             {{ t('tmcut.factory.newBatch') }}
@@ -900,7 +900,7 @@ function removeBatch(batchId: string) {
       <!-- Plan + estimate -->
       <div
         v-if="previewed && plan && estimate && guard"
-        class="bg-white dark:bg-default border border-default rounded-xl p-4 flex flex-col gap-3"
+        class="rounded-xl p-4 flex flex-col gap-3 flat-panel"
       >
         <div class="flex items-center justify-between">
           <h3 class="text-sm font-semibold text-highlighted dark:text-white">
@@ -1003,7 +1003,7 @@ function removeBatch(batchId: string) {
     <!-- Queue + results -->
     <!-- ================================================================== -->
     <div class="xl:col-span-7 flex flex-col gap-4">
-      <div class="bg-white dark:bg-default border border-default rounded-xl">
+      <div class="rounded-xl flat-panel">
         <div class="px-4 py-3 border-b border-default flex items-center justify-between">
           <h3 class="text-sm font-semibold text-highlighted dark:text-white">
             {{ t('tmcut.factory.queueTitle') }}
@@ -1102,7 +1102,7 @@ function removeBatch(batchId: string) {
       </div>
 
       <!-- Selected batch detail -->
-      <div v-if="selectedBatch" class="bg-white dark:bg-default border border-default rounded-xl">
+      <div v-if="selectedBatch" class="rounded-xl flat-panel">
         <div class="px-4 py-3 border-b border-default flex items-center justify-between gap-2">
           <div class="min-w-0">
             <p class="text-sm font-semibold text-highlighted dark:text-white truncate">
@@ -1228,7 +1228,7 @@ function removeBatch(batchId: string) {
       </div>
 
       <!-- History -->
-      <div v-if="historyBatches.length > 0" class="bg-white dark:bg-default border border-default rounded-xl">
+      <div v-if="historyBatches.length > 0" class="rounded-xl flat-panel">
         <div class="px-4 py-3 border-b border-default">
           <h3 class="text-sm font-semibold text-highlighted dark:text-white">
             {{ t('tmcut.factory.historyTitle') }}

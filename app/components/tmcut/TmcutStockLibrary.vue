@@ -167,7 +167,7 @@ function durationLabel(item: StockItem): string {
           <template #content>
             <div class="space-y-2.5">
               <p class="text-[11px] leading-snug text-toned flex items-start gap-1.5">
-                <UIcon name="i-lucide-plug-zap" class="size-3.5 shrink-0 mt-px text-amber-500" />
+                <UIcon name="i-lucide-plug-zap" class="size-3.5 shrink-0 mt-px text-warning-500" />
                 <span>{{ t('tmcut.stock.connectHint', { providers: hiddenLabels }) }}</span>
               </p>
               <UButton
@@ -231,7 +231,7 @@ function durationLabel(item: StockItem): string {
 
     <!-- State messages -->
     <div v-if="error" class="space-y-1">
-      <p class="text-[10px] text-red-400 break-words flex items-start gap-1">
+      <p class="text-[10px] text-error-400 break-words flex items-start gap-1">
         <UIcon name="i-lucide-triangle-alert" class="size-3 shrink-0 mt-0.5" />
         {{ error }}
       </p>

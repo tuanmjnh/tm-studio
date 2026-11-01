@@ -46,8 +46,8 @@ const colorClasses = {
   primary: 'border-primary-300 dark:border-primary-700 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300',
   secondary: 'border-secondary-300 dark:border-secondary-700 bg-secondary-50 dark:bg-secondary-900/20 text-secondary-700 dark:text-secondary-300',
   success: 'border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300',
-  warning: 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300',
-  error: 'border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300',
+  warning: 'border-warning-300 dark:border-warning-700 bg-warning-50 dark:bg-warning-900/20 text-warning-700 dark:text-warning-300',
+  error: 'border-error-300 dark:border-error-700 bg-error-50 dark:bg-error-900/20 text-error-700 dark:text-error-300',
   neutral: 'border-default bg-muted text-toned'
 }
 </script>

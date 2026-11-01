@@ -252,15 +252,15 @@ function usePrompt(prompt: string) {
 
           <div
             v-else-if="!draft && (validationErrors.length > 0 || lastError)"
-            class="rounded-lg border border-red-500/40 bg-red-500/10 p-4"
+            class="rounded-lg border border-error-500/40 bg-error-500/10 p-4"
           >
             <div class="flex items-center gap-2 mb-2">
-              <UIcon name="i-lucide-circle-alert" class="size-4 text-red-400" />
-              <p class="text-xs font-semibold text-red-300">
+              <UIcon name="i-lucide-circle-alert" class="size-4 text-error-400" />
+              <p class="text-xs font-semibold text-error-300">
                 {{ t('tmcut.aiTemplates.invalidPlanTitle') }}
               </p>
             </div>
-            <ul class="space-y-1 text-[11px] text-red-200/90 font-mono max-h-40 overflow-y-auto">
+            <ul class="space-y-1 text-[11px] text-error-200/90 font-mono max-h-40 overflow-y-auto">
               <li v-if="lastError">
                 {{ lastError }}
               </li>
@@ -314,9 +314,9 @@ function usePrompt(prompt: string) {
 
             <div
               v-if="draft.warnings.length > 0"
-              class="rounded-md bg-amber-500/10 border border-amber-500/30 px-3 py-2"
+              class="rounded-md bg-warning-500/10 border border-warning-500/30 px-3 py-2"
             >
-              <p class="text-[11px] text-amber-200 flex items-center gap-1.5">
+              <p class="text-[11px] text-warning-200 flex items-center gap-1.5">
                 <UIcon name="i-lucide-triangle-alert" class="size-3.5 shrink-0" />
                 {{ t('tmcut.aiTemplates.placeholderNote') }}
               </p>
@@ -324,7 +324,7 @@ function usePrompt(prompt: string) {
                 <li
                   v-for="warning in draft.warnings"
                   :key="warning"
-                  class="text-[10px] font-mono text-amber-200/80"
+                  class="text-[10px] font-mono text-warning-200/80"
                 >
                   {{ warning }}
                 </li>

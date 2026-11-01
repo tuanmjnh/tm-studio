@@ -82,7 +82,7 @@ onBeforeUnmount(() => {
     <!-- Recovery banner -->
     <div
       v-if="pendingRecovery"
-      class="flex items-center justify-between gap-3 px-4 py-2 bg-amber-500/10 border-b border-amber-500/30 text-amber-200 text-xs"
+      class="flex items-center justify-between gap-3 px-4 py-2 bg-warning-500/10 border-b border-warning-500/30 text-warning-200 text-xs"
     >
       <span class="truncate">{{ t('tmcut.recovery.banner') }}</span>
       <div class="flex items-center gap-2 shrink-0">

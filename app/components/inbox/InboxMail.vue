@@ -32,7 +32,9 @@ function onReply() {
   sending.value = true
   emit('reply', body)
   reply.value = ''
-  setTimeout(() => { sending.value = false }, 1500)
+  setTimeout(() => {
+    sending.value = false
+  }, 1500)
 }
 
 function onTextareaKeydown(e: KeyboardEvent) {
@@ -90,7 +92,7 @@ function formatDate(dateStr: string | null) {
           <UButton
             :icon="firstMessage.starred ? 'i-lucide-star' : 'i-lucide-star'"
             :color="firstMessage.starred ? 'warning' : 'neutral'"
-            :class="firstMessage.starred ? 'text-amber-500 fill-amber-500' : ''"
+            :class="firstMessage.starred ? 'text-warning-500 fill-warning-500' : ''"
             :aria-label="firstMessage.starred ? t('inbox.unstar') : t('inbox.star')"
             variant="ghost"
             size="xs"
@@ -173,7 +175,7 @@ function formatDate(dateStr: string | null) {
               <UButton
                 icon="i-lucide-star"
                 :color="msg.starred ? 'warning' : 'neutral'"
-                :class="msg.starred ? 'text-amber-500 fill-amber-500' : ''"
+                :class="msg.starred ? 'text-warning-500 fill-warning-500' : ''"
                 :aria-label="msg.starred ? t('inbox.unstar') : t('inbox.star')"
                 variant="ghost"
                 size="xs"
@@ -295,7 +297,7 @@ function formatDate(dateStr: string | null) {
 .email-body :deep(img) {
   max-width: 100%;
   height: auto;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
 }
 
 .email-body :deep(a) {

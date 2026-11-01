@@ -173,14 +173,14 @@ const sourceThumbUrl = computed(() => (sourceAsset.value ? getThumbUrl(sourceAss
 
 function scoreBarClass(score: number): string {
   if (score >= 0.7) return 'bg-emerald-500'
-  if (score >= 0.4) return 'bg-amber-500'
-  return 'bg-red-500'
+  if (score >= 0.4) return 'bg-warning-500'
+  return 'bg-error-500'
 }
 
 function scoreBadgeClass(score: number): string {
   if (score >= 0.7) return 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-  if (score >= 0.4) return 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
-  return 'bg-red-500/15 text-red-600 dark:text-red-400'
+  if (score >= 0.4) return 'bg-warning-500/15 text-warning'
+  return 'bg-error-500/15 text-error'
 }
 
 // ===== Source picking (step 1) =====
@@ -590,7 +590,7 @@ async function handleAccept() {
 
     <div class="space-y-6">
       <!-- Modern Stepper -->
-      <div class="bg-white/80 dark:bg-default/80 border border-default rounded-2xl p-4">
+      <div class="flat-panel rounded-2xl p-4">
         <div class="flex items-center gap-2 overflow-x-auto">
           <template v-for="(s, index) in steps" :key="s.step">
             <div
@@ -602,7 +602,7 @@ async function handleAccept() {
               <div
                 class="w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-semibold"
                 :class="currentStep > s.step
-                  ? 'bg-primary-500/20 text-primary-600 dark:text-primary-400'
+                  ? 'bg-primary-500/20 text-primary'
                   : currentStep === s.step
                     ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/30'
                     : 'bg-accented text-dimmed'"
@@ -613,7 +613,7 @@ async function handleAccept() {
               <div class="flex flex-col">
                 <span
                   class="text-[10px] uppercase tracking-wider font-semibold"
-                  :class="currentStep === s.step ? 'text-primary-600 dark:text-primary-400' : 'text-dimmed'"
+                  :class="currentStep === s.step ? 'text-primary' : 'text-dimmed'"
                 >
                   {{ t('tmcut.steps.step', { step: s.step }) }}
                 </span>
@@ -660,7 +660,7 @@ async function handleAccept() {
       <div class="steps-container animate-fade-in">
         <div v-if="currentStep === 1" key="step1" class="space-y-6 animate-slide-up">
           <div
-            class="bg-white/80 dark:bg-default/80 border-2 border-dashed border-default rounded-2xl p-12 text-center transition-colors duration-200"
+            class="bg-default/80 border-2 border-dashed border-default rounded-2xl p-12 text-center transition-colors duration-200"
             :class="{ 'ring-2 ring-primary bg-primary/5': sourceDropActive && !sourceBusy }"
             :aria-busy="sourceBusy"
             @dragenter.prevent.stop="onSourceDragEnter"
@@ -703,7 +703,7 @@ async function handleAccept() {
             </p>
           </div>
 
-          <div v-if="sourceAsset" class="flex items-center gap-3 px-4 py-3 bg-white/80 dark:bg-default/80 border border-default rounded-xl">
+          <div v-if="sourceAsset" class="flex items-center gap-3 px-4 py-3 flat-panel rounded-xl">
             <UIcon name="i-lucide-file-video" class="w-5 h-5 text-primary shrink-0" />
             <span class="truncate font-medium text-highlighted flex-1">{{ sourceAsset.name }}</span>
             <TmcutBadge variant="success" size="xs">
@@ -762,10 +762,10 @@ async function handleAccept() {
             <div class="space-y-3 pt-1">
               <!-- Toggle Filler Words -->
               <!-- Toggle Filler Words -->
-              <div class="bg-white/80 dark:bg-default/80 border border-default rounded-xl p-4">
+              <div class="flat-panel rounded-xl p-4">
                 <div class="space-y-1">
                   <div class="flex items-center gap-2">
-                    <UIcon name="i-lucide-filter-x" class="w-4 h-4 text-amber-500 shrink-0" />
+                    <UIcon name="i-lucide-filter-x" class="w-4 h-4 text-warning-500 shrink-0" />
                     <span class="text-xs font-medium text-highlighted">{{ t('tmcut.autocutV2.filterFillerLabel') }}</span>
                   </div>
                   <p class="text-xs text-muted">
@@ -780,7 +780,7 @@ async function handleAccept() {
               </div>
 
               <!-- AI content triage -->
-              <div class="bg-white/80 dark:bg-default/80 border border-default rounded-xl p-4">
+              <div class="flat-panel rounded-xl p-4">
                 <div class="space-y-1">
                   <div class="flex items-center gap-2">
                     <UIcon name="i-lucide-sparkles" class="w-4 h-4 text-sky-500 shrink-0" />
@@ -802,7 +802,7 @@ async function handleAccept() {
                  so the UI cannot promise more influence than the engine
                  allows. 0 skips the triage call entirely (see composable). -->
               <!-- AI Weight Slider -->
-              <div v-if="aiAnalysis" class="bg-white/80 dark:bg-default/80 border border-default rounded-xl p-4 space-y-3">
+              <div v-if="aiAnalysis" class="flat-panel rounded-xl p-4 space-y-3">
                 <div class="flex items-center justify-between">
                   <span class="text-xs font-medium text-highlighted">{{ t('tmcut.autocutV2.aiWeightLabel') }}</span>
                   <span class="text-xs tabular-nums text-muted font-mono">{{ Math.round(aiWeight * 100) }}%</span>
@@ -820,7 +820,7 @@ async function handleAccept() {
               </div>
 
               <!-- Priority Keywords Input -->
-              <div class="bg-white/80 dark:bg-default/80 border border-default rounded-xl p-4 space-y-3">
+              <div class="flat-panel rounded-xl p-4 space-y-3">
                 <div class="flex items-center justify-between">
                   <div class="flex items-center gap-2">
                     <UIcon name="i-lucide-tag" class="w-4 h-4 text-purple-500 shrink-0" />
@@ -828,7 +828,7 @@ async function handleAccept() {
                   </div>
                   <span class="text-xs text-dimmed">{{ t('tmcut.autocutV2.keywordsOptional') }}</span>
                 </div>
-                <div class="flex flex-wrap items-center gap-1.5 rounded-lg border border-default bg-white/80 dark:bg-default/80 px-2 py-1.5">
+                <div class="flex flex-wrap items-center gap-1.5 rounded-lg flat-panel px-2 py-1.5">
                   <span v-for="chip in keywordChips" :key="chip" class="inline-flex items-center gap-1 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 px-2 py-0.5 text-xs font-medium">
                     {{ chip }}
                     <button
@@ -894,12 +894,12 @@ async function handleAccept() {
           </div>
 
           <!-- Error state -->
-          <div v-else-if="analysisError" class="border border-red-500/40 bg-red-950/30 rounded-xl p-6 text-center">
-            <UIcon name="i-lucide-alert-triangle" class="w-8 h-8 text-red-400 mx-auto mb-2" />
-            <p class="text-sm font-medium text-red-200">
+          <div v-else-if="analysisError" class="border border-error-500/40 bg-error-950/30 rounded-xl p-6 text-center">
+            <UIcon name="i-lucide-alert-triangle" class="w-8 h-8 text-error-400 mx-auto mb-2" />
+            <p class="text-sm font-medium text-error-200">
               {{ t('tmcut.steps.analyzeFailed') }}
             </p>
-            <p class="text-xs text-red-300/70 font-mono mt-1 break-all">
+            <p class="text-xs text-error-300/70 font-mono mt-1 break-all">
               {{ analysisError === 'desktop-only' ? t('tmcut.media.desktopOnly') : analysisError }}
             </p>
             <div class="flex justify-center gap-3 mt-4">
@@ -1002,7 +1002,7 @@ async function handleAccept() {
                 </div>
 
                 <!-- Profile scorer selector: clicking re-runs the real scoring pipeline -->
-                <div class="bg-white/80 dark:bg-default/80 border border-default rounded-xl p-4 space-y-3">
+                <div class="flat-panel rounded-xl p-4 space-y-3">
                   <span class="text-xs uppercase tracking-wider text-dimmed">{{ t('tmcut.wizard.scorerLabel') }}</span>
                   <div class="grid grid-cols-1 md:grid-cols-3 gap-1.5">
                     <TmcutProfileCard
@@ -1033,7 +1033,7 @@ async function handleAccept() {
                     :class="activeSegmentIndex === index
                       ? 'border-primary/50 bg-primary/5 shadow-sm'
                       : included.includes(index)
-                        ? 'border-default bg-white dark:bg-default hover:border-default'
+                        ? 'hover:border-default flat-panel'
                         : 'border-default bg-muted opacity-60'"
                     @click="selectSegment(index)"
                   >
@@ -1111,7 +1111,7 @@ async function handleAccept() {
                         </span>
                         <span
                           v-if="segment.hasFillerWords || segment.reason === 'filler-word'"
-                          class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-medium"
+                          class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-warning-500/10 text-warning font-medium"
                         >
                           <UIcon name="i-lucide-message-square-warning" class="w-3 h-3" />
                           {{ t('tmcut.autocutV2.fillerTag') }}<template v-if="segment.detectedFillers?.length">: {{
@@ -1148,7 +1148,7 @@ async function handleAccept() {
               <div class="xl:col-span-5 flex flex-col gap-4">
                 <!-- Video player mini-review card -->
                 <div
-                  class="border border-default rounded-xl p-4 bg-white dark:bg-default flex flex-col gap-2"
+                  class="rounded-xl p-4 flex flex-col gap-2 flat-panel"
                 >
                   <div class="flex items-center justify-between gap-2">
                     <div class="flex items-center gap-1.5 min-w-0">
@@ -1255,7 +1255,7 @@ async function handleAccept() {
                 </div>
 
                 <!-- AI analysis breakdown -->
-                <div class="bg-white/80 dark:bg-default/80 border border-default rounded-2xl p-4 flex flex-col gap-2">
+                <div class="flat-panel rounded-2xl p-4 flex flex-col gap-2">
                   <div class="flex items-center justify-between">
                     <div class="flex items-center gap-1.5">
                       <UIcon name="i-lucide-bar-chart-3" class="w-4 h-4 text-primary-500" />
@@ -1266,7 +1266,7 @@ async function handleAccept() {
                     </TmcutBadge>
                   </div>
                   <div class="grid grid-cols-2 gap-1.5">
-                    <div class="bg-white/80 dark:bg-default/80 border border-default rounded-lg p-2.5 flex flex-col">
+                    <div class="flat-panel rounded-lg p-2.5 flex flex-col">
                       <div class="flex items-center justify-between mb-0.5">
                         <span class="text-xs text-dimmed">{{ t('tmcut.wizard.metricScenes') }}</span>
                         <UIcon name="i-lucide-scissors" class="w-3.5 h-3.5 text-primary-500" />
@@ -1274,7 +1274,7 @@ async function handleAccept() {
                       <span class="text-sm font-bold text-highlighted">{{ edlResult!.sceneCount }}</span>
                       <span class="text-xs text-muted truncate">{{ t('tmcut.wizard.metricScenesSub') }}</span>
                     </div>
-                    <div class="bg-white/80 dark:bg-default/80 border border-default rounded-lg p-2.5 flex flex-col">
+                    <div class="flat-panel rounded-lg p-2.5 flex flex-col">
                       <div class="flex items-center justify-between mb-0.5">
                         <span class="text-xs text-dimmed">{{ t('tmcut.wizard.metricSilences') }}</span>
                         <UIcon name="i-lucide-volume-x" class="w-3.5 h-3.5 text-primary-500" />
@@ -1282,7 +1282,7 @@ async function handleAccept() {
                       <span class="text-sm font-bold text-highlighted">{{ edlResult!.silenceCount }}</span>
                       <span class="text-xs text-muted truncate">{{ t('tmcut.wizard.metricSilencesSub', { duration: formatDurationSec(edlResult!.silenceRemovedSec) }) }}</span>
                     </div>
-                    <div class="bg-white/80 dark:bg-default/80 border border-default rounded-lg p-2.5 flex flex-col">
+                    <div class="flat-panel rounded-lg p-2.5 flex flex-col">
                       <div class="flex items-center justify-between mb-0.5">
                         <span class="text-xs text-dimmed">{{ t('tmcut.wizard.metricSpeech') }}</span>
                         <UIcon name="i-lucide-mic" class="w-3.5 h-3.5 text-primary-500" />
@@ -1290,7 +1290,7 @@ async function handleAccept() {
                       <span class="text-sm font-bold text-highlighted">{{ edlResult!.transcriptUsed ? `${speechPct}%` : '—' }}</span>
                       <span class="text-xs text-muted truncate">{{ edlResult!.transcriptUsed ? $t('tmcut.steps.transcriptOn') : $t('tmcut.steps.transcriptOff') }}</span>
                     </div>
-                    <div class="bg-white/80 dark:bg-default/80 border border-default rounded-lg p-2.5 flex flex-col">
+                    <div class="flat-panel rounded-lg p-2.5 flex flex-col">
                       <div class="flex items-center justify-between mb-0.5">
                         <span class="text-xs text-dimmed">{{ t('tmcut.wizard.metricSource') }}</span>
                         <UIcon name="i-lucide-clock" class="w-3.5 h-3.5 text-primary-500" />
@@ -1301,7 +1301,7 @@ async function handleAccept() {
                   </div>
 
                   <!-- Safe draft project notice -->
-                  <div class="bg-white/80 dark:bg-default/80 border border-default rounded-xl p-3 flex items-start gap-2">
+                  <div class="flat-panel rounded-xl p-3 flex items-start gap-2">
                     <div class="w-6 h-6 rounded-full bg-primary-500/20 text-primary-500 flex items-center justify-center shrink-0 mt-0.5">
                       <UIcon name="i-lucide-shield-check" class="w-3 h-3" />
                     </div>

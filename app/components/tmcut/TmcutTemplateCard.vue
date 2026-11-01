@@ -35,7 +35,7 @@ function getAspectRatioClass(aspectRatio: string): string {
 </script>
 
 <template>
-  <div class="group relative bg-white/80 dark:bg-default/80 border border-default rounded-2xl overflow-hidden hover:border-primary-300 dark:hover:border-primary-700 hover:shadow-xl transition-all duration-300 flex flex-col">
+  <div class="group relative flat-panel rounded-2xl overflow-hidden hover:border-primary/40 hover:shadow-xl transition-all duration-300 flex flex-col">
     <!-- Visual Preview -->
     <div class="w-full h-40 bg-neutral-950 flex items-center justify-center relative overflow-hidden p-4 border-b border-default">
       <div
@@ -111,7 +111,7 @@ function getAspectRatioClass(aspectRatio: string): string {
         </div>
         <div
           v-if="template.industry"
-          class="flex items-center gap-1.5 mb-2 text-[11px] font-medium text-primary-600 dark:text-primary-400"
+          class="flex items-center gap-1.5 mb-2 text-[11px] font-medium text-primary"
         >
           <UIcon :name="industryIcon(template.industry)" class="w-3.5 h-3.5 shrink-0" />
           <span class="truncate">{{ industryLabel(template.industry) }}</span>

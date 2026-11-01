@@ -9,6 +9,19 @@
   --font-sans: 'Inter Variable', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
+  /* Corners are near-square by design. Every `rounded-*` utility and every
+     Nuxt UI component reads this scale, so the whole app tightens from here
+     instead of per-component `rounded-…` edits. Pills, dots and avatars keep
+     `rounded-full`, which is a separate token and stays circular. */
+  --radius-xs: 0.0625rem;
+  --radius-sm: 0.125rem;
+  --radius-md: 0.1875rem;
+  --radius-lg: 0.25rem;
+  --radius-xl: 0.25rem;
+  --radius-2xl: 0.375rem;
+  --radius-3xl: 0.5rem;
+  --radius-4xl: 0.5rem;
+
   /* Studio editor surfaces (dark-first chrome) */
   --color-studio-canvas: #0B0B14;
   --color-studio-panel: #111019;
@@ -56,6 +69,24 @@
   --studio-mint-accent: var(--color-studio-mint);
 }
 
+/* Nuxt UI resolves `--ui-<color>` inside `@layer theme` at the 500 shade in
+   light mode. Measured on white that is 2.0:1 for amber, 2.1:1 for cyan and
+   teal, 3.3:1 for red and 3.9:1 for violet, so soft buttons, badges, alerts
+   and links were largely unreadable. The light theme pins each accent a step
+   or two darker instead; every pair below now clears AA on both white and a
+   10% self-tint (warning needs two steps, amber is the brightest accent).
+   Dark mode keeps the 400 shades, which already pass on dark surfaces.
+   Unlayered with :root:not(.dark) so it outranks the layered plugin output by
+   cascade order, no !important needed. */
+:root:not(.dark) {
+  --ui-primary: var(--ui-color-primary-600);
+  --ui-secondary: var(--ui-color-secondary-600);
+  --ui-info: var(--ui-color-info-700);
+  --ui-success: var(--ui-color-success-700);
+  --ui-warning: var(--ui-color-warning-800);
+  --ui-error: var(--ui-color-error-700);
+}
+
 @utility flat-glass-card {
   background-color: var(--flat-glass-bg);
   backdrop-filter: blur(14px) saturate(140%);
@@ -91,6 +122,26 @@
     inset 0 1px 0 0 var(--flat-glass-top-shine);
 }
 
+/* Opaque panels. These are the workhorse surface of the studio pages: a page
+   background tint plus a hairline, no blur and no shadow. They used to be
+   spelled out as `bg-white/80 dark:bg-default/80 border border-default` in
+   every file, which meant 30+ copies of the same two declarations and two
+   hard-coded themes to keep in sync. One token, one place. */
+@utility flat-panel {
+  background-color: color-mix(in oklab, var(--ui-bg) 80%, transparent);
+  border: 1px solid var(--ui-border);
+}
+
+@utility flat-panel-raised {
+  background-color: color-mix(in oklab, var(--ui-bg-elevated) 80%, transparent);
+  border: 1px solid var(--ui-border);
+}
+
+@utility flat-subpanel {
+  background-color: color-mix(in oklab, var(--ui-bg-muted) 60%, transparent);
+  border: 1px solid var(--ui-border);
+}
+
 /* One static radial from the top-left. It is a plain background-image: no
    mask, no grid overlay, no animation, so it paints once and never re-rasterises
    while the user scrolls or drags the timeline. */
@@ -112,10 +163,19 @@
   flex-shrink: 0;
   inline-size: 3rem;
   block-size: 3rem;
-  border-radius: 0.75rem;
+  border-radius: var(--radius-lg);
   color: var(--tile-accent, var(--ui-primary));
   background-color: color-mix(in oklab, var(--tile-accent, var(--ui-primary)) 10%, transparent);
   border: 1px solid color-mix(in oklab, var(--tile-accent, var(--ui-primary)) 20%, transparent);
+}
+
+/* Edge ships its own reveal button inside password fields; every password
+   input in the app already has an explicit show/hide control, so hide the
+   browser duplicate once here instead of per component. */
+@layer base {
+  input[type='password']::-ms-reveal {
+    display: none;
+  }
 }
 
 @keyframes slide-in-right {

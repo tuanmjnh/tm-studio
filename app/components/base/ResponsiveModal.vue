@@ -53,9 +53,9 @@ const isDisabled = computed(() => props.disabled)
 
 // Default UI configuration for responsive fullscreen modal
 const defaultUi: Record<string, unknown> = {
-  header: 'flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800',
+  header: 'flex items-center justify-between px-4 py-3 border-b border-default',
   body: 'flex-1 overflow-y-auto p-4',
-  footer: 'flex items-center justify-end gap-2 px-4 py-3 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50'
+  footer: 'flex items-center justify-end gap-2 px-4 py-3 border-t border-default bg-muted/40'
 }
 
 const uiConfig = computed(() => {

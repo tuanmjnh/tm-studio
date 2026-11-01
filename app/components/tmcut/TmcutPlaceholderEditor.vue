@@ -21,7 +21,7 @@ function updateTextInput(value: string) {
 </script>
 
 <template>
-  <div class="p-3 rounded-xl border border-default bg-white/80 dark:bg-default/80 space-y-2">
+  <div class="p-3 rounded-xl flat-panel space-y-2">
     <div class="flex items-center justify-between text-sm">
       <span class="font-medium text-highlighted flex items-center gap-2">
         <UIcon

@@ -21,7 +21,7 @@ withDefaults(defineProps<{
       class="absolute inset-0"
       :class="`tmcut-motion-${preset}`"
     >
-      <div class="absolute inset-0 bg-gradient-to-b from-sky-300 via-sky-100 to-amber-100" />
+      <div class="absolute inset-0 bg-gradient-to-b from-sky-300 via-sky-100 to-warning-100" />
       <UIcon
         name="i-lucide-mountain-snow"
         class="absolute left-1/2 top-[58%] size-8 -translate-x-1/2 -translate-y-1/2 text-slate-600/80"
@@ -70,15 +70,5 @@ withDefaults(defineProps<{
   0% { transform: scale(1.3); opacity: 1 }
   60% { transform: scale(1); opacity: 1 }
   100% { transform: scale(1); opacity: 1 }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .tmcut-motion-fade,
-  .tmcut-motion-fade-in,
-  .tmcut-motion-fade-out,
-  .tmcut-motion-zoom-in,
-  .tmcut-motion-zoom-out {
-    animation: none;
-  }
 }
 </style>

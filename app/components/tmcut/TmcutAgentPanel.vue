@@ -352,7 +352,7 @@ function closeModal() {
             {{ lastMessage }}
           </div>
 
-          <div v-if="lastError" class="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-300 font-mono break-words">
+          <div v-if="lastError" class="rounded-lg border border-error-500/40 bg-error-500/10 p-3 text-xs text-error-300 font-mono break-words">
             {{ lastError }}
           </div>
 
@@ -412,14 +412,14 @@ function closeModal() {
               </div>
             </div>
 
-            <div v-if="draftIssues.length > 0" class="rounded-lg border border-red-500/40 bg-red-500/10 p-3">
+            <div v-if="draftIssues.length > 0" class="rounded-lg border border-error-500/40 bg-error-500/10 p-3">
               <div class="flex items-center gap-2 mb-1.5">
-                <UIcon name="i-lucide-circle-alert" class="size-4 text-red-400" />
-                <p class="text-xs font-semibold text-red-300">
+                <UIcon name="i-lucide-circle-alert" class="size-4 text-error-400" />
+                <p class="text-xs font-semibold text-error-300">
                   {{ t('tmcut.agent.validationTitle') }}
                 </p>
               </div>
-              <ul class="space-y-1 text-[11px] text-red-200/90 font-mono max-h-32 overflow-y-auto">
+              <ul class="space-y-1 text-[11px] text-error-200/90 font-mono max-h-32 overflow-y-auto">
                 <li v-for="issue in draftIssues" :key="issue.operationId">
                   #{{ issue.index + 1 }} · {{ issue.message }}
                 </li>

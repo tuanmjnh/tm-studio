@@ -192,7 +192,7 @@ onBeforeUnmount(() => {
     <span
       v-if="badge"
       class="absolute bottom-0.5 left-0.5 max-w-[calc(100%-4px)] inline-flex items-center gap-0.5 rounded px-1 py-px text-[8px] font-medium leading-none bg-black/60 text-dimmed"
-      :class="badge.tone === 'warning' ? 'text-amber-300' : ''"
+      :class="badge.tone === 'warning' ? 'text-warning-300' : ''"
       :title="t(badge.key)"
     >
       <UIcon :name="badge.icon" class="size-2.5 shrink-0" aria-hidden="true" />

@@ -2,7 +2,7 @@
 const model = defineModel<string>({ default: '' })
 
 const show = ref(false)
-const props = withDefaults(defineProps<{
+withDefaults(defineProps<{
   placeholder?: string
   size?: 'sm' | 'md' | 'lg'
   ariaLabel?: string
@@ -36,9 +36,3 @@ const { t } = useI18n()
     </template>
   </UInput>
 </template>
-
-<style scoped>
-::-ms-reveal {
-  display: none;
-}
-</style>

@@ -255,7 +255,7 @@ function handleApply(entryId: string, assetKind: string) {
     <!-- Audit banner (roadmap §26): installed copies hit by live notices -->
     <div
       v-if="takedownAffected.length > 0"
-      class="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-[10px] text-amber-200"
+      class="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-warning-500/10 border border-warning-500/30 text-[10px] text-warning-200"
     >
       <UIcon name="i-lucide-shield-alert" class="size-3 shrink-0" />
       {{ t('tmcut.assetCenter.takedownAffectedCount', { count: takedownAffected.length }) }}
@@ -305,7 +305,7 @@ function handleApply(entryId: string, assetKind: string) {
              silently. -->
         <div
           v-if="takedownFor(entry.id) && entryState(entry.id) !== 'installed'"
-          class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-red-500/10 border border-red-500/30 text-[10px] text-red-200"
+          class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-error-500/10 border border-error-500/30 text-[10px] text-error-200"
         >
           <UIcon name="i-lucide-shield-off" class="size-3 shrink-0" />
           {{ t('tmcut.assetCenter.takedownBlocked') }}
@@ -313,7 +313,7 @@ function handleApply(entryId: string, assetKind: string) {
 
         <div
           v-else-if="takedownFor(entry.id)"
-          class="flex items-center justify-between gap-2 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/30 text-[10px] text-amber-200"
+          class="flex items-center justify-between gap-2 px-2 py-1 rounded-md bg-warning-500/10 border border-warning-500/30 text-[10px] text-warning-200"
         >
           <span class="flex items-center gap-1.5 min-w-0">
             <UIcon name="i-lucide-shield-alert" class="size-3 shrink-0" />
@@ -331,7 +331,7 @@ function handleApply(entryId: string, assetKind: string) {
         <!-- License gate notice (review/unknown never render as usable) -->
         <div
           v-else-if="!canInstallEntry(entry.id).allowed && entryState(entry.id) === 'catalog'"
-          class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/30 text-[10px] text-amber-200"
+          class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-warning-500/10 border border-warning-500/30 text-[10px] text-warning-200"
         >
           <UIcon name="i-lucide-shield-alert" class="size-3 shrink-0" />
           {{ t(`tmcut.assetCenter.blocked.${canInstallEntry(entry.id).reason || 'review'}`, t('tmcut.assetCenter.installBlocked')) }}
@@ -352,7 +352,7 @@ function handleApply(entryId: string, assetKind: string) {
         <!-- Failure / missing reason + recovery action -->
         <div
           v-else-if="entryState(entry.id) === 'error'"
-          class="flex items-center justify-between gap-2 px-2 py-1 rounded-md bg-red-500/10 border border-red-500/30 text-[10px] text-red-200"
+          class="flex items-center justify-between gap-2 px-2 py-1 rounded-md bg-error-500/10 border border-error-500/30 text-[10px] text-error-200"
         >
           <span class="truncate flex items-center gap-1">
             <UIcon name="i-lucide-alert-triangle" class="size-3 shrink-0" />
@@ -377,7 +377,7 @@ function handleApply(entryId: string, assetKind: string) {
             <span
               v-if="entry.priceUsd > 0"
               class="shrink-0 font-semibold"
-              :class="hasEntitlement(entry.id, entry.version) ? 'text-emerald-500' : 'text-amber-500'"
+              :class="hasEntitlement(entry.id, entry.version) ? 'text-emerald-500' : 'text-warning-500'"
             >
               {{ hasEntitlement(entry.id, entry.version)
                 ? t('tmcut.assetCenter.owned')

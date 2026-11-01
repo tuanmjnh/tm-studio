@@ -1,6 +1,8 @@
-<script setup lang="ts">
+<script setup lang="ts" generic="T extends object">
 import { useVModel, useInfiniteScroll } from '@vueuse/core'
-import Sortable from 'sortablejs'
+import Sortable, { type SortableEvent } from 'sortablejs'
+import type { DropdownMenuItem } from '@nuxt/ui'
+import type { GridColumn, GridSwipeAction } from '~/types/gridList'
 
 const { t } = useI18n()
 
@@ -15,27 +17,16 @@ const { t } = useI18n()
  * - Custom slot rendering
  */
 
-export interface GridColumn {
-  key: string
-  label?: string
-  sortable?: boolean
-  class?: string
-  rowClass?: string
-  slot?: string
-  headerClass?: string
-  sort?: 'asc' | 'desc' | 1 | -1 | null
-}
-
 const props = withDefaults(defineProps<{
-  items: any[]
+  items: T[]
   columns: GridColumn[]
   loading?: boolean
-  selected?: any[]
+  selected?: T[]
   itemKey?: string
   selectable?: boolean
-  actionOptions?: (item: any) => any[] // For desktop dropdown
-  swipeLeftActions?: (item: any) => any[]
-  swipeRightActions?: (item: any) => any[]
+  actionOptions?: (item: T) => DropdownMenuItem[] | DropdownMenuItem[][]
+  swipeLeftActions?: (item: T) => GridSwipeAction<T>[]
+  swipeRightActions?: (item: T) => GridSwipeAction<T>[]
   mobileActionMode?: 'swipe' | 'dropdown' | 'context'
   viewMode?: 'list' | 'grid'
   gridCols?: string
@@ -43,7 +34,7 @@ const props = withDefaults(defineProps<{
   draggable?: boolean
   storageKey?: string
   hideHeader?: boolean
-  uiScrollArea?: any
+  uiScrollArea?: { root?: string, viewport?: string }
   actionsButtonVisibility?: 'always' | 'list' | 'grid' | 'never'
   canLoadMore?: boolean
 }>(), {
@@ -58,16 +49,16 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{
-  (e: 'update:selected', value: any[]): void
-  (e: 'update:viewMode', value: 'list' | 'grid'): void
-  (e: 'sort', column: any): void
-  (e: 'click', item: any): void
-  (e: 'refresh'): void
-  (e: 'load-more'): void
-  (e: 'update:items', items: any[]): void
+  'update:selected': [value: T[]]
+  'update:viewMode': [value: 'list' | 'grid']
+  'sort': [column: GridColumn]
+  'click': [item: T]
+  'refresh': []
+  'load-more': []
+  'update:items': [items: T[]]
 }>()
 
-const selectedItems = useVModel(props, 'selected', emit, { passive: true, defaultValue: [] }) as Ref<any[]>
+const selectedItems = useVModel(props, 'selected', emit, { passive: true, defaultValue: [] }) as Ref<T[]>
 const currentViewMode = useVModel(props, 'viewMode', emit, { passive: true, defaultValue: 'list' }) as Ref<'list' | 'grid'>
 
 // Handle View Mode Persistence via Composable
@@ -103,7 +94,7 @@ const mergedUi = computed(() => {
   return merged
 })
 
-const scrollEl = ref<any>(null)
+const scrollEl = ref<ComponentPublicInstance | null>(null)
 // Target the viewport div inside UScrollArea for infinite scroll
 const scrollTarget = computed(() => scrollEl.value?.$el?.querySelector('[data-radix-scroll-area-viewport]') || scrollEl.value?.$el)
 
@@ -128,22 +119,26 @@ const toggleAll = (val: boolean | 'indeterminate') => {
   selectedItems.value = (val === true) ? [...props.items] : []
 }
 
-const toggleSelect = (item: any, val: boolean | 'indeterminate') => {
+const fieldValue = (item: T, key: string): unknown => (item as Record<string, unknown>)[key]
+
+const itemId = (item: T): string | number => (fieldValue(item, props.itemKey || '_id') as string | number)
+
+const toggleSelect = (item: T, val: boolean | 'indeterminate') => {
   const key = props.itemKey || '_id'
-  const id = item[key]
+  const id = fieldValue(item, key)
 
   if (val === true) {
-    if (!selectedItems.value.find(i => i[key] === id)) {
+    if (!selectedItems.value.find(i => fieldValue(i, key) === id)) {
       selectedItems.value = [...selectedItems.value, item]
     }
   } else {
-    selectedItems.value = selectedItems.value.filter(i => i[key] !== id)
+    selectedItems.value = selectedItems.value.filter(i => fieldValue(i, key) !== id)
   }
 }
 
-const isSelected = (item: any) => {
+const isSelected = (item: T) => {
   const key = props.itemKey || '_id'
-  return !!selectedItems.value.find(i => i[key] === item[key])
+  return !!selectedItems.value.find(i => fieldValue(i, key) === fieldValue(item, key))
 }
 
 // Drag & Drop Sorting
@@ -163,10 +158,14 @@ const initSortable = () => {
     fallbackClass: 'sortable-fallback',
     forceFallback: true,
     swapThreshold: 0.65,
-    onUpdate: (evt: any) => {
+    onUpdate: (evt: SortableEvent) => {
+      const from = evt.oldIndex ?? -1
+      const to = evt.newIndex ?? -1
+      if (from < 0 || to < 0) return
       const newItems = [...props.items]
-      const [moved] = newItems.splice(evt.oldIndex, 1)
-      newItems.splice(evt.newIndex, 0, moved)
+      const [moved] = newItems.splice(from, 1)
+      if (!moved) return
+      newItems.splice(to, 0, moved)
       emit('update:items', newItems)
     }
   })
@@ -200,10 +199,10 @@ const contextMenu = ref({
   isOpen: false,
   x: 0,
   y: 0,
-  items: [] as any[]
+  items: [] as DropdownMenuItem[] | DropdownMenuItem[][]
 })
 
-const handleContextMenu = (item: any, event: MouseEvent) => {
+const handleContextMenu = (item: T, event: MouseEvent) => {
   if (!props.actionOptions) return
   // event.preventDefault() // Handled by @contextmenu.prevent
 
@@ -215,7 +214,7 @@ const handleContextMenu = (item: any, event: MouseEvent) => {
   }
 }
 
-const handleLongPress = (payload: { item: any, clientX: number, clientY: number }) => {
+const handleLongPress = (payload: { item: T, clientX: number, clientY: number }) => {
   if (!props.actionOptions) return
 
   contextMenu.value = {
@@ -256,7 +255,7 @@ const actionsClass = computed(() => {
     <!-- Table Header (Visible only on Desktop List Mode) -->
     <div
       v-if="viewMode === 'list' && !hideHeader"
-      class="hidden lg:flex items-center pl-0.75 pr-3.25 py-3 mb-1 text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 bg-transparent"
+      class="hidden lg:flex items-center pl-0.75 pr-3.25 py-3 mb-1 text-xs font-bold uppercase tracking-wider text-muted border-b border-default bg-transparent"
     >
       <!-- Drag Handle Placeholder (Aligned with SwipeCard pl-2 + w-6 = 32px) -->
       <div v-if="isDraggable" class="w-8 shrink-0" />
@@ -295,7 +294,7 @@ const actionsClass = computed(() => {
           <UIcon
             :name="(col.sort === 'asc' || col.sort === 1) ? 'i-lucide-arrow-up-narrow-wide' : (col.sort === 'desc' || col.sort === -1) ? 'i-lucide-arrow-down-wide-narrow' : 'i-lucide-arrow-up-down'"
             class="w-4 h-4 ml-1"
-            :class="col.sort ? 'text-primary-500' : 'text-gray-400'"
+            :class="col.sort ? 'text-primary-500' : 'text-dimmed'"
           />
         </div>
         <span v-else>{{ col.label }}</span>
@@ -322,12 +321,12 @@ const actionsClass = computed(() => {
         <USkeleton
           v-for="i in skeletonCount"
           :key="i"
-          :class="[currentViewMode === 'list' ? 'h-20' : 'h-48', 'w-full rounded-xl bg-gray-100 dark:bg-gray-800/50']"
+          :class="[currentViewMode === 'list' ? 'h-20' : 'h-48', 'w-full rounded-xl bg-muted/60']"
         />
       </div>
 
       <!-- Empty State -->
-      <div v-else-if="items.length === 0" class="flex flex-col items-center justify-center py-20 text-gray-500">
+      <div v-else-if="items.length === 0" class="flex flex-col items-center justify-center py-20 text-muted">
         <slot name="empty">
           <UEmpty
             size="xl"
@@ -346,9 +345,9 @@ const actionsClass = computed(() => {
         :class="viewMode === 'list' ? 'space-y-2 pb-4 pr-3 pl-0.5' : `grid ${gridCols} gap-4 pb-4 pr-3 pl-0.5`"
       >
         <slot name="first-item" />
-        <div v-for="item in items" :key="item[itemKey || '_id']">
+        <div v-for="item in items" :key="itemId(item)">
           <LazyGridListSwipeCard
-            :id="item[itemKey || '_id']"
+            :id="itemId(item)"
             :item="item"
             :open-id="openCardId"
             :disabled="false"
@@ -413,12 +412,12 @@ const actionsClass = computed(() => {
                     ]"
                   >
                     <slot v-if="col.slot || $slots[col.key]" :name="col.slot || col.key" :item="item">
-                      <div class="truncate text-xs text-gray-700 dark:text-gray-300">
-                        {{ item[col.key] }}
+                      <div class="truncate text-xs text-toned">
+                        {{ fieldValue(item, col.key) }}
                       </div>
                     </slot>
-                    <div v-else class="truncate text-sm text-gray-700 dark:text-gray-300">
-                      {{ item[col.key] }}
+                    <div v-else class="truncate text-sm text-toned">
+                      {{ fieldValue(item, col.key) }}
                     </div>
                   </div>
                 </div>

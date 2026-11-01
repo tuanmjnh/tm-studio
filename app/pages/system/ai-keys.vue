@@ -8,6 +8,7 @@ import type { DropdownMenuItem } from '@nuxt/ui'
 import type { AiTaskStatus, AiGatewayStatus, AiKeyVaultStatus } from '#shared/types/electron'
 import { useHubAi } from '~/composables/useHubAi'
 import type { HubAiConnection, HubAiModel, HubAiProviderItem } from '~/composables/useHubAi'
+import type { HubConnectionStatus } from 'tm-hub-client'
 import { getErrorMessage } from '~/shared/utils/errors'
 
 const { t } = useI18n()
@@ -82,14 +83,14 @@ if (import.meta.client) {
   try {
     const raw = localStorage.getItem(LOCAL_HEALTH_STORAGE_KEY)
     if (raw) localConnectionHealth.value = JSON.parse(raw)
-  } catch {}
+  } catch { /* best-effort persistence */ }
 }
 
 watch(localConnectionHealth, (val) => {
   if (import.meta.client) {
     try {
       localStorage.setItem(LOCAL_HEALTH_STORAGE_KEY, JSON.stringify(val))
-    } catch {}
+    } catch { /* best-effort persistence */ }
   }
 }, { deep: true })
 const modelPersistProgress = ref<{ current: number, total: number } | null>(null)
@@ -207,7 +208,7 @@ const vaultBanner = computed(() => {
   }
   return {
     icon: 'i-lucide-shield-alert',
-    color: 'text-amber-600 dark:text-amber-400',
+    color: 'text-warning',
     title: t('settings.aiKeysVaultOff'),
     desc: t('settings.aiKeysVaultOffDesc')
   }
@@ -271,7 +272,7 @@ function openConnect() {
 
 function cleanVal(v: unknown): string {
   let s = String(v ?? '').trim()
-  while ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+  while ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith('\'') && s.endsWith('\''))) {
     if (s.length < 2) break
     s = s.slice(1, -1).trim()
   }
@@ -338,7 +339,8 @@ function openCredential(p: HubAiProviderItem, name = '', connection: HubAiConnec
   values['AI_MODEL'] = cleanVal(connection?.config?.['AI_MODEL'] || connection?.config?.['model'] || '')
 
   const existingModels = hubAllModels.value.filter(m =>
-    connection ? (m.connectionId === connection.id || (!m.connectionId && m.provider === p.definition.key))
+    connection
+      ? (m.connectionId === connection.id || (!m.connectionId && m.provider === p.definition.key))
       : m.provider === p.definition.key
   )
   if (existingModels.length) {
@@ -484,7 +486,7 @@ async function saveCredential() {
       // "Test" actually reaches the endpoint.
       try {
         await hubPatchConnection(appId, targetConnId, { status: 'connected' })
-      } catch { }
+      } catch { /* best-effort persistence */ }
     }
 
     notify.success(t('aiProviders.credential_saved'))
@@ -547,7 +549,7 @@ async function runDiscovery(input: {
       if (keyRes?.data?.apiKey) {
         cleanKey = cleanVal(keyRes.data.apiKey)
       }
-    } catch { }
+    } catch { /* best-effort persistence */ }
   }
 
   const isLocal = isLocalUrl(cleanBase)
@@ -567,7 +569,7 @@ async function runDiscovery(input: {
             lastTestOk: true,
             lastTestAt: new Date().toISOString()
           })
-        } catch { }
+        } catch { /* best-effort persistence */ }
       }
       if (input.connectionId) {
         localConnectionHealth.value[input.connectionId] = {
@@ -614,7 +616,7 @@ async function runDiscovery(input: {
             lastTestOk: true,
             lastTestAt: new Date().toISOString()
           })
-        } catch { }
+        } catch { /* best-effort persistence */ }
       }
       if (input.connectionId) {
         localConnectionHealth.value[input.connectionId] = {
@@ -667,11 +669,12 @@ async function runDiscovery(input: {
               lastTestOk: true,
               lastTestAt: new Date().toISOString()
             })
-          } catch { }
+          } catch { /* best-effort persistence */ }
         }
         return { ok: true, count: list.length, models: list }
-      } catch (electronErr: any) {
-        throw new Error(electronErr?.message || getErrorMessage(hubErr, k => t(k)))
+      } catch (electronErr) {
+        const message = electronErr instanceof Error ? electronErr.message : ''
+        throw new Error(message || getErrorMessage(hubErr, k => t(k)), { cause: electronErr })
       }
     } else if (!hasElectron.value && cleanBase) {
       try {
@@ -694,11 +697,11 @@ async function runDiscovery(input: {
                 lastTestOk: true,
                 lastTestAt: new Date().toISOString()
               })
-            } catch { }
+            } catch { /* best-effort persistence */ }
           }
           return { ok: true, count: list.length, models: list }
         }
-      } catch { }
+      } catch { /* best-effort persistence */ }
     }
     throw hubErr
   }
@@ -923,13 +926,13 @@ async function refreshHub() {
     ])
     hubProviders.value = providers.map(p => ({
       ...p,
-      connections: (p.connections || []).map(c => {
+      connections: (p.connections || []).map((c) => {
         const local = localConnectionHealth.value[c.id]
         if (local && local.lastTestOk !== undefined) {
           return {
             ...c,
             lastTestOk: local.lastTestOk,
-            status: (local.status as any) || c.status,
+            status: (local.status as HubConnectionStatus) || c.status,
             lastTestAt: local.lastTestAt || c.lastTestAt
           }
         }
@@ -996,17 +999,17 @@ async function hubTest(c: HubAiConnection, provItem?: HubAiProviderItem) {
   hubBusyKey.value = c.id
   try {
     const p = provItem || hubProviders.value.find(prov =>
-      prov.definition.key === c.provider ||
-      prov.definition.id === c.providerDefinitionId ||
-      prov.definition.id === c.provider ||
-      prov.connections.some(conn => conn.id === c.id)
+      prov.definition.key === c.provider
+      || prov.definition.id === c.providerDefinitionId
+      || prov.definition.id === c.provider
+      || prov.connections.some(conn => conn.id === c.id)
     )
     const effectiveBase = cleanVal(
-      c.baseUrlOverride ||
-      c.config?.['AI_BASE_URL'] ||
-      c.config?.['baseUrl'] ||
-      p?.definition.base_url_default ||
-      (/freellm/i.test(c.provider) ? 'http://127.0.0.1:31415/v1' : '')
+      c.baseUrlOverride
+      || c.config?.['AI_BASE_URL']
+      || c.config?.['baseUrl']
+      || p?.definition.base_url_default
+      || (/freellm/i.test(c.provider) ? 'http://127.0.0.1:31415/v1' : '')
     )
     const res = await runDiscovery({
       connectionId: c.id,
@@ -1038,7 +1041,7 @@ async function hubTest(c: HubAiConnection, provItem?: HubAiProviderItem) {
         lastTestOk: true,
         lastTestAt: c.lastTestAt
       })
-    } catch { }
+    } catch { /* best-effort persistence */ }
     notify.success(
       t('aiProviders.test_ok'),
       [
@@ -1061,7 +1064,7 @@ async function hubTest(c: HubAiConnection, provItem?: HubAiProviderItem) {
         lastTestOk: false,
         lastTestAt: c.lastTestAt
       })
-    } catch { }
+    } catch { /* best-effort persistence */ }
     // The relay's own message already carries the provider's answer
     // ("ai.provider-unavailable — HTTP 404 — Function not found for account");
     // getErrorMessage maps anything matching /fetch failed|network/ to a
@@ -1077,17 +1080,17 @@ async function hubFetchModels(c: HubAiConnection, provItem?: HubAiProviderItem) 
   hubBusyKey.value = c.id
   try {
     const p = provItem || hubProviders.value.find(prov =>
-      prov.definition.key === c.provider ||
-      prov.definition.id === c.providerDefinitionId ||
-      prov.definition.id === c.provider ||
-      prov.connections.some(conn => conn.id === c.id)
+      prov.definition.key === c.provider
+      || prov.definition.id === c.providerDefinitionId
+      || prov.definition.id === c.provider
+      || prov.connections.some(conn => conn.id === c.id)
     )
     const effectiveBase = cleanVal(
-      c.baseUrlOverride ||
-      c.config?.['AI_BASE_URL'] ||
-      c.config?.['baseUrl'] ||
-      p?.definition.base_url_default ||
-      (/freellm/i.test(c.provider) ? 'http://127.0.0.1:31415/v1' : '')
+      c.baseUrlOverride
+      || c.config?.['AI_BASE_URL']
+      || c.config?.['baseUrl']
+      || p?.definition.base_url_default
+      || (/freellm/i.test(c.provider) ? 'http://127.0.0.1:31415/v1' : '')
     )
     const res = await runDiscovery({
       connectionId: c.id,
@@ -1109,7 +1112,7 @@ async function hubFetchModels(c: HubAiConnection, provItem?: HubAiProviderItem) 
         lastTestOk: true,
         lastTestAt: c.lastTestAt
       })
-    } catch { }
+    } catch { /* best-effort persistence */ }
     notify.success(t('aiProviders.models_fetched', [String(res.count)]))
   } catch (err) {
     c.lastTestOk = false
@@ -1126,7 +1129,7 @@ async function hubFetchModels(c: HubAiConnection, provItem?: HubAiProviderItem) 
         lastTestOk: false,
         lastTestAt: c.lastTestAt
       })
-    } catch { }
+    } catch { /* best-effort persistence */ }
     notify.error(t('aiProviders.test_fail'), getErrorMessage(err, k => t(k)))
   } finally {
     hubBusyKey.value = ''
@@ -1192,17 +1195,17 @@ async function refreshModelsForConnection(c: HubAiConnection) {
   isDiscoveringConnectionModels.value = true
   try {
     const p = hubProviders.value.find(prov =>
-      prov.definition.key === c.provider ||
-      prov.definition.id === c.providerDefinitionId ||
-      prov.definition.id === c.provider ||
-      prov.connections.some(conn => conn.id === c.id)
+      prov.definition.key === c.provider
+      || prov.definition.id === c.providerDefinitionId
+      || prov.definition.id === c.provider
+      || prov.connections.some(conn => conn.id === c.id)
     )
     const effectiveBase = cleanVal(
-      c.baseUrlOverride ||
-      c.config?.['AI_BASE_URL'] ||
-      c.config?.['baseUrl'] ||
-      p?.definition.base_url_default ||
-      (/freellm/i.test(c.provider) ? 'http://127.0.0.1:31415/v1' : '')
+      c.baseUrlOverride
+      || c.config?.['AI_BASE_URL']
+      || c.config?.['baseUrl']
+      || p?.definition.base_url_default
+      || (/freellm/i.test(c.provider) ? 'http://127.0.0.1:31415/v1' : '')
     )
     const res = await runDiscovery({
       connectionId: c.id,
@@ -1224,7 +1227,7 @@ async function refreshModelsForConnection(c: HubAiConnection) {
         lastTestOk: true,
         lastTestAt: c.lastTestAt
       })
-    } catch { }
+    } catch { /* best-effort persistence */ }
     notify.success(t('aiProviders.discover_models'), t('aiProviders.discovered_count', { count: res.count }))
     await refreshHub()
   } catch (err) {
@@ -1242,7 +1245,7 @@ async function refreshModelsForConnection(c: HubAiConnection) {
         lastTestOk: false,
         lastTestAt: c.lastTestAt
       })
-    } catch { }
+    } catch { /* best-effort persistence */ }
     notify.error(t('aiProviders.discover_failed'), getErrorMessage(err, k => t(k)))
   } finally {
     isDiscoveringConnectionModels.value = false
@@ -1483,11 +1486,24 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
   <BasePage id="ai_keys" :title="t('settings.aiKeysTitle')" :description="t('settings.aiKeysDesc')">
     <template #right>
       <div class="flex items-center gap-2">
-        <UButton color="primary" variant="soft" size="sm" icon="i-lucide-plus"
-          :label="t('aiProviders.connect_provider')" @click="openConnect()" />
+        <UButton
+          color="primary"
+          variant="soft"
+          size="sm"
+          icon="i-lucide-plus"
+          :label="t('aiProviders.connect_provider')"
+          @click="openConnect()"
+        />
         <UDropdownMenu :items="headerMenu" :content="{ align: 'end' }">
-          <UButton icon="i-lucide-ellipsis-vertical" color="neutral" variant="ghost" square size="sm"
-            :aria-label="t('common.actions')" :title="t('common.actions')" />
+          <UButton
+            icon="i-lucide-ellipsis-vertical"
+            color="neutral"
+            variant="ghost"
+            square
+            size="sm"
+            :aria-label="t('common.actions')"
+            :title="t('common.actions')"
+          />
         </UDropdownMenu>
       </div>
     </template>
@@ -1496,7 +1512,8 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
       <!-- ============ Metric Cards ======================================== -->
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div
-          class="p-3.5 rounded-xl border border-default bg-white dark:bg-default flex items-center justify-between">
+          class="p-3.5 rounded-xl flex items-center justify-between flat-panel"
+        >
           <div>
             <p class="text-xs text-muted">
               {{ t('aiProviders.total_providers') }}
@@ -1511,7 +1528,8 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
         </div>
 
         <div
-          class="p-3.5 rounded-xl border border-default bg-white dark:bg-default flex items-center justify-between">
+          class="p-3.5 rounded-xl flex items-center justify-between flat-panel"
+        >
           <div>
             <p class="text-xs text-muted">
               {{ t('aiProviders.total_credentials') }}
@@ -1521,13 +1539,15 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
             </p>
           </div>
           <div
-            class="size-9 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+            class="size-9 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400"
+          >
             <UIcon name="i-lucide-key-round" class="size-5" />
           </div>
         </div>
 
         <div
-          class="p-3.5 rounded-xl border border-default bg-white dark:bg-default flex items-center justify-between">
+          class="p-3.5 rounded-xl flex items-center justify-between flat-panel"
+        >
           <div>
             <p class="text-xs text-muted">
               {{ t('aiProviders.total_models') }}
@@ -1537,13 +1557,15 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
             </p>
           </div>
           <div
-            class="size-9 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400">
+            class="size-9 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400"
+          >
             <UIcon name="i-lucide-cpu" class="size-5" />
           </div>
         </div>
 
         <div
-          class="p-3.5 rounded-xl border border-default bg-white dark:bg-default flex items-center justify-between">
+          class="p-3.5 rounded-xl flex items-center justify-between flat-panel"
+        >
           <div class="min-w-0 flex-1 pr-2">
             <p class="text-xs text-muted truncate">
               {{ t('settings.aiKeysTitle') }}
@@ -1560,11 +1582,14 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
 
       <!-- ============ Tab Switcher ======================================== -->
       <div class="flex items-center gap-1 border-b border-default pb-2">
-        <button type="button"
-          class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors" :class="activeTab === 'providers'
+        <button
+          type="button"
+          class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+          :class="activeTab === 'providers'
             ? 'bg-primary/10 text-primary font-semibold'
             : 'text-muted hover:text-highlighted hover:bg-muted'"
-          @click="activeTab = 'providers'">
+          @click="activeTab = 'providers'"
+        >
           <UIcon name="i-lucide-server" class="size-4" />
           <span>{{ t('aiProviders.tab_providers') }}</span>
           <UBadge size="xs" color="neutral" variant="subtle">
@@ -1572,11 +1597,14 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
           </UBadge>
         </button>
 
-        <button type="button"
-          class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors" :class="activeTab === 'models'
+        <button
+          type="button"
+          class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+          :class="activeTab === 'models'
             ? 'bg-primary/10 text-primary font-semibold'
             : 'text-muted hover:text-highlighted hover:bg-muted'"
-          @click="activeTab = 'models'">
+          @click="activeTab = 'models'"
+        >
           <UIcon name="i-lucide-cpu" class="size-4" />
           <span>{{ t('aiProviders.tab_models') }}</span>
           <UBadge size="xs" color="neutral" variant="subtle">
@@ -1584,11 +1612,14 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
           </UBadge>
         </button>
 
-        <button type="button"
-          class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors" :class="activeTab === 'surfaces'
+        <button
+          type="button"
+          class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+          :class="activeTab === 'surfaces'
             ? 'bg-primary/10 text-primary font-semibold'
             : 'text-muted hover:text-highlighted hover:bg-muted'"
-          @click="activeTab = 'surfaces'">
+          @click="activeTab = 'surfaces'"
+        >
           <UIcon name="i-lucide-shield-check" class="size-4" />
           <span>{{ t('aiProviders.tab_surfaces') }}</span>
         </button>
@@ -1610,21 +1641,45 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
               class="w-full"
             >
               <template v-if="searchProvider?.length" #trailing>
-                <UButton color="neutral" variant="link" size="sm" icon="i-lucide-circle-x" aria-label="Clear input"
-                  @click="searchProvider = ''" />
+                <UButton
+                  color="neutral"
+                  variant="link"
+                  size="sm"
+                  icon="i-lucide-circle-x"
+                  aria-label="Clear input"
+                  @click="searchProvider = ''"
+                />
               </template>
             </UInput>
           </div>
           <div class="flex items-center gap-2">
-            <UButton color="primary" variant="soft" size="xs" icon="i-lucide-plus"
-              :label="t('aiProviders.connect_provider')" @click="openConnect()" />
+            <UButton
+              color="primary"
+              variant="soft"
+              size="xs"
+              icon="i-lucide-plus"
+              :label="t('aiProviders.connect_provider')"
+              @click="openConnect()"
+            />
           </div>
         </div>
 
-        <UAlert v-if="hubError" color="error" variant="subtle" icon="i-lucide-triangle-alert"
-          :title="t('aiProviders.sync_failed')" :description="hubError">
+        <UAlert
+          v-if="hubError"
+          color="error"
+          variant="subtle"
+          icon="i-lucide-triangle-alert"
+          :title="t('aiProviders.sync_failed')"
+          :description="hubError"
+        >
           <template #actions>
-            <UButton color="error" variant="ghost" size="xs" :label="t('common.refresh')" @click="refresh" />
+            <UButton
+              color="error"
+              variant="ghost"
+              size="xs"
+              :label="t('common.refresh')"
+              @click="refresh"
+            />
           </template>
         </UAlert>
 
@@ -1634,10 +1689,14 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
           <USkeleton class="h-14 w-full rounded-lg" />
         </div>
 
-        <div v-else-if="filteredProviders.length === 0"
-          class="rounded-xl border border-default p-10 text-center">
-          <UIcon :name="totalConnectedProviders === 0 ? 'i-lucide-plug' : 'i-lucide-bot'"
-            class="size-10 text-muted mx-auto mb-2" />
+        <div
+          v-else-if="filteredProviders.length === 0"
+          class="rounded-xl border border-default p-10 text-center"
+        >
+          <UIcon
+            :name="totalConnectedProviders === 0 ? 'i-lucide-plug' : 'i-lucide-bot'"
+            class="size-10 text-muted mx-auto mb-2"
+          />
           <p class="text-sm font-medium text-highlighted">
             {{ totalConnectedProviders === 0 ? t('aiProviders.no_connected_providers') : t('aiProviders.no_credentials')
             }}
@@ -1646,22 +1705,39 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
             {{ totalConnectedProviders === 0 ? t('aiProviders.no_connected_hint') : t('aiProviders.description') }}
           </p>
           <div class="flex flex-wrap items-center justify-center gap-2 mt-4">
-            <UButton color="primary" variant="soft" size="sm" icon="i-lucide-plus"
-              :label="t('aiProviders.connect_provider')" @click="openConnect()" />
-            <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-upload" :label="t('aiProviders.import')"
-              @click="openImport()" />
+            <UButton
+              color="primary"
+              variant="soft"
+              size="sm"
+              icon="i-lucide-plus"
+              :label="t('aiProviders.connect_provider')"
+              @click="openConnect()"
+            />
+            <UButton
+              color="neutral"
+              variant="ghost"
+              size="sm"
+              icon="i-lucide-upload"
+              :label="t('aiProviders.import')"
+              @click="openImport()"
+            />
           </div>
         </div>
 
         <div v-else class="space-y-3">
-          <div v-for="p in filteredProviders" :key="p.definition.key"
-            class="rounded-xl border border-default bg-white dark:bg-default overflow-hidden shadow-xs">
+          <div
+            v-for="p in filteredProviders"
+            :key="p.definition.key"
+            class="rounded-xl overflow-hidden shadow-xs flat-panel"
+          >
             <!-- Provider Card Header -->
             <div
-              class="flex items-center justify-between gap-3 px-4 py-3 bg-muted/70 border-b border-default">
+              class="flex items-center justify-between gap-3 px-4 py-3 bg-muted/70 border-b border-default"
+            >
               <div class="flex items-center gap-2.5 min-w-0">
                 <div
-                  class="size-7 rounded-lg bg-accented/60 flex items-center justify-center shrink-0">
+                  class="size-7 rounded-lg bg-accented/60 flex items-center justify-center shrink-0"
+                >
                   <UIcon :name="providerIcon(p.definition.key)" class="size-4 text-highlighted" />
                 </div>
                 <div class="min-w-0">
@@ -1674,8 +1750,14 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
                 <UBadge color="neutral" variant="subtle" size="xs">
                   {{ t('aiProviders.credentials_count', [String(p.connections.length)]) }}
                 </UBadge>
-                <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-plus"
-                  :label="t('aiProviders.add_credential')" @click="openCredential(p)" />
+                <UButton
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  icon="i-lucide-plus"
+                  :label="t('aiProviders.add_credential')"
+                  @click="openCredential(p)"
+                />
               </div>
             </div>
 
@@ -1685,8 +1767,11 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
             </div>
 
             <div v-else class="divide-y divide-default">
-              <div v-for="c in p.connections" :key="c.id"
-                class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 hover:bg-muted/50 transition-colors">
+              <div
+                v-for="c in p.connections"
+                :key="c.id"
+                class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 hover:bg-muted/50 transition-colors"
+              >
                 <div class="min-w-0 flex-1">
                   <div class="flex items-center gap-2 flex-wrap">
                     <span class="text-sm font-semibold text-highlighted truncate">{{ c.name
@@ -1701,17 +1786,30 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
                       <UIcon name="i-lucide-loader-2" class="size-3.5 animate-spin mr-1" />
                       {{ t('aiProviders.testing_connection') }}
                     </UBadge>
-                    <UBadge v-else :color="providerHealth(c).color" variant="subtle" size="sm">
+                    <UBadge
+                      v-else
+                      :color="providerHealth(c).color"
+                      variant="subtle"
+                      size="sm"
+                    >
                       <UIcon v-if="providerHealth(c).color === 'success'" name="i-lucide-check" class="size-3.5 mr-1" />
-                      <UIcon v-else-if="providerHealth(c).color === 'error'" name="i-lucide-alert-triangle"
-                        class="size-3.5 mr-1" />
+                      <UIcon
+                        v-else-if="providerHealth(c).color === 'error'"
+                        name="i-lucide-alert-triangle"
+                        class="size-3.5 mr-1"
+                      />
                       {{ providerHealth(c).label }}
                     </UBadge>
                     <span class="inline-flex items-center gap-1 font-mono text-xs text-muted">
                       <UIcon :name="providerIcon(p.definition.key)" class="size-3.5" />
                       {{ p.definition.name }}
                     </span>
-                    <UBadge v-if="c.isShared" color="warning" variant="subtle" size="xs">
+                    <UBadge
+                      v-if="c.isShared"
+                      color="warning"
+                      variant="subtle"
+                      size="xs"
+                    >
                       {{ t('aiProviders.shared') }}
                     </UBadge>
                   </div>
@@ -1739,14 +1837,27 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
                 <!-- Controls & Actions (matching tm-trading style: single switch + dropdown menu) -->
                 <div class="flex items-center gap-2 self-end sm:self-center shrink-0">
                   <UTooltip :text="c.isEnabled ? t('aiProviders.enable') : t('aiProviders.disabled')">
-                    <USwitch :model-value="c.isEnabled" size="sm" :disabled="hubPatchKey === c.id"
-                      :aria-label="t('aiProviders.enable')" @update:model-value="hubToggleEnabled(c)" />
+                    <USwitch
+                      :model-value="c.isEnabled"
+                      size="sm"
+                      :disabled="hubPatchKey === c.id"
+                      :aria-label="t('aiProviders.enable')"
+                      @update:model-value="hubToggleEnabled(c)"
+                    />
                   </UTooltip>
 
                   <UDropdownMenu :items="getConnectionActions(p, c)" :content="{ align: 'end' }">
-                    <UButton icon="i-lucide-ellipsis-vertical" color="neutral" variant="ghost" square size="sm"
-                      :loading="hubBusyKey === c.id" :disabled="hubBusyKey === c.id" :aria-label="t('common.actions')"
-                      :title="t('common.actions')" />
+                    <UButton
+                      icon="i-lucide-ellipsis-vertical"
+                      color="neutral"
+                      variant="ghost"
+                      square
+                      size="sm"
+                      :loading="hubBusyKey === c.id"
+                      :disabled="hubBusyKey === c.id"
+                      :aria-label="t('common.actions')"
+                      :title="t('common.actions')"
+                    />
                   </UDropdownMenu>
                 </div>
               </div>
@@ -1810,10 +1921,23 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
           </div>
 
           <div class="flex items-center gap-2">
-            <UButton color="primary" variant="soft" size="xs" icon="i-lucide-plus" :label="t('aiProviders.add_model')"
-              @click="openAddModel()" />
-            <UButton color="neutral" variant="soft" size="xs" icon="i-lucide-cloud" :loading="hubSyncing"
-              :label="t('aiProviders.sync_from_hub')" @click="syncFromHub" />
+            <UButton
+              color="primary"
+              variant="soft"
+              size="xs"
+              icon="i-lucide-plus"
+              :label="t('aiProviders.add_model')"
+              @click="openAddModel()"
+            />
+            <UButton
+              color="neutral"
+              variant="soft"
+              size="xs"
+              icon="i-lucide-cloud"
+              :loading="hubSyncing"
+              :label="t('aiProviders.sync_from_hub')"
+              @click="syncFromHub"
+            />
           </div>
         </div>
 
@@ -1823,8 +1947,10 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
           <USkeleton class="h-12 w-full rounded-lg" />
         </div>
 
-        <div v-else-if="filteredModels.length === 0"
-          class="rounded-xl border border-default p-10 text-center">
+        <div
+          v-else-if="filteredModels.length === 0"
+          class="rounded-xl border border-default p-10 text-center"
+        >
           <UIcon name="i-lucide-cpu" class="size-10 text-muted mx-auto mb-2" />
           <p class="text-sm font-medium text-highlighted">
             {{ t('aiProviders.models_empty') }}
@@ -1833,20 +1959,35 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
             {{ t('aiProviders.models_catalog_desc') }}
           </p>
           <div class="flex items-center justify-center gap-2 mt-4">
-            <UButton color="primary" variant="soft" size="sm" icon="i-lucide-plus" :label="t('aiProviders.add_model')"
-              @click="openAddModel()" />
-            <UButton color="neutral" variant="soft" size="sm" icon="i-lucide-cloud"
-              :label="t('aiProviders.sync_from_hub')" @click="syncFromHub" />
+            <UButton
+              color="primary"
+              variant="soft"
+              size="sm"
+              icon="i-lucide-plus"
+              :label="t('aiProviders.add_model')"
+              @click="openAddModel()"
+            />
+            <UButton
+              color="neutral"
+              variant="soft"
+              size="sm"
+              icon="i-lucide-cloud"
+              :label="t('aiProviders.sync_from_hub')"
+              @click="syncFromHub"
+            />
           </div>
         </div>
 
         <!-- Models Table -->
-        <div v-else
-          class="rounded-xl border border-default bg-white dark:bg-default overflow-hidden shadow-xs">
+        <div
+          v-else
+          class="rounded-xl overflow-hidden shadow-xs flat-panel"
+        >
           <div class="overflow-x-auto">
             <table class="w-full text-left text-xs">
               <thead
-                class="bg-muted/80 border-b border-default text-muted uppercase text-[10px]">
+                class="bg-muted/80 border-b border-default text-muted uppercase text-[10px]"
+              >
                 <tr>
                   <th class="py-2.5 px-3 font-semibold">
                     {{ t('aiProviders.model_id') }}
@@ -1869,8 +2010,11 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
                 </tr>
               </thead>
               <tbody class="divide-y divide-default dark:border-default">
-                <tr v-for="m in displayedModels" :key="m.id"
-                  class="hover:bg-muted/50 transition-colors">
+                <tr
+                  v-for="m in displayedModels"
+                  :key="m.id"
+                  class="hover:bg-muted/50 transition-colors"
+                >
                   <td class="py-2 px-3 font-mono text-[11px] text-highlighted max-w-xs truncate">
                     <span
                       class="cursor-pointer hover:underline"
@@ -1889,7 +2033,8 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
                   </td>
                   <td class="py-2 px-3 whitespace-nowrap">
                     <span
-                      class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-muted text-highlighted text-[11px]">
+                      class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-muted text-highlighted text-[11px]"
+                    >
                       <UIcon :name="providerIcon(m.provider)" class="size-3.5" />
                       <span>{{ m.provider }}</span>
                     </span>
@@ -1901,39 +2046,53 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
                           : t('aiProviders.source_manual') }}
                       </UBadge>
                       <span v-if="m.connectionId" class="text-[10px] text-muted truncate max-w-[100px]">
-                        {{allConnections.find(c => c.id === m.connectionId)?.name || 'scoped'}}
+                        {{ allConnections.find(c => c.id === m.connectionId)?.name || 'scoped' }}
                       </span>
                     </div>
                   </td>
                   <td class="py-2 px-3 text-center whitespace-nowrap">
-                    <USwitch :model-value="m.isEnabled" size="sm" :disabled="hubModelBusy === m.id"
-                      :aria-label="t('aiProviders.enable')" @update:model-value="hubToggleModel(m)" />
+                    <USwitch
+                      :model-value="m.isEnabled"
+                      size="sm"
+                      :disabled="hubModelBusy === m.id"
+                      :aria-label="t('aiProviders.enable')"
+                      @update:model-value="hubToggleModel(m)"
+                    />
                   </td>
                   <td class="py-2 px-3 text-right whitespace-nowrap">
-                    <UDropdownMenu :items="[
-                      ...(allConnections.find(c => c.id === m.connectionId) ? [{
-                        label: t('aiProviders.set_primary'),
-                        icon: 'i-lucide-star',
-                        color: 'primary' as const,
-                        disabled: !m.isEnabled,
-                        onSelect: () => setDefaultModelForConnection(allConnections.find(c => c.id === m.connectionId)!, m.modelId)
-                      }] : []),
-                      {
-                        label: t('aiProviders.copy_model_id'),
-                        icon: 'i-lucide-copy',
-                        color: 'neutral' as const,
-                        onSelect: () => { copy(m.modelId); notify.success(t('aiProviders.model_id_copied', [m.modelId])) }
-                      },
-                      { type: 'separator' as const },
-                      {
-                        label: t('aiProviders.delete_model'),
-                        icon: 'i-lucide-trash-2',
-                        color: 'error' as const,
-                        onSelect: () => promptDeleteModel(m)
-                      }
-                    ]" :content="{ align: 'end' }">
-                      <UButton icon="i-lucide-ellipsis-vertical" color="neutral" variant="ghost" square size="xs"
-                        :aria-label="t('common.actions')" />
+                    <UDropdownMenu
+                      :items="[
+                        ...(allConnections.find(c => c.id === m.connectionId) ? [{
+                          label: t('aiProviders.set_primary'),
+                          icon: 'i-lucide-star',
+                          color: 'primary' as const,
+                          disabled: !m.isEnabled,
+                          onSelect: () => setDefaultModelForConnection(allConnections.find(c => c.id === m.connectionId)!, m.modelId)
+                        }] : []),
+                        {
+                          label: t('aiProviders.copy_model_id'),
+                          icon: 'i-lucide-copy',
+                          color: 'neutral' as const,
+                          onSelect: () => { copy(m.modelId); notify.success(t('aiProviders.model_id_copied', [m.modelId])) }
+                        },
+                        { type: 'separator' as const },
+                        {
+                          label: t('aiProviders.delete_model'),
+                          icon: 'i-lucide-trash-2',
+                          color: 'error' as const,
+                          onSelect: () => promptDeleteModel(m)
+                        }
+                      ]"
+                      :content="{ align: 'end' }"
+                    >
+                      <UButton
+                        icon="i-lucide-ellipsis-vertical"
+                        color="neutral"
+                        variant="ghost"
+                        square
+                        size="xs"
+                        :aria-label="t('common.actions')"
+                      />
                     </UDropdownMenu>
                   </td>
                 </tr>
@@ -1941,15 +2100,24 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
             </table>
           </div>
           <div
-            class="px-3 py-2 bg-muted/50 border-t border-default text-[11px] text-muted flex items-center justify-between flex-wrap gap-2">
+            class="px-3 py-2 bg-muted/50 border-t border-default text-[11px] text-muted flex items-center justify-between flex-wrap gap-2"
+          >
             <span>{{ t('global.showingCount', { count: displayedModels.length, total: filteredModels.length }) }} ({{ hubAllModels.length }} total)</span>
             <div v-if="filteredModels.length > displayedModels.length" class="flex items-center gap-2">
-              <UButton size="xs" variant="soft" color="neutral"
+              <UButton
+                size="xs"
+                variant="soft"
+                color="neutral"
                 :label="t('aiProviders.load_more_models', { current: displayedModels.length, total: filteredModels.length })"
-                @click="modelsCatalogLimit += 50" />
-              <UButton size="xs" variant="ghost" color="neutral"
+                @click="modelsCatalogLimit += 50"
+              />
+              <UButton
+                size="xs"
+                variant="ghost"
+                color="neutral"
                 :label="t('aiProviders.show_all_models', { total: filteredModels.length })"
-                @click="modelsCatalogLimit = filteredModels.length" />
+                @click="modelsCatalogLimit = filteredModels.length"
+              />
             </div>
           </div>
         </div>
@@ -1959,14 +2127,15 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
       <!-- TAB 3: KEY VAULT & LOCAL DESKTOP SURFACES                          -->
       <!-- ================================================================== -->
       <div v-if="activeTab === 'surfaces'" class="space-y-4 max-w-3xl">
-        <p v-if="!hasElectron" class="text-xs text-amber-600 dark:text-amber-400">
+        <p v-if="!hasElectron" class="text-xs text-warning">
           {{ t('tmcut.aiConnect.desktopOnly') }}
         </p>
 
         <template v-else>
           <!-- At-rest encryption banner -->
           <div
-            class="rounded-xl border border-default p-4 bg-white dark:bg-default shadow-xs">
+            class="rounded-xl p-4 shadow-xs flat-panel"
+          >
             <div class="flex items-center justify-between gap-3 flex-wrap">
               <div class="flex items-center gap-2.5 min-w-0">
                 <UIcon :name="vaultBanner.icon" class="size-5 shrink-0" :class="vaultBanner.color" />
@@ -1984,13 +2153,26 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
                   <UIcon name="i-lucide-lock" class="w-3 h-3 mr-1" />
                   {{ t('settings.aiKeysEncryptedCount', { count: vault?.encrypted ?? 0 }) }}
                 </UBadge>
-                <UBadge v-if="(vault?.plaintext ?? 0) > 0" color="warning" variant="subtle" size="xs">
+                <UBadge
+                  v-if="(vault?.plaintext ?? 0) > 0"
+                  color="warning"
+                  variant="subtle"
+                  size="xs"
+                >
                   <UIcon name="i-lucide-eye" class="w-3 h-3 mr-1" />
                   {{ t('settings.aiKeysPlaintextCount', { count: vault?.plaintext ?? 0 }) }}
                 </UBadge>
-                <UButton v-if="showEncryptButton" color="primary" variant="soft" size="xs"
-                  icon="i-lucide-lock-keyhole-open" :loading="migrating" :label="t('settings.aiKeysEncryptNow')"
-                  :title="t('settings.aiKeysEncryptNowTitle')" @click="handleEncrypt" />
+                <UButton
+                  v-if="showEncryptButton"
+                  color="primary"
+                  variant="soft"
+                  size="xs"
+                  icon="i-lucide-lock-keyhole-open"
+                  :loading="migrating"
+                  :label="t('settings.aiKeysEncryptNow')"
+                  :title="t('settings.aiKeysEncryptNowTitle')"
+                  @click="handleEncrypt"
+                />
               </div>
             </div>
             <p v-if="justEncrypted" class="text-[11px] mt-2 text-emerald-600 dark:text-emerald-400">
@@ -2000,19 +2182,29 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
 
           <!-- Global connection -->
           <div
-            class="rounded-xl border border-default bg-white dark:bg-default divide-y divide-default shadow-xs overflow-hidden">
+            class="rounded-xl divide-y divide-default shadow-xs overflow-hidden flat-panel"
+          >
             <div class="flex items-center justify-between gap-2 px-3 py-2.5 bg-muted/70">
               <span class="text-xs font-semibold text-highlighted uppercase tracking-wide">
                 {{ t('tmcut.aiConnect.globalLabel') }}
               </span>
               <span class="flex items-center gap-1.5 min-w-0">
-                <span class="text-[11px] font-mono text-muted truncate max-w-[60%]"
-                  :class="gatewayStatus?.configured ? '' : 'text-amber-600 dark:text-amber-400'">
+                <span
+                  class="text-[11px] font-mono text-muted truncate max-w-[60%]"
+                  :class="gatewayStatus?.configured ? '' : 'text-warning'"
+                >
                   {{ gatewayStatus ? `${gatewayStatus.providerLabel}${gatewayStatus.model ? ' · ' + gatewayStatus.model
                     : ''}` : '—' }}
                 </span>
-                <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-plug-zap" :loading="testing['global']"
-                  :aria-label="t('tmcut.aiConnect.testTitle')" @click="handleTest('global')" />
+                <UButton
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  icon="i-lucide-plug-zap"
+                  :loading="testing['global']"
+                  :aria-label="t('tmcut.aiConnect.testTitle')"
+                  @click="handleTest('global')"
+                />
               </span>
             </div>
             <div class="flex items-center justify-between gap-2 px-3 py-2">
@@ -2025,38 +2217,59 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
                     : t('settings.aiKeysMissing') }}
               </UBadge>
             </div>
-            <p v-if="testResults['global']" class="px-3 py-1.5 text-[10px]" :class="testResults['global'].state === 'ok'
-              ? 'text-emerald-600 dark:text-emerald-400'
-              : testResults['global'].state === 'warn'
-                ? 'text-amber-600 dark:text-amber-400'
-                : 'text-red-600 dark:text-red-400'">
+            <p
+              v-if="testResults['global']"
+              class="px-3 py-1.5 text-[10px]"
+              :class="testResults['global'].state === 'ok'
+                ? 'text-emerald-600 dark:text-emerald-400'
+                : testResults['global'].state === 'warn'
+                  ? 'text-warning'
+                  : 'text-error'"
+            >
               {{ testResults['global'].detail }}
             </p>
           </div>
 
           <!-- Per-surface rows -->
           <div
-            class="rounded-xl border border-default bg-white dark:bg-default divide-y divide-default shadow-xs overflow-hidden">
+            class="rounded-xl divide-y divide-default shadow-xs overflow-hidden flat-panel"
+          >
             <div v-for="row in surfaceRows" :key="row.key" class="flex items-center justify-between gap-2 px-3 py-2.5">
               <span class="text-[11px] text-highlighted">{{ row.label }}</span>
               <span class="flex items-center gap-1.5 min-w-0">
-                <UBadge v-if="row.st && !row.st.hasKey && !row.st.provider?.includes('ollama')" color="warning"
-                  variant="subtle" size="xs">
+                <UBadge
+                  v-if="row.st && !row.st.hasKey && !row.st.provider?.includes('ollama')"
+                  color="warning"
+                  variant="subtle"
+                  size="xs"
+                >
                   {{ t('settings.aiKeysMissing') }}
                 </UBadge>
-                <span class="text-[10px] font-mono text-muted truncate max-w-[55%]"
-                  :class="row.st?.configured ? '' : 'text-amber-600 dark:text-amber-400'">
+                <span
+                  class="text-[10px] font-mono text-muted truncate max-w-[55%]"
+                  :class="row.st?.configured ? '' : 'text-warning'"
+                >
                   {{ row.st ? `${row.st.providerLabel}${row.st.overridden ? ' •' : ''}${row.st.model ? ' · '
                     + row.st.model : ''}` : '—' }}
                 </span>
-                <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-plug-zap" :loading="testing[row.task]"
-                  :title="t('tmcut.aiConnect.testTitle')" :aria-label="t('tmcut.aiConnect.testTitle')"
-                  @click="handleTest(row.task)" />
+                <UButton
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  icon="i-lucide-plug-zap"
+                  :loading="testing[row.task]"
+                  :title="t('tmcut.aiConnect.testTitle')"
+                  :aria-label="t('tmcut.aiConnect.testTitle')"
+                  @click="handleTest(row.task)"
+                />
               </span>
             </div>
             <!-- Last test verdict per surface -->
-            <div v-for="tested in testedRows" :key="`res-${tested.task}`"
-              class="flex items-center gap-1.5 px-3 py-1.5 bg-muted/50">
+            <div
+              v-for="tested in testedRows"
+              :key="`res-${tested.task}`"
+              class="flex items-center gap-1.5 px-3 py-1.5 bg-muted/50"
+            >
               <UBadge :color="testStateColor(tested.res)" variant="subtle" size="xs">
                 {{ tested.label }}
               </UBadge>
@@ -2071,7 +2284,8 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
 
           <!-- How-to note -->
           <div
-            class="p-4 rounded-xl border border-default bg-muted/50 text-xs space-y-1.5 text-muted">
+            class="p-4 rounded-xl border border-default bg-muted/50 text-xs space-y-1.5 text-muted"
+          >
             <div class="flex items-center gap-2 font-medium text-highlighted">
               <UIcon name="i-lucide-info" class="w-4 h-4 text-primary" />
               <span>{{ t('settings.aiKeysWhereTitle') }}</span>
@@ -2087,9 +2301,11 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
     <!-- ==================================================================== -->
     <!-- MODAL: CONNECTION MODELS CATALOG (like tm-trading ConnectionModelsModal) -->
     <!-- ==================================================================== -->
-    <UModal v-model:open="isConnectionModelsOpen"
+    <UModal
+      v-model:open="isConnectionModelsOpen"
       :title="connectionModelsTarget ? t('aiProviders.models_for_connection', [connectionModelsTarget.name || connectionModelsTarget.provider]) : t('aiProviders.models_title')"
-      :ui="{ content: 'sm:max-w-2xl' }">
+      :ui="{ content: 'sm:max-w-2xl' }"
+    >
       <template #body>
         <div class="space-y-3">
           <!-- Toolbar with search & re-discover -->
@@ -2103,13 +2319,22 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
                 :placeholder="t('aiProviders.search_models_placeholder')"
               />
             </div>
-            <UButton v-if="connectionModelsTarget" icon="i-lucide-sparkles" color="neutral" variant="soft" size="sm"
-              :loading="isDiscoveringConnectionModels" :label="t('aiProviders.fetch_models')"
-              @click="refreshModelsForConnection(connectionModelsTarget)" />
+            <UButton
+              v-if="connectionModelsTarget"
+              icon="i-lucide-sparkles"
+              color="neutral"
+              variant="soft"
+              size="sm"
+              :loading="isDiscoveringConnectionModels"
+              :label="t('aiProviders.fetch_models')"
+              @click="refreshModelsForConnection(connectionModelsTarget)"
+            />
           </div>
 
-          <div v-if="isDiscoveringConnectionModels"
-            class="p-8 text-center border border-dashed border-default rounded-xl space-y-3">
+          <div
+            v-if="isDiscoveringConnectionModels"
+            class="p-8 text-center border border-dashed border-default rounded-xl space-y-3"
+          >
             <UIcon name="i-lucide-loader-2" class="size-8 text-primary animate-spin mx-auto" />
             <p class="text-sm font-medium text-highlighted">
               {{ t('aiProviders.testing_connection') }}
@@ -2119,29 +2344,48 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
             </p>
           </div>
 
-          <div v-else-if="filteredConnectionModels.length === 0"
-            class="p-8 text-center border border-dashed border-default rounded-xl space-y-2">
+          <div
+            v-else-if="filteredConnectionModels.length === 0"
+            class="p-8 text-center border border-dashed border-default rounded-xl space-y-2"
+          >
             <UIcon name="i-lucide-cpu" class="size-8 text-muted mx-auto" />
             <p class="text-sm text-muted">
               {{ t('aiProviders.models_empty') }}
             </p>
-            <UButton v-if="connectionModelsTarget" color="primary" variant="soft" size="sm" icon="i-lucide-sparkles"
-              :loading="isDiscoveringConnectionModels" :label="t('aiProviders.fetch_models')"
-              @click="refreshModelsForConnection(connectionModelsTarget)" />
+            <UButton
+              v-if="connectionModelsTarget"
+              color="primary"
+              variant="soft"
+              size="sm"
+              icon="i-lucide-sparkles"
+              :loading="isDiscoveringConnectionModels"
+              :label="t('aiProviders.fetch_models')"
+              @click="refreshModelsForConnection(connectionModelsTarget)"
+            />
           </div>
 
           <!-- Models List -->
-          <div v-else
-            class="max-h-[50vh] divide-y divide-default overflow-y-auto rounded-xl border border-default bg-white dark:bg-default">
-            <div v-for="m in displayedConnectionModels" :key="m.id"
-              class="flex items-center gap-2.5 px-3.5 py-2.5 hover:bg-muted/50 transition-colors">
-              <UIcon :name="connectionModelsTarget?.config?.AI_MODEL === m.modelId ? 'i-lucide-star' : 'i-lucide-box'"
+          <div
+            v-else
+            class="max-h-[50vh] divide-y divide-default overflow-y-auto rounded-xl flat-panel"
+          >
+            <div
+              v-for="m in displayedConnectionModels"
+              :key="m.id"
+              class="flex items-center gap-2.5 px-3.5 py-2.5 hover:bg-muted/50 transition-colors"
+            >
+              <UIcon
+                :name="connectionModelsTarget?.config?.AI_MODEL === m.modelId ? 'i-lucide-star' : 'i-lucide-box'"
                 class="size-4 shrink-0"
-                :class="connectionModelsTarget?.config?.AI_MODEL === m.modelId ? 'text-warning fill-warning' : 'text-muted'" />
+                :class="connectionModelsTarget?.config?.AI_MODEL === m.modelId ? 'text-warning fill-warning' : 'text-muted'"
+              />
 
               <div class="min-w-0 flex-1">
-                <p class="truncate font-mono text-xs"
-                  :class="m.isEnabled ? 'text-highlighted font-medium' : 'text-muted line-through'" :title="m.modelId">
+                <p
+                  class="truncate font-mono text-xs"
+                  :class="m.isEnabled ? 'text-highlighted font-medium' : 'text-muted line-through'"
+                  :title="m.modelId"
+                >
                   {{ m.modelId }}
                 </p>
                 <p v-if="m.displayName && m.displayName !== m.modelId" class="text-[11px] text-muted truncate">
@@ -2150,8 +2394,12 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
               </div>
 
               <!-- Primary badge -->
-              <UBadge v-if="connectionModelsTarget?.config?.AI_MODEL === m.modelId" color="warning" variant="subtle"
-                size="xs">
+              <UBadge
+                v-if="connectionModelsTarget?.config?.AI_MODEL === m.modelId"
+                color="warning"
+                variant="subtle"
+                size="xs"
+              >
                 {{ t('aiProviders.primary_badge') }}
               </UBadge>
 
@@ -2162,49 +2410,73 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
               </UBadge>
 
               <!-- Enable Switch -->
-              <USwitch :model-value="m.isEnabled" size="xs" :disabled="hubModelBusy === m.id" :aria-label="m.modelId"
-                @update:model-value="hubToggleModel(m)" />
+              <USwitch
+                :model-value="m.isEnabled"
+                size="xs"
+                :disabled="hubModelBusy === m.id"
+                :aria-label="m.modelId"
+                @update:model-value="hubToggleModel(m)"
+              />
 
               <!-- Model Action Dropdown -->
-              <UDropdownMenu :items="[
-                ...(connectionModelsTarget && connectionModelsTarget.config?.AI_MODEL !== m.modelId ? [{
-                  label: t('aiProviders.set_primary'),
-                  icon: 'i-lucide-star',
-                  color: 'primary' as const,
-                  disabled: !m.isEnabled,
-                  onSelect: () => setDefaultModelForConnection(connectionModelsTarget!, m.modelId)
-                }] : []),
-                {
-                  label: t('aiProviders.copy_model_id'),
-                  icon: 'i-lucide-copy',
-                  color: 'neutral' as const,
-                  onSelect: () => { copy(m.modelId); notify.success(t('aiProviders.model_id_copied', [m.modelId])) }
-                },
-                { type: 'separator' as const },
-                {
-                  label: t('aiProviders.delete_model'),
-                  icon: 'i-lucide-trash-2',
-                  color: 'error' as const,
-                  onSelect: () => promptDeleteModel(m)
-                }
-              ]" :content="{ align: 'end' }">
-                <UButton icon="i-lucide-ellipsis-vertical" color="neutral" variant="ghost" square size="xs"
-                  :aria-label="t('common.actions')" />
+              <UDropdownMenu
+                :items="[
+                  ...(connectionModelsTarget && connectionModelsTarget.config?.AI_MODEL !== m.modelId ? [{
+                    label: t('aiProviders.set_primary'),
+                    icon: 'i-lucide-star',
+                    color: 'primary' as const,
+                    disabled: !m.isEnabled,
+                    onSelect: () => setDefaultModelForConnection(connectionModelsTarget!, m.modelId)
+                  }] : []),
+                  {
+                    label: t('aiProviders.copy_model_id'),
+                    icon: 'i-lucide-copy',
+                    color: 'neutral' as const,
+                    onSelect: () => { copy(m.modelId); notify.success(t('aiProviders.model_id_copied', [m.modelId])) }
+                  },
+                  { type: 'separator' as const },
+                  {
+                    label: t('aiProviders.delete_model'),
+                    icon: 'i-lucide-trash-2',
+                    color: 'error' as const,
+                    onSelect: () => promptDeleteModel(m)
+                  }
+                ]"
+                :content="{ align: 'end' }"
+              >
+                <UButton
+                  icon="i-lucide-ellipsis-vertical"
+                  color="neutral"
+                  variant="ghost"
+                  square
+                  size="xs"
+                  :aria-label="t('common.actions')"
+                />
               </UDropdownMenu>
             </div>
           </div>
 
           <!-- Load more pagination for Connection Models -->
-          <div v-if="filteredConnectionModels.length > displayedConnectionModels.length"
-            class="flex items-center justify-between p-2.5 mt-2 bg-muted rounded-lg text-xs text-muted flex-wrap gap-2">
+          <div
+            v-if="filteredConnectionModels.length > displayedConnectionModels.length"
+            class="flex items-center justify-between p-2.5 mt-2 bg-muted rounded-lg text-xs text-muted flex-wrap gap-2"
+          >
             <span>{{ t('global.showingCount', { count: displayedConnectionModels.length, total: filteredConnectionModels.length }) }}</span>
             <div class="flex items-center gap-2">
-              <UButton size="xs" variant="soft" color="neutral"
+              <UButton
+                size="xs"
+                variant="soft"
+                color="neutral"
                 :label="t('aiProviders.load_more_models', { current: displayedConnectionModels.length, total: filteredConnectionModels.length })"
-                @click="connectionModelsLimit += 50" />
-              <UButton size="xs" variant="ghost" color="neutral"
+                @click="connectionModelsLimit += 50"
+              />
+              <UButton
+                size="xs"
+                variant="ghost"
+                color="neutral"
                 :label="t('aiProviders.show_all_models', { total: filteredConnectionModels.length })"
-                @click="connectionModelsLimit = filteredConnectionModels.length" />
+                @click="connectionModelsLimit = filteredConnectionModels.length"
+              />
             </div>
           </div>
 
@@ -2226,8 +2498,16 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
               :placeholder="t('aiProviders.display_name')"
               @keyup.enter="addInlineModelSubmit"
             />
-            <UButton size="sm" icon="i-lucide-plus" :loading="inlineModelAdding" variant="soft" color="primary"
-              :disabled="!inlineNewModelId.trim()" :label="t('aiProviders.add_model')" @click="addInlineModelSubmit" />
+            <UButton
+              size="sm"
+              icon="i-lucide-plus"
+              :loading="inlineModelAdding"
+              variant="soft"
+              color="primary"
+              :disabled="!inlineNewModelId.trim()"
+              :label="t('aiProviders.add_model')"
+              @click="addInlineModelSubmit"
+            />
           </div>
         </div>
       </template>
@@ -2236,22 +2516,39 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
     <!-- ==================================================================== -->
     <!-- MODAL: ADD MANUAL MODEL                                              -->
     <!-- ==================================================================== -->
-    <LazyBaseFormModal v-model:open="isModelModalOpen" :title="t('aiProviders.add_model')" :state="modelForm"
-      :loading="modelSaving" :submit-label="t('common.save')" @submit="saveModelSubmit">
+    <LazyBaseFormModal
+      v-model:open="isModelModalOpen"
+      :title="t('aiProviders.add_model')"
+      :state="modelForm"
+      :loading="modelSaving"
+      :submit-label="t('common.save')"
+      @submit="saveModelSubmit"
+    >
       <div class="space-y-3">
         <UFormField :label="'Provider'" required>
-          <USelect v-model="modelForm.provider" :items="providerOptions.filter(o => o.value !== 'all')"
-            class="w-full" />
+          <USelect
+            v-model="modelForm.provider"
+            :items="providerOptions.filter(o => o.value !== 'all')"
+            class="w-full"
+          />
         </UFormField>
 
         <UFormField :label="t('aiProviders.model_id')" required>
-          <UInput v-model="modelForm.modelId" :placeholder="t('aiProviders.model_id_hint')" autocomplete="off"
-            class="w-full" />
+          <UInput
+            v-model="modelForm.modelId"
+            :placeholder="t('aiProviders.model_id_hint')"
+            autocomplete="off"
+            class="w-full"
+          />
         </UFormField>
 
         <UFormField :label="t('aiProviders.display_name')">
-          <UInput v-model="modelForm.displayName" placeholder="vd. GPT-4o Mini (OpenAI)" autocomplete="off"
-            class="w-full" />
+          <UInput
+            v-model="modelForm.displayName"
+            placeholder="vd. GPT-4o Mini (OpenAI)"
+            autocomplete="off"
+            class="w-full"
+          />
         </UFormField>
       </div>
     </LazyBaseFormModal>
@@ -2259,8 +2556,12 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
     <!-- ==================================================================== -->
     <!-- MODAL: CONNECT PROVIDER (catalogue picker, unconnected only)          -->
     <!-- ==================================================================== -->
-    <UModal v-model:open="connectOpen" :title="t('aiProviders.connect_provider_title')"
-      :description="t('aiProviders.connect_provider_hint')" :ui="{ content: 'sm:max-w-xl' }">
+    <UModal
+      v-model:open="connectOpen"
+      :title="t('aiProviders.connect_provider_title')"
+      :description="t('aiProviders.connect_provider_hint')"
+      :ui="{ content: 'sm:max-w-xl' }"
+    >
       <template #body>
         <div class="space-y-3">
           <UInput
@@ -2275,9 +2576,13 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
             {{ t('aiProviders.connect_all_connected') }}
           </div>
           <div v-else class="max-h-80 space-y-1 overflow-y-auto pr-1">
-            <button v-for="p in connectableProviders" :key="p.definition.key" type="button"
+            <button
+              v-for="p in connectableProviders"
+              :key="p.definition.key"
+              type="button"
               class="flex w-full items-center gap-3 rounded-lg border border-default px-3 py-2 text-left hover:bg-muted"
-              @click="connectProvider(p)">
+              @click="connectProvider(p)"
+            >
               <UIcon :name="providerIcon(p.definition.key)" class="size-4 shrink-0 text-muted" />
               <span class="min-w-0 flex-1">
                 <span class="block truncate text-sm font-medium text-highlighted">{{ p.definition.name }}</span>
@@ -2293,9 +2598,21 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
       </template>
       <template #footer>
         <div class="flex w-full items-center justify-between">
-          <UButton :label="t('aiProviders.add_provider')" icon="i-lucide-plus" color="neutral" variant="ghost" size="sm"
-            @click="connectOpen = false; openProvider()" />
-          <UButton :label="t('common.close')" color="neutral" variant="ghost" size="sm" @click="connectOpen = false" />
+          <UButton
+            :label="t('aiProviders.add_provider')"
+            icon="i-lucide-plus"
+            color="neutral"
+            variant="ghost"
+            size="sm"
+            @click="connectOpen = false; openProvider()"
+          />
+          <UButton
+            :label="t('common.close')"
+            color="neutral"
+            variant="ghost"
+            size="sm"
+            @click="connectOpen = false"
+          />
         </div>
       </template>
     </UModal>
@@ -2303,55 +2620,91 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
     <!-- ==================================================================== -->
     <!-- MODAL: ADD CUSTOM PROVIDER                                           -->
     <!-- ==================================================================== -->
-    <LazyBaseFormModal v-model:open="isProviderOpen" :title="t('aiProviders.add_provider_title')"
-      :state="{ name: providerForm.name, baseUrl: providerForm.baseUrl, type: providerForm.type }" :loading="providerSaving"
-      :submit-label="t('common.save')" @submit="saveProvider">
+    <LazyBaseFormModal
+      v-model:open="isProviderOpen"
+      :title="t('aiProviders.add_provider_title')"
+      :state="{ name: providerForm.name, baseUrl: providerForm.baseUrl, type: providerForm.type }"
+      :loading="providerSaving"
+      :submit-label="t('common.save')"
+      @submit="saveProvider"
+    >
       <UFormField :label="t('aiProviders.provider_type')" class="mb-3">
         <div class="grid grid-cols-2 gap-2">
-          <button type="button"
+          <button
+            type="button"
             class="flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors"
             :class="providerForm.type === 'cloud' ? 'border-primary bg-primary-50 dark:bg-primary-950/30 text-primary font-medium' : 'border-default text-muted hover:bg-muted'"
-            @click="providerForm.type = 'cloud'">
+            @click="providerForm.type = 'cloud'"
+          >
             <UIcon name="i-lucide-cloud" class="size-4 shrink-0" />
             <span>{{ t('aiProviders.provider_type_cloud') }}</span>
           </button>
-          <button type="button"
+          <button
+            type="button"
             class="flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors"
             :class="providerForm.type === 'local' ? 'border-primary bg-primary-50 dark:bg-primary-950/30 text-primary font-medium' : 'border-default text-muted hover:bg-muted'"
-            @click="providerForm.type = 'local'">
+            @click="providerForm.type = 'local'"
+          >
             <UIcon name="i-lucide-hard-drive" class="size-4 shrink-0" />
             <span>{{ t('aiProviders.provider_type_local') }}</span>
           </button>
         </div>
       </UFormField>
-      <UFormField :label="t('aiProviders.provider_name')" required class="mb-3"
-        :description="t('aiProviders.provider_name_hint')">
-        <UInput v-model="providerForm.name" :placeholder="t('aiProviders.provider_name_placeholder')" autocomplete="off"
-          class="w-full" />
+      <UFormField
+        :label="t('aiProviders.provider_name')"
+        required
+        class="mb-3"
+        :description="t('aiProviders.provider_name_hint')"
+      >
+        <UInput
+          v-model="providerForm.name"
+          :placeholder="t('aiProviders.provider_name_placeholder')"
+          autocomplete="off"
+          class="w-full"
+        />
       </UFormField>
-      <UFormField :label="t('aiProviders.field_base_url')" required
-        :description="t('aiProviders.provider_base_url_hint')">
-        <UInput v-model="providerForm.baseUrl" type="url" :placeholder="providerForm.type === 'local' ? 'http://localhost:11434/v1' : 'https://api.example.com/v1'" autocomplete="off"
-          class="w-full" />
+      <UFormField
+        :label="t('aiProviders.field_base_url')"
+        required
+        :description="t('aiProviders.provider_base_url_hint')"
+      >
+        <UInput
+          v-model="providerForm.baseUrl"
+          type="url"
+          :placeholder="providerForm.type === 'local' ? 'http://localhost:11434/v1' : 'https://api.example.com/v1'"
+          autocomplete="off"
+          class="w-full"
+        />
       </UFormField>
     </LazyBaseFormModal>
 
     <!-- ==================================================================== -->
     <!-- MODAL: ADD / EDIT CREDENTIAL (In-place governance)                   -->
     <!-- ==================================================================== -->
-    <UModal v-model:open="isCredentialOpen"
+    <UModal
+      v-model:open="isCredentialOpen"
       :title="`${credentialTarget ? t('aiProviders.edit_credential') : t('aiProviders.add_credential')} - ${credentialProvider?.name || ''}`"
-      :ui="{ content: 'sm:max-w-2xl' }">
+      :ui="{ content: 'sm:max-w-2xl' }"
+    >
       <template #body>
         <div class="space-y-4">
           <UFormField :label="t('aiProviders.credential_name')" :description="t('aiProviders.credential_name_hint')">
             <div class="flex gap-2">
-              <UInput v-model="credentialName" :placeholder="t('aiProviders.default_name')" autocomplete="off"
-                class="w-full" />
-              <UButton v-if="!credentialTarget && credentialProviderItem" icon="i-lucide-sparkles" color="neutral"
-                variant="soft" :title="t('aiProviders.auto_generate_name')"
+              <UInput
+                v-model="credentialName"
+                :placeholder="t('aiProviders.default_name')"
+                autocomplete="off"
+                class="w-full"
+              />
+              <UButton
+                v-if="!credentialTarget && credentialProviderItem"
+                icon="i-lucide-sparkles"
+                color="neutral"
+                variant="soft"
+                :title="t('aiProviders.auto_generate_name')"
                 :aria-label="t('aiProviders.auto_generate_name')"
-                @click="credentialName = generateAutoConnectionName(credentialProviderItem)" />
+                @click="credentialName = generateAutoConnectionName(credentialProviderItem)"
+              />
             </div>
           </UFormField>
 
@@ -2360,43 +2713,72 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
             <template #label>
               <div class="flex items-center justify-between w-full">
                 <span>{{ t('aiProviders.field_base_url') }}</span>
-                <UBadge v-if="isLocalUrl(credentialValues['AI_BASE_URL'])" color="info" variant="subtle" size="xs">
+                <UBadge
+                  v-if="isLocalUrl(credentialValues['AI_BASE_URL'])"
+                  color="info"
+                  variant="subtle"
+                  size="xs"
+                >
                   {{ t('aiProviders.local_endpoint_badge') }}
                 </UBadge>
               </div>
             </template>
-            <UInput v-model="credentialValues['AI_BASE_URL']"
-              :placeholder="credentialProvider?.base_url_default || 'https://api.example.com/v1'" autocomplete="off"
-              class="w-full" />
+            <UInput
+              v-model="credentialValues['AI_BASE_URL']"
+              :placeholder="credentialProvider?.base_url_default || 'https://api.example.com/v1'"
+              autocomplete="off"
+              class="w-full"
+            />
           </UFormField>
 
           <!-- Keyless Mode Toggle -->
-          <UFormField :label="t('aiProviders.keyless_mode')"
-            :description="isLocalUrl(credentialValues['AI_BASE_URL']) ? t('aiProviders.keyless_detected_hint') : t('aiProviders.keyless_mode_hint')">
+          <UFormField
+            :label="t('aiProviders.keyless_mode')"
+            :description="isLocalUrl(credentialValues['AI_BASE_URL']) ? t('aiProviders.keyless_detected_hint') : t('aiProviders.keyless_mode_hint')"
+          >
             <USwitch v-model="credentialIsKeyless" />
           </UFormField>
 
           <!-- API Key -->
-          <UFormField v-if="credentialProvider"
+          <UFormField
+            v-if="credentialProvider"
             :label="isEffectiveKeyless ? t('aiProviders.field_api_key_optional') : t('aiProviders.field_api_key')"
             :required="!credentialTarget && !isEffectiveKeyless"
-            :description="credentialTarget ? t('aiProviders.api_key_edit_hint') : (isEffectiveKeyless ? t('aiProviders.keyless_detected_hint') : undefined)">
+            :description="credentialTarget ? t('aiProviders.api_key_edit_hint') : (isEffectiveKeyless ? t('aiProviders.keyless_detected_hint') : undefined)"
+          >
             <div class="space-y-2">
-              <BasePasswordInput v-model="credentialValues['AI_API_KEY']"
+              <BasePasswordInput
+                v-model="credentialValues['AI_API_KEY']"
                 :placeholder="credentialTarget ? t('aiProviders.api_key_edit_placeholder') : (isEffectiveKeyless ? t('aiProviders.field_api_key_optional') : '••••••••')"
-                autocomplete="new-password" class="w-full" />
+                autocomplete="new-password"
+                class="w-full"
+              />
 
               <!-- Root account key reveal -->
               <div v-if="isRoot && credentialTarget" class="flex flex-wrap items-center gap-2 pt-1">
-                <UButton icon="i-lucide-eye" color="neutral" variant="soft" size="xs" :loading="revealingKey"
-                  :label="t('aiProviders.reveal_key')" @click="revealStoredKey" />
+                <UButton
+                  icon="i-lucide-eye"
+                  color="neutral"
+                  variant="soft"
+                  size="xs"
+                  :loading="revealingKey"
+                  :label="t('aiProviders.reveal_key')"
+                  @click="revealStoredKey"
+                />
                 <template v-if="revealedKey">
                   <code
                     class="max-w-[260px] truncate rounded bg-muted px-2 py-1 font-mono text-xs text-muted"
-                    :title="revealedKey">{{ revealedKey }}</code>
-                  <UButton icon="i-lucide-copy" color="neutral" variant="ghost" size="xs"
-                    :aria-label="t('aiProviders.copy_key')" :title="t('aiProviders.copy_key')"
-                    @click="copyRevealedKey" />
+                    :title="revealedKey"
+                  >{{ revealedKey }}</code>
+                  <UButton
+                    icon="i-lucide-copy"
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    :aria-label="t('aiProviders.copy_key')"
+                    :title="t('aiProviders.copy_key')"
+                    @click="copyRevealedKey"
+                  />
                 </template>
               </div>
             </div>
@@ -2405,16 +2787,32 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
           <!-- Default Model with Live Discover Button -->
           <UFormField :label="t('aiProviders.field_default_model')">
             <div class="flex gap-2">
-              <USelectMenu v-if="formModelOptions.length" v-model="credentialValues['AI_MODEL']"
-                :items="formModelMenuItems" value-key="value" label-key="label"
-                :search-input="{ placeholder: t('aiProviders.search_model') }" class="w-full"
-                :placeholder="t('aiProviders.field_default_model')" />
-              <UInput v-else v-model="credentialValues['AI_MODEL']" :placeholder="t('aiProviders.model_id_hint')"
-                class="w-full" />
-              <UButton icon="i-lucide-sparkles" color="neutral" variant="soft" :loading="discoveringInForm"
+              <USelectMenu
+                v-if="formModelOptions.length"
+                v-model="credentialValues['AI_MODEL']"
+                :items="formModelMenuItems"
+                value-key="value"
+                label-key="label"
+                :search-input="{ placeholder: t('aiProviders.search_model') }"
+                class="w-full"
+                :placeholder="t('aiProviders.field_default_model')"
+              />
+              <UInput
+                v-else
+                v-model="credentialValues['AI_MODEL']"
+                :placeholder="t('aiProviders.model_id_hint')"
+                class="w-full"
+              />
+              <UButton
+                icon="i-lucide-sparkles"
+                color="neutral"
+                variant="soft"
+                :loading="discoveringInForm"
                 :disabled="!credentialValues['AI_BASE_URL'] && !credentialProvider?.base_url_default"
-                :title="t('aiProviders.discover_models')" :aria-label="t('aiProviders.discover_models')"
-                @click="discoverModelsInForm" />
+                :title="t('aiProviders.discover_models')"
+                :aria-label="t('aiProviders.discover_models')"
+                @click="discoverModelsInForm"
+              />
             </div>
             <p v-if="formModelOptions.length" class="text-xs text-muted mt-1">
               {{ t('aiProviders.discovered_count', { count: formModelOptions.length }) }}
@@ -2427,8 +2825,10 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
           </UFormField>
 
           <!-- Saving Models Progress Indicator -->
-          <div v-if="modelPersistProgress"
-            class="rounded-lg bg-primary/10 border border-primary/20 p-2.5 flex items-center justify-between text-xs text-primary">
+          <div
+            v-if="modelPersistProgress"
+            class="rounded-lg bg-primary/10 border border-primary/20 p-2.5 flex items-center justify-between text-xs text-primary"
+          >
             <div class="flex items-center gap-2">
               <UIcon name="i-lucide-loader-2" class="size-4 animate-spin shrink-0" />
               <span>{{ t('aiProviders.saving_models_progress', { current: modelPersistProgress.current, total: modelPersistProgress.total }) }}</span>
@@ -2440,14 +2840,33 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
 
       <template #footer>
         <div class="flex w-full items-center justify-between">
-          <UButton icon="i-lucide-activity" color="success" variant="soft" size="sm" :loading="testingInForm"
-            :label="t('aiProviders.test_in_modal')" @click="testInForm" />
+          <UButton
+            icon="i-lucide-activity"
+            color="success"
+            variant="soft"
+            size="sm"
+            :loading="testingInForm"
+            :label="t('aiProviders.test_in_modal')"
+            @click="testInForm"
+          />
           <div class="flex items-center gap-2">
-            <UButton :label="t('common.cancel')" color="neutral" variant="ghost" size="sm"
-              :disabled="credentialSaving" @click="isCredentialOpen = false" />
-            <UButton :label="modelPersistProgress ? t('aiProviders.saving_models_progress', { current: modelPersistProgress.current, total: modelPersistProgress.total }) : t('common.save')"
-              color="primary" variant="soft" size="sm" :loading="credentialSaving"
-              :disabled="credentialSaving" @click="saveCredential" />
+            <UButton
+              :label="t('common.cancel')"
+              color="neutral"
+              variant="ghost"
+              size="sm"
+              :disabled="credentialSaving"
+              @click="isCredentialOpen = false"
+            />
+            <UButton
+              :label="modelPersistProgress ? t('aiProviders.saving_models_progress', { current: modelPersistProgress.current, total: modelPersistProgress.total }) : t('common.save')"
+              color="primary"
+              variant="soft"
+              size="sm"
+              :loading="credentialSaving"
+              :disabled="credentialSaving"
+              @click="saveCredential"
+            />
           </div>
         </div>
       </template>
@@ -2456,23 +2875,43 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
     <!-- ==================================================================== -->
     <!-- MODAL: IMPORT / EXPORT PROVIDERS (JSON / ENV / CSV)                  -->
     <!-- ==================================================================== -->
-    <LazyAiProvidersIoModal v-model:open="ioOpen" :mode="ioMode" :app-id="appId" :providers="hubProviders"
-      :can-export-secrets="isRoot" @completed="refreshHub" />
+    <LazyAiProvidersIoModal
+      v-model:open="ioOpen"
+      :mode="ioMode"
+      :app-id="appId"
+      :providers="hubProviders"
+      :can-export-secrets="isRoot"
+      @completed="refreshHub"
+    />
 
     <!-- ==================================================================== -->
     <!-- MODAL: CONFIRM DELETE CREDENTIAL                                     -->
     <!-- ==================================================================== -->
-    <LazyBaseConfirmModal :open="!!deleteConnectionTarget" :title="t('aiProviders.delete_credential')" :description="deleteConnectionTarget
-      ? t('aiProviders.connection_deleted_confirm', [deleteConnectionTarget.connection.name || deleteConnectionTarget.providerName])
-      : ''" :loading="isDeleting" :confirm-label="t('common.delete')"
-      @update:open="val => !val && (deleteConnectionTarget = null)" @confirm="executeDeleteConnection" />
+    <LazyBaseConfirmModal
+      :open="!!deleteConnectionTarget"
+      :title="t('aiProviders.delete_credential')"
+      :description="deleteConnectionTarget
+        ? t('aiProviders.connection_deleted_confirm', [deleteConnectionTarget.connection.name || deleteConnectionTarget.providerName])
+        : ''"
+      :loading="isDeleting"
+      :confirm-label="t('common.delete')"
+      @update:open="val => !val && (deleteConnectionTarget = null)"
+      @confirm="executeDeleteConnection"
+    />
 
     <!-- ==================================================================== -->
     <!-- MODAL: CONFIRM DELETE MODEL                                          -->
     <!-- ==================================================================== -->
-    <LazyBaseConfirmModal :open="!!deleteModelTarget" :title="t('aiProviders.delete_model')" :description="deleteModelTarget
-      ? t('aiProviders.model_deleted_confirm', [deleteModelTarget.displayName || deleteModelTarget.modelId])
-      : ''" :loading="isDeleting" :confirm-label="t('common.delete')"
-      @update:open="val => !val && (deleteModelTarget = null)" @confirm="executeDeleteModel" />
+    <LazyBaseConfirmModal
+      :open="!!deleteModelTarget"
+      :title="t('aiProviders.delete_model')"
+      :description="deleteModelTarget
+        ? t('aiProviders.model_deleted_confirm', [deleteModelTarget.displayName || deleteModelTarget.modelId])
+        : ''"
+      :loading="isDeleting"
+      :confirm-label="t('common.delete')"
+      @update:open="val => !val && (deleteModelTarget = null)"
+      @confirm="executeDeleteModel"
+    />
   </BasePage>
 </template>

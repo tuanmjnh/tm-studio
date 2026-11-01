@@ -1,4 +1,4 @@
-interface NotificationItem {
+export interface NotificationItem {
   id: string
   unread: boolean
   sender?: {

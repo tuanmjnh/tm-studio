@@ -82,8 +82,8 @@ function handleOrchestrate() {
           />
         </div>
 
-        <div v-if="!isDesktop" class="rounded-md bg-amber-500/10 border border-amber-500/30 p-2.5">
-          <p class="text-[11px] text-amber-200 flex items-center gap-1.5">
+        <div v-if="!isDesktop" class="rounded-md bg-warning-500/10 border border-warning-500/30 p-2.5">
+          <p class="text-[11px] text-warning-200 flex items-center gap-1.5">
             <UIcon name="i-lucide-monitor-off" class="size-3.5" />
             {{ t('tmcut.audioOrchestration.webOnly') }}
           </p>

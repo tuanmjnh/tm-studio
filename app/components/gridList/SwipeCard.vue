@@ -1,20 +1,20 @@
-<script setup lang="ts">
+<script setup lang="ts" generic="T extends object">
 import { usePointerSwipe, useVibrate, useResizeObserver, onClickOutside, onLongPress } from '@vueuse/core'
 
 const props = defineProps<{
   id: string | number
   openId?: string | number | null
   disabled?: boolean
-  item?: any
-  contextItems?: any[]
+  item?: T
+  contextItems?: T[]
   mobileMode?: 'swipe' | 'dropdown' | 'context'
   draggable?: boolean
 }>()
 
 const emits = defineEmits<{
   (e: 'update:openId', id: string | number | null): void
-  (e: 'click', item: any): void
-  (e: 'long-press', payload: { item: any, clientX: number, clientY: number }): void
+  (e: 'click', item: T): void
+  (e: 'long-press', payload: { item: T, clientX: number, clientY: number }): void
 }>()
 
 const container = ref<HTMLElement | null>(null)
@@ -46,13 +46,13 @@ onLongPress(swipeTarget, (e) => {
   const clientX = (e as unknown as TouchEvent).touches?.[0]?.clientX || (e as MouseEvent).clientX
   const clientY = (e as unknown as TouchEvent).touches?.[0]?.clientY || (e as MouseEvent).clientY
 
-  emits('long-press', { item: props.item, clientX, clientY })
+  if (props.item !== undefined) emits('long-press', { item: props.item, clientX, clientY })
 }, { delay: 500 })
 
 // Swipe Logic
 const { distanceX, isSwiping } = usePointerSwipe(swipeTarget, {
   disableTextSelect: true,
-  onSwipeEnd: (e, direction) => {
+  onSwipeEnd: (_e, _direction) => {
     if (props.mobileMode !== 'swipe' && props.mobileMode !== undefined) return
 
     // Threshold to snap open (e.g., 40% of width or fixed amount)
@@ -111,6 +111,7 @@ onClickOutside(container, () => {
 
 const handleContentClick = () => {
   // Allow click if not swiping or movement is very small (accidental jitter)
+  if (props.item === undefined) return
   if (!isSwiping.value || Math.abs(distanceX.value) < 5) {
     emits('click', props.item)
   }
@@ -120,7 +121,7 @@ const handleContentClick = () => {
 <template>
   <div
     ref="container"
-    class="relative overflow-hidden rounded-lg border border-gray-300/50 dark:border-gray-700/50 bg-white/40 dark:bg-gray-800/40 backdrop-blur-sm shadow-xs transition-all duration-200 hover:bg-white/60 dark:hover:bg-gray-800/60 hover:shadow-md hover:border-primary-500/50 touch-pan-y select-none group"
+    class="flat-glass-card-interactive relative overflow-hidden rounded-lg touch-pan-y select-none group"
   >
     <!--  -->
     <!-- Action Layer (Background) -->
@@ -145,7 +146,7 @@ const handleContentClick = () => {
           <div
             v-if="draggable"
             style="touch-action: none"
-            class="drag-handle w-6 flex cursor-move p-1 text-gray-400 opacity-50 group-hover:opacity-100 touch-none"
+            class="drag-handle w-6 flex cursor-move p-1 text-dimmed opacity-50 group-hover:opacity-100 touch-none"
             @contextmenu.stop
           >
             <UIcon name="i-lucide-grip-vertical" class="w-4 h-4" />
@@ -156,7 +157,7 @@ const handleContentClick = () => {
         <!-- Center & Right (Swipe Target) -->
         <div
           ref="swipeTarget"
-          class="active-scale flex-1 min-w-0 h-full flex items-center transition-all duration-200 active:bg-gray-50 dark:active:bg-gray-800/80 rounded-lg"
+          class="active-scale flex-1 min-w-0 h-full flex items-center transition-all duration-200 active:bg-muted rounded-lg"
           tabindex="0"
           @click="handleContentClick"
           @keydown.enter.self.prevent="handleContentClick"
@@ -178,11 +179,6 @@ const handleContentClick = () => {
 </template>
 
 <style scoped>
-/* Ensure touch actions don't interfere with vertical scroll of page */
-.touch-pan-y {
-  touch-action: pan-y;
-}
-
 /*
   Apply active scale to the content area only, excluding interactive children.
   We exclude:

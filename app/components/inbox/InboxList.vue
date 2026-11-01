@@ -362,7 +362,7 @@ defineShortcuts({
             <UIcon
               name="i-lucide-star"
               class="size-4 transition-transform hover:scale-110"
-              :class="[mail.starred ? 'text-amber-500 fill-amber-500' : 'text-muted']"
+              :class="[mail.starred ? 'text-warning-500 fill-warning-500' : 'text-muted']"
             />
           </button>
 

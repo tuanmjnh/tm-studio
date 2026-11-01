@@ -9,7 +9,7 @@ export interface FolderItem {
   color?: string
 }
 
-const props = defineProps<{
+defineProps<{
   profile: InboxProfile | null
   connected: boolean
   activeFolder: string
@@ -24,7 +24,7 @@ const { t } = useI18n()
 
 const folders: FolderItem[] = [
   { id: 'inbox', labelKey: 'inbox.folderInbox', icon: 'i-lucide-inbox', query: 'in:inbox' },
-  { id: 'starred', labelKey: 'inbox.folderStarred', icon: 'i-lucide-star', query: 'is:starred', color: 'text-amber-500' },
+  { id: 'starred', labelKey: 'inbox.folderStarred', icon: 'i-lucide-star', query: 'is:starred', color: 'text-warning-500' },
   { id: 'sent', labelKey: 'inbox.folderSent', icon: 'i-lucide-send', query: 'in:sent' },
   { id: 'drafts', labelKey: 'inbox.folderDrafts', icon: 'i-lucide-file-text', query: 'in:draft' },
   { id: 'spam', labelKey: 'inbox.folderSpam', icon: 'i-lucide-alert-circle', query: 'in:spam', color: 'text-orange-500' },
@@ -76,7 +76,7 @@ function selectFolder(f: FolderItem) {
             class="size-4 shrink-0 transition-transform group-hover:scale-110"
             :class="[
               activeFolder === folder.id ? 'text-primary' : (folder.color || 'text-muted group-hover:text-highlighted'),
-              folder.id === 'starred' && activeFolder === 'starred' ? 'fill-amber-500' : ''
+              folder.id === 'starred' && activeFolder === 'starred' ? 'fill-warning-500' : ''
             ]"
           />
           <span class="truncate">{{ t(folder.labelKey) }}</span>

@@ -130,8 +130,8 @@ const webOnly = !isDesktop.value
 <template>
   <div class="flex flex-col h-full">
     <!-- Web-only notice -->
-    <div v-if="webOnly" class="mb-4 p-3 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg">
-      <div class="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+    <div v-if="webOnly" class="mb-4 p-3 bg-warning-50 dark:bg-warning-900/30 border border-warning-200 dark:border-warning-800 rounded-lg">
+      <div class="flex items-center gap-2 text-warning-700 dark:text-warning-300">
         <UIcon name="i-lucide-alert-circle" class="w-5 h-5 shrink-0" />
         <span class="text-sm">{{ t('tmcut.assetCenter.webOnly') }}</span>
       </div>
@@ -147,8 +147,8 @@ const webOnly = !isDesktop.value
           type="text"
           :placeholder="t('tmcut.assetCenter.search')"
           :aria-label="t('tmcut.assetCenter.search')"
-          class="w-full bg-white dark:bg-default border border-default rounded-lg pl-9 pr-3 py-2 text-sm text-highlighted placeholder:text-dimmed focus:outline-none focus:border-primary/50"
-        />
+          class="w-full rounded-lg pl-9 pr-3 py-2 text-sm text-highlighted placeholder:text-dimmed focus:outline-none focus:border-primary/50 flat-panel"
+        >
       </div>
       <div class="flex items-center gap-1.5">
         <USelect
@@ -165,7 +165,7 @@ const webOnly = !isDesktop.value
     </div>
 
     <!-- Category Tabs -->
-    <div class="mb-4 flex gap-1 bg-white dark:bg-default p-1 rounded-lg border border-default">
+    <div class="mb-4 flex gap-1 p-1 rounded-lg flat-panel">
       <button
         v-for="tab in tabOptions"
         :key="tab.id"
@@ -187,7 +187,7 @@ const webOnly = !isDesktop.value
         <div
           v-for="entry in filtered"
           :key="entry.id"
-          class="group bg-white dark:bg-default border border-default rounded-xl p-4 flex flex-col hover:border-primary/50 transition-all"
+          class="group rounded-xl p-4 flex flex-col hover:border-primary/50 transition-all flat-panel"
         >
           <!-- Header -->
           <div class="flex items-start justify-between gap-2 mb-3">
@@ -196,7 +196,9 @@ const webOnly = !isDesktop.value
                 <UIcon :name="getCategoryIcon(entry.category)" class="w-4 h-4 text-primary" />
               </div>
               <div>
-                <p class="text-xs font-medium text-highlighted truncate">{{ entry.title }}</p>
+                <p class="text-xs font-medium text-highlighted truncate">
+                  {{ entry.title }}
+                </p>
                 <p class="text-[10px] text-muted uppercase tracking-wider">
                   {{ t(`tmcut.assetCenter.categories.${entry.category}`, entry.category) }}
                 </p>

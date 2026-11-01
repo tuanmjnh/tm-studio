@@ -83,7 +83,7 @@ const { t } = useI18n()
   <span
     v-if="saveLabel"
     class="hidden lg:inline text-[11px] font-mono text-muted"
-    :class="saveStatus === 'error' ? 'text-red-400' : ''"
+    :class="saveStatus === 'error' ? 'text-error-400' : ''"
     :title="lastSavedAt ? new Date(lastSavedAt).toLocaleString() : ''"
   >
     {{ saveLabel }}

@@ -219,7 +219,7 @@ function closeModal() {
                 type="button"
                 class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border text-left transition-all"
                 :class="selectedPlatform === plat.value
-                  ? 'border-primary-500 bg-primary-50/50 dark:bg-primary-950/30 text-primary-600 dark:text-primary-400 font-semibold'
+                  ? 'border-primary-500 bg-primary-50/50 dark:bg-primary-950/30 text-primary font-semibold'
                   : 'border-default text-toned hover:bg-muted'"
                 @click="selectedPlatform = plat.value"
               >
@@ -240,7 +240,7 @@ function closeModal() {
                 type="button"
                 class="flex-1 py-1.5 text-xs font-medium rounded-md border text-center transition-all"
                 :class="selectedDuration === dur.value
-                  ? 'border-primary-500 bg-primary-50/50 dark:bg-primary-950/30 text-primary-600 dark:text-primary-400'
+                  ? 'border-primary-500 bg-primary-50/50 dark:bg-primary-950/30 text-primary'
                   : 'border-default text-toned hover:bg-muted'"
                 @click="selectedDuration = dur.value"
               >
@@ -316,7 +316,7 @@ function closeModal() {
                 <div class="flex items-center justify-between">
                   <div class="flex items-center gap-2">
                     <span
-                      class="w-5 h-5 rounded-full bg-primary-100 dark:bg-primary-950 text-primary-600 dark:text-primary-400 flex items-center justify-center font-bold text-[10px]"
+                      class="w-5 h-5 rounded-full bg-primary-100 dark:bg-primary-950 text-primary flex items-center justify-center font-bold text-[10px]"
                     >
                       {{ scene.order }}
                     </span>
@@ -344,7 +344,7 @@ function closeModal() {
 
                 <div
                   v-if="scene.onScreenText"
-                  class="flex items-center gap-2 text-primary-600 dark:text-primary-400 font-medium"
+                  class="flex items-center gap-2 text-primary font-medium"
                 >
                   <UIcon name="i-lucide-type" class="w-3.5 h-3.5 shrink-0" />
                   <span>{{ scene.onScreenText }}</span>

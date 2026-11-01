@@ -377,7 +377,10 @@ const headerActions = computed<HeaderAction[]>(() => [
     key: 'refresh',
     icon: 'i-lucide-refresh-cw',
     label: t('common.refresh'),
-    onSelect: () => { loadProfile(); loadMessages(true) }
+    onSelect: () => {
+      loadProfile()
+      loadMessages(true)
+    }
   }
 ])
 
@@ -533,7 +536,7 @@ useHead({ title })
             class="hidden lg:flex flex-col h-full items-center justify-center p-8 text-center bg-elevated/10 space-y-3 select-none"
           >
             <div
-              class="size-16 rounded-2xl bg-elevated/80 border border-default flex items-center justify-center text-muted shadow-xs"
+              class="size-16 rounded-2xl flat-panel-raised flex items-center justify-center text-muted shadow-xs"
             >
               <UIcon name="i-lucide-mail" class="size-8 text-dimmed" />
             </div>

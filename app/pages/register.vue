@@ -49,7 +49,7 @@
         </UButton>
       </UForm>
       <template #footer>
-        <p class="text-center text-sm text-gray-500">
+        <p class="text-center text-sm text-muted">
           {{ $t('auth.alreadyHaveAccount') }}
           <NuxtLink to="/login" class="text-primary font-medium">{{ $t('auth.signIn') }}</NuxtLink>
         </p>

@@ -527,7 +527,7 @@ const testedRows = computed(() => {
       v-if="expanded"
       class="px-3 pb-3 pt-3 border-t border-default flex flex-col gap-3"
     >
-      <p v-if="!isDesktop" class="text-[11px] text-amber-600 dark:text-amber-400">
+      <p v-if="!isDesktop" class="text-[11px] text-warning">
         {{ t('tmcut.aiConnect.desktopOnly') }}
       </p>
 
@@ -543,7 +543,7 @@ const testedRows = computed(() => {
             <span class="flex items-center gap-1 min-w-0">
               <span
                 class="text-[10px] font-mono text-muted truncate max-w-[55%]"
-                :class="row.st?.configured ? '' : 'text-amber-600 dark:text-amber-400'"
+                :class="row.st?.configured ? '' : 'text-warning'"
               >
                 {{ row.st ? `${row.st.providerLabel}${row.st.overridden ? ' •' : ''}${row.st.model ? ' · ' + row.st.model : ''}` : '—' }}
               </span>
@@ -593,7 +593,7 @@ const testedRows = computed(() => {
               id="tmcut-aiconnect-hub"
               v-model="hubSelected"
               :aria-label="t('tmcut.aiConnect.hubLabel')"
-              class="w-full min-w-0 text-xs rounded-lg border border-default bg-white dark:bg-default px-2 py-1.5"
+              class="w-full min-w-0 text-xs rounded-lg px-2 py-1.5 flat-panel"
               :disabled="hubAdopting"
             >
               <option value="">
@@ -623,7 +623,7 @@ const testedRows = computed(() => {
         <p
           v-else-if="!hubLoading"
           class="text-[10px]"
-          :class="hubError ? 'text-amber-600 dark:text-amber-400' : 'text-dimmed'"
+          :class="hubError ? 'text-warning' : 'text-dimmed'"
         >
           {{ hubError || t('tmcut.aiConnect.hubEmpty') }}
         </p>
@@ -644,7 +644,7 @@ const testedRows = computed(() => {
             <select
               id="tmcut-aiconnect-provider"
               v-model="form.provider"
-              class="w-full text-xs rounded-lg border border-default bg-white dark:bg-default px-2 py-1.5"
+              class="w-full text-xs rounded-lg px-2 py-1.5 flat-panel"
               @change="handleProviderChange"
             >
               <option v-for="preset in presets" :key="preset.id" :value="preset.id">
@@ -661,7 +661,7 @@ const testedRows = computed(() => {
                 v-if="models.length > 0"
                 id="tmcut-aiconnect-model"
                 v-model="form.model"
-                class="w-full min-w-0 text-xs rounded-lg border border-default bg-white dark:bg-default px-2 py-1.5"
+                class="w-full min-w-0 text-xs rounded-lg px-2 py-1.5 flat-panel"
               >
                 <option value="">
                   {{ t('tmcut.aiConnect.modelNone') }}
@@ -677,7 +677,7 @@ const testedRows = computed(() => {
                 type="text"
                 spellcheck="false"
                 :placeholder="t('tmcut.aiConnect.modelPlaceholder')"
-                class="w-full min-w-0 text-xs rounded-lg border border-default bg-white dark:bg-default px-2 py-1.5"
+                class="w-full min-w-0 text-xs rounded-lg px-2 py-1.5 flat-panel"
               >
               <UButton
                 color="neutral"
@@ -703,9 +703,9 @@ const testedRows = computed(() => {
             type="text"
             spellcheck="false"
             :placeholder="t('tmcut.aiConnect.baseUrlPlaceholder')"
-            class="w-full text-xs rounded-lg border border-default bg-white dark:bg-default px-2 py-1.5"
+            class="w-full text-xs rounded-lg px-2 py-1.5 flat-panel"
           >
-          <p v-if="baseUrlMissing" class="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
+          <p v-if="baseUrlMissing" class="mt-1 text-[11px] text-warning">
             {{ t('tmcut.aiConnect.needsBaseHint') }}
           </p>
         </div>
@@ -720,7 +720,7 @@ const testedRows = computed(() => {
             type="password"
             autocomplete="off"
             :placeholder="hasStoredKey ? t('tmcut.aiConnect.apiKeyKeepPlaceholder') : t('tmcut.aiConnect.apiKeyPlaceholder')"
-            class="w-full text-xs rounded-lg border border-default bg-white dark:bg-default px-2 py-1.5"
+            class="w-full text-xs rounded-lg px-2 py-1.5 flat-panel"
           >
           <p v-if="hasStoredKey && !form.apiKey" class="mt-1 text-[11px] text-muted">
             {{ t('tmcut.aiConnect.apiKeyStoredHint') }}
@@ -763,7 +763,7 @@ const testedRows = computed(() => {
                 <select
                   :id="`tmcut-aiconnect-${task}-provider`"
                   v-model="surfaces[task].provider"
-                  class="w-full text-xs rounded-lg border border-default bg-white dark:bg-default px-2 py-1.5"
+                  class="w-full text-xs rounded-lg px-2 py-1.5 flat-panel"
                 >
                   <option v-for="preset in presets" :key="preset.id" :value="preset.id">
                     {{ preset.label }}
@@ -780,7 +780,7 @@ const testedRows = computed(() => {
                   type="text"
                   spellcheck="false"
                   :placeholder="t('tmcut.aiConnect.modelPlaceholder')"
-                  class="w-full text-xs rounded-lg border border-default bg-white dark:bg-default px-2 py-1.5"
+                  class="w-full text-xs rounded-lg px-2 py-1.5 flat-panel"
                 >
               </div>
             </div>
@@ -794,7 +794,7 @@ const testedRows = computed(() => {
                 type="text"
                 spellcheck="false"
                 :placeholder="presetBaseUrl(surfaces[task].provider) || t('tmcut.aiConnect.baseUrlPlaceholder')"
-                class="w-full text-xs rounded-lg border border-default bg-white dark:bg-default px-2 py-1.5"
+                class="w-full text-xs rounded-lg px-2 py-1.5 flat-panel"
               >
             </div>
             <div>
@@ -807,7 +807,7 @@ const testedRows = computed(() => {
                 type="password"
                 autocomplete="off"
                 :placeholder="t('tmcut.aiConnect.apiKeyPlaceholder')"
-                class="w-full text-xs rounded-lg border border-default bg-white dark:bg-default px-2 py-1.5"
+                class="w-full text-xs rounded-lg px-2 py-1.5 flat-panel"
               >
             </div>
           </template>
@@ -847,8 +847,8 @@ const testedRows = computed(() => {
           :class="testResults['global'].state === 'ok'
             ? 'text-emerald-600 dark:text-emerald-400'
             : testResults['global'].state === 'warn'
-              ? 'text-amber-600 dark:text-amber-400'
-              : 'text-red-600 dark:text-red-400'"
+              ? 'text-warning'
+              : 'text-error'"
         >
           {{ testResults['global'].detail }}
         </p>
