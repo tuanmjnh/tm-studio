@@ -11,14 +11,14 @@
 //  v3 contract — ticks for time, 0..1 for opacity/scale/transform, percent
 //  (0..100) for volume before it becomes a 0..1 gain.
 //
-//  Scope (M1): constant speed, v3 clips (`timeline`/`source`). Speed ramps
-//  (`speedPoints`) still need the app's clipTime integral and are a later
-//  slice — a clip carrying them is evaluated at its base speed and flagged
-//  `ramped: true` so callers can refuse or fall back.
+//  Source position honors constant speed, reverse and speed ramps: a ramped
+//  clip maps through `rampTimelineToSource` (the same integral the preview
+//  and export compiler use), so no caller needs the app's clipTime helper.
 // =============================================================================
 
 import { evalKeyframe } from './keyframes.mjs'
 import { gainAt } from './audio.mjs'
+import { isRamped, rampTimelineToSource } from './retime.mjs'
 import { transitionWindows } from './transitions.mjs'
 
 function finiteOr(value, fallback) {
@@ -36,16 +36,18 @@ function spanOf(clip) {
   return { start, duration, end: start + duration }
 }
 
-/** Clip-local timeline ticks -> source ticks (constant speed, reverse aware). */
+/** Clip-local timeline ticks -> source ticks (speed, ramp and reverse aware). */
 function sourceAt(clip, localTicks, duration) {
   if (!clip?.source) return null
   const inT = finiteOr(clip.source.in, 0)
   const outT = finiteOr(clip.source.out, inT)
-  const speed = finiteOr(clip.speed, 1) > 0 ? finiteOr(clip.speed, 1) : 1
   const local = clamp(localTicks, 0, duration)
   const lo = Math.min(inT, outT)
   const hi = Math.max(inT, outT)
-  const source = clip.reverse ? outT - local * speed : inT + local * speed
+  const speed = finiteOr(clip.speed, 1) > 0 ? finiteOr(clip.speed, 1) : 1
+  const source = isRamped(clip)
+    ? rampTimelineToSource({ in: inT, out: outT, reverse: clip.reverse === true, speed: clip.speed, speedPoints: clip.speedPoints }, local)
+    : clip.reverse ? outT - local * speed : inT + local * speed
   return clamp(source, lo, hi)
 }
 
@@ -205,7 +207,7 @@ function layerFor(clip, track, at, windows, clipsById) {
     mask: clip.mask ?? null,
     transition: transitionOf(transitionAt(windows, clip.id, at), clipsById),
     text: textOf(clip),
-    ramped: Array.isArray(clip.speedPoints) && clip.speedPoints.length >= 2,
+    ramped: isRamped(clip),
     groupId: clip.groupId ?? null,
     linkId: clip.linkId ?? null
   }

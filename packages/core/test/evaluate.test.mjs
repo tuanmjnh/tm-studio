@@ -95,6 +95,44 @@ describe('evaluateTimeline — source mapping', () => {
     assert.equal(only(evaluateTimeline(timeline, 2 * T).layers).sourceTicks, 8 * T)
   })
 
+  it('maps a speed curve through the integral, not the base speed', () => {
+    const timeline = timelineOf([
+      videoClip({
+        source: { in: 0, out: 10 * T },
+        timeline: { start: 0, duration: 10 * T },
+        speedPoints: [{ t: 0, speed: 1 }, { t: 2 * T, speed: 2 }]
+      })
+    ])
+    const atCurve = only(evaluateTimeline(timeline, 2 * T).layers)
+    assert.equal(atCurve.ramped, true)
+    assert.equal(atCurve.sourceTicks, 3 * T, 'area of 1→2 over 2 s is 3 s')
+    assert.equal(only(evaluateTimeline(timeline, 4 * T).layers).sourceTicks, 7 * T, 'then the clamped 2× tail adds 4 s')
+  })
+
+  it('runs a speed curve backwards for reversed clips', () => {
+    const timeline = timelineOf([
+      videoClip({
+        source: { in: 0, out: 10 * T },
+        timeline: { start: 0, duration: 10 * T },
+        reverse: true,
+        speedPoints: [{ t: 0, speed: 1 }, { t: 2 * T, speed: 2 }]
+      })
+    ])
+    assert.equal(only(evaluateTimeline(timeline, 2 * T).layers).sourceTicks, 7 * T)
+  })
+
+  it('does not flag a curve with fewer than two valid points', () => {
+    const timeline = timelineOf([
+      videoClip({
+        timeline: { start: 0, duration: 10 * T },
+        speedPoints: [null, { t: 0, speed: 2 }]
+      })
+    ])
+    const layer = only(evaluateTimeline(timeline, 2 * T).layers)
+    assert.equal(layer.ramped, false)
+    assert.equal(layer.sourceTicks, 2 * T)
+  })
+
   it('leaves sourceTicks null for text clips', () => {
     const text = {
       id: 'clip-t',
@@ -232,7 +270,7 @@ describe('evaluateTimeline — ordering and flags', () => {
     assert.deepEqual(result.tracks.map(track => track.layers.length), [2, 1])
   })
 
-  it('flags speed-ramped clips instead of guessing their duration', () => {
+  it('flags speed-ramped clips', () => {
     const layer = only(evaluateTimeline(timelineOf([videoClip({
       speedPoints: [{ t: 0, speed: 1 }, { t: 2 * T, speed: 2 }]
     })]), 0).layers)

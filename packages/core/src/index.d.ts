@@ -15,9 +15,7 @@ import type {
   TmcutFitMode,
   TmcutOrientation,
   TmcutCropRect,
-  TmcutTextAnimationType,
   TmcutStabilizeLevel,
-  TmcutStabilizeStatus,
   MediaTime
 } from '../types/dsl.js'
 import type { TmcutAssetKind, TmcutMediaMetadata } from '../types/media.js'
@@ -746,10 +744,10 @@ export interface AssetCenterLicense {
   review: AssetCenterLicenseReviewRecord | null
 }
 
-export type AssetCenterSource =
-  | { type: 'remote', url: string }
-  | { type: 'sample', sampleId: string }
-  | { type: 'embedded', payload: Record<string, unknown> | null }
+export type AssetCenterSource
+  = | { type: 'remote', url: string }
+    | { type: 'sample', sampleId: string }
+    | { type: 'embedded', payload: Record<string, unknown> | null }
 
 export type AssetCenterAssetKind = 'media' | 'effect-preset' | 'title-preset'
 
@@ -1513,7 +1511,7 @@ export interface CoreEvaluatedLayer {
   mask: unknown
   transition: CoreEvaluatedTransition | null
   text: CoreEvaluatedText | null
-  /** Speed ramps are not integrated yet — callers decide to refuse or fall back. */
+  /** True when `sourceTicks` came from a speed curve (>= 2 valid points). */
   ramped: boolean
   groupId: string | null
   linkId: string | null
