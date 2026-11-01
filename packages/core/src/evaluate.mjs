@@ -14,11 +14,14 @@
 //  Source position honors constant speed, reverse and speed ramps: a ramped
 //  clip maps through `rampTimelineToSource` (the same integral the preview
 //  and export compiler use), so no caller needs the app's clipTime helper.
+//  Text clips also carry their in/out animation state (opacity, slide delta,
+//  zoom) resolved at the same tick, so the preview and export read one answer.
 // =============================================================================
 
 import { evalKeyframe } from './keyframes.mjs'
 import { gainAt } from './audio.mjs'
 import { isRamped, rampTimelineToSource } from './retime.mjs'
+import { TICKS_PER_SECOND } from './time.mjs'
 import { transitionWindows } from './transitions.mjs'
 
 function finiteOr(value, fallback) {
@@ -116,7 +119,52 @@ function envelopeAt(clip, localTicks) {
   return gainAt({ ...clip, volume: 100 }, localTicks)
 }
 
-function textOf(clip) {
+/** Shortest in/out ramp — matches the preview's and export's 0.05 s floor. */
+const TEXT_ANIM_MIN_TICKS = TICKS_PER_SECOND / 20
+
+/**
+ * Text in/out animation at clip-local ticks: the shared math behind the
+ * preview's CSS and the export's drawtext alpha/x/zoom expressions.
+ * `animInDuration`/`animOutDuration` are SECONDS (the only seconds field in
+ * the clip); each window is clamped to half the clip with a 0.05 s floor.
+ * The returned `opacity` is separate from the clip's own opacity — callers
+ * multiply both so a keyframed fade is not applied twice.
+ *
+ * @param {object|null|undefined} clip
+ * @param {number} localTicks
+ * @param {number} durationTicks clip-local length in ticks
+ * @returns {{ opacity: number, deltaX: number, deltaY: number, scale: number }}
+ */
+export function textAnimationAt(clip, localTicks, durationTicks) {
+  const duration = Math.max(0, finiteOr(durationTicks, 0))
+  const local = clamp(finiteOr(localTicks, 0), 0, duration)
+  const animIn = typeof clip?.animIn === 'string' && clip.animIn !== 'none' ? clip.animIn : null
+  const animOut = typeof clip?.animOut === 'string' && clip.animOut !== 'none' ? clip.animOut : null
+  const windowOf = seconds => Math.max(
+    TEXT_ANIM_MIN_TICKS,
+    Math.min(duration / 2, finiteOr(seconds, 0.5) * TICKS_PER_SECOND)
+  )
+  const inWindow = animIn ? windowOf(clip.animInDuration) : 0
+  const outWindow = animOut ? windowOf(clip.animOutDuration) : 0
+  const pIn = inWindow > 0 ? clamp(local / inWindow, 0, 1) : 1
+  const pOut = outWindow > 0 ? clamp((duration - local) / outWindow, 0, 1) : 1
+
+  const inXDir = animIn === 'slide-left' ? 100 : animIn === 'slide-right' ? -100 : 0
+  const outXDir = animOut === 'slide-left' ? -100 : animOut === 'slide-right' ? 100 : 0
+  const inYDir = animIn === 'slide-up' ? 60 : animIn === 'slide-down' ? -60 : 0
+  const outYDir = animOut === 'slide-up' ? -60 : animOut === 'slide-down' ? 60 : 0
+  const scaleIn = animIn === 'zoom-in' ? 0.3 + 0.7 * pIn : animIn === 'zoom-out' ? 1.5 - 0.5 * pIn : 1
+  const scaleOut = animOut === 'zoom-out' ? 0.3 + 0.7 * pOut : animOut === 'zoom-in' ? 1.5 - 0.5 * pOut : 1
+
+  return {
+    opacity: Math.min(animIn ? pIn : 1, animOut ? pOut : 1),
+    deltaX: inXDir * (1 - pIn) + outXDir * (1 - pOut),
+    deltaY: inYDir * (1 - pIn) + outYDir * (1 - pOut),
+    scale: scaleIn * scaleOut
+  }
+}
+
+function textOf(clip, localTicks, durationTicks) {
   if (clip?.type !== 'text' && !clip?.text) return null
   return {
     content: clip.text ?? '',
@@ -132,7 +180,8 @@ function textOf(clip) {
     animIn: clip.animIn ?? 'none',
     animInDuration: finiteOr(clip.animInDuration, 0),
     animOut: clip.animOut ?? 'none',
-    animOutDuration: finiteOr(clip.animOutDuration, 0)
+    animOutDuration: finiteOr(clip.animOutDuration, 0),
+    animation: textAnimationAt(clip, localTicks, durationTicks)
   }
 }
 
@@ -206,7 +255,7 @@ function layerFor(clip, track, at, windows, clipsById) {
     effects: Array.isArray(clip.effects) ? clip.effects.map(effect => ({ ...effect })) : [],
     mask: clip.mask ?? null,
     transition: transitionOf(transitionAt(windows, clip.id, at), clipsById),
-    text: textOf(clip),
+    text: textOf(clip, localTicks, span.duration),
     ramped: isRamped(clip),
     groupId: clip.groupId ?? null,
     linkId: clip.linkId ?? null

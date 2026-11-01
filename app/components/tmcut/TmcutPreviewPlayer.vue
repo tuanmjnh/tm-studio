@@ -7,7 +7,7 @@ import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { computeFitObjectStyle, CROP_RATIO_PRESETS, clampCropRect, applyCropRatio, canvasFpsValue } from '~/utils/tmcut/canvas'
 import { textBoxPadding, textStrokeWidth, textShadowOffset } from '~/utils/tmcut/textStyle'
 import { effectCssParts } from '~/utils/tmcut/fxPreview'
-import { previewScale, evalKeyframe, gainAt, evaluateClip, safeAreaRects, SAFE_AREA_PRESETS, TICKS_PER_SECOND, secToTicks, ticksToSec, maskCssMaskImage } from '@tmcut-core'
+import { previewScale, evalKeyframe, gainAt, evaluateClip, textAnimationAt, safeAreaRects, SAFE_AREA_PRESETS, TICKS_PER_SECOND, secToTicks, maskCssMaskImage } from '@tmcut-core'
 import type { TmcutKeyframe, TmcutTextAnimationType } from '@tmcut-core'
 import { clipDurationTicks, clipStartSec, clipEndSec, clipMediaTimeSec } from '~/utils/tmcut/clipTime'
 import { useTmcutFrames } from '~/composables/useTmcutFrames'
@@ -859,43 +859,19 @@ function textOverlayStyle(textClip: {
   const to = evalKeyframe(textClip, 'opacity', at) ?? textClip.opacity ?? 100
   const fontSize = textClip.fontSize || 36
 
-  // Text in/out animations (Roadmap C-5): preview simulation matching export math.
-  // C16-R3: offset/in/out are store TICKS decoded to seconds here; the
-  // animation durations (animInDuration/animOutDuration) stay seconds.
-  const tStart = ticksToSec(textClip.offset || 0)
-  const clipDuration = Math.max(0.05, ticksToSec(clipDurationTicks({
-    in: textClip.in ?? 0,
-    out: textClip.out ?? TICKS_PER_SECOND,
-    speed: textClip.speed || 1
-  })))
-  const localTime = Math.max(0, playhead.value - tStart)
-
-  const animIn = textClip.animIn && textClip.animIn !== 'none' ? textClip.animIn : null
-  const dIn = animIn ? Math.max(0.05, Math.min(clipDuration / 2, textClip.animInDuration ?? 0.5)) : 0
-  const pIn = dIn > 0 ? Math.min(1, Math.max(0, localTime / dIn)) : 1
-
-  const animOut = textClip.animOut && textClip.animOut !== 'none' ? textClip.animOut : null
-  const dOut = animOut ? Math.max(0.05, Math.min(clipDuration / 2, textClip.animOutDuration ?? 0.5)) : 0
-  const pOut = dOut > 0 ? Math.min(1, Math.max(0, (clipDuration - localTime) / dOut)) : 1
-
-  // Alpha / Opacity ramp
-  const alphaIn = animIn ? pIn : 1
-  const alphaOut = animOut ? pOut : 1
-  const animAlpha = Math.min(alphaIn, alphaOut)
-
-  // Slide delta offsets (pixels)
-  const inXDir = animIn === 'slide-left' ? 100 : animIn === 'slide-right' ? -100 : 0
-  const outXDir = animOut === 'slide-left' ? -100 : animOut === 'slide-right' ? 100 : 0
-  const animDeltaX = (inXDir * (1 - pIn)) + (outXDir * (1 - pOut))
-
-  const inYDir = animIn === 'slide-up' ? 60 : animIn === 'slide-down' ? -60 : 0
-  const outYDir = animOut === 'slide-up' ? -60 : animOut === 'slide-down' ? 60 : 0
-  const animDeltaY = (inYDir * (1 - pIn)) + (outYDir * (1 - pOut))
-
-  // Zoom scale multiplier
-  const scaleIn = animIn === 'zoom-in' ? (0.3 + 0.7 * pIn) : animIn === 'zoom-out' ? (1.5 - 0.5 * pIn) : 1
-  const scaleOut = animOut === 'zoom-out' ? (0.3 + 0.7 * pOut) : animOut === 'zoom-in' ? (1.5 - 0.5 * pOut) : 1
-  const animScaleMultiplier = scaleIn * scaleOut
+  // Text in/out animations (Roadmap C-5): core owns the alpha/slide/zoom
+  // math (same numbers as the export's drawtext expressions); this file
+  // only applies the preview scale. C16-R3: offset/in/out are store TICKS;
+  // the animation durations (animInDuration/animOutDuration) stay seconds.
+  const animation = textAnimationAt(
+    textClip,
+    Math.max(0, at),
+    Math.max(TICKS_PER_SECOND / 20, clipDurationTicks({
+      in: textClip.in ?? 0,
+      out: textClip.out ?? TICKS_PER_SECOND,
+      speed: textClip.speed || 1
+    }))
+  )
 
   // Anchor (roadmap C-2) mirrors the export x expression exactly:
   // left = 0+x, center = (w−tw)/2+x, right = w−tw+x — the block's EDGE
@@ -935,8 +911,8 @@ function textOverlayStyle(textClip: {
     fontSize: `${fontSize * scale}px`,
     left: align === 'left' ? '0' : align === 'right' ? '100%' : '50%',
     top: '50%',
-    transform: `translate(${(tx + animDeltaX) * scale}px, ${(ty + animDeltaY) * scale}px) translate(${anchorX}, -50%) scale(${(ts / 100) * animScaleMultiplier}) rotate(${textClip.rotation || 0}deg)`,
-    opacity: (to / 100) * animAlpha,
+    transform: `translate(${(tx + animation.deltaX) * scale}px, ${(ty + animation.deltaY) * scale}px) translate(${anchorX}, -50%) scale(${(ts / 100) * animation.scale}) rotate(${textClip.rotation || 0}deg)`,
+    opacity: (to / 100) * animation.opacity,
     // R124 A3: masked text fades through the same SVG mask as video. The
     // overlay is text-sized, not canvas-sized, so mask units are the
     // box itself here — a small, documented WYSIWYG gap vs the canvas-frame

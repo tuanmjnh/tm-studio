@@ -1,7 +1,7 @@
 // @tmcut/core — timeline evaluation tests. Run: node --test test/
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { evaluateClip, evaluateTimeline } from '../src/evaluate.mjs'
+import { evaluateClip, evaluateTimeline, textAnimationAt } from '../src/evaluate.mjs'
 import { TICKS_PER_SECOND } from '../src/time.mjs'
 
 const T = TICKS_PER_SECOND
@@ -275,6 +275,60 @@ describe('evaluateTimeline — ordering and flags', () => {
       speedPoints: [{ t: 0, speed: 1 }, { t: 2 * T, speed: 2 }]
     })]), 0).layers)
     assert.equal(layer.ramped, true)
+  })
+})
+
+describe('textAnimationAt', () => {
+  const clip = (overrides = {}) => ({ animIn: 'none', animOut: 'none', ...overrides })
+
+  it('is the identity without animations', () => {
+    assert.deepEqual(textAnimationAt(clip(), 0, 4 * T), { opacity: 1, deltaX: 0, deltaY: 0, scale: 1 })
+  })
+
+  it('fades in over the requested duration', () => {
+    const anim = clip({ animIn: 'fade', animInDuration: 0.5 })
+    assert.equal(textAnimationAt(anim, 0, 4 * T).opacity, 0)
+    assert.equal(textAnimationAt(anim, 0.25 * T, 4 * T).opacity, 0.5)
+    assert.equal(textAnimationAt(anim, 0.5 * T, 4 * T).opacity, 1)
+  })
+
+  it('slides and zooms from the direction tables', () => {
+    const anim = clip({ animIn: 'slide-left', animInDuration: 0.5 })
+    assert.deepEqual(textAnimationAt(anim, 0, 4 * T), { opacity: 0, deltaX: 100, deltaY: 0, scale: 1 })
+    const zoom = clip({ animIn: 'zoom-in', animInDuration: 0.5 })
+    assert.equal(textAnimationAt(zoom, 0, 4 * T).scale, 0.3)
+    assert.equal(textAnimationAt(zoom, 0.5 * T, 4 * T).scale, 1)
+  })
+
+  it('ramps out towards the clip end', () => {
+    const anim = clip({ animOut: 'zoom-out', animOutDuration: 0.5 })
+    assert.equal(textAnimationAt(anim, 3.75 * T, 4 * T).opacity, 0.5)
+    const end = textAnimationAt(anim, 4 * T, 4 * T)
+    assert.equal(end.opacity, 0)
+    assert.equal(end.scale, 0.3)
+  })
+
+  it('clamps each window to half the clip with a 0.05 s floor', () => {
+    const long = clip({ animIn: 'fade', animInDuration: 5 })
+    assert.equal(textAnimationAt(long, 0.2 * T, 0.4 * T).opacity, 1, 'half of 0.4 s wins over 5 s')
+    const tiny = clip({ animIn: 'fade' })
+    assert.equal(textAnimationAt(tiny, 0, 0).opacity, 0, 'zero-length clip still gets the floor window')
+  })
+
+  it('is exposed on the evaluated text layer', () => {
+    const text = {
+      id: 'clip-t',
+      type: 'text',
+      text: 'Hi',
+      animIn: 'fade',
+      animInDuration: 2,
+      timeline: { start: 0, duration: 4 * T },
+      transform: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, opacity: 1 },
+      effects: [],
+      keyframes: []
+    }
+    const layer = only(evaluateTimeline(timelineOf([text]), T).layers)
+    assert.equal(layer.text.animation.opacity, 0.5)
   })
 })
 

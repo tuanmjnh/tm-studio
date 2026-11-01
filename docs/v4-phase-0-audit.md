@@ -178,8 +178,8 @@ Khai báo tại [dsl.ts](file:///D:/Applications/tm-studio/packages/core/types/d
 
 | # | Gap | Bằng chứng | Hệ quả |
 |---|---|---|---|
-| G1 | ~~Không có `renderAt(timestamp)` / timeline evaluator~~ **Đã xử lý ở M1 (2026-11-01)** | [evaluate.mjs](file:///D:/Applications/tm-studio/packages/core/src/evaluate.mjs) export `evaluateTimeline` + `evaluateClip`; source position đi qua cả speed ramp (`rampTimelineToSource`); 24 test trong [evaluate.test.mjs](file:///D:/Applications/tm-studio/packages/core/test/evaluate.test.mjs) | Preview/export đã có một nguồn resolve chung; adoption vào preview là M2 |
-| G2 | Preview ≠ export | preview CSS ([TmcutPreviewPlayer.vue:702](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L702)) vs `drawtext` ([text.ts:125](file:///D:/Applications/tm-studio/app/utils/tmcut/render/text.ts#L125)) | transform/opacity của preview **đã** lấy từ `evaluateClip` (M2 bước 1); text/shadow/mask vẫn do renderer riêng tính, chưa có golden-frame test |
+| G1 | ~~Không có `renderAt(timestamp)` / timeline evaluator~~ **Đã xử lý ở M1 (2026-11-01)** | [evaluate.mjs](file:///D:/Applications/tm-studio/packages/core/src/evaluate.mjs) export `evaluateTimeline` + `evaluateClip`; source position đi qua cả speed ramp (`rampTimelineToSource`), text có `textAnimationAt`; 30 test trong [evaluate.test.mjs](file:///D:/Applications/tm-studio/packages/core/test/evaluate.test.mjs) | Preview/export đã có một nguồn resolve chung; adoption vào preview là M2 |
+| G2 | Preview ≠ export | preview CSS ([TmcutPreviewPlayer.vue:702](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L702)) vs `drawtext` ([text.ts:125](file:///D:/Applications/tm-studio/app/utils/tmcut/render/text.ts#L125)) | transform/opacity lấy từ `evaluateClip`, animation chữ in/out lấy từ `textAnimationAt` (M2 bước 1–2); font/shadow/mask vẫn do renderer riêng tính, chưa có golden-frame test |
 | G3 | Không có interface Platform Adapter | chỉ có `TmcutPreviewEngine` (2 capability) ([useTmcutPreviewEngine.ts:26](file:///D:/Applications/tm-studio/app/composables/useTmcutPreviewEngine.ts#L26)) | Phase 1 phải định nghĩa adapter cho media/decode/capture/encode |
 | G4 | Export phụ thuộc FFmpeg ở cả 2 runtime | desktop spawn; web Nitro spawn | không chạy được trên Vercel serverless (Phase 7 chặn) |
 | G5 | Hai model project | §4.1 vs §4.2 | nguy cơ trôi schema; cần chốt model nào là canonical |
@@ -193,7 +193,7 @@ Khai báo tại [dsl.ts](file:///D:/Applications/tm-studio/packages/core/types/d
 
 | Tiêu chí | Kết quả | Ghi chú |
 |---|---|---|
-| Core chạy trong browser và Node test | **PASS** | alias trỏ source; 433/433 node tests (sau M2 prep) |
+| Core chạy trong browser và Node test | **PASS** | alias trỏ source; 442/442 node tests (sau M2 bước 2) |
 | Project serialize/deserialize không phụ thuộc Electron | **PASS** | localStorage + JSON thuần; IPC là optional |
 | Timeline evaluation có unit tests | **PASS** | `evaluateTimeline` + 19 test thuần Node (M1); idempotent theo `t`, không đọc `Date.now()` |
 | Migration project cũ có test | **PASS** | 2 spec app + `v1compat` core |
@@ -206,7 +206,7 @@ Khai báo tại [dsl.ts](file:///D:/Applications/tm-studio/packages/core/types/d
 |---|---|---|---|
 | **M0 — Contract freeze** (xong) | Audit này + chốt §4.5 | `docs/v4-phase-0-audit.md` | Review xong; không đổi code |
 | **M1 — Adapter + evaluator skeleton** (xong 2026-11-01) | `PlatformAdapter` (media/capture/encode) + `evaluateTimeline(timeline, t)` + `createClock` + `createPlatformInfo` | `evaluate.mjs`, `clock.mjs`, `platform.mjs`, `types/platform.ts` + 3 bộ test | evaluator idempotent theo `t`, không đọc `Date.now()` — **PASS**; host implementation còn ở M2 |
-| **M2 — DOM renderer dùng evaluator** (đang làm 2026-11-01) | Preview đọc layer từ evaluator thay vì tự tính CSS; export FFmpeg vẫn nguyên. Bước 1 xong: `evaluateClip` là nguồn duy nhất cho transform/opacity/mỗi clip của preview ([TmcutPreviewPlayer.vue:702](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L702)) | preview giữ pixel tương đương hiện tại | `compareFrames` + `evaluateClip` đã có; còn golden PNG, chọn layer/text/transition qua `evaluateTimeline`, và QA trực quan `/tmcut/editor` |
+| **M2 — DOM renderer dùng evaluator** (đang làm 2026-11-01) | Preview đọc layer từ evaluator thay vì tự tính CSS; export FFmpeg vẫn nguyên. Bước 1–2 xong: `evaluateClip` là nguồn duy nhất cho transform/opacity mỗi clip ([TmcutPreviewPlayer.vue:702](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L702)) và `textAnimationAt` cho animation chữ in/out ([TmcutPreviewPlayer.vue:866](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L866)) | preview giữ pixel tương đương hiện tại | `compareFrames` + `evaluateClip` đã có; còn golden PNG, chọn layer/text/transition qua `evaluateTimeline`, và QA trực quan `/tmcut/editor` |
 | **M3 — Chuyển transform/mask/transition sang model chung** | `toRenderClip` trả layer trung gian; builder FFmpeg và DOM cùng đọc | một nguồn nghĩa | so ảnh preview vs frame FFmpeg với tolerance |
 | **M4 — Hợp nhất HTML capture** | Một engine capture (chọn `playwright-core` hoặc WebContents) cho cả hai runtime | 1 contract, 2 transport | cùng composition → cùng hash frame |
 | **M5 — WebCodecs export (song song FFmpeg)** | Encoder + muxer cho mp4/webm ở web | feature flag `renderer: 'webcodecs' \| 'ffmpeg'` | bitrate/quality report; fallback FFmpeg |

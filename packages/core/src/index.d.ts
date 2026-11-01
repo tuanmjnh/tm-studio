@@ -1473,6 +1473,21 @@ export interface CoreEvaluatedTransition {
   progress: number
 }
 
+export interface CoreTextAnimation {
+  /** 0..1 — multiply with the clip's own opacity. */
+  opacity: number
+  /** Canvas px, multiply by the preview scale. */
+  deltaX: number
+  deltaY: number
+  scale: number
+}
+
+export function textAnimationAt(
+  clip: { animIn?: string, animInDuration?: number, animOut?: string, animOutDuration?: number } | null | undefined,
+  localTicks: number,
+  durationTicks: number
+): CoreTextAnimation
+
 export interface CoreEvaluatedText {
   content: string
   color: string | null
@@ -1488,6 +1503,7 @@ export interface CoreEvaluatedText {
   animInDuration: number
   animOut: string
   animOutDuration: number
+  animation: CoreTextAnimation
 }
 
 /** One clip resolved at an absolute tick — renderer-agnostic, JSON-safe. */

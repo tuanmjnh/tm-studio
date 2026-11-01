@@ -965,7 +965,7 @@ Nên triển khai theo giai đoạn, giữ sản phẩm hiện tại hoạt đ�
 
 ### Phase 1 – Shared Core và Platform Contracts
 
-> **Trạng thái: IN PROGRESS.** M1 đã xong (2026-11-01): `evaluateTimeline(timeline, tick)` ([evaluate.mjs](file:///D:/Applications/tm-studio/packages/core/src/evaluate.mjs)), clock tick↔frame ([clock.mjs](file:///D:/Applications/tm-studio/packages/core/src/clock.mjs)), capability negotiation ([platform.mjs](file:///D:/Applications/tm-studio/packages/core/src/platform.mjs)) và contract type-only `TmcutPlatformAdapter` ([types/platform.ts](file:///D:/Applications/tm-studio/packages/core/types/platform.ts)); 34 test thuần Node. Còn lại của Phase 1: hiện thực host adapter browser/electron và cho preview đọc evaluator (M2).
+> **Trạng thái: IN PROGRESS.** M1 đã xong (2026-11-01): `evaluateTimeline(timeline, tick)` ([evaluate.mjs](file:///D:/Applications/tm-studio/packages/core/src/evaluate.mjs)), clock tick↔frame ([clock.mjs](file:///D:/Applications/tm-studio/packages/core/src/clock.mjs)), capability negotiation ([platform.mjs](file:///D:/Applications/tm-studio/packages/core/src/platform.mjs)) và contract type-only `TmcutPlatformAdapter` ([types/platform.ts](file:///D:/Applications/tm-studio/packages/core/types/platform.ts)); 34 test thuần Node. M2 đang mở (2026-11-01): preview đã đọc `evaluateClip` cho transform/opacity và `textAnimationAt` cho animation chữ in/out, evaluator ánh xạ speed ramp bằng tích phân (`rampTimelineToSource`); core 442 test. Còn lại của Phase 1: hiện thực host adapter browser/electron, preview chọn layer/transition qua `evaluateTimeline`, và golden-frame test.
 
 - Tách Project Core khỏi UI.
 - Tách Timeline evaluator.
