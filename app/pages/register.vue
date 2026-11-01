@@ -1,12 +1,12 @@
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 px-4">
-    <UCard class="w-full max-w-md">
+  <div class="relative min-h-screen flex items-center justify-center bg-default studio-ambient-glow px-4">
+    <UCard variant="glass" class="w-full max-w-md">
       <template #header>
         <div class="text-center">
           <h1 class="text-2xl font-bold">
             {{ $t('auth.createAccount') }}
           </h1>
-          <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          <p class="text-sm text-muted mt-1">
             {{ $t('auth.getStarted') }}
           </p>
         </div>

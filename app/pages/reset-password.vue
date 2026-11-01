@@ -1,6 +1,6 @@
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 px-4">
-    <UCard class="w-full max-w-md">
+  <div class="relative min-h-screen flex items-center justify-center bg-default studio-ambient-glow px-4">
+    <UCard variant="glass" class="w-full max-w-md">
       <template #header>
         <div class="text-center">
           <div
@@ -11,7 +11,7 @@
           <h1 class="text-2xl font-bold">
             {{ $t('auth.resetPassword') }}
           </h1>
-          <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          <p class="text-sm text-muted mt-1">
             {{ $t('auth.enterNewPassword') }}
           </p>
         </div>
@@ -54,7 +54,7 @@
       </UForm>
 
       <template #footer>
-        <p class="text-center text-sm text-gray-500 dark:text-gray-400">
+        <p class="text-center text-sm text-muted">
           {{ $t('auth.rememberPassword') }}
           <NuxtLink to="/login" class="text-primary font-medium hover:underline ml-1">
             {{ $t('auth.signIn') }}

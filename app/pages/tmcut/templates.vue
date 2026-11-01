@@ -325,7 +325,7 @@ function confirmDeleteTemplate() {
     <!-- Timeline Template Library -->
     <div v-show="libraryTab === 'timeline'" class="space-y-6 animate-fade-in">
       <!-- Search & Filters Toolbar -->
-      <div class="bg-white/80 dark:bg-default/80 backdrop-blur-sm border border-default rounded-2xl p-4">
+      <div class="bg-white/80 dark:bg-default/80 border border-default rounded-2xl p-4">
         <!-- Search -->
         <div class="relative w-full lg:w-80 mb-4 lg:mb-0">
           <UIcon name="i-lucide-search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-dimmed" />
@@ -336,7 +336,7 @@ function confirmDeleteTemplate() {
             type="text"
             :aria-label="t('tmcut.templateLibrary.searchPlaceholder')"
             :placeholder="t('tmcut.templateLibrary.searchPlaceholder')"
-            class="w-full bg-white/80 dark:bg-default/80 backdrop-blur-sm border border-default rounded-xl pl-10 pr-4 py-2.5 text-sm text-highlighted placeholder:text-dimmed focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
+            class="w-full bg-white/80 dark:bg-default/80 border border-default rounded-xl pl-10 pr-4 py-2.5 text-sm text-highlighted placeholder:text-dimmed focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
           >
         </div>
 

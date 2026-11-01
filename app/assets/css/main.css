@@ -28,84 +28,80 @@
   --color-green-900: #0A5331;
 }
 
-/* Glass surfaces read from the Nuxt UI palette, so they follow the active
-   theme instead of hard-coding a second set of colors. Light mode leans on a
-   translucent pane over the tinted ambient layer: a 78%-opaque card on white
-   reads as a flat grey box, so the pane drops to ~58% and gains a specular
-   gradient, a crisper hairline and a two-layer shadow. */
+/* Flat frosted glass, Linear/UDMT style: one translucent pane, a 12-16px blur,
+   a 1px hairline and a single inset shine. Deliberately no specular gradient,
+   no extra ring and no drop-shadow stack — every one of those adds a paint or
+   compositing pass and the design reads the same without them.
+   `--ui-bg` is white in light mode and zinc-900 in dark mode, which is exactly
+   the white/75 + zinc-900/60 pair the design asks for. */
 :root {
-  --studio-glass-bg: color-mix(in oklab, var(--ui-bg-elevated) 46%, transparent);
-  --studio-glass-tint: linear-gradient(155deg, rgb(255 255 255 / 0.45), rgb(255 255 255 / 0.08) 44%, rgb(255 255 255 / 0.32));
-  --studio-glass-border: color-mix(in oklab, var(--ui-border) 78%, white 22%);
-  --studio-glass-ring: rgb(15 23 42 / 0.07);
-  --studio-glass-specular: rgb(255 255 255 / 0.9);
-  --studio-glass-inner-bottom: rgb(255 255 255 / 0.45);
-  --studio-glass-shadow: 0 1px 2px rgb(15 23 42 / 0.08), 0 24px 48px -20px rgb(15 23 42 / 0.35);
-  --studio-ambient-primary: 34%;
-  --studio-ambient-secondary: 30%;
-  --studio-ambient-tertiary: 22%;
-  --studio-ambient-accent: 12%;
-  --studio-ambient-grid: rgb(15 23 42 / 0.045);
+  --flat-glass-bg: color-mix(in oklab, var(--ui-bg) 75%, transparent);
+  --flat-glass-hover-bg: color-mix(in oklab, var(--ui-bg) 90%, transparent);
+  --flat-glass-popover-bg: color-mix(in oklab, var(--ui-bg) 88%, transparent);
+  --flat-glass-top-shine: rgb(255 255 255 / 0.9);
+  --flat-glass-shadow: 0 2px 10px -2px rgb(9 9 11 / 0.06);
+  --ambient-glow-opacity: 0.07;
   /* Mint is the AI accent. #2DD4A8 is only 1.89:1 on white, so light mode
      swaps in a darker tint that can carry 10px text and icons. */
   --studio-mint-accent: #077A5A;
 }
 
 .dark {
-  --studio-glass-bg: color-mix(in oklab, var(--ui-bg-elevated) 62%, transparent);
-  --studio-glass-tint: linear-gradient(155deg, rgb(255 255 255 / 0.12), rgb(255 255 255 / 0.02) 46%, rgb(255 255 255 / 0.07));
-  --studio-glass-border: color-mix(in oklab, var(--ui-border) 62%, white 38%);
-  --studio-glass-ring: rgb(255 255 255 / 0.06);
-  --studio-glass-specular: rgb(255 255 255 / 0.2);
-  --studio-glass-inner-bottom: rgb(0 0 0 / 0.32);
-  --studio-glass-shadow: 0 1px 2px rgb(0 0 0 / 0.45), 0 26px 60px -20px rgb(0 0 0 / 0.8);
-  --studio-ambient-primary: 30%;
-  --studio-ambient-secondary: 26%;
-  --studio-ambient-tertiary: 20%;
-  --studio-ambient-accent: 18%;
-  --studio-ambient-grid: rgb(255 255 255 / 0.035);
+  --flat-glass-bg: color-mix(in oklab, var(--ui-bg) 62%, transparent);
+  --flat-glass-hover-bg: color-mix(in oklab, var(--ui-bg) 82%, transparent);
+  --flat-glass-popover-bg: color-mix(in oklab, var(--ui-bg) 86%, transparent);
+  --flat-glass-top-shine: rgb(255 255 255 / 0.06);
+  --flat-glass-shadow: 0 4px 20px -4px rgb(0 0 0 / 0.45);
+  --ambient-glow-opacity: 0.14;
   --studio-mint-accent: var(--color-studio-mint);
 }
 
-@utility glass-surface {
-  background-color: var(--studio-glass-bg);
-  background-image: var(--studio-glass-tint);
-  backdrop-filter: blur(22px) saturate(150%);
-  -webkit-backdrop-filter: blur(22px) saturate(150%);
-  border: 1px solid var(--studio-glass-border);
+@utility flat-glass-card {
+  background-color: var(--flat-glass-bg);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border: 1px solid var(--ui-border);
   box-shadow:
-    0 0 0 1px var(--studio-glass-ring),
-    var(--studio-glass-shadow),
-    inset 0 1px 0 0 var(--studio-glass-specular),
-    inset 0 -1px 0 0 var(--studio-glass-inner-bottom);
+    var(--flat-glass-shadow),
+    inset 0 1px 0 0 var(--flat-glass-top-shine);
 }
 
-/* Ambient layer: pure CSS so the console keeps its depth cue without shipping
-   a bitmap backdrop. The radials sit inside the viewport (not in the corners)
-   so cards actually have colour behind them to blur, and a masked hairline
-   grid gives that colour a structure. Alphas are tuned per theme through the
-   custom properties above; the palette comes from Nuxt UI semantic colors. */
-@utility studio-ambient {
-  background-color: var(--ui-bg);
-  background-image:
-    radial-gradient(52rem 40rem at 18% 12%, color-mix(in oklab, var(--ui-primary) var(--studio-ambient-primary), transparent), transparent 66%),
-    radial-gradient(46rem 36rem at 84% 6%, color-mix(in oklab, var(--ui-secondary) var(--studio-ambient-secondary), transparent), transparent 64%),
-    radial-gradient(60rem 44rem at 58% 104%, color-mix(in oklab, var(--ui-info) var(--studio-ambient-tertiary), transparent), transparent 70%),
-    radial-gradient(38rem 30rem at 6% 94%, color-mix(in oklab, var(--studio-mint-accent) var(--studio-ambient-accent), transparent), transparent 68%);
-  background-repeat: no-repeat;
+@utility flat-glass-card-interactive {
+  background-color: var(--flat-glass-bg);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border: 1px solid var(--ui-border);
+  box-shadow:
+    var(--flat-glass-shadow),
+    inset 0 1px 0 0 var(--flat-glass-top-shine);
+  transition: background-color 150ms ease, border-color 150ms ease;
 
-  &::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background-image:
-      linear-gradient(to right, var(--studio-ambient-grid) 1px, transparent 1px),
-      linear-gradient(to bottom, var(--studio-ambient-grid) 1px, transparent 1px);
-    background-size: 64px 64px;
-    mask-image: radial-gradient(ellipse 85% 65% at 50% 40%, black 28%, transparent 78%);
-    -webkit-mask-image: radial-gradient(ellipse 85% 65% at 50% 40%, black 28%, transparent 78%);
-    pointer-events: none;
+  &:hover {
+    background-color: var(--flat-glass-hover-bg);
+    border-color: color-mix(in oklab, var(--ui-primary) 45%, var(--ui-border));
   }
+}
+
+@utility flat-glass-popover {
+  background-color: var(--flat-glass-popover-bg);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  box-shadow:
+    0 20px 48px -12px rgb(0 0 0 / 0.45),
+    inset 0 1px 0 0 var(--flat-glass-top-shine);
+}
+
+/* One static radial from the top-left. It is a plain background-image: no
+   mask, no grid overlay, no animation, so it paints once and never re-rasterises
+   while the user scrolls or drags the timeline. */
+@utility studio-ambient-glow {
+  background-image: radial-gradient(
+    50rem 36rem at 18% 0%,
+    color-mix(in oklab, var(--ui-primary) calc(var(--ambient-glow-opacity) * 100%), transparent),
+    color-mix(in oklab, var(--ui-secondary) calc(var(--ambient-glow-opacity) * 50%), transparent) 45%,
+    transparent 80%
+  );
+  background-repeat: no-repeat;
 }
 
 /* Square icon plate for bento cards. Set --tile-accent to recolor. */
@@ -116,13 +112,10 @@
   flex-shrink: 0;
   inline-size: 3rem;
   block-size: 3rem;
-  border-radius: 0.875rem;
+  border-radius: 0.75rem;
   color: var(--tile-accent, var(--ui-primary));
-  background:
-    radial-gradient(120% 120% at 20% 0%, color-mix(in oklab, var(--tile-accent, var(--ui-primary)) 32%, transparent), transparent 72%),
-    color-mix(in oklab, var(--tile-accent, var(--ui-primary)) 12%, transparent);
-  border: 1px solid color-mix(in oklab, var(--tile-accent, var(--ui-primary)) 26%, transparent);
-  box-shadow: inset 0 1px 0 0 var(--studio-glass-specular);
+  background-color: color-mix(in oklab, var(--tile-accent, var(--ui-primary)) 10%, transparent);
+  border: 1px solid color-mix(in oklab, var(--tile-accent, var(--ui-primary)) 20%, transparent);
 }
 
 @keyframes slide-in-right {

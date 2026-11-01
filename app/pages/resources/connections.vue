@@ -416,7 +416,7 @@ useHead({ title: t('connections.title') })
         <div
           v-for="p in providers"
           :key="p.key"
-          class="glass-surface flex flex-col gap-3 rounded-2xl p-5"
+          class="flat-glass-card flex flex-col gap-3 rounded-xl p-5"
         >
           <div class="flex items-start justify-between gap-2">
             <div class="flex items-center gap-3 min-w-0">

@@ -48,7 +48,7 @@ const cards = computed(() => [
         v-for="card in cards"
         :key="card.to"
         :to="card.to"
-        class="glass-surface group flex flex-col gap-4 rounded-2xl p-5 transition duration-200 hover:-translate-y-0.5 hover:border-primary/40"
+        class="flat-glass-card-interactive group flex flex-col gap-4 rounded-xl p-5"
         :style="{ '--tile-accent': card.accent }"
       >
         <span class="studio-icon-tile">

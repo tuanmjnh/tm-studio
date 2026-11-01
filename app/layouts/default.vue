@@ -44,7 +44,7 @@ const groups = computed<CommandPaletteGroup[]>(() => [{
       v-model:open="open"
       collapsible
       resizable
-      class="bg-elevated/55 backdrop-blur-2xl border-e border-default"
+      class="bg-elevated/60 backdrop-blur-md border-e border-default"
       :ui="{ footer: 'lg:border-t lg:border-default' }"
     >
       <template #header="{ collapsed }">

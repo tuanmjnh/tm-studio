@@ -54,7 +54,7 @@ function toggleTheme() {
   <UPopover
     v-model:open="isNavOpen"
     :content="{ align: 'start', side: 'bottom', sideOffset: 8 }"
-    :ui="{ content: 'w-[min(36rem,calc(100vw-1.5rem))] max-h-[min(34rem,calc(100vh-5rem))] overflow-y-auto glass-surface p-4 z-50' }"
+    :ui="{ content: 'w-[min(36rem,calc(100vw-1.5rem))] max-h-[min(34rem,calc(100vh-5rem))] overflow-y-auto p-4 z-50' }"
   >
     <UButton
       color="neutral"

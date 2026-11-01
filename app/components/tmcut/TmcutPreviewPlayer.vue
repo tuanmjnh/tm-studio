@@ -1985,7 +1985,7 @@ onUnmounted(() => {
          sits on its own elevated surface instead of a 50% tint that vanished
          into the panel background in both themes. -->
     <div
-      class="w-full shrink-0 mt-3 border border-default bg-white/80 px-3 py-2.5 shadow-sm backdrop-blur-sm dark:border-default dark:bg-default/80"
+      class="w-full shrink-0 mt-3 border border-default bg-white/80 px-3 py-2.5 shadow-sm dark:border-default dark:bg-default/80"
     >
       <!-- Mini scrub bar: click/drag to seek -->
       <div class="flex items-center gap-3 select-none">

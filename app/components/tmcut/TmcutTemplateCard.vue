@@ -35,7 +35,7 @@ function getAspectRatioClass(aspectRatio: string): string {
 </script>
 
 <template>
-  <div class="group relative bg-white/80 dark:bg-default/80 backdrop-blur-sm border border-default rounded-2xl overflow-hidden hover:border-primary-300 dark:hover:border-primary-700 hover:shadow-xl transition-all duration-300 flex flex-col">
+  <div class="group relative bg-white/80 dark:bg-default/80 border border-default rounded-2xl overflow-hidden hover:border-primary-300 dark:hover:border-primary-700 hover:shadow-xl transition-all duration-300 flex flex-col">
     <!-- Visual Preview -->
     <div class="w-full h-40 bg-neutral-950 flex items-center justify-center relative overflow-hidden p-4 border-b border-default">
       <div

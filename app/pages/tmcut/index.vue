@@ -273,7 +273,7 @@ function cardMenuItems(project: TmcutProject): DropdownMenuItem[] {
             type="text"
             :aria-label="t('tmcut.home.searchPlaceholder')"
             :placeholder="t('tmcut.home.searchPlaceholder')"
-            class="w-full bg-elevated/80 backdrop-blur-sm border border-default rounded-xl pl-10 pr-4 py-2.5 text-sm text-highlighted placeholder:text-muted focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+            class="w-full bg-elevated/80 border border-default rounded-xl pl-10 pr-4 py-2.5 text-sm text-highlighted placeholder:text-muted focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
           >
         </div>
 
@@ -290,7 +290,7 @@ function cardMenuItems(project: TmcutProject): DropdownMenuItem[] {
             :label="t('tmcut.home.sortLabel')"
             size="sm"
           />
-          <div class="flex items-center bg-elevated/80 backdrop-blur-sm border border-default rounded-xl p-0.5">
+          <div class="flex items-center bg-elevated/80 border border-default rounded-xl p-0.5">
             <TmcutButton
               size="xs"
               icon="i-lucide-grid-2x2"
@@ -343,7 +343,7 @@ function cardMenuItems(project: TmcutProject): DropdownMenuItem[] {
           <div
             v-for="project in filteredProjects"
             :key="project.id"
-            class="group relative bg-elevated/80 backdrop-blur-sm border border-default rounded-2xl overflow-hidden hover:border-primary/50 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 flex flex-col"
+            class="group relative bg-elevated/80 border border-default rounded-2xl overflow-hidden hover:border-primary/50 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 flex flex-col"
             tabindex="0"
             @click="router.push(`/tmcut/editor?project=${project.id}`)"
             @keydown.enter.self.prevent="router.push(`/tmcut/editor?project=${project.id}`)"
@@ -425,7 +425,7 @@ function cardMenuItems(project: TmcutProject): DropdownMenuItem[] {
         </div>
 
         <!-- List View -->
-        <div v-else class="bg-elevated/80 backdrop-blur-sm border border-default rounded-2xl overflow-hidden divide-y divide-default/60">
+        <div v-else class="bg-elevated/80 border border-default rounded-2xl overflow-hidden divide-y divide-default/60">
           <div
             v-for="project in filteredProjects"
             :key="project.id"
@@ -465,7 +465,7 @@ function cardMenuItems(project: TmcutProject): DropdownMenuItem[] {
       </div>
 
       <!-- Template Presets Strip -->
-      <div class="bg-elevated/80 backdrop-blur-sm border border-default rounded-2xl p-6 shadow-sm">
+      <div class="bg-elevated/80 border border-default rounded-2xl p-6 shadow-sm">
         <div class="flex items-center justify-between mb-4">
           <div>
             <div class="flex items-center gap-2">

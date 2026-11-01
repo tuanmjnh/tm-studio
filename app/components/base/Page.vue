@@ -19,7 +19,7 @@ const panelUi = computed(() => ({
 }))
 
 const navbarUiMerged = computed(() => ({
-  root: 'bg-elevated/40 backdrop-blur-xl',
+  root: 'bg-elevated/50 backdrop-blur-md',
   title: props.description ? 'flex flex-col items-start justify-center gap-px h-full truncate' : undefined,
   ...props.navbarUi
 }))

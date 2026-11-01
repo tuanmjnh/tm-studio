@@ -39,6 +39,36 @@ export default defineAppConfig({
       light: 'i-lucide-sun',
       dark: 'i-lucide-moon'
     },
+    // Flat frosted glass. Cards opt in with <UCard variant="glass"> so dense
+    // settings forms stay opaque: a backdrop-filter per card is the one thing
+    // that would make a 30-card page slower than the design it replaced.
+    card: {
+      variants: {
+        variant: {
+          glass: {
+            root: 'flat-glass-card rounded-xl'
+          }
+        }
+      }
+    },
+    // Menus are shown one at a time, so the frosted surface is affordable here.
+    // The classes are core Tailwind utilities on purpose: they tailwind-merge
+    // away the theme's opaque `bg-default` / `ring` / `shadow-lg` defaults.
+    popover: {
+      slots: {
+        content: 'bg-default/85 backdrop-blur-xl backdrop-saturate-150 border border-default ring-0 rounded-xl shadow-2xl'
+      }
+    },
+    button: {
+      slots: {
+        base: 'rounded-lg font-medium transition-colors duration-150'
+      }
+    },
+    badge: {
+      slots: {
+        base: 'rounded-md font-medium'
+      }
+    },
     editor: {
       slots: {
         base: [
