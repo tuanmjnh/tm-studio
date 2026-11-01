@@ -5,7 +5,7 @@
     "baseUrl": ".",
     "paths": {
       "~/*": ["./app/*"],
-      "@tmcut-core": ["../tmcut-core/src/index.mjs"]
+      "@tmcut-core": ["./packages/core/src/index.mjs"]
     }
   }
 }

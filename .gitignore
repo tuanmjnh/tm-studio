@@ -40,6 +40,7 @@ yt-dlp.exe
 
 # TMCut render smoke work dir (R79)
 .smoke-render/
+.golden-render-*/
 
 # Dev Electron profile (dev:electron --user-data-dir)
 .dev-user-data/
