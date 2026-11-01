@@ -6,6 +6,7 @@ import { useTmcutMediaImport } from '~/composables/useTmcutMediaImport'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { useTmcutUiPrefs } from '~/composables/useTmcutUiPrefs'
 import { useTmcutEditorLayout } from '~/composables/useTmcutEditorLayout'
+import { useTmcutEditorDialogs } from '~/composables/useTmcutEditorDialogs'
 import { useAgentProposalCount } from '~/composables/useTmcutAgentTools'
 import { useMcpRendererBridge } from '~/composables/useMcpRendererBridge'
 import { useFileSystem } from '~/composables/useFileSystem'
@@ -28,14 +29,10 @@ const {
   saveStatus,
   lastSavedAt,
   pendingRecovery,
-  snapshots,
   applyRecovery,
   dismissRecovery,
   refreshProjects,
   loadSnapshots,
-  createSnapshot,
-  restoreSnapshot,
-  deleteSnapshot,
   switchCanvas,
   setCanvasBackground,
   duplicateAsProject,
@@ -54,6 +51,19 @@ const {
 const { formatTimecode } = useTmcutPlayback()
 const { mediaFilters, handleImportMedia } = useTmcutMediaImport()
 const { shortcutsOpen } = useTmcutUiPrefs()
+const {
+  showExportModal,
+  voiceStudioOpen,
+  showSnapshotModal,
+  showCustomCanvasModal,
+  aiScriptModalOpen,
+  aiEditorModalOpen,
+  agentPanelOpen,
+  audioOrchestrationOpen,
+  customCanvas,
+  saveSnapshot,
+  closeAllDialogs
+} = useTmcutEditorDialogs()
 
 // Hardware status chip (design #2 "GPU" indicator — honest data only):
 // WebGPU availability is really detectable; the engine side names the
@@ -84,10 +94,6 @@ const toast = useToast()
 useMcpRendererBridge()
 
 const projectId = computed(() => (route.query.project as string) || 'default')
-const showExportModal = ref(false)
-const voiceStudioOpen = ref(false)
-const showSnapshotModal = ref(false)
-const showCustomCanvasModal = ref(false)
 const compactPanel = ref<'media' | 'inspector' | null>(null)
 
 // Desktop dock sizes persist per browser; mobile overlays ignore them.
@@ -150,22 +156,6 @@ async function handleDismissRecovery() {
   await dismissRecovery()
 }
 
-function handleSaveSnapshot() {
-  void createSnapshot()
-  toast.add({ title: t('tmcut.snapshot.saved'), color: 'success' })
-}
-
-async function handleRestoreSnapshot(ts: number) {
-  await restoreSnapshot(ts)
-  toast.add({ title: t('tmcut.snapshot.restored'), color: 'success' })
-  showSnapshotModal.value = false
-}
-
-async function handleDeleteSnapshot(ts: number) {
-  await deleteSnapshot(ts)
-  toast.add({ title: t('tmcut.snapshot.deleted'), color: 'success' })
-}
-
 onMounted(async () => {
   hasWebGPU.value = typeof navigator !== 'undefined' && 'gpu' in navigator
   hydrateLayout()
@@ -189,6 +179,9 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleEditorKeydown)
+  // The dialog flags live at module scope, so the editor session ends them —
+  // the dock may still be an unresolved lazy chunk and cannot self-reset.
+  closeAllDialogs()
 })
 
 const canvasPresets = computed(() => TMUTCANVAS_PRESETS.map(preset => ({
@@ -210,8 +203,6 @@ const fpsOptions = [
   { label: '30 FPS', value: 30 },
   { label: '60 FPS', value: 60 }
 ]
-
-const customCanvas = ref({ width: 1080, height: 1080, fps: 30 })
 
 const currentRatioLabel = computed(() => {
   if (!currentProject.value?.canvas) return ''
@@ -242,26 +233,6 @@ function applySocialPreset(social: { presetId: string, label: string }) {
   toast.add({
     title: t('tmcut.canvas.socialApplied'),
     description: `${social.label} · ${preset.id} (${preset.width}x${preset.height})`,
-    color: 'success'
-  })
-}
-
-function applyCustomCanvas() {
-  const { width, height, fps } = customCanvas.value
-  if (!width || !height || width < 64 || height < 64 || width > 7680 || height > 4320) {
-    toast.add({ title: t('tmcut.canvas.customInvalid'), color: 'warning' })
-    return
-  }
-  if (!currentProject.value) return
-  switchCanvas(Math.round(width), Math.round(height))
-  if (currentProject.value) {
-    currentProject.value.canvas.fps = { numerator: fps, denominator: 1 }
-    saveProject()
-  }
-  showCustomCanvasModal.value = false
-  toast.add({
-    title: t('tmcut.aspectRatioUpdated'),
-    description: `${t('tmcut.canvas.custom')} (${width}x${height})`,
     color: 'success'
   })
 }
@@ -373,7 +344,7 @@ const editorExtraActions = computed(() => [
     {
       label: t('tmcut.snapshot.save'),
       icon: 'i-lucide-camera',
-      onSelect: () => handleSaveSnapshot()
+      onSelect: () => saveSnapshot()
     },
     {
       label: t('tmcut.snapshot.title'),
@@ -497,12 +468,6 @@ async function handleImportTemplateIntoProject() {
   }
 }
 
-const aiScriptModalOpen = ref(false)
-// AI Editor (roadmap v3 PART C): prompt -> validated Edit Plan -> review -> apply.
-const aiEditorModalOpen = ref(false)
-const audioOrchestrationOpen = ref(false)
-// Agent panel (roadmap v1 §4): text/voice command -> draft -> review -> apply as ONE undo group.
-const agentPanelOpen = ref(false)
 const pendingAgentOps = useAgentProposalCount()
 
 function handleEditorKeydown(e: KeyboardEvent) {
@@ -680,138 +645,8 @@ function handleEditorKeydown(e: KeyboardEvent) {
         :hardware-label="hardwareLabel"
       />
 
-      <!-- Export Modal -->
-      <LazyTmcutExportModal v-model:open="showExportModal" />
-      <LazyTmcutVoiceStudio v-model:open="voiceStudioOpen" />
-
-      <!-- Export Queue Modal -->
-      <LazyTmcutExportQueueModal v-model:open="queueModalOpen" />
-
-      <!-- Custom Canvas Modal -->
-      <UModal v-model:open="showCustomCanvasModal" :title="t('tmcut.canvas.customTitle')">
-        <template #body>
-          <div class="space-y-4">
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label for="tmcut-canvas-width" class="text-xs text-muted">{{ t('tmcut.canvas.width') }}</label>
-                <UInput
-                  id="tmcut-canvas-width"
-                  v-model="customCanvas.width"
-                  type="number"
-                  :min="64"
-                  :max="7680"
-                  class="w-full mt-1"
-                />
-              </div>
-              <div>
-                <label for="tmcut-canvas-height" class="text-xs text-muted">{{ t('tmcut.canvas.height') }}</label>
-                <UInput
-                  id="tmcut-canvas-height"
-                  v-model="customCanvas.height"
-                  type="number"
-                  :min="64"
-                  :max="4320"
-                  class="w-full mt-1"
-                />
-              </div>
-            </div>
-            <div>
-              <span class="text-xs text-muted">{{ t('tmcut.canvas.fps') }}</span>
-              <USelect
-                v-model="customCanvas.fps"
-                :aria-label="t('tmcut.canvas.fps')"
-                :items="fpsOptions"
-                class="w-full mt-1"
-              />
-            </div>
-            <p class="text-[11px] text-muted">
-              {{ t('tmcut.canvas.customDesc') }}
-            </p>
-          </div>
-        </template>
-        <template #footer>
-          <div class="flex justify-end gap-2">
-            <UButton variant="soft" color="neutral" @click="showCustomCanvasModal = false">
-              {{ t('global.cancel') }}
-            </UButton>
-            <UButton color="primary" variant="solid" @click="applyCustomCanvas">
-              {{ t('tmcut.canvas.apply') }}
-            </UButton>
-          </div>
-        </template>
-      </UModal>
-
-      <!-- Snapshot Modal -->
-      <UModal v-model:open="showSnapshotModal" :title="t('tmcut.snapshot.title')">
-        <template #body>
-          <div class="space-y-3">
-            <div class="flex justify-end">
-              <UButton
-                icon="i-lucide-camera"
-                size="xs"
-                variant="soft"
-                color="primary"
-                @click="handleSaveSnapshot"
-              >
-                {{ t('tmcut.snapshot.save') }}
-              </UButton>
-            </div>
-
-            <div
-              v-if="snapshots.length === 0"
-              class="border border-dashed border-default rounded-lg p-6 text-center"
-            >
-              <UIcon name="i-lucide-history" class="w-8 h-8 text-muted mx-auto mb-2" />
-              <p class="text-sm font-medium text-highlighted">
-                {{ t('tmcut.snapshot.empty') }}
-              </p>
-              <p class="text-xs text-muted mt-1">
-                {{ t('tmcut.snapshot.emptyDesc') }}
-              </p>
-            </div>
-
-            <div v-else class="space-y-2 max-h-80 overflow-y-auto">
-              <div
-                v-for="snapshot in snapshots"
-                :key="snapshot.ts"
-                class="flex items-center justify-between gap-2 border border-default rounded-lg p-3"
-              >
-                <div class="min-w-0">
-                  <p class="text-sm font-medium text-highlighted truncate">
-                    {{ snapshot.name }}
-                  </p>
-                  <p class="text-xs text-muted">
-                    {{ new Date(snapshot.ts).toLocaleString() }}
-                  </p>
-                </div>
-                <div class="flex items-center gap-2 shrink-0">
-                  <UButton size="xs" variant="soft" @click="handleRestoreSnapshot(snapshot.ts)">
-                    {{ t('tmcut.snapshot.restore') }}
-                  </UButton>
-                  <UButton
-                    size="xs"
-                    variant="soft"
-                    color="error"
-                    icon="i-lucide-trash"
-                    :aria-label="t('tmcut.snapshot.delete')"
-                    @click="handleDeleteSnapshot(snapshot.ts)"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </template>
-      </UModal>
-
-      <!-- AI Script & Storyboard Modal (Roadmap H-2) -->
-      <LazyTmcutAiScriptModal v-model:open="aiScriptModalOpen" />
-      <LazyTmcutAiEditor v-model:open="aiEditorModalOpen" />
-
-      <!-- Agent & voice commands (Roadmap v1 §4) -->
-      <LazyTmcutAgentPanel v-model:open="agentPanelOpen" />
-
-      <!-- Audio orchestration (Phase 8 §24) -->
-      <LazyTmcutAudioOrchestrationModal v-model:open="audioOrchestrationOpen" />
+      <!-- Export, voice, snapshot, canvas and AI dialogs -->
+      <LazyTmcutEditorOverlays />
     </div>
   </BasePage>
 </template>

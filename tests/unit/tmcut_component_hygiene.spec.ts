@@ -413,3 +413,49 @@ describe('template non-null assertions sit under a matching guard', () => {
     assert.deepEqual(found, [], `assertions that can render off a null ref:\n${found.join('\n')}`)
   })
 })
+
+describe('editor dialogs live in their own dock', () => {
+  // The page used to declare eight dialogs inline beside the workspace, mixing
+  // layout chrome with dialog state. They now render from TmcutEditorOverlays,
+  // which shares its open flags with the page (toolbar, canvas menu, keyboard
+  // shortcuts) through useTmcutEditorDialogs.
+  const editor = read('app/pages/tmcut/editor.vue')
+  const overlays = read('app/components/tmcut/TmcutEditorOverlays.vue')
+  const dialogs = read('app/composables/useTmcutEditorDialogs.ts')
+
+  it('the page renders the dock instead of declaring dialogs inline', () => {
+    assert.match(editor, /<LazyTmcutEditorOverlays\b/)
+    assert.doesNotMatch(editor, /<UModal\b/)
+    assert.doesNotMatch(
+      editor,
+      /<LazyTmcut(?:ExportModal|VoiceStudio|ExportQueueModal|AiScriptModal|AiEditor|AgentPanel|AudioOrchestrationModal)\b/
+    )
+  })
+
+  it('the dock renders every dialog the editor can open', () => {
+    const lazy = ['ExportModal', 'VoiceStudio', 'ExportQueueModal', 'AiScriptModal', 'AiEditor', 'AgentPanel', 'AudioOrchestrationModal']
+    for (const name of lazy) {
+      assert.ok(overlays.includes(`<LazyTmcut${name} `), `Tmcut${name} must be rendered by the dock`)
+    }
+    assert.equal((overlays.match(/<UModal\b/g) || []).length, 2, 'custom canvas + snapshot history')
+  })
+
+  it('both sides share one set of open flags', () => {
+    const flags = [
+      'showExportModal', 'voiceStudioOpen', 'showSnapshotModal', 'showCustomCanvasModal',
+      'aiScriptModalOpen', 'aiEditorModalOpen', 'agentPanelOpen', 'audioOrchestrationOpen'
+    ]
+    for (const flag of flags) {
+      assert.ok(new RegExp(`const ${flag} = ref\\(`).test(dialogs), `${flag} is owned by useTmcutEditorDialogs`)
+      assert.ok(!new RegExp(`const ${flag} = ref\\(`).test(editor), `${flag} must not be redeclared in the page`)
+    }
+    assert.match(editor, /useTmcutEditorDialogs\(\)/)
+    assert.match(overlays, /useTmcutEditorDialogs\(\)/)
+  })
+
+  it('the page closes the dialogs when the editor session ends', () => {
+    // Module-scope flags outlive the lazy dock: if the user leaves before the
+    // chunk resolves, only the page's always-registered unmount hook runs.
+    assert.match(editor, /onUnmounted\(\(\) => \{[\s\S]*?closeAllDialogs\(\)/)
+  })
+})
