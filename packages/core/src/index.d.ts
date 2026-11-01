@@ -1469,7 +1469,7 @@ export function isAllowedRenderUrl(rawUrl: string, allowRemote?: boolean): boole
 
 // --- Timeline evaluation (V4 Phase 1 / M1) ---
 export type { TmcutClock, TmcutPlatformAdapter, TmcutPlatformCapture, TmcutCaptureRequest, TmcutCaptureSession, TmcutPlatformInfo, TmcutPlatformMedia, TmcutPlatformName } from '../types/platform.js'
-export type { TmcutCapabilities, TmcutRuntimeInfo } from '../types/runtime.js'
+export type { TmcutCapabilities, TmcutRuntimeInfo, TmcutRenderEngine, TmcutRenderJob } from '../types/runtime.js'
 
 export interface CoreEvaluatedTransform {
   x: number

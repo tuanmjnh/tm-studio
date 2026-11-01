@@ -29,16 +29,31 @@ export interface TmcutPreviewEngine {
   dispose(): Promise<void>
 }
 
+/**
+ * One render job as the host reports it. `output` says where the finished
+ * file lives — an absolute path on a host with a filesystem, a URL on a host
+ * that renders server-side — and it only means something once `status` is
+ * terminal. `error` carries the host's own failure message.
+ */
 export interface TmcutRenderJob {
   id: string
   status: 'queued' | 'running' | 'done' | 'failed' | 'cancelled'
   progress: number
+  output?: { path?: string, url?: string }
+  error?: string
 }
 
+/**
+ * Encoder host service. Polling is a PULL: `getJob` is what a caller loops on,
+ * because a progress number alone cannot express "finished, and here is the
+ * file" — which is the one thing every export path eventually needs.
+ */
 export interface TmcutRenderEngine {
   render(plan: unknown): Promise<TmcutRenderJob>
   cancel(jobId: string): Promise<void>
   getProgress(jobId: string): number
+  /** Latest known state, or null when this host has never seen that id. */
+  getJob?(jobId: string): TmcutRenderJob | null
 }
 
 export interface TmcutRuntime {

@@ -19,7 +19,7 @@
  * follow-up) implements one contract instead of being special-cased
  * across player code.
  */
-import { useTmcutMedia } from '~/composables/useTmcutMedia'
+import { useTmcutPlatform } from '~/composables/useTmcutPlatform'
 
 export type TmcutPreviewEngineKind = 'electron' | 'web'
 
@@ -38,33 +38,30 @@ export interface TmcutPreviewEngine {
 }
 
 /**
- * Picks the engine once per session. `isDesktop` reflects the presence
- * of the `tmcutIpc()` preload bridge, which cannot change after load,
- * so the returned object may be treated as stable inside a component.
+ * Picks the engine once per session. `useTmcutPlatform` reads the same
+ * preload-bridge presence the adapter negotiates from, so the preview's
+ * capabilities and its media resolution both come from one host answer
+ * (ADR-014) rather than a second `isDesktop` branch that can drift from it.
+ * The returned object may be treated as stable inside a component.
  */
 export function useTmcutPreviewEngine(): TmcutPreviewEngine {
-  const { isDesktop, resolveMediaSrc } = useTmcutMedia()
-
-  if (isDesktop.value) {
-    return {
-      kind: 'electron',
-      capabilities: { proxyPreview: true, stabilize: true },
-      // Proxy-aware: serves the ready proxy when the toggle is on,
-      // otherwise the media:// URL of the original file.
-      resolveSrc: src => resolveMediaSrc(src)
-    }
-  }
+  const platform = useTmcutPlatform()
+  const desktop = platform.info.name === 'electron'
 
   return {
-    kind: 'web',
-    // Web-parity (web-parity step 2): the proxy pass is server-side now —
-    // POST /api/v1/media/proxy scales uploaded sources through the local
-    // Nitro ffmpeg, so proxy preview is available on the web runtime too.
-    // Stabilization remains desktop-only (it is still a full render job).
-    capabilities: { proxyPreview: true, stabilize: false },
-    // resolveMediaSrc serves the ready proxy when the toggle is on,
-    // otherwise the /uploads/ URL of the original file (mediaUrl is
-    // toURL, so /uploads/…, blob:/data:/https: pass through unchanged).
-    resolveSrc: src => resolveMediaSrc(src)
+    kind: desktop ? 'electron' : 'web',
+    capabilities: {
+      // Proxy preview runs on both runtimes: the desktop pipeline writes a
+      // 540p file next to the source, the web pipeline asks the local Nitro
+      // server (POST /api/v1/media/proxy). Stabilization stays desktop-only —
+      // it is still a full render job.
+      proxyPreview: true,
+      stabilize: desktop
+    },
+    // Proxy-aware on both hosts: serves the ready proxy when the toggle is on,
+    // otherwise the playable URL the host's media group produces
+    // (`media://local/…` on desktop, `/uploads/…`, blob:, data: or https: on
+    // web).
+    resolveSrc: src => platform.media.resolveSrc(src)
   }
 }

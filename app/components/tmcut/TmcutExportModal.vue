@@ -9,6 +9,7 @@ import { compileTimelineToFfmpeg } from '~/utils/tmcut/compiler'
 import type { TmcutCompileMode } from '~/utils/tmcut/compiler'
 import { canvasFpsValue } from '~/utils/tmcut/canvas'
 import { useTmcutExportQueue } from '~/composables/useTmcutExportQueue'
+import { useTmcutPlatform } from '~/composables/useTmcutPlatform'
 import { useTmcutTelemetry } from '~/composables/useTmcutTelemetry'
 import { useTmcutUsageTracker } from '~/composables/useTmcutUsageTracker'
 import type { ToolTask } from '#shared/types/electron'
@@ -22,6 +23,10 @@ const { findAssetBySrc, mediaUrl } = useTmcutMedia()
 const { pickFile, pickFolder } = useFileSystem()
 const taskManager = useToolTaskManager('ffmpeg')
 const { enqueueJob, activeJobsCount, queueModalOpen, activeJobId, cancelJob } = useTmcutExportQueue()
+// ADR-014: the host answer, not a global sniff. `isDesktop` used to read
+// `window.electronAPI` here; the adapter negotiates the same fact once and the
+// render dispatch now reads its capabilities instead of a second copy.
+const platform = useTmcutPlatform()
 const toast = useToast()
 const telemetry = useTmcutTelemetry()
 const usage = useTmcutUsageTracker()
@@ -214,7 +219,7 @@ const webResultUrl = ref('')
 const isWebRendering = ref(false)
 const webProgress = ref(0)
 
-const isDesktop = computed(() => !!window.electronAPI?.tmcut)
+const isDesktop = computed(() => platform.info.capabilities.filesystem === true)
 
 let offRenderDone: (() => void) | null = null
 
@@ -584,33 +589,30 @@ async function runWebExport(compileResult: ReturnType<typeof buildCompileResult>
   isWebRendering.value = true
   webProgress.value = 0
   try {
-    const started = await $fetch<{ ok: boolean, jobId: string }>('/api/v1/media/render', {
-      method: 'POST',
-      body: {
-        args: compileResult.args,
-        outputName: fileName.value || `render.${ext.value}`,
-        duration: compileResult.duration
-      }
+    // ADR-014: the server transport lives in the web encoder; this loop only
+    // decides how often to look and what to show.
+    const started = await platform.encoder.render({
+      args: compileResult.args,
+      outputName: fileName.value || `render.${ext.value}`,
+      duration: compileResult.duration
     })
 
     for (let i = 0; i < WEB_POLL_LIMIT; i++) {
       await new Promise(resolve => setTimeout(resolve, WEB_POLL_MS))
-      const job = await $fetch<{ status: string, progress: number, url: string | null, error: string | null }>(
-        `/api/v1/media/render/${started.jobId}`
-      )
-      if (job.status === 'running') {
+      const job = await platform.refreshJob(started.id)
+      if (job?.status === 'running') {
         webProgress.value = Math.max(0, Math.min(99, job.progress || 0))
         continue
       }
-      if (job.status === 'done' && job.url) {
+      if (job?.status === 'done' && job.output?.url) {
         webProgress.value = 100
-        webResultUrl.value = job.url
+        webResultUrl.value = job.output.url
         exportDone.value = true
         recordExportCompleted()
         toast.add({ title: t('tmcut.export.success'), color: 'success' })
         return
       }
-      throw new Error(job.error || t('tmcut.export.errorDesc'))
+      throw new Error(job?.error || t('tmcut.export.errorDesc'))
     }
     throw new Error(t('tmcut.export.errorDesc'))
   } catch (err) {
@@ -643,9 +645,9 @@ async function startExport() {
 
   try {
     const compileResult = buildCompileResult()
-    // Web runtime: hand the compiled args to the Nitro renderer instead of
-    // the Electron ffmpeg bridge.
-    if (!isDesktop.value) {
+    // A capability, not a global sniff: a host without its own ffmpeg hands the
+    // compiled args to the Nitro renderer instead of the local queue.
+    if (!platform.info.capabilities.nativeFFmpeg) {
       await runWebExport(compileResult)
       return
     }
@@ -660,7 +662,7 @@ async function startExport() {
       }
     }
 
-    enqueueJob({
+    await platform.encoder.render({
       projectId: currentProject.value?.id,
       projectName: currentProject.value?.name || fileName.value,
       outputPath: outputPath.value,
@@ -670,7 +672,7 @@ async function startExport() {
       task,
       watchFolder: watchFolder.value && isDesktop.value,
       autoPreview: autoPreview.value
-    }, true)
+    })
 
     if (watchFolder.value && isDesktop.value) {
       startWatching(outputPath.value)
