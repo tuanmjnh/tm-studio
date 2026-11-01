@@ -11,6 +11,14 @@ const CHANNEL = 'tmcut:renderHtmlVideo'
 const PROGRESS_CHANNEL = 'tmcut:htmlVideoProgress'
 const MAX_HTML_BYTES = 2 * 1024 * 1024
 const MAX_FRAMES = 1800
+// Rates an offscreen Chromium can actually screenshot in order. Shared by
+// request validation and the platform capture, so the two never disagree.
+const MIN_FPS = 15
+const MAX_FPS = 60
+
+// Fonts and images must be resident before the first seek, or frame 0 of a
+// composition renders without its glyphs.
+const READINESS_SCRIPT = 'Promise.race([document.fonts.ready,new Promise(r=>setTimeout(r,5000))]).then(()=>Promise.all(Array.from(document.images).map(i=>i.decode().catch(()=>{}))))'
 
 function validateRenderOptions(options = {}) {
   const width = Number(options.width)
@@ -24,7 +32,7 @@ function validateRenderOptions(options = {}) {
 
   if (!Number.isSafeInteger(width) || width < 64 || width > 3840 || width % 2 !== 0) errors.push('width-must-be-even-64-3840')
   if (!Number.isSafeInteger(height) || height < 64 || height > 2160 || height % 2 !== 0) errors.push('height-must-be-even-64-2160')
-  if (!Number.isInteger(fps) || fps < 15 || fps > 60) errors.push('fps-must-be-15-60')
+  if (!Number.isInteger(fps) || fps < MIN_FPS || fps > MAX_FPS) errors.push(`fps-must-be-${MIN_FPS}-${MAX_FPS}`)
   if (!Number.isFinite(duration) || duration < 1 || duration > 120) errors.push('duration-must-be-1-120')
   if (Number.isFinite(duration) && Number.isInteger(fps) && duration * fps > MAX_FRAMES) errors.push('frame-limit-exceeded')
   if (!html.trim()) errors.push('html-required')
@@ -91,33 +99,20 @@ function writeFrame(stream, frame) {
   })
 }
 
-async function renderHtmlVideo(options, deps = {}) {
-  const validation = validateRenderOptions(options)
-  if (!validation.ok) return { ok: false, error: validation.errors.join(',') }
-  const value = validation.value
-  const stat = deps.stat || fs.statSync
-  const exists = deps.existsSync || fs.existsSync
-  const mkdir = deps.mkdirSync || fs.mkdirSync
-  const rename = deps.renameSync || fs.renameSync
-  const unlink = deps.unlinkSync || fs.unlinkSync
+/**
+ * One loaded composition, seeked frame by frame (the `TmcutCaptureSession`
+ * of ADR-014). The renderer never plays the animation: it asks for a time,
+ * screenshots, and asks for the next, so the same document always produces
+ * the same frames. close() releases the window, and a document that fails to
+ * load releases it the same way.
+ */
+async function openCaptureSession({ html, css, width, height }, deps = {}) {
   const BrowserWindowClass = deps.BrowserWindow || BrowserWindow
-  const spawnProcess = deps.spawn || spawn
-  const binaries = deps.binaries || getToolsBinaries()
-  let child = null
   let window = null
-  let temporaryPath = ''
-  let stderr = ''
-  let frameCount = 0
-  const totalFrames = Math.round(value.duration * value.fps)
-
   try {
-    const outputDir = path.dirname(value.outputPath)
-    if (!exists(outputDir)) mkdir(outputDir, { recursive: true })
-    temporaryPath = path.join(outputDir, `.${path.basename(value.outputPath, path.extname(value.outputPath))}.${randomUUID()}.tmp.mp4`)
-
     window = new BrowserWindowClass({
-      width: value.width,
-      height: value.height,
+      width,
+      height,
       show: false,
       frame: false,
       backgroundColor: '#000000',
@@ -131,8 +126,63 @@ async function renderHtmlVideo(options, deps = {}) {
     })
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
     window.webContents.on('will-navigate', event => event.preventDefault())
-    await window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(buildCompositionDocument(value))}`)
-    await window.webContents.executeJavaScript('Promise.race([document.fonts.ready,new Promise(r=>setTimeout(r,5000))]).then(()=>Promise.all(Array.from(document.images).map(i=>i.decode().catch(()=>{}))))')
+    await window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(buildCompositionDocument({ html, css, width, height }))}`)
+    await window.webContents.executeJavaScript(READINESS_SCRIPT)
+    return {
+      async seek(atSec) {
+        await window.webContents.executeJavaScript(`window.__tmcutSeek(${atSec})`)
+      },
+      async screenshot() {
+        const image = await window.webContents.capturePage({ x: 0, y: 0, width, height })
+        return image.toPNG()
+      },
+      async close() {
+        if (!window.isDestroyed()) window.destroy()
+      }
+    }
+  } catch (error) {
+    if (window && !window.isDestroyed()) window.destroy()
+    throw error
+  }
+}
+
+/**
+ * `TmcutPlatformCapture` for this host (ADR-014): a browser tab cannot
+ * screenshot an offscreen document frame-accurately, so only Electron
+ * declares the capability, and it declares the same rate bounds the render
+ * path validates.
+ */
+function createElectronPlatformCapture(deps = {}) {
+  return {
+    open: request => openCaptureSession(request, deps),
+    supportsFps: fps => Number.isInteger(fps) && fps >= MIN_FPS && fps <= MAX_FPS
+  }
+}
+
+async function renderHtmlVideo(options, deps = {}) {
+  const validation = validateRenderOptions(options)
+  if (!validation.ok) return { ok: false, error: validation.errors.join(',') }
+  const value = validation.value
+  const stat = deps.stat || fs.statSync
+  const exists = deps.existsSync || fs.existsSync
+  const mkdir = deps.mkdirSync || fs.mkdirSync
+  const rename = deps.renameSync || fs.renameSync
+  const unlink = deps.unlinkSync || fs.unlinkSync
+  const spawnProcess = deps.spawn || spawn
+  const binaries = deps.binaries || getToolsBinaries()
+  let child = null
+  let session = null
+  let temporaryPath = ''
+  let stderr = ''
+  let frameCount = 0
+  const totalFrames = Math.round(value.duration * value.fps)
+
+  try {
+    const outputDir = path.dirname(value.outputPath)
+    if (!exists(outputDir)) mkdir(outputDir, { recursive: true })
+    temporaryPath = path.join(outputDir, `.${path.basename(value.outputPath, path.extname(value.outputPath))}.${randomUUID()}.tmp.mp4`)
+
+    session = await openCaptureSession(value, deps)
 
     child = spawnProcess(binaries.ffmpeg, ffmpegArgs({ ...value, frameCount: totalFrames, outputPath: temporaryPath }), {
       windowsHide: true,
@@ -157,10 +207,8 @@ async function renderHtmlVideo(options, deps = {}) {
     })
 
     for (let index = 0; index < totalFrames; index++) {
-      const at = index / value.fps
-      await window.webContents.executeJavaScript(`window.__tmcutSeek(${at})`)
-      const image = await window.webContents.capturePage({ x: 0, y: 0, width: value.width, height: value.height })
-      await writeFrame(child.stdin, image.toPNG())
+      await session.seek(index / value.fps)
+      await writeFrame(child.stdin, await session.screenshot())
       frameCount++
       if (value.jobId && deps.sender && !deps.sender.isDestroyed()) {
         deps.sender.send(PROGRESS_CHANNEL, { jobId: value.jobId, frame: frameCount, total: totalFrames })
@@ -182,7 +230,7 @@ async function renderHtmlVideo(options, deps = {}) {
     const message = error && error.message ? error.message : error
     return { ok: false, error: String(message), frames: frameCount }
   } finally {
-    if (window && !window.isDestroyed()) window.destroy()
+    if (session) await session.close()
   }
 }
 
@@ -195,10 +243,14 @@ module.exports = {
   PROGRESS_CHANNEL,
   MAX_HTML_BYTES,
   MAX_FRAMES,
+  MIN_FPS,
+  MAX_FPS,
   validateRenderOptions,
   sanitizeCompositionHtml,
   buildCompositionDocument,
   ffmpegArgs,
+  openCaptureSession,
+  createElectronPlatformCapture,
   renderHtmlVideo,
   registerHtmlVideoRenderer
 }

@@ -7,7 +7,7 @@ import test from 'node:test'
 import { createRequire } from 'node:module'
 
 const require = createRequire(import.meta.url)
-const { validateRenderOptions, sanitizeCompositionHtml, buildCompositionDocument, ffmpegArgs, renderHtmlVideo, MAX_FRAMES } = require('../../electron/tools/html-video-renderer.cjs')
+const { validateRenderOptions, sanitizeCompositionHtml, buildCompositionDocument, ffmpegArgs, openCaptureSession, createElectronPlatformCapture, renderHtmlVideo, MAX_FRAMES } = require('./html-video-renderer.cjs')
 
 function validOptions(outputPath, extra = {}) {
   return {
@@ -199,4 +199,105 @@ test('failed FFmpeg render preserves pre-existing destination and removes tempor
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+class FakeCompositionWindow {
+  constructor(options) {
+    FakeCompositionWindow.last = this
+    this.options = options
+    this.destroyed = false
+    this.executed = []
+    this.seekTimes = []
+    this.listeners = {}
+    this.webContents = {
+      setWindowOpenHandler: (handler) => { this.openHandler = handler },
+      on: (event, handler) => { this.listeners[event] = handler },
+      executeJavaScript: async (code) => {
+        this.executed.push(code)
+        const seek = /window\.__tmcutSeek\(([^)]+)\)/.exec(code)
+        if (seek) this.seekTimes.push(Number(seek[1]))
+      },
+      capturePage: async (rect) => {
+        this.lastRect = rect
+        return { toPNG: () => Buffer.from('png-frame') }
+      }
+    }
+  }
+
+  async loadURL(url) { this.url = url }
+  isDestroyed() { return this.destroyed }
+  destroy() { this.destroyed = true }
+}
+
+function sessionDeps() {
+  FakeCompositionWindow.last = null
+  return { BrowserWindow: FakeCompositionWindow }
+}
+
+const COMPOSITION = { html: '<main class="t">frame</main>', css: '.t { color: red }', width: 320, height: 180 }
+
+test('capture session loads an isolated offscreen document and settles fonts before the first frame', async () => {
+  const session = await openCaptureSession(COMPOSITION, sessionDeps())
+  const window = FakeCompositionWindow.last
+  assert.equal(window.options.show, false)
+  assert.deepEqual(window.options.webPreferences, {
+    nodeIntegration: false,
+    contextIsolation: true,
+    sandbox: true,
+    webSecurity: true,
+    offscreen: true
+  })
+  assert.match(window.url, /^data:text\/html/)
+  const document = decodeURIComponent(window.url.replace('data:text/html;charset=utf-8,', ''))
+  assert.match(document, /window\.__tmcutSeek/)
+  assert.match(document, /connect-src 'none'/)
+  assert.match(document, /\.t \{ color: red \}/)
+  assert.deepEqual(window.openHandler({}), { action: 'deny' })
+  let prevented = false
+  function preventDefault() {
+    prevented = true
+  }
+  window.listeners['will-navigate']({ preventDefault })
+  assert.equal(prevented, true)
+  // Readiness runs before any seek, so frame 0 never renders without glyphs.
+  assert.match(window.executed[0], /document\.fonts\.ready/)
+  assert.equal(window.seekTimes.length, 0)
+  await session.close()
+})
+
+test('capture session seeks on request, screenshots the composed rect, and releases the window once', async () => {
+  const session = await openCaptureSession(COMPOSITION, sessionDeps())
+  const window = FakeCompositionWindow.last
+  assert.deepEqual(Object.keys(session).sort(), ['close', 'screenshot', 'seek'])
+  await session.seek(0)
+  await session.seek(2.5)
+  assert.deepEqual(window.seekTimes, [0, 2.5])
+  const frame = await session.screenshot()
+  assert.equal(Buffer.isBuffer(frame), true)
+  assert.equal(frame.toString(), 'png-frame')
+  assert.deepEqual(window.lastRect, { x: 0, y: 0, width: 320, height: 180 })
+  await session.close()
+  assert.equal(window.destroyed, true)
+  await session.close()
+})
+
+test('capture session destroys its window when the composition fails to load', async () => {
+  class ExplodingWindow extends FakeCompositionWindow {
+    async loadURL() { throw new Error('render-process-gone') }
+  }
+  FakeCompositionWindow.last = null
+  await assert.rejects(
+    openCaptureSession(COMPOSITION, { BrowserWindow: ExplodingWindow }),
+    /render-process-gone/
+  )
+  assert.equal(ExplodingWindow.last.destroyed, true)
+})
+
+test('electron capture host answers the platform contract for the rates it can shoot', async () => {
+  const capture = createElectronPlatformCapture(sessionDeps())
+  for (const fps of [14, 15.5, 61, 0, null, '30']) assert.equal(capture.supportsFps(fps), false, String(fps))
+  for (const fps of [15, 30, 60]) assert.equal(capture.supportsFps(fps), true, String(fps))
+  const session = await capture.open({ ...COMPOSITION, fps: 30 })
+  assert.equal(typeof session.seek, 'function')
+  await session.close()
 })
