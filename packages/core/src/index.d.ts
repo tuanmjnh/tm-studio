@@ -25,6 +25,7 @@ import type { TmcutEdl, TmcutEdlSegment } from '../types/edl.js'
 import type { TranscriptCue } from '../types/caption.js'
 import type { TmcutCapabilities, TmcutRuntimeInfo } from '../types/runtime.js'
 import type { TmcutClock } from '../types/platform.js'
+import type { TmcutFrameCompareOptions, TmcutFrameCompareResult } from '../types/pixels.js'
 
 // Re-exported domain types for consumers (single import site).
 export type {
@@ -1548,3 +1549,15 @@ export function createPlatformInfo(
   capabilities?: Partial<TmcutCapabilities>
 ): TmcutRuntimeInfo
 export function platformSupports(info: TmcutRuntimeInfo | null | undefined, capability: keyof TmcutCapabilities): boolean
+
+// --- Golden-frame comparison (V4 M2 prep, ADR-016) ---
+export type {
+  TmcutFrameCompareOptions,
+  TmcutFrameCompareResult
+} from '../types/pixels.js'
+export const DEFAULT_FRAME_COMPARE: Readonly<Required<TmcutFrameCompareOptions>>
+export function compareFrames(
+  expected: Uint8Array | Uint8ClampedArray,
+  actual: Uint8Array | Uint8ClampedArray,
+  options?: TmcutFrameCompareOptions
+): TmcutFrameCompareResult

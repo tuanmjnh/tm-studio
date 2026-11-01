@@ -184,7 +184,7 @@ Khai báo tại [dsl.ts](file:///D:/Applications/tm-studio/packages/core/types/d
 | G4 | Export phụ thuộc FFmpeg ở cả 2 runtime | desktop spawn; web Nitro spawn | không chạy được trên Vercel serverless (Phase 7 chặn) |
 | G5 | Hai model project | §4.1 vs §4.2 | nguy cơ trôi schema; cần chốt model nào là canonical |
 | G6 | Hai stack HTML capture | Electron `capturePage` vs `playwright-core` | kết quả có thể lệch pixel giữa runtime |
-| G7 | Không có golden-frame test | `tests/unit` chỉ có spec hành vi/args, không so ảnh | Phase 2 acceptance "golden-frame" chưa có hạ tầng |
+| G7 | ~~Không có golden-frame test~~ **Hạ tầng so sánh xong (M2 prep, 2026-11-01)** | [pixels.mjs](file:///D:/Applications/tm-studio/packages/core/src/pixels.mjs) `compareFrames` (MAE + tỉ lệ pixel lệch, ADR-016) + 7 test; chưa có ảnh golden thật | M2 chỉ còn chụp frame và gọi `compareFrames` |
 | G8 | Không có WebCodecs/muxer | `grep VideoEncoder/mediabunny` = 0 | Phase 5 làm mới hoàn toàn |
 | G9 | Downloader (yt-dlp) chưa tồn tại trong repo | chỉ resolve binary + updater, không có lệnh tải | Phase 6 |
 | G10 | `@tmcut-core` alias ≠ tên package (`tmcut-core`) | [nuxt.config.ts:21](file:///D:/Applications/tm-studio/nuxt.config.ts#L21) vs [packages/core/package.json](file:///D:/Applications/tm-studio/packages/core/package.json) | dễ nhầm khi publish/đóng gói |
@@ -206,7 +206,7 @@ Khai báo tại [dsl.ts](file:///D:/Applications/tm-studio/packages/core/types/d
 |---|---|---|---|
 | **M0 — Contract freeze** (xong) | Audit này + chốt §4.5 | `docs/v4-phase-0-audit.md` | Review xong; không đổi code |
 | **M1 — Adapter + evaluator skeleton** (xong 2026-11-01) | `PlatformAdapter` (media/capture/encode) + `evaluateTimeline(timeline, t)` + `createClock` + `createPlatformInfo` | `evaluate.mjs`, `clock.mjs`, `platform.mjs`, `types/platform.ts` + 3 bộ test | evaluator idempotent theo `t`, không đọc `Date.now()` — **PASS**; host implementation còn ở M2 |
-| **M2 — DOM renderer dùng evaluator** | Preview đọc layer từ evaluator thay vì tự tính CSS; export FFmpeg vẫn nguyên | preview giữ pixel tương đương hiện tại | golden-frame test đầu tiên (tĩnh: canvas + text) |
+| **M2 — DOM renderer dùng evaluator** (hạ tầng so sánh xong 2026-11-01) | Preview đọc layer từ evaluator thay vì tự tính CSS; export FFmpeg vẫn nguyên | preview giữ pixel tương đương hiện tại | golden-frame test đầu tiên (tĩnh: canvas + text) — `compareFrames` đã có, còn golden PNG + nối preview |
 | **M3 — Chuyển transform/mask/transition sang model chung** | `toRenderClip` trả layer trung gian; builder FFmpeg và DOM cùng đọc | một nguồn nghĩa | so ảnh preview vs frame FFmpeg với tolerance |
 | **M4 — Hợp nhất HTML capture** | Một engine capture (chọn `playwright-core` hoặc WebContents) cho cả hai runtime | 1 contract, 2 transport | cùng composition → cùng hash frame |
 | **M5 — WebCodecs export (song song FFmpeg)** | Encoder + muxer cho mp4/webm ở web | feature flag `renderer: 'webcodecs' \| 'ffmpeg'` | bitrate/quality report; fallback FFmpeg |
