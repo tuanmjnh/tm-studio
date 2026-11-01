@@ -7,6 +7,7 @@ import {
   durationToSeconds,
   CURATED_SCRIPT_PRESETS,
   exportScriptMarkdown,
+  fitScenesToDuration,
   type TmcutAiScript,
   type GenerateScriptOptions
 } from '../utils/tmcut/aiScript'
@@ -48,6 +49,23 @@ export function useTmcutAiScript() {
   }
 
   /**
+   * Curated preset re-timed to the requested duration. Used whenever the
+   * gateway is unavailable or the model answer cannot be trusted, so the
+   * fallback is still the length the user asked for.
+   */
+  function curatedFallback(options: GenerateScriptOptions, targetSec: number): TmcutAiScript {
+    const matched = CURATED_SCRIPT_PRESETS.find(p => p.platform === options.platform) || CURATED_SCRIPT_PRESETS[0]!
+    return {
+      ...matched,
+      title: options.prompt ? `Kịch bản: ${options.prompt.slice(0, 50)}` : matched.title,
+      platform: options.platform,
+      targetDurationSec: targetSec,
+      scenes: fitScenesToDuration(matched.scenes, targetSec),
+      createdAt: new Date().toISOString()
+    }
+  }
+
+  /**
    * Generates a video storyboard script based on user prompt and parameters.
    */
   async function generateScript(options: GenerateScriptOptions): Promise<TmcutAiScript> {
@@ -60,15 +78,7 @@ export function useTmcutAiScript() {
       const keyAvailable = await checkGatewayStatus()
 
       if (!keyAvailable) {
-        // Fallback to curated preset matched by platform
-        const matched = CURATED_SCRIPT_PRESETS.find(p => p.platform === options.platform) || CURATED_SCRIPT_PRESETS[0]!
-        const customized: TmcutAiScript = {
-          ...matched,
-          title: options.prompt ? `Kịch bản: ${options.prompt.slice(0, 50)}` : matched.title,
-          platform: options.platform,
-          targetDurationSec: targetSec,
-          createdAt: new Date().toISOString()
-        }
+        const customized = curatedFallback(options, targetSec)
         generatedScript.value = customized
         return customized
       }
@@ -104,14 +114,7 @@ export function useTmcutAiScript() {
       return script
     } catch (err: unknown) {
       // If AI call failed, provide a curated preset gracefully
-      const matched = CURATED_SCRIPT_PRESETS.find(p => p.platform === options.platform) || CURATED_SCRIPT_PRESETS[0]!
-      const fallbackScript: TmcutAiScript = {
-        ...matched,
-        title: options.prompt ? `Kịch bản: ${options.prompt.slice(0, 50)}` : matched.title,
-        platform: options.platform,
-        targetDurationSec: targetSec,
-        createdAt: new Date().toISOString()
-      }
+      const fallbackScript = curatedFallback(options, targetSec)
       generatedScript.value = fallbackScript
       error.value = err instanceof Error ? err.message : String(err)
       return fallbackScript

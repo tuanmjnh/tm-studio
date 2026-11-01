@@ -142,6 +142,29 @@ export function durationToSeconds(dur: AiScriptDuration): number {
 }
 
 /**
+ * Re-time a preset's scenes to the request's target duration.
+ *
+ * The curated fallbacks are authored for one fixed length (30s / 60s). When the
+ * gateway is unavailable a user who asked for 15s still gets a usable script —
+ * but a 30-second storyboard under a "15s" title would be a quiet lie, and the
+ * project built from it would be twice as long as requested. Scales
+ * proportionally with a 1s floor and absorbs rounding drift in the last scene.
+ */
+export function fitScenesToDuration(scenes: TmcutAiScriptScene[], targetSec: number): TmcutAiScriptScene[] {
+  const safeTarget = Math.max(1, Math.round(targetSec))
+  const total = scenes.reduce((acc, scene) => acc + Math.max(1, scene.durationSec), 0)
+  const fitted = scenes.map(scene => ({
+    ...scene,
+    durationSec: Math.max(1, Math.round((Math.max(1, scene.durationSec) * safeTarget) / total))
+  }))
+  if (!fitted.length) return fitted
+  const sum = fitted.reduce((acc, scene) => acc + scene.durationSec, 0)
+  const last = fitted[fitted.length - 1]!
+  last.durationSec = Math.max(1, last.durationSec + (safeTarget - sum))
+  return fitted
+}
+
+/**
  * Formats a script into readable Markdown text.
  */
 export function exportScriptMarkdown(script: TmcutAiScript): string {

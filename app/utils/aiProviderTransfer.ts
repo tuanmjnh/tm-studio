@@ -315,7 +315,7 @@ function rowsFromEnv(text: string): RawRow[] {
   // Single-connection dotenv block (the app's own AI_* keys).
   const generic: Record<string, string> = {}
   for (const { key, value } of lines) {
-    if (key === 'AI_PROVIDER' || key === 'AI_API_KEY' || key === 'AI_BASE_URL' || key === 'AI_MODEL' || key === 'AI_NAME') {
+    if (key === 'AI_PROVIDER' || key === 'AI_API_KEY' || key === 'AI_BASE_URL' || key === 'AI_MODEL' || key === 'AI_NAME' || key === 'AI_ENABLED') {
       generic[key] = value
       continue
     }
@@ -511,10 +511,13 @@ function csvCell(value: string): string {
   return /[",\n\r]/.test(raw) ? `"${raw.replace(/"/g, '""')}"` : raw
 }
 
+// Dots and hyphens are legal in a dotenv key (`envLines` accepts them), so a
+// credential name like `team-2` survives an export → import round-trip instead
+// of being flattened to `team_2` (a different credential on the hub).
 function envPrefix(row: AiTransferRow): string {
-  const base = row.provider.toUpperCase().replace(/[^A-Z0-9]+/g, '_')
+  const base = row.provider.toUpperCase().replace(/[^A-Z0-9._-]+/g, '_')
   if (!row.name || row.name === 'default') return base
-  const suffix = row.name.toUpperCase().replace(/[^A-Z0-9]+/g, '_')
+  const suffix = row.name.toUpperCase().replace(/[^A-Z0-9._-]+/g, '_')
   return suffix ? `${base}__${suffix}` : base
 }
 
