@@ -193,7 +193,7 @@ Khai báo tại [dsl.ts](file:///D:/Applications/tm-studio/packages/core/types/d
 
 | Tiêu chí | Kết quả | Ghi chú |
 |---|---|---|
-| Core chạy trong browser và Node test | **PASS** | alias trỏ source; 409/409 node tests (sau M1) |
+| Core chạy trong browser và Node test | **PASS** | alias trỏ source; 424/424 node tests (sau M1) |
 | Project serialize/deserialize không phụ thuộc Electron | **PASS** | localStorage + JSON thuần; IPC là optional |
 | Timeline evaluation có unit tests | **PASS** | `evaluateTimeline` + 19 test thuần Node (M1); idempotent theo `t`, không đọc `Date.now()` |
 | Migration project cũ có test | **PASS** | 2 spec app + `v1compat` core |
@@ -205,7 +205,7 @@ Khai báo tại [dsl.ts](file:///D:/Applications/tm-studio/packages/core/types/d
 | Mốc | Nội dung | Deliverable | Gate |
 |---|---|---|---|
 | **M0 — Contract freeze** (xong) | Audit này + chốt §4.5 | `docs/v4-phase-0-audit.md` | Review xong; không đổi code |
-| **M1 — Adapter + evaluator skeleton** (evaluator xong 2026-11-01; adapter còn lại) | `PlatformAdapter` (media/capture/encode/clock) + `evaluateTimeline(timeline, t)` trả danh sách layer đã resolve (không vẽ) | `packages/core/src/evaluate.mjs` + `test/evaluate.test.mjs` | evaluator idempotent theo `t`, không đọc `Date.now()` — **PASS** |
+| **M1 — Adapter + evaluator skeleton** (xong 2026-11-01) | `PlatformAdapter` (media/capture/encode) + `evaluateTimeline(timeline, t)` + `createClock` + `createPlatformInfo` | `evaluate.mjs`, `clock.mjs`, `platform.mjs`, `types/platform.ts` + 3 bộ test | evaluator idempotent theo `t`, không đọc `Date.now()` — **PASS**; host implementation còn ở M2 |
 | **M2 — DOM renderer dùng evaluator** | Preview đọc layer từ evaluator thay vì tự tính CSS; export FFmpeg vẫn nguyên | preview giữ pixel tương đương hiện tại | golden-frame test đầu tiên (tĩnh: canvas + text) |
 | **M3 — Chuyển transform/mask/transition sang model chung** | `toRenderClip` trả layer trung gian; builder FFmpeg và DOM cùng đọc | một nguồn nghĩa | so ảnh preview vs frame FFmpeg với tolerance |
 | **M4 — Hợp nhất HTML capture** | Một engine capture (chọn `playwright-core` hoặc WebContents) cho cả hai runtime | 1 contract, 2 transport | cùng composition → cùng hash frame |

@@ -23,6 +23,8 @@ import type {
 import type { TmcutAssetKind, TmcutMediaMetadata } from '../types/media.js'
 import type { TmcutEdl, TmcutEdlSegment } from '../types/edl.js'
 import type { TranscriptCue } from '../types/caption.js'
+import type { TmcutCapabilities, TmcutRuntimeInfo } from '../types/runtime.js'
+import type { TmcutClock } from '../types/platform.js'
 
 // Re-exported domain types for consumers (single import site).
 export type {
@@ -1452,3 +1454,97 @@ export interface HtmlVideoSpecResult {
 export function validateHtmlVideoSpec(spec?: HtmlVideoSpecInput): HtmlVideoSpecResult
 export function isBlockedRenderHost(hostname: string): boolean
 export function isAllowedRenderUrl(rawUrl: string, allowRemote?: boolean): boolean
+
+// --- Timeline evaluation (V4 Phase 1 / M1) ---
+export type { TmcutClock, TmcutPlatformAdapter, TmcutPlatformCapture, TmcutCaptureRequest, TmcutCaptureSession, TmcutPlatformInfo, TmcutPlatformMedia, TmcutPlatformName } from '../types/platform.js'
+export type { TmcutCapabilities, TmcutRuntimeInfo } from '../types/runtime.js'
+
+export interface CoreEvaluatedTransform {
+  x: number
+  y: number
+  scaleX: number
+  scaleY: number
+  rotation: number
+}
+
+export interface CoreEvaluatedTransition {
+  type: string | null
+  duration: number
+  role: 'incoming' | 'outgoing'
+  progress: number
+}
+
+export interface CoreEvaluatedText {
+  content: string
+  color: string | null
+  fontSize: number | null
+  fontFamily: string | null
+  fontFile: string | null
+  bold: boolean
+  italic: boolean
+  align: string
+  shadow: boolean
+  stroke: boolean
+  animIn: string
+  animInDuration: number
+  animOut: string
+  animOutDuration: number
+}
+
+/** One clip resolved at an absolute tick — renderer-agnostic, JSON-safe. */
+export interface CoreEvaluatedLayer {
+  clipId: string
+  trackId: string | null
+  trackType: string
+  kind: string
+  startTicks: number
+  endTicks: number
+  localTicks: number
+  sourceTicks: number | null
+  visible: boolean
+  /** 0..1 */
+  opacity: number
+  /** Linear gain 0..1 (clip x track x fade). */
+  volume: number
+  audible: boolean
+  transform: CoreEvaluatedTransform
+  effects: TmcutClipEffect[]
+  mask: unknown
+  transition: CoreEvaluatedTransition | null
+  text: CoreEvaluatedText | null
+  /** Speed ramps are not integrated yet — callers decide to refuse or fall back. */
+  ramped: boolean
+  groupId: string | null
+  linkId: string | null
+}
+
+export interface CoreEvaluatedTrack {
+  id: string | null
+  type: string | null
+  muted: boolean
+  hidden: boolean
+  locked: boolean
+  layers: CoreEvaluatedLayer[]
+}
+
+export interface CoreTimelineEvaluation {
+  at: number
+  /** Draw order: track order, then clip start time. */
+  layers: CoreEvaluatedLayer[]
+  tracks: CoreEvaluatedTrack[]
+}
+
+export function evaluateTimeline(
+  input: TmcutProject | TmcutTimeline | { timeline?: TmcutTimeline } | null | undefined,
+  atTicks: number
+): CoreTimelineEvaluation
+
+// --- Clock + host capability contract (V4 Phase 1 / M1) ---
+export function createClock(rate: FrameRate): TmcutClock
+export const PLATFORM_NAMES: readonly TmcutRuntimeInfo['name'][]
+export const PLATFORM_CAPABILITIES: readonly (keyof TmcutCapabilities)[]
+export function createPlatformInfo(
+  name: TmcutRuntimeInfo['name'],
+  capabilities?: Partial<TmcutCapabilities>
+): TmcutRuntimeInfo
+export function platformSupports(info: TmcutRuntimeInfo | null | undefined, capability: keyof TmcutCapabilities): boolean
