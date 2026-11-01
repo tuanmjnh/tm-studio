@@ -1030,7 +1030,10 @@ function removeBatch(batchId: string) {
             :key="batch.batchId"
             class="px-4 py-3 cursor-pointer hover:bg-muted"
             :class="{ 'bg-muted': selectedBatchId === batch.batchId }"
+            tabindex="0"
             @click="selectedBatchId = batch.batchId"
+            @keydown.enter.self.prevent="selectedBatchId = batch.batchId"
+            @keydown.space.self.prevent="selectedBatchId = batch.batchId"
           >
             <div class="flex items-center justify-between gap-2">
               <div class="min-w-0">
@@ -1236,7 +1239,10 @@ function removeBatch(batchId: string) {
             v-for="batch in historyBatches"
             :key="batch.batchId"
             class="px-4 py-2.5 flex items-center justify-between gap-2 cursor-pointer hover:bg-muted"
+            tabindex="0"
             @click="selectedBatchId = batch.batchId"
+            @keydown.enter.self.prevent="selectedBatchId = batch.batchId"
+            @keydown.space.self.prevent="selectedBatchId = batch.batchId"
           >
             <div class="min-w-0">
               <p class="text-xs font-medium text-highlighted dark:text-white truncate">

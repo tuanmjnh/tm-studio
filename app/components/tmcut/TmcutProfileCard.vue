@@ -24,14 +24,28 @@ const emit = defineEmits<{ select: [id: string] }>()
         ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 shadow-lg shadow-primary-500/10'
         : 'border-default hover:border-primary-300 dark:hover:border-primary-700 bg-white/80 dark:bg-default/80 backdrop-blur-sm'
     ]"
+    role="button"
+    tabindex="0"
+    :aria-pressed="props.selected"
     @click="emit('select', props.profile.id)"
+    @keydown.enter.self.prevent="emit('select', props.profile.id)"
+    @keydown.space.self.prevent="emit('select', props.profile.id)"
   >
     <div class="space-y-3">
       <UIcon :name="props.profile.icon" class="w-7 h-7 text-primary-500" />
-      <h4 class="font-semibold text-sm text-highlighted">{{ props.profile.name }}</h4>
-      <p class="text-xs text-muted">{{ props.profile.desc }}</p>
+      <h4 class="font-semibold text-sm text-highlighted">
+        {{ props.profile.name }}
+      </h4>
+      <p class="text-xs text-muted">
+        {{ props.profile.desc }}
+      </p>
     </div>
-    <TmcutBadge v-if="props.selected" variant="primary" size="xs" class="mt-4 self-start flex items-center gap-1">
+    <TmcutBadge
+      v-if="props.selected"
+      variant="primary"
+      size="xs"
+      class="mt-4 self-start flex items-center gap-1"
+    >
       <UIcon name="i-lucide-check" class="w-3 h-3" />
       {{ $t('tmcut.autocutV2.profileSelected') }}
     </TmcutBadge>

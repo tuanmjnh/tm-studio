@@ -157,7 +157,10 @@ const handleContentClick = () => {
         <div
           ref="swipeTarget"
           class="active-scale flex-1 min-w-0 h-full flex items-center transition-all duration-200 active:bg-gray-50 dark:active:bg-gray-800/80 rounded-lg"
+          tabindex="0"
           @click="handleContentClick"
+          @keydown.enter.self.prevent="handleContentClick"
+          @keydown.space.self.prevent="handleContentClick"
         >
           <!-- Center (Default) Slot -->
           <div class="flex-1 min-w-0 h-full flex items-center">

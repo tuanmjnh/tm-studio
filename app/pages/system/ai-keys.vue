@@ -1872,8 +1872,15 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
                 <tr v-for="m in displayedModels" :key="m.id"
                   class="hover:bg-muted/50 transition-colors">
                   <td class="py-2 px-3 font-mono text-[11px] text-highlighted max-w-xs truncate">
-                    <span class="cursor-pointer hover:underline" :title="'Click to copy ' + m.modelId"
-                      @click="copy(m.modelId); notify.success(t('aiProviders.model_id_copied', [m.modelId]))">
+                    <span
+                      class="cursor-pointer hover:underline"
+                      :title="'Click to copy ' + m.modelId"
+                      role="button"
+                      tabindex="0"
+                      @click="copy(m.modelId); notify.success(t('aiProviders.model_id_copied', [m.modelId]))"
+                      @keydown.enter.self.prevent="copy(m.modelId); notify.success(t('aiProviders.model_id_copied', [m.modelId]))"
+                      @keydown.space.self.prevent="copy(m.modelId); notify.success(t('aiProviders.model_id_copied', [m.modelId]))"
+                    >
                       {{ m.modelId }}
                     </span>
                   </td>

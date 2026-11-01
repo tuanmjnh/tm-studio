@@ -586,7 +586,11 @@ useHead({ title: t('connections.title') })
               :class="addStep === 'category'
                 ? 'bg-primary text-white'
                 : 'bg-primary/20 text-primary cursor-pointer'"
+              role="button"
+              tabindex="0"
               @click="!addSaving && (addStep = 'category')"
+              @keydown.enter.self.prevent="!addSaving && (addStep = 'category')"
+              @keydown.space.self.prevent="!addSaving && (addStep = 'category')"
             >
               1
             </span>
@@ -600,7 +604,11 @@ useHead({ title: t('connections.title') })
               :class="addStep === 'provider'
                 ? 'bg-primary text-white'
                 : (addStep === 'form' ? 'bg-primary/20 text-primary cursor-pointer' : 'bg-elevated text-muted')"
+              role="button"
+              tabindex="0"
               @click="!addSaving && addCategory && (addStep = 'provider')"
+              @keydown.enter.self.prevent="!addSaving && addCategory && (addStep = 'provider')"
+              @keydown.space.self.prevent="!addSaving && addCategory && (addStep = 'provider')"
             >
               2
             </span>
@@ -638,7 +646,11 @@ useHead({ title: t('connections.title') })
               v-for="cat in CATEGORIES"
               :key="cat.key"
               class="group relative rounded-xl border border-default/60 p-4 cursor-pointer hover:border-primary hover:bg-primary/5 transition-all flex flex-col items-center text-center gap-2"
+              role="button"
+              tabindex="0"
               @click="selectCategory(cat)"
+              @keydown.enter.self.prevent="selectCategory(cat)"
+              @keydown.space.self.prevent="selectCategory(cat)"
             >
               <div class="flex items-center justify-center size-12 rounded-xl bg-primary/10 text-primary group-hover:scale-105 transition-transform">
                 <UIcon :name="cat.icon" class="size-6" />
@@ -684,7 +696,11 @@ useHead({ title: t('connections.title') })
               v-for="p in categoryProviders"
               :key="p.key"
               class="group rounded-xl border border-default/60 p-3.5 cursor-pointer hover:border-primary hover:bg-primary/5 transition-all flex items-center gap-3"
+              role="button"
+              tabindex="0"
               @click="selectProvider(p)"
+              @keydown.enter.self.prevent="selectProvider(p)"
+              @keydown.space.self.prevent="selectProvider(p)"
             >
               <div class="flex items-center justify-center size-10 rounded-lg bg-elevated/70 shrink-0 group-hover:scale-105 transition-transform">
                 <UIcon :name="p.icon" class="size-5 text-highlighted group-hover:text-primary transition-colors" />

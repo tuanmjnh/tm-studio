@@ -751,7 +751,10 @@ function showInFolder(filePath?: string) {
           :key="folder.id"
           class="group/fchip relative rounded-md text-[11px] font-medium flex items-center gap-1.5 shrink-0 transition-colors pl-2 pr-1 py-1 cursor-pointer border"
           :class="selectedFolderId === folder.id ? 'bg-primary/20 border-primary text-primary font-semibold' : 'bg-accented/60 border-default hover:border-accented text-toned'"
+          tabindex="0"
           @click="selectedFolderId = folder.id"
+          @keydown.enter.self.prevent="selectedFolderId = folder.id"
+          @keydown.space.self.prevent="selectedFolderId = folder.id"
           @dragover.prevent="onFolderDragOver($event)"
           @drop.prevent="onFolderDrop($event, folder.id)"
         >
@@ -841,7 +844,11 @@ function showInFolder(filePath?: string) {
         <div
           v-if="filteredAssets.length === 0"
           class="border border-dashed border-default hover:border-primary/50 cursor-pointer rounded-lg p-4 text-center transition-colors group"
+          role="button"
+          tabindex="0"
           @click="handleImportMedia"
+          @keydown.enter.self.prevent="handleImportMedia"
+          @keydown.space.self.prevent="handleImportMedia"
         >
           <UIcon
             name="i-lucide-upload-cloud"
@@ -869,7 +876,10 @@ function showInFolder(filePath?: string) {
             :class="asset.status === 'missing' ? 'border-amber-500/60' : 'border-transparent hover:border-primary/60'"
             :title="asset.name"
             :draggable="asset.status !== 'missing'"
+            tabindex="0"
             @click="asset.status !== 'missing' && handleAddToTimeline(asset)"
+            @keydown.enter.self.prevent="asset.status !== 'missing' && handleAddToTimeline(asset)"
+            @keydown.space.self.prevent="asset.status !== 'missing' && handleAddToTimeline(asset)"
             @dragstart="handleAssetDragStart($event, asset)"
           >
             <div class="relative w-24 h-14 rounded overflow-hidden shrink-0 bg-accented dark:bg-studio-panel">
@@ -1057,7 +1067,10 @@ function showInFolder(filePath?: string) {
             :class="asset.status === 'missing' ? 'border-amber-500/60' : 'border-transparent hover:border-primary/60'"
             :title="asset.name"
             :draggable="asset.status !== 'missing'"
+            tabindex="0"
             @click="asset.status !== 'missing' && handleAddToTimeline(asset)"
+            @keydown.enter.self.prevent="asset.status !== 'missing' && handleAddToTimeline(asset)"
+            @keydown.space.self.prevent="asset.status !== 'missing' && handleAddToTimeline(asset)"
             @dragstart="handleAssetDragStart($event, asset)"
           >
             <div class="relative aspect-video bg-accented dark:bg-studio-panel">
@@ -1177,7 +1190,11 @@ function showInFolder(filePath?: string) {
           v-for="preset in textPresets"
           :key="preset.id"
           class="border border-default hover:border-primary/60 cursor-pointer rounded-lg p-3 bg-muted/60 dark:bg-studio-panel/60 transition-colors"
+          role="button"
+          tabindex="0"
           @click="handleAddTextPreset(preset)"
+          @keydown.enter.self.prevent="handleAddTextPreset(preset)"
+          @keydown.space.self.prevent="handleAddTextPreset(preset)"
         >
           <p
             class="font-bold text-center leading-tight truncate"

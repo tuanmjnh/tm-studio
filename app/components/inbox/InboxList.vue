@@ -340,7 +340,10 @@ defineShortcuts({
             ? 'border-primary bg-primary/10'
             : 'border-transparent hover:border-primary/50 hover:bg-elevated/40'
         ]"
+        tabindex="0"
         @click="selectedId = mail.id"
+        @keydown.enter.self.prevent="selectedId = mail.id"
+        @keydown.space.self.prevent="selectedId = mail.id"
       >
         <div class="flex items-start gap-2.5">
           <!-- Selection Checkbox -->

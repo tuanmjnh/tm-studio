@@ -285,7 +285,11 @@ const actionsClass = computed(() => {
         <div
           v-if="col.sortable"
           class="cursor-pointer select-none flex items-center hover:text-primary-500 transition-colors"
+          role="button"
+          tabindex="0"
           @click="emit('sort', col)"
+          @keydown.enter.prevent="emit('sort', col)"
+          @keydown.space.prevent="emit('sort', col)"
         >
           {{ col.label }}
           <UIcon

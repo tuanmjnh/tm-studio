@@ -344,7 +344,10 @@ function cardMenuItems(project: TmcutProject): DropdownMenuItem[] {
             v-for="project in filteredProjects"
             :key="project.id"
             class="group relative bg-elevated/80 backdrop-blur-sm border border-default rounded-2xl overflow-hidden hover:border-primary/50 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 flex flex-col"
+            tabindex="0"
             @click="router.push(`/tmcut/editor?project=${project.id}`)"
+            @keydown.enter.self.prevent="router.push(`/tmcut/editor?project=${project.id}`)"
+            @keydown.space.self.prevent="router.push(`/tmcut/editor?project=${project.id}`)"
           >
             <div class="aspect-video bg-muted relative overflow-hidden">
               <img
@@ -427,7 +430,10 @@ function cardMenuItems(project: TmcutProject): DropdownMenuItem[] {
             v-for="project in filteredProjects"
             :key="project.id"
             class="flex items-center gap-4 px-5 py-4 bg-elevated/50 hover:bg-primary/5 transition-colors cursor-pointer"
+            tabindex="0"
             @click="router.push(`/tmcut/editor?project=${project.id}`)"
+            @keydown.enter.self.prevent="router.push(`/tmcut/editor?project=${project.id}`)"
+            @keydown.space.self.prevent="router.push(`/tmcut/editor?project=${project.id}`)"
           >
             <UIcon name="i-lucide-film" class="w-5 h-5 text-muted shrink-0" />
             <TmcutBadge

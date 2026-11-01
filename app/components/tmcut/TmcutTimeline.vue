@@ -1205,9 +1205,17 @@ onUnmounted(() => {
       </div>
 
       <!-- In/Out render zone chip (clears on click) -->
-      <div v-if="renderIn !== null || renderOut !== null"
+      <div
+        v-if="renderIn !== null || renderOut !== null"
         class="font-mono text-[10px] flex items-center gap-1.5 bg-primary/10 px-2 py-0.5 rounded border border-primary/30 text-primary select-none"
-        :title="t('tmcut.timelineActions.clearMarks')" @click="clearRenderMarks()">
+        role="button"
+        tabindex="0"
+        :title="t('tmcut.timelineActions.clearMarks')"
+        :aria-label="t('tmcut.timelineActions.clearMarks')"
+        @click="clearRenderMarks()"
+        @keydown.enter.self.prevent="clearRenderMarks()"
+        @keydown.space.self.prevent="clearRenderMarks()"
+      >
         <span>I {{ renderIn !== null ? formatTimecode(renderIn) : '--:--' }}</span>
         <span class="opacity-50">→</span>
         <span>O {{ renderOut !== null ? formatTimecode(renderOut) : '--:--' }}</span>

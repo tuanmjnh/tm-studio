@@ -1176,7 +1176,12 @@ function previewResultDirectly() {
                         : gpuSupport.nvenc
                           ? 'bg-muted/60 border-default text-toned hover:border-accented'
                           : 'bg-muted/30 border-default/40 text-muted cursor-not-allowed'"
+                      role="button"
+                      tabindex="0"
+                      :aria-pressed="activeEncoder.includes('nvenc')"
                       @click="selectEncoderProfile('nvenc')"
+                      @keydown.enter.self.prevent="selectEncoderProfile('nvenc')"
+                      @keydown.space.self.prevent="selectEncoderProfile('nvenc')"
                     >
                       <div class="flex items-center gap-1.5 truncate">
                         <span
@@ -1201,7 +1206,12 @@ function previewResultDirectly() {
                         : gpuSupport.qsv
                           ? 'bg-muted/60 border-default text-toned hover:border-accented'
                           : 'bg-muted/30 border-default/40 text-muted cursor-not-allowed'"
+                      role="button"
+                      tabindex="0"
+                      :aria-pressed="activeEncoder.includes('qsv')"
                       @click="selectEncoderProfile('qsv')"
+                      @keydown.enter.self.prevent="selectEncoderProfile('qsv')"
+                      @keydown.space.self.prevent="selectEncoderProfile('qsv')"
                     >
                       <div class="flex items-center gap-1.5 truncate">
                         <span
@@ -1226,7 +1236,12 @@ function previewResultDirectly() {
                         : gpuSupport.amf
                           ? 'bg-muted/60 border-default text-toned hover:border-accented'
                           : 'bg-muted/30 border-default/40 text-muted cursor-not-allowed'"
+                      role="button"
+                      tabindex="0"
+                      :aria-pressed="activeEncoder.includes('amf')"
                       @click="selectEncoderProfile('amf')"
+                      @keydown.enter.self.prevent="selectEncoderProfile('amf')"
+                      @keydown.space.self.prevent="selectEncoderProfile('amf')"
                     >
                       <div class="flex items-center gap-1.5 truncate">
                         <span
@@ -1249,7 +1264,12 @@ function previewResultDirectly() {
                       :class="!activeEncoder.includes('nvenc') && !activeEncoder.includes('qsv') && !activeEncoder.includes('amf')
                         ? 'bg-accented border-primary/40 text-highlighted'
                         : 'bg-muted/60 border-default text-toned hover:border-accented'"
+                      role="button"
+                      tabindex="0"
+                      :aria-pressed="activeEncoder.includes('cpu')"
                       @click="selectEncoderProfile('cpu')"
+                      @keydown.enter.self.prevent="selectEncoderProfile('cpu')"
+                      @keydown.space.self.prevent="selectEncoderProfile('cpu')"
                     >
                       <div class="flex items-center gap-1.5 truncate">
                         <span
