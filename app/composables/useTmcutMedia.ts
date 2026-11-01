@@ -11,6 +11,7 @@ import {
   normalizeMediaPath
 } from '~/utils/tmcut/media'
 import { clampWaveformPoints } from '~/utils/tmcut/waveform'
+import { probeWebMetadata } from '~/utils/tmcut/webProbe'
 import { readStoredFlag, writeStored } from '~/utils/tmcut/localStore'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { toURL } from '~/utils/ffmpegHelper'
@@ -331,8 +332,8 @@ export function useTmcutMedia() {
         // element. Without this a web-imported clip lands on the timeline at
         // the 5s/10s default length instead of its real duration.
         if (asset.kind !== 'image') {
-          const duration = await probeWebMedia(mediaUrl(asset.path), asset.kind)
-          if (duration > 0) asset.meta.durationSec = Math.round(duration * 100) / 100
+          const probed = await probeWebMetadata(mediaUrl(asset.path), asset.kind)
+          if (probed) asset.meta.durationSec = Math.round(probed.durationSec * 100) / 100
         }
         asset.status = 'ready'
         asset.meta.probedAt = new Date().toISOString()
@@ -441,22 +442,6 @@ export function useTmcutMedia() {
     }
     persistLibrary()
     return { added, duplicates, failed }
-  }
-
-  // Probe duration of a blob: URL via a temporary media element (web only).
-  function probeWebMedia(url: string, kind: TmcutAssetKind): Promise<number> {
-    return new Promise((resolve) => {
-      try {
-        const el = kind === 'audio' ? new Audio() : document.createElement('video')
-        el.preload = 'metadata'
-        el.onloadedmetadata = () => resolve(Number.isFinite(el.duration) ? el.duration : 0)
-        el.onerror = () => resolve(0)
-        el.src = url
-        setTimeout(() => resolve(0), 15000)
-      } catch {
-        resolve(0)
-      }
-    })
   }
 
   // Capture a video frame as a dataURL thumbnail (web only, best-effort).
@@ -579,15 +564,15 @@ export function useTmcutMedia() {
         try {
           // Upload and duration probe run in parallel so a large video does
           // not pay for the transfer and the probe one after the other.
-          const [uploaded, duration] = await Promise.all([
+          const [uploaded, probed] = await Promise.all([
             uploadWebFile(file, file.name),
-            kind === 'image' ? Promise.resolve(0) : probeWebMedia(blobUrl, kind)
+            kind === 'image' ? Promise.resolve(null) : probeWebMetadata(blobUrl, kind)
           ])
           const asset = buildAsset(uploaded.url, kind)
           asset.name = file.name
           asset.meta.fileSize = uploaded.size
-          if (duration > 0) {
-            asset.meta.durationSec = Math.round(duration * 100) / 100
+          if (probed) {
+            asset.meta.durationSec = Math.round(probed.durationSec * 100) / 100
           }
           if (kind === 'video') {
             // Push the captured cover frame to the server too so the
@@ -965,7 +950,6 @@ export function useTmcutMedia() {
     downloadRemoteMedia,
     cancelMediaDownload,
     onMediaDownloadProgress,
-    probeWebMedia,
     captureVideoThumb,
     checkMissing,
     relink,

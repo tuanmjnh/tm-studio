@@ -109,6 +109,165 @@ async function main() {
     assert.deepEqual(seen, ['clip.mp4', null], 'the host owns the mapping, adapter only forwards')
   })
 
+  await check('probe is one question with two honest answers (ADR-020)', async () => {
+    await freshStore()
+    const g = globalThis as Record<string, unknown>
+    const previous = g.window
+    const ffprobePaths: string[] = []
+    let importPipelineCalls = 0
+    g.window = {
+      electronAPI: {
+        tmcut: {
+          // Raw ffprobe JSON, exactly what main returns: the adapter must hand
+          // it to core, because a `30000/1001` frame rate is worth nothing to a
+          // component that reads `metadata.fps`.
+          probeMedia: async ({ filePath }: { filePath: string }) => {
+            ffprobePaths.push(filePath)
+            return {
+              ok: true,
+              probe: {
+                format: { duration: '12.5' },
+                streams: [
+                  { codec_type: 'video', width: 640, height: 360, avg_frame_rate: '30000/1001' },
+                  { codec_type: 'audio' }
+                ]
+              }
+            }
+          },
+          // The import pipeline is the other half of the ownership decision:
+          // probing a file must not start producing thumbnails for it.
+          analyzeAsset: async () => {
+            importPipelineCalls++
+            return { ok: true }
+          }
+        }
+      }
+    }
+    try {
+      const desktop = useTmcutPlatform({ isDesktop: { value: true }, resolveSrc: () => '', request: fakeRequest({}).request })
+      const meta = await desktop.media.probe('D:/clips/a.mkv')
+      assert.deepEqual(ffprobePaths, ['D:/clips/a.mkv'], 'the stored path reaches ffprobe untouched')
+      assert.equal(importPipelineCalls, 0, 'probe is read-only: it never runs the asset pipeline')
+      assert.deepEqual(
+        meta,
+        { durationSec: 12.5, width: 640, height: 360, fps: 30000 / 1001, hasAudio: true },
+        'core normalizes the answer on both hosts'
+      )
+
+      g.window = { electronAPI: { tmcut: { probeMedia: async () => ({ ok: false, error: 'ffprobe failed' }) } } }
+      const refused = useTmcutPlatform({ isDesktop: { value: true }, resolveSrc: () => '', request: fakeRequest({}).request })
+      assert.equal(await refused.media.probe('D:/clips/broken.avi'), null, 'a host that cannot read the file says so instead of returning zeros')
+    } finally {
+      g.window = previous
+    }
+
+    // The browser has no ffprobe, so it probes the playable URL — the mapping
+    // resolveSrc owns — and reports what an element can report.
+    const urls: string[] = []
+    const web = useTmcutPlatform({
+      isDesktop: { value: false },
+      resolveSrc: src => src ? `/uploads/${src}` : '',
+      request: fakeRequest({}).request,
+      probeWeb: async (url) => {
+        urls.push(url)
+        return { durationSec: 8, width: 1280, height: 720, fps: 0, hasAudio: true }
+      }
+    })
+    assert.deepEqual(await web.media.probe('a.mp4'), { durationSec: 8, width: 1280, height: 720, fps: 0, hasAudio: true })
+    assert.deepEqual(urls, ['/uploads/a.mp4'], 'the web host probes the URL it can actually load')
+
+    // The consumers this slice exists for: the two "add a file to the timeline"
+    // handlers used to guess with a media element, which reports an error for
+    // containers Chromium cannot decode and handed every such clip a flat 10 s
+    // or 15 s length.
+    const timeline = read('app/components/tmcut/TmcutTimeline.vue')
+    assert.match(timeline, /platform\.media\.probe\(filePath\)/, 'the timeline asks the host')
+    assert.doesNotMatch(timeline, /tempVideo|tempAudio/, 'no element-based duration guess left behind')
+  })
+
+  await check('the browser answer reports only what a media element can see (ADR-020)', async () => {
+    // The default web branch, driven by a fake DOM rather than an injected
+    // answer. This is the half of ADR-020 that the adapter spec cannot get from
+    // a stub: a browser really does not report a frame rate, and an element
+    // with no video track is the only audio signal it has. A fake element fires
+    // `onloadedmetadata` when `src` is assigned, the same order a real one
+    // uses, so the util's own `preload`/`onerror`/timeout handling is exercised.
+    const { probeWebMetadata } = await import('../../app/utils/tmcut/webProbe')
+    const g = globalThis as Record<string, unknown>
+    const previousDocument = g.document
+    const previousAudio = g.Audio
+
+    function fakeElement(props: Record<string, unknown>, mode: 'metadata' | 'error' = 'metadata') {
+      const el: Record<string, unknown> = { preload: '', ...props }
+      let value = ''
+      Object.defineProperty(el, 'src', {
+        configurable: true,
+        get: () => value,
+        set: (v: string) => {
+          value = v
+          setTimeout(() => {
+            if (mode === 'error') (el.onerror as (() => void) | undefined)?.()
+            else (el.onloadedmetadata as (() => void) | undefined)?.()
+          }, 0)
+        }
+      })
+      return el
+    }
+
+    try {
+      g.document = { createElement: () => fakeElement({ duration: 8, videoWidth: 1280, videoHeight: 720 }) }
+      const video = await probeWebMetadata('/uploads/a.mp4')
+      assert.deepEqual(video, { durationSec: 8, width: 1280, height: 720, fps: 0, hasAudio: false })
+
+      // Audio-only: no video track means zero intrinsic size, which is the
+      // signal the browser gives without an audioTracks list.
+      g.Audio = function () {
+        return fakeElement({ duration: 30, videoWidth: 0, videoHeight: 0 })
+      } as unknown as typeof Audio
+      const audio = await probeWebMetadata('/uploads/voice.mp3', 'audio')
+      assert.deepEqual(audio, { durationSec: 30, width: 0, height: 0, fps: 0, hasAudio: true })
+
+      // A container Chromium cannot decode errors out, and the caller keeps
+      // its own fallback instead of receiving a 0-second clip.
+      g.document = { createElement: () => fakeElement({ duration: 0, videoWidth: 0, videoHeight: 0 }, 'error') }
+      assert.equal(await probeWebMetadata('/uploads/broken.avi'), null, 'an unloadable file is null, not zeros')
+
+      // Same for a file the element loads but reports no length for — a webm
+      // with a streamed duration often does exactly this.
+      g.document = { createElement: () => fakeElement({ duration: Infinity, videoWidth: 640, videoHeight: 360 }) }
+      assert.equal(await probeWebMetadata('/uploads/stream.webm'), null)
+
+      g.document = undefined
+      assert.equal(await probeWebMetadata('/uploads/a.mp4'), null, 'no DOM, no answer (SSR)')
+
+      // And the wiring: an adapter with no injected probe uses this util, so a
+      // metadata question never instantiates the media composable.
+      g.document = { createElement: () => fakeElement({ duration: 4, videoWidth: 320, videoHeight: 240 }) }
+      const web = useTmcutPlatform({
+        isDesktop: { value: false },
+        resolveSrc: src => src ? `/uploads/${src}` : '',
+        request: fakeRequest({}).request
+      })
+      assert.deepEqual(
+        await web.media.probe('clip.mp4'),
+        { durationSec: 4, width: 320, height: 240, fps: 0, hasAudio: false },
+        'the web host defaults to the element probe over the playable URL'
+      )
+
+      // One web probe implementation, not a composable export and a util.
+      const duplicated = [
+        'app/composables/useTmcutMedia.ts',
+        'app/components/tmcut/TmcutMediaPanel.vue',
+        'app/composables/useTmcutPlatform.ts'
+      ].filter(file => read(file).includes('probeWebMedia'))
+      assert.deepEqual(duplicated, [], 'the old in-composable probe name is gone')
+    } finally {
+      g.document = previousDocument
+      if (previousAudio === undefined) delete g.Audio
+      else g.Audio = previousAudio
+    }
+  })
+
   await check('both hosts report the one render contract window (ADR-019)', async () => {
     await freshStore()
     const web = useTmcutPlatform({ isDesktop: { value: false }, resolveSrc: () => '', request: fakeRequest({}).request })

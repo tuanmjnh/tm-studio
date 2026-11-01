@@ -44,7 +44,7 @@ export type {
   TmcutStabilizeStatus,
   MediaTime
 } from '../types/dsl.js'
-export type { TmcutAssetKind } from '../types/media.js'
+export type { TmcutAssetKind, TmcutMediaMetadata } from '../types/media.js'
 export type { TmcutEdl, TmcutEdlSegment } from '../types/edl.js'
 
 export type CoreTrackType = 'video' | 'text' | 'audio'

@@ -27,12 +27,26 @@ export interface TmcutClock {
 }
 
 /**
- * Stored locator -> playable URL. `probe` is optional: it needs a media
- * pipeline (ffprobe / a metadata element) that headless hosts may lack.
+ * Stored locator -> playable URL, plus the read-only metadata question.
+ *
+ * ADR-020: `probe` is required because both shipping hosts can answer it —
+ * Electron through ffprobe, a browser tab through a metadata element. It asks
+ * about a file and writes nothing: thumbnails, waveforms and the persisted
+ * asset record stay with the host's asset pipeline (`analyzeAsset` on desktop),
+ * which consumes the same core normalization rather than a second copy.
+ *
+ * `src` is the stored locator, and each host maps it the way it plays it: a
+ * filesystem path for ffprobe, a URL for the media element. Null means "this
+ * host could not read it" — a missing pipeline, an unreadable file, a document
+ * without streams — and callers must keep their own fallback.
+ *
+ * Field trust differs per host: ffprobe reports every field, while a browser
+ * reports duration and intrinsic size only, so a web probe leaves `fps` at 0
+ * and infers `hasAudio` from the absence of a video track.
  */
 export interface TmcutPlatformMedia {
   resolveSrc(src?: string | null): string
-  probe?(src: string): Promise<TmcutMediaMetadata | null>
+  probe(src: string): Promise<TmcutMediaMetadata | null>
 }
 
 /** One HTML/CSS composition document, loaded once and seeked per frame. */

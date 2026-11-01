@@ -15,17 +15,19 @@
  *    (`openCaptureSession`) and the Nitro server (`playwright-core`). `open()`
  *    therefore rejects and names where the session actually runs. Roadmap M4
  *    is what turns that into a real `open`.
- *  - `media.probe` is left out (optional in the contract): metadata today is
- *    written into the asset store by `analyzeAsset`, which owns its own IPC
- *    path. Exposing it as a pure `src -> metadata` call needs a decision about
- *    who owns that state, not a re-export.
+ *  - `media.probe` answers "what is this file" (ADR-020) and writes nothing.
+ *    The asset pipeline keeps owning persisted metadata: on desktop
+ *    `analyzeAsset` still does its single round-trip that also produces the
+ *    thumbnail, filmstrip and waveform. What changed is that a component no
+ *    longer needs an asset record to ask the question.
  *
  * The adapter is safe to hold in a component: the desktop/web split cannot
  * change after load, because it is the presence of the preload bridge.
  */
-import { createPlatformInfo, HTML_VIDEO_LIMITS, rationalToFloat } from '@tmcut-core'
+import { createPlatformInfo, HTML_VIDEO_LIMITS, normalizeProbe, rationalToFloat } from '@tmcut-core'
 import type {
   FrameRate,
+  TmcutMediaMetadata,
   TmcutPlatformAdapter,
   TmcutPlatformInfo,
   TmcutRenderEngine,
@@ -33,6 +35,7 @@ import type {
 } from '@tmcut-core'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
 import { tmcutHostIpc } from '~/utils/tmcut/hostBridge'
+import { probeWebMetadata } from '~/utils/tmcut/webProbe'
 import { useTmcutExportQueue } from '~/composables/useTmcutExportQueue'
 import type { TmcutExportJob } from '~/composables/useTmcutExportQueue'
 
@@ -55,6 +58,8 @@ export interface TmcutPlatformDeps {
   isDesktop?: { value: boolean }
   /** Stored locator -> playable URL, injected for tests. */
   resolveSrc?: (src?: string | null) => string
+  /** Browser metadata-element probe, injected for tests (ADR-020). */
+  probeWeb?: (url: string) => Promise<TmcutMediaMetadata | null>
   /** Transport for the server-side encoder, injected for tests. */
   request?: PlatformRequest
 }
@@ -237,6 +242,26 @@ export function useTmcutPlatform(deps: TmcutPlatformDeps = {}): TmcutHostPlatfor
   const desktop = deps.isDesktop?.value ?? tmcutHostIpc() !== undefined
   const info = desktop ? desktopInfo() : webInfo()
   const resolveSrc = deps.resolveSrc ?? ((src?: string | null) => mediaOf().resolveMediaSrc(src))
+
+  /**
+   * ADR-020: the same question answered twice a different way, which is why it
+   * belongs on the contract instead of in each component. Desktop runs ffprobe
+   * over the stored **path** (a `media://` URL would not open) and normalizes
+   * the raw JSON with core, so the numbers are the ones `analyzeAsset` writes;
+   * the browser has no pipeline, only a metadata element over the **playable
+   * URL**, and reports duration and size but not frame rate. Both return null
+   * rather than a zero-filled guess, so a caller can keep its own fallback.
+   */
+  const probe = async (src: string): Promise<TmcutMediaMetadata | null> => {
+    if (desktop) {
+      const ipc = tmcutHostIpc()
+      if (!ipc?.probeMedia) return null
+      const result = await ipc.probeMedia({ filePath: src })
+      return result?.ok ? normalizeProbe(result.probe) : null
+    }
+    const askWeb = deps.probeWeb ?? probeWebMetadata
+    return askWeb(resolveSrc(src))
+  }
   const request = deps.request ?? ($fetch as unknown as PlatformRequest)
 
   // Built on first use: a component that only asks about media or capabilities
@@ -256,7 +281,7 @@ export function useTmcutPlatform(deps: TmcutPlatformDeps = {}): TmcutHostPlatfor
 
   return {
     info,
-    media: { resolveSrc },
+    media: { resolveSrc, probe },
     capture: {
       supportsFps: rate => rateInRange(rate, HTML_VIDEO_LIMITS.minFps, HTML_VIDEO_LIMITS.maxFps),
       open: async () => {

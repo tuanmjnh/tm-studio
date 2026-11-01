@@ -8,8 +8,8 @@ import { useTmcutContextMenu } from '~/composables/useTmcutContextMenu'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { useFileSystem } from '~/composables/useFileSystem'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
+import { useTmcutPlatform } from '~/composables/useTmcutPlatform'
 import { useTmcutUiPrefs } from '~/composables/useTmcutUiPrefs'
-import { toURL } from '~/utils/ffmpegHelper'
 import { TMCUT_ASSET_MIME } from '~/utils/tmcut/dnd'
 import type { TmcutAssetDragPayload } from '~/utils/tmcut/dnd'
 import { clipStartSec, clipEndSec, clipDurationSec, clipStartTicks, clipDurationTicks } from '~/utils/tmcut/clipTime'
@@ -72,6 +72,10 @@ const {
 
 const { pickFile, pickWebFiles, selectSaveFile, readText, writeText } = useFileSystem()
 const { isDesktop, importWebFiles, addAssetToTimeline } = useTmcutMedia()
+// ADR-020: the two "add a file straight to the timeline" handlers below need a
+// file's length before any asset record exists, so they ask the host through
+// the adapter instead of each growing its own probe.
+const platform = useTmcutPlatform()
 const { transcribe } = useTmcutAi()
 const { tip, shortcutsOpen, snapOn } = useTmcutUiPrefs()
 const toast = useToast()
@@ -673,38 +677,22 @@ async function handleAddVideo() {
 
   if (!filePath || typeof filePath !== 'string') return
 
-  // Probe media metadata using HTML5 Video element
-  // (toURL serves the file through the privileged media://local protocol)
-  const mediaUrl = toURL(filePath)
-  const tempVideo = document.createElement('video')
-  tempVideo.src = mediaUrl
-  tempVideo.preload = 'metadata'
-
-  tempVideo.onloadedmetadata = () => {
-    const dur = tempVideo.duration || 10
-    const filename = filePath.split(/[\\/]/).pop() || 'Video'
-    addClipToTrack('video', {
-      name: filename,
-      src: filePath,
-      in: 0,
-      out: Math.round(secToTicks(dur)),
-      speed: 1
-    })
-    toast.add({ title: t('tmcut.timelineActions.videoAdded', { name: filename }), color: 'success' })
-  }
-
-  tempVideo.onerror = () => {
-    // Fallback if metadata fails
-    const filename = filePath.split(/[\\/]/).pop() || 'Video'
-    addClipToTrack('video', {
-      name: filename,
-      src: filePath,
-      in: 0,
-      out: 10 * TICKS_PER_SECOND,
-      speed: 1
-    })
-    toast.add({ title: t('tmcut.timelineActions.videoAdded', { name: filename }), color: 'success' })
-  }
+  const filename = filePath.split(/[\\/]/).pop() || 'Video'
+  // ADR-020: ask the host (ffprobe) instead of spawning a media element. That
+  // element fired `onerror` for every container Chromium cannot decode — the
+  // picker above offers mkv and avi — and gave those clips the same 10 s as a
+  // "real" length. A file that truly reports nothing still falls back.
+  const probed = await platform.media.probe(filePath)
+  addClipToTrack('video', {
+    name: filename,
+    src: filePath,
+    in: 0,
+    out: probed && probed.durationSec > 0
+      ? Math.round(secToTicks(probed.durationSec))
+      : 10 * TICKS_PER_SECOND,
+    speed: 1
+  })
+  toast.add({ title: t('tmcut.timelineActions.videoAdded', { name: filename }), color: 'success' })
 }
 
 // Add text overlay
@@ -887,33 +875,21 @@ async function handleAddAudio() {
 
   if (!filePath || typeof filePath !== 'string') return
 
-  const mediaUrl = toURL(filePath)
-  const tempAudio = new Audio(mediaUrl)
-
-  tempAudio.onloadedmetadata = () => {
-    const dur = tempAudio.duration || 15
-    const filename = filePath.split(/[\\/]/).pop() || 'Audio'
-    addClipToTrack('audio', {
-      name: filename,
-      src: filePath,
-      in: 0,
-      out: Math.round(secToTicks(dur)),
-      volume: 100
-    })
-    toast.add({ title: t('tmcut.timelineActions.audioAdded', { name: filename }), color: 'success' })
-  }
-
-  tempAudio.onerror = () => {
-    const filename = filePath.split(/[\\/]/).pop() || 'Audio'
-    addClipToTrack('audio', {
-      name: filename,
-      src: filePath,
-      in: 0,
-      out: 15 * TICKS_PER_SECOND,
-      volume: 100
-    })
-    toast.add({ title: t('tmcut.timelineActions.audioAdded', { name: filename }), color: 'success' })
-  }
+  const filename = filePath.split(/[\\/]/).pop() || 'Audio'
+  // Same host question as "add video" above: the audio picker offers flac and
+  // ogg, which Chromium often cannot decode, and every failure landed the clip
+  // at a flat 15 s.
+  const probed = await platform.media.probe(filePath)
+  addClipToTrack('audio', {
+    name: filename,
+    src: filePath,
+    in: 0,
+    out: probed && probed.durationSec > 0
+      ? Math.round(secToTicks(probed.durationSec))
+      : 15 * TICKS_PER_SECOND,
+    volume: 100
+  })
+  toast.add({ title: t('tmcut.timelineActions.audioAdded', { name: filename }), color: 'success' })
 }
 
 // Synchronize scrolling between panels: the canvas is the master axes

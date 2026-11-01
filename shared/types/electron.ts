@@ -554,6 +554,17 @@ export interface TmcutAnalyzeResult {
   error?: string
 }
 
+/**
+ * Read-only metadata answer (ADR-020) — `analyzeAsset` without the side
+ * effects: main spawns ffprobe and returns its JSON, nothing is written.
+ */
+export interface TmcutProbeResult {
+  ok: boolean
+  /** Raw ffprobe JSON (format + streams); normalized renderer-side via core. */
+  probe?: unknown
+  error?: string
+}
+
 export interface TmcutAnalysisResult {
   ok: boolean
   /** Raw ffmpeg stderr; parsed renderer-side via core analysis module. */
@@ -869,6 +880,13 @@ export interface TmcutNamespace {
   /** Byte progress for a download started with the same `id`. */
   onDownloadProgress(callback: (payload: DownloadProgressPayload) => void): () => void
   analyzeAsset(args: { filePath: string, kind: string }): Promise<TmcutAnalyzeResult>
+  /**
+   * Metadata for one absolute path, with nothing written to disk (ADR-020).
+   * The platform adapter's `media.probe` on the desktop host; import keeps
+   * using `analyzeAsset`, whose single round-trip also makes the thumbnail,
+   * filmstrip and waveform.
+   */
+  probeMedia(args: { filePath: string }): Promise<TmcutProbeResult>
   analyzeScenes(args: { filePath: string, threshold?: number }): Promise<TmcutAnalysisResult>
   analyzeSilence(args: { filePath: string, noiseDb?: number, minDuration?: number }): Promise<TmcutAnalysisResult>
   /** System font faces with file paths (roadmap C-1). Empty array when the scanner addon cannot load. */

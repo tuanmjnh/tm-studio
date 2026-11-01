@@ -14,6 +14,7 @@ import { filterAssetsByFolder, secToTicks, TICKS_PER_SECOND } from '@tmcut-core'
 import { clipDurationSec } from '~/utils/tmcut/clipTime'
 import { effectiveAssetKind } from '~/utils/tmcut/assetKind'
 import { tmcutHostBridge } from '~/utils/tmcut/hostBridge'
+import { probeWebMetadata } from '~/utils/tmcut/webProbe'
 
 /**
  * Left media dock: category tabs, asset bin (list/grid), folders, voiceover,
@@ -41,7 +42,6 @@ const {
   importWebFiles,
   uploadWebFile,
   uploadVideoThumb,
-  probeWebMedia,
   captureVideoThumb,
   relink,
   removeAsset,
@@ -419,8 +419,8 @@ async function handleRelink(asset: TmcutAsset) {
           updated.name = file.name
           updated.meta.fileSize = uploaded.size
           if (updated.kind !== 'image') {
-            const duration = await probeWebMedia(blobUrl, updated.kind)
-            if (duration > 0) updated.meta.durationSec = Math.round(duration * 100) / 100
+            const probed = await probeWebMetadata(blobUrl, updated.kind)
+            if (probed) updated.meta.durationSec = Math.round(probed.durationSec * 100) / 100
           }
           if (updated.kind === 'video') {
             const thumb = await captureVideoThumb(blobUrl)

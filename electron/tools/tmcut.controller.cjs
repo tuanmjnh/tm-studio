@@ -1394,6 +1394,18 @@ function registerTmcutController() {
     return analyzeAsset(safePath, kind)
   })
 
+  // Read-only metadata question (ADR-020): the renderer probes a file it has
+  // not imported yet — a video dropped straight onto the timeline — so this is
+  // analyzeAsset without every side effect: no thumbnail, no filmstrip, no
+  // waveform, nothing written. Raw ffprobe JSON only; normalization stays in
+  // @tmcut/core (normalizeProbe), per the runtime-adapter rule above.
+  ipcMain.handle(`${moduleName}:probeMedia`, async (_event, args) => {
+    const safePath = isUserMediaPath(args?.filePath)
+    if (!safePath) return { ok: false, error: 'Invalid path' }
+    const probe = await probeMediaJson(safePath)
+    return probe ? { ok: true, probe } : { ok: false, error: 'ffprobe failed' }
+  })
+
   ipcMain.handle(`${moduleName}:analyzeScenes`, async (_event, { filePath, threshold }) => {
     const safePath = isUserMediaPath(filePath)
     if (!safePath) return { ok: false, error: 'Invalid path' }

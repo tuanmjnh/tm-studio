@@ -132,6 +132,23 @@ await check('preload inline copies equal the canonical policy arrays', () => {
   assert.deepEqual(grab('OUTBOUND_CHANNELS'), OUTBOUND_CHANNELS)
 })
 
+await check('every tmcut handler main registers is invocable from the preload', () => {
+  // The classic packaged-app bug: a handler lands in a controller but not in
+  // the preload allow-list, so it compiles, type-checks and passes unit tests,
+  // and only the shipped app sees `undefined`. ADR-020 added `probeMedia` and
+  // this pairing is what a reviewer cannot eyeball across two 1200-line files.
+  const controller = readFileSync(join(root, 'electron', 'tools', 'tmcut.controller.cjs'), 'utf8')
+  const preload = readFileSync(join(root, 'electron', 'preload.cjs'), 'utf8')
+  const handles = [...controller.matchAll(/ipcMain\.handle\(`\$\{moduleName\}:([A-Za-z]+)`/g)].map(m => m[1]!)
+  assert.ok(handles.length > 20, `expected the tmcut controller handlers, found ${handles.length}`)
+  const block = preload.match(/const tmcut = exposeNamespace\('tmcut', \{[\s\S]*?invoke: \[([\s\S]*?)\]/)
+  assert.ok(block, 'preload.cjs no longer declares the tmcut invoke list')
+  const invokes = new Set([...block[1]!.matchAll(/'([^']+)'/g)].map(m => m[1]!))
+  const unreachable = handles.filter(name => !invokes.has(name))
+  assert.deepEqual(unreachable, [], `handlers the renderer cannot reach: ${unreachable.join(', ')}`)
+  assert.ok(invokes.has('probeMedia'), 'the adapter probe needs its channel')
+})
+
 await check('choke point gates every later registration (R134)', async () => {
   // The R134 mechanism: swap ipcMain.handle once at startup, every
   // controller registration afterwards is wrapped. Model the swap with
