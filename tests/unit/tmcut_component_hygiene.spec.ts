@@ -459,3 +459,43 @@ describe('editor dialogs live in their own dock', () => {
     assert.match(editor, /onUnmounted\(\(\) => \{[\s\S]*?closeAllDialogs\(\)/)
   })
 })
+
+describe('canvas contract lives in the editor canvas composable', () => {
+  // Aspect-ratio presets, canvas background and frame rate used to sit in the
+  // page script beside the toolbar wiring. They now live in
+  // useTmcutEditorCanvas, so the page keeps only chrome and the custom-canvas
+  // dialog still shares one source of truth for the current size.
+  const editor = read('app/pages/tmcut/editor.vue')
+  const canvas = read('app/composables/useTmcutEditorCanvas.ts')
+
+  it('the page delegates canvas state to the composable', () => {
+    assert.match(editor, /useTmcutEditorCanvas\(\)/)
+    for (const owned of ['canvasLabel', 'statusCanvasLabel', 'canvasMenuItems', 'handleDuplicateAs']) {
+      assert.ok(
+        new RegExp(`^const \\{[^\\n]*\\b${owned}\\b[^\\n]*\\} = useTmcutEditorCanvas\\(\\)`, 'm').test(editor),
+        `${owned} must come from useTmcutEditorCanvas`
+      )
+      assert.ok(
+        !new RegExp(`const ${owned} = computed\\(`).test(editor),
+        `${owned} must not be redeclared in the page`
+      )
+    }
+  })
+
+  it('the composable owns every canvas mutation', () => {
+    for (const mutation of ['switchCanvas', 'setCanvasBackground', 'duplicateAsProject']) {
+      assert.ok(new RegExp(`\\b${mutation}\\b`).test(canvas), `${mutation} is applied by the composable`)
+      assert.ok(
+        !new RegExp(`\\b${mutation}\\b`).test(editor),
+        `${mutation} must not be destructured by the page`
+      )
+    }
+    assert.match(canvas, /useTmcutEditorDialogs\(\)/, 'the custom-canvas modal state is shared, not duplicated')
+    assert.ok(canvas.split('\n').length > 120, 'composable still carries the real implementation')
+  })
+
+  it('the aspect-ratio menu keeps its four groups in order', () => {
+    // Presets, social presets, backgrounds, frame rates — one menu.
+    assert.match(canvas, /return \[presetItems, socialItems, backgroundItems, fpsItems\]/)
+  })
+})
