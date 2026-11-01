@@ -9,7 +9,10 @@
 //
 //  It draws nothing and knows nothing about pixels: units stay in the DSL
 //  v3 contract — ticks for time, 0..1 for opacity/scale/transform, percent
-//  (0..100) for volume before it becomes a 0..1 gain.
+//  (0..100) for volume before it becomes a 0..1 gain. Both stored clip
+//  shapes are accepted: DSL v3 (`timeline`/`source`) and the app store's
+//  flat model (`offset` + `in`/`out`), so the editor preview and core
+//  consumers read one answer.
 //
 //  Source position honors constant speed, reverse and speed ramps: a ramped
 //  clip maps through `rampTimelineToSource` (the same integral the preview
@@ -23,6 +26,7 @@ import { gainAt } from './audio.mjs'
 import { isRamped, rampTimelineToSource } from './retime.mjs'
 import { TICKS_PER_SECOND } from './time.mjs'
 import { transitionWindows } from './transitions.mjs'
+import { clipSpan } from './timeline.mjs'
 
 function finiteOr(value, fallback) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
@@ -32,18 +36,36 @@ function clamp(value, lo, hi) {
   return Math.min(Math.max(value, lo), hi)
 }
 
-/** Absolute span of a v3 clip in ticks. Non-positive durations are empty. */
+/**
+ * Absolute span of a clip in ticks. DSL v3 keeps it under `timeline`; the
+ * app store keeps `offset` + `in`/`out`/`speed` flat — `clipSpan` resolves
+ * both so one evaluator serves the editor and core-native projects.
+ */
 function spanOf(clip) {
-  const start = finiteOr(clip?.timeline?.start, 0)
-  const duration = Math.max(0, finiteOr(clip?.timeline?.duration, 0))
-  return { start, duration, end: start + duration }
+  return clipSpan(clip)
+}
+
+/**
+ * Source range of a clip in ticks: DSL v3 `source.{in,out}` or the app's
+ * flat `in`/`out`. Null when the clip carries neither (text/sticker layers).
+ */
+function sourceRangeOf(clip) {
+  if (clip?.source) {
+    const inT = finiteOr(clip.source.in, 0)
+    return { in: inT, out: finiteOr(clip.source.out, inT) }
+  }
+  if (typeof clip?.in === 'number' && Number.isFinite(clip.in)) {
+    return { in: clip.in, out: finiteOr(clip.out, clip.in) }
+  }
+  return null
 }
 
 /** Clip-local timeline ticks -> source ticks (speed, ramp and reverse aware). */
 function sourceAt(clip, localTicks, duration) {
-  if (!clip?.source) return null
-  const inT = finiteOr(clip.source.in, 0)
-  const outT = finiteOr(clip.source.out, inT)
+  const range = sourceRangeOf(clip)
+  if (!range) return null
+  const inT = range.in
+  const outT = range.out
   const local = clamp(localTicks, 0, duration)
   const lo = Math.min(inT, outT)
   const hi = Math.max(inT, outT)

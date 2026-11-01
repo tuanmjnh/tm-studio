@@ -332,6 +332,93 @@ describe('textAnimationAt', () => {
   })
 })
 
+describe('evaluateTimeline — flat app-model clips', () => {
+  // The app store keeps geometry flat (`offset` + `in`/`out`/`speed`) and
+  // visual values in percent/canvas px; no `timeline`/`source` objects.
+  function flatClip(overrides = {}) {
+    return {
+      id: 'clip-flat',
+      type: 'video',
+      in: 0,
+      out: 4 * T,
+      offset: 0,
+      speed: 1,
+      opacity: 100,
+      scale: 100,
+      x: 0,
+      y: 0,
+      rotation: 0,
+      keyframes: [],
+      effects: [],
+      ...overrides
+    }
+  }
+
+  it('derives the span from offset/in/out/speed and maps the source', () => {
+    const timeline = timelineOf([flatClip({ in: 2 * T, out: 10 * T, offset: 3 * T, speed: 2 })])
+    const layer = only(evaluateTimeline(timeline, 4 * T).layers)
+    assert.equal(layer.startTicks, 3 * T)
+    assert.equal(layer.endTicks, 7 * T, '(10 - 2) s of source at 2x lasts 4 s')
+    assert.equal(layer.localTicks, T)
+    assert.equal(layer.sourceTicks, 4 * T)
+    assert.equal(evaluateTimeline(timeline, 7 * T).layers.length, 0, 'end tick is exclusive')
+    assert.equal(only(evaluateTimeline(timeline, 3 * T).layers).sourceTicks, 2 * T)
+  })
+
+  it('runs reverse and ramp flat clips through the shared retime math', () => {
+    const reversed = timelineOf([flatClip({ in: 0, out: 4 * T, reverse: true })])
+    assert.equal(only(evaluateTimeline(reversed, T).layers).sourceTicks, 3 * T)
+
+    const ramped = timelineOf([flatClip({
+      in: 0,
+      out: 10 * T,
+      speedPoints: [{ t: 0, speed: 1 }, { t: 2 * T, speed: 2 }]
+    })])
+    const layer = only(evaluateTimeline(ramped, 2 * T).layers)
+    assert.equal(layer.ramped, true)
+    assert.equal(layer.sourceTicks, 3 * T)
+  })
+
+  it('resolves flat visual fields (percent scale/opacity, canvas px)', () => {
+    const timeline = timelineOf([flatClip({ scale: 150, opacity: 40, x: 12, y: -8, rotation: 5 })])
+    const layer = only(evaluateTimeline(timeline, T).layers)
+    assert.equal(layer.opacity, 0.4)
+    assert.deepEqual(layer.transform, { x: 12, y: -8, scaleX: 1.5, scaleY: 1.5, rotation: 5 })
+  })
+
+  it('pairs flat transition windows like DSL v3 clips', () => {
+    const outgoing = flatClip({ id: 'a', out: 2 * T })
+    const incoming = flatClip({
+      id: 'b',
+      out: 2 * T,
+      offset: 1.5 * T,
+      transitionIn: { type: 'fade', duration: 0.5 * T }
+    })
+    const timeline = timelineOf([outgoing, incoming])
+
+    const mid = evaluateTimeline(timeline, 1.75 * T).layers
+    assert.equal(mid.length, 2)
+    assert.equal(mid.find(layer => layer.clipId === 'a').transition.role, 'outgoing')
+    const inLayer = mid.find(layer => layer.clipId === 'b')
+    assert.equal(inLayer.transition.role, 'incoming')
+    assert.equal(inLayer.transition.type, 'fade')
+    assert.ok(Math.abs(inLayer.transition.progress - 0.5) < 1e-9)
+
+    assert.equal(only(evaluateTimeline(timeline, 0.5 * T).layers).transition, null)
+  })
+
+  it('skips a flat transition whose neighbour was trimmed away', () => {
+    const broken = flatClip({
+      id: 'b',
+      out: 2 * T,
+      offset: 1.5 * T,
+      transitionIn: { type: 'fade', duration: 0.5 * T }
+    })
+    const layer = only(evaluateTimeline(timelineOf([broken]), 1.75 * T).layers)
+    assert.equal(layer.transition, null)
+  })
+})
+
 describe('evaluateClip', () => {
   it('resolves flat app-model fields without a timeline', () => {
     const visual = evaluateClip({

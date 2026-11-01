@@ -98,6 +98,20 @@ describe('transitions (C5)', () => {
     assert.deepEqual(transitionWindows(track), [])
   })
 
+  it('reports windows for the app store flat clip shape', () => {
+    // Same pair as above, but with `offset` + `in`/`out`/`speed` (no
+    // `timeline`/`source`) — the shape the editor preview hands the core.
+    const items = [
+      { id: 'a', type: 'video', in: 0, out: secToTicks(2), offset: 0, speed: 1 },
+      { id: 'b', type: 'video', in: 0, out: secToTicks(2), offset: secToTicks(1.5), speed: 1, transitionIn: { type: 'fade', duration: secToTicks(0.5) } }
+    ]
+    assert.deepEqual(transitionWindows({ type: 'video', items }), [
+      { fromId: 'a', toId: 'b', startTicks: secToTicks(1.5), endTicks: secToTicks(2) }
+    ])
+    items[0].out = secToTicks(1)
+    assert.deepEqual(transitionWindows({ type: 'video', items }), [], 'trimmed neighbour breaks the pair')
+  })
+
   it('re-applying replaces the previous shift instead of stacking', () => {
     const { timeline, b } = pair()
     assert.equal(applyTransition(timeline, b.id, 'fade', secToTicks(0.5)), true)

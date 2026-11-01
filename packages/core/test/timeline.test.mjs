@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import {
   clipDurationTicks,
   clipEndTicks,
+  clipSpan,
   totalDurationTicks,
   findClip,
   ensureTrack,
@@ -118,6 +119,25 @@ describe('timeline', () => {
     const bad = makeTimeline()
     bad.tracks.push({ id: 't-x', type: 'hologram', items: [{ id: 'c1', source: { in: 5, out: 5 }, timeline: { start: -1, duration: 0 }, speed: 0 }] })
     assert.ok(validateTimeline(bad).length >= 4)
+  })
+
+  it('resolves a span for DSL v3 and flat app-model clips (clipSpan)', () => {
+    const timeline = makeTimeline()
+    const v3 = addClip(timeline, 'video', { source: { in: 0, out: secToTicks(10) }, speed: 2 })
+    assert.deepEqual(clipSpan(v3), { start: 0, duration: secToTicks(5), end: secToTicks(5) })
+
+    assert.deepEqual(
+      clipSpan({ in: 0, out: secToTicks(10), offset: secToTicks(2), speed: 2 }),
+      { start: secToTicks(2), duration: secToTicks(5), end: secToTicks(7) }
+    )
+    // Speed 0/absent falls back to 1, matching the app store accessor.
+    assert.deepEqual(
+      clipSpan({ in: 0, out: secToTicks(2), offset: 0, speed: 0 }),
+      { start: 0, duration: secToTicks(2), end: secToTicks(2) }
+    )
+    // Text/sticker layers carry no media range: empty, never a throw.
+    assert.deepEqual(clipSpan({ id: 't', type: 'text', text: 'Hi' }), { start: 0, duration: 0, end: 0 })
+    assert.deepEqual(clipSpan(null), { start: 0, duration: 0, end: 0 })
   })
 
   it('adds uniquely named tracks and removes them (Roadmap C8)', () => {

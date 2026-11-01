@@ -160,6 +160,19 @@ export function formatTimecode(ticks: number, rate: FrameRate): string
 
 export function clipDurationTicks(clip: TmcutTimelineClip): number
 export function clipEndTicks(clip: TmcutTimelineClip): number
+export interface CoreClipSpan {
+  start: number
+  duration: number
+  end: number
+}
+/**
+ * Absolute tick span for BOTH stored shapes: DSL v3 (`timeline.start` +
+ * `timeline.duration`) and the app store's flat model (`offset` + derived
+ * `in`/`out`/`speed`). Unknown shapes are empty (`duration: 0`).
+ */
+export function clipSpan(
+  clip: TmcutTimelineClip | { offset?: number, in?: number, out?: number, speed?: number } | null | undefined
+): CoreClipSpan
 export function totalDurationTicks(timeline: TmcutTimeline): number
 export function findClip(timeline: TmcutTimeline, clipId: string): { track: TmcutTrack, index: number, clip: TmcutTimelineClip } | null
 export function findTrack(timeline: TmcutTimeline, trackId: string): TmcutTrack | null
@@ -1549,8 +1562,27 @@ export interface CoreTimelineEvaluation {
   tracks: CoreEvaluatedTrack[]
 }
 
+/**
+ * Read-only shapes `evaluateTimeline` accepts in addition to the DSL:
+ * the app store's flat tracks/clips (`offset` + `in`/`out`/`speed`).
+ * `items` stays opaque because the evaluator tolerates both clip shapes.
+ */
+export interface CoreEvaluatorTrackLike {
+  id?: string
+  type?: string
+  muted?: boolean
+  hidden?: boolean
+  locked?: boolean
+  volume?: number
+  items?: readonly unknown[]
+}
+
+export interface CoreEvaluatorTimelineLike {
+  tracks?: readonly CoreEvaluatorTrackLike[]
+}
+
 export function evaluateTimeline(
-  input: TmcutProject | TmcutTimeline | { timeline?: TmcutTimeline } | null | undefined,
+  input: TmcutProject | TmcutTimeline | CoreEvaluatorTimelineLike | { timeline?: CoreEvaluatorTimelineLike } | null | undefined,
   atTicks: number
 ): CoreTimelineEvaluation
 

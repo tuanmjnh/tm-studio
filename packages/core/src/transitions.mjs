@@ -19,7 +19,7 @@
 // =============================================================================
 
 import { TICKS_PER_SECOND } from './time.mjs'
-import { clipDurationTicks, clipEndTicks, findClip } from './timeline.mjs'
+import { clipDurationTicks, clipEndTicks, clipSpan, findClip } from './timeline.mjs'
 
 // The 6 original keys keep their order and semantics (stored projects).
 // The 39 keys added in R128 are the remaining FFmpeg `xfade` transition
@@ -164,6 +164,9 @@ export function clearTransition(timeline, clipId) {
  * start, `endTicks` = the original cut = the neighbor's end). Pairs broken
  * by later edits (the neighbor no longer ends at the window end) are
  * skipped — they have no valid overlap region. Sorted by position.
+ *
+ * Spans go through `clipSpan`, so the app store's flat clips (no
+ * `timeline`/`source`) resolve exactly like DSL v3 ones.
  */
 export function transitionWindows(track) {
   const items = Array.isArray(track?.items) ? track.items : []
@@ -171,10 +174,10 @@ export function transitionWindows(track) {
   for (const clip of items) {
     const duration = clip.transitionIn?.duration
     if (!(typeof duration === 'number' && duration > 0)) continue
-    const startTicks = clip.timeline.start
+    const startTicks = clipSpan(clip).start
     const endTicks = startTicks + duration
     const outgoing = items.find(other =>
-      other.id !== clip.id && Math.abs(clipEndTicks(other) - endTicks) <= ADJACENCY_EPS)
+      other.id !== clip.id && Math.abs(clipSpan(other).end - endTicks) <= ADJACENCY_EPS)
     if (!outgoing) continue
     windows.push({ fromId: outgoing.id, toId: clip.id, startTicks, endTicks })
   }

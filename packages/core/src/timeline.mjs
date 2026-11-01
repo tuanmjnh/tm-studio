@@ -38,6 +38,32 @@ export function clipEndTicks(clip) {
   return start + clipDurationTicks(clip)
 }
 
+function speedOf(clip) {
+  return isFiniteNumber(clip?.speed) && clip.speed > 0 ? clip.speed : 1
+}
+
+/**
+ * Absolute tick span, accepting BOTH stored shapes: DSL v3 (`timeline.start`
+ * + `clip.timeline.duration`) and the app store's flat model (`offset` +
+ * `in`/`out`/`speed`, where the span is derived exactly like the app's
+ * `clipDurationTicks`). Unknown shapes are empty (`duration: 0`), which
+ * keeps every caller's live check false instead of throwing.
+ */
+export function clipSpan(clip) {
+  if (clip?.timeline) {
+    const start = isFiniteNumber(clip.timeline.start) ? clip.timeline.start : 0
+    const duration = Math.max(0, isFiniteNumber(clip.timeline.duration) ? clip.timeline.duration : 0)
+    return { start, duration, end: start + duration }
+  }
+  if (isFiniteNumber(clip?.in) || isFiniteNumber(clip?.out) || isFiniteNumber(clip?.offset)) {
+    const start = Math.max(0, Math.round(isFiniteNumber(clip.offset) ? clip.offset : 0))
+    const span = (isFiniteNumber(clip.out) ? clip.out : 0) - (isFiniteNumber(clip.in) ? clip.in : 0)
+    const duration = Math.max(0, Math.round(span / speedOf(clip)))
+    return { start, duration, end: start + duration }
+  }
+  return { start: 0, duration: 0, end: 0 }
+}
+
 /** Total timeline duration in ticks (max clip end across tracks). */
 export function totalDurationTicks(timeline) {
   let max = 0
