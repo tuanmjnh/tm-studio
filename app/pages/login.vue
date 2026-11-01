@@ -122,8 +122,9 @@ useHead({ title: computed(() => t('auth.signIn')) })
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 px-4">
+  <div class="relative min-h-screen flex items-center justify-center studio-ambient px-4">
     <div class="absolute top-4 right-4 flex items-center gap-2">
+      <UColorModeButton color="neutral" variant="soft" size="sm" />
       <UTooltip :text="t('settings.title')">
         <UButton
           icon="i-lucide-settings"
@@ -136,114 +137,115 @@ useHead({ title: computed(() => t('auth.signIn')) })
       </UTooltip>
     </div>
 
-    <UCard class="w-full max-w-md">
-      <template #header>
-        <div class="text-center">
-          <div
-            class="inline-flex items-center justify-center size-12 rounded-xl bg-primary/10 text-primary mb-3 mx-auto"
-          >
-            <UIcon v-if="totpChallenge" name="i-lucide-shield-check" class="size-6" />
-            <MediaVisual v-else src="/logo.svg" size="size-7" />
+    <div class="glass-surface w-full max-w-md rounded-xl">
+      <UCard class="w-full" :ui="{ root: 'bg-transparent ring-0 shadow-none' }">
+        <template #header>
+          <div class="text-center">
+            <div
+              class="inline-flex items-center justify-center size-12 rounded-xl bg-primary/10 text-primary mb-3 mx-auto"
+            >
+              <UIcon v-if="totpChallenge" name="i-lucide-shield-check" class="size-6" />
+              <MediaVisual v-else src="/logo.svg" size="size-7" />
+            </div>
+            <h1 class="text-2xl font-bold mt-1">
+              {{ totpChallenge ? $t('auth.totpTitle') : $t('auth.welcomeBack') }}
+            </h1>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              {{ totpChallenge ? $t('auth.totpSubtitle', { email: totpChallenge.user.email }) : $t('auth.signInToAccount')
+              }}
+            </p>
           </div>
-          <h1 class="text-2xl font-bold mt-1">
-            {{ totpChallenge ? $t('auth.totpTitle') : $t('auth.welcomeBack') }}
-          </h1>
-          <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            {{ totpChallenge ? $t('auth.totpSubtitle', { email: totpChallenge.user.email }) : $t('auth.signInToAccount')
-            }}
-          </p>
-        </div>
-      </template>
+        </template>
 
-      <UForm
-        v-if="!totpChallenge"
-        :schema="schema"
-        :state="state"
-        class="space-y-4"
-        @submit="onSubmit"
-      >
-        <UFormField :label="$t('auth.emailOrUsername')" name="email">
-          <UInput
-            v-model="state.email"
-            type="text"
-            :placeholder="$t('auth.emailPlaceholder')"
-            class="w-full"
-          />
-        </UFormField>
+        <UForm
+          v-if="!totpChallenge"
+          :schema="schema"
+          :state="state"
+          class="space-y-4"
+          @submit="onSubmit"
+        >
+          <UFormField :label="$t('auth.emailOrUsername')" name="email">
+            <UInput
+              v-model="state.email"
+              type="text"
+              :placeholder="$t('auth.emailPlaceholder')"
+              class="w-full"
+            />
+          </UFormField>
 
-        <UFormField :label="$t('auth.password')" name="password">
-          <BasePasswordInput v-model="state.password" :placeholder="$t('auth.passwordPlaceholder')" class="w-full" />
-        </UFormField>
+          <UFormField :label="$t('auth.password')" name="password">
+            <BasePasswordInput v-model="state.password" :placeholder="$t('auth.passwordPlaceholder')" class="w-full" />
+          </UFormField>
 
-        <div class="flex items-center justify-between text-sm py-1">
-          <UCheckbox v-model="remember" :label="$t('auth.rememberMe')" />
-          <NuxtLink to="/forgot-password" class="text-primary hover:underline">
-            {{ $t('auth.forgotPassword') }}
-          </NuxtLink>
+          <div class="flex items-center justify-between text-sm py-1">
+            <UCheckbox v-model="remember" :label="$t('auth.rememberMe')" />
+            <NuxtLink to="/forgot-password" class="text-primary hover:underline">
+              {{ $t('auth.forgotPassword') }}
+            </NuxtLink>
+          </div>
+
+          <UButton
+            type="submit"
+            variant="soft"
+            block
+            :loading="auth.loading.value"
+            :disabled="auth.loading.value"
+          >
+            {{ $t('auth.signIn') }}
+          </UButton>
+        </UForm>
+
+        <div v-if="!totpChallenge" class="mt-4 flex items-center gap-3">
+          <USeparator class="flex-1" />
+          <span class="text-xs text-muted">{{ $t('common.or') }}</span>
+          <USeparator class="flex-1" />
         </div>
 
         <UButton
-          type="submit"
-          variant="soft"
+          v-if="!totpChallenge"
+          class="mt-4"
+          icon="i-lucide-fingerprint"
+          variant="outline"
           block
-          :loading="auth.loading.value"
+          :loading="passkeyLoading"
           :disabled="auth.loading.value"
+          @click="onPasskeyLogin"
         >
-          {{ $t('auth.signIn') }}
+          {{ $t('auth.passkeySignIn') }}
         </UButton>
-      </UForm>
 
-      <div v-if="!totpChallenge" class="mt-4 flex items-center gap-3">
-        <USeparator class="flex-1" />
-        <span class="text-xs text-muted">{{ $t('common.or') }}</span>
-        <USeparator class="flex-1" />
-      </div>
-
-      <UButton
-        v-if="!totpChallenge"
-        class="mt-4"
-        icon="i-lucide-fingerprint"
-        variant="outline"
-        block
-        :loading="passkeyLoading"
-        :disabled="auth.loading.value"
-        @click="onPasskeyLogin"
-      >
-        {{ $t('auth.passkeySignIn') }}
-      </UButton>
-
-      <form v-else class="space-y-4" @submit.prevent="onVerifyTotp">
-        <UFormField :label="$t('auth.totpCodeLabel')" name="code" required>
-          <UInput
-            v-model="totpCode"
-            type="text"
-            inputmode="numeric"
-            autocomplete="one-time-code"
-            maxlength="6"
-            :placeholder="$t('auth.totpCodePlaceholder')"
-            class="w-full text-center tracking-[0.5em]"
-            size="lg"
-          />
-        </UFormField>
-        <UButton
-          type="submit"
-          variant="soft"
-          block
-          :loading="auth.loading.value"
-          :disabled="auth.loading.value || totpCode.trim().length < 6"
-        >
-          {{ $t('auth.totpVerify') }}
-        </UButton>
-        <UButton
-          type="button"
-          color="neutral"
-          variant="ghost"
-          block
-          @click="resetTotp"
-        >
-          {{ $t('auth.totpBack') }}
-        </UButton>
-      </form>
+        <form v-else class="space-y-4" @submit.prevent="onVerifyTotp">
+          <UFormField :label="$t('auth.totpCodeLabel')" name="code" required>
+            <UInput
+              v-model="totpCode"
+              type="text"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              maxlength="6"
+              :placeholder="$t('auth.totpCodePlaceholder')"
+              class="w-full text-center tracking-[0.5em]"
+              size="lg"
+            />
+          </UFormField>
+          <UButton
+            type="submit"
+            variant="soft"
+            block
+            :loading="auth.loading.value"
+            :disabled="auth.loading.value || totpCode.trim().length < 6"
+          >
+            {{ $t('auth.totpVerify') }}
+          </UButton>
+          <UButton
+            type="button"
+            color="neutral"
+            variant="ghost"
+            block
+            @click="resetTotp"
+          >
+            {{ $t('auth.totpBack') }}
+          </UButton>
+        </form>
       <!-- <template v-if="!totpChallenge" #footer>
         <p class="text-center text-sm text-gray-500 dark:text-gray-400">
           {{ $t("auth.noAccount") || "Chưa có tài khoản?" }}
@@ -252,7 +254,8 @@ useHead({ title: computed(() => t('auth.signIn')) })
           </NuxtLink>
         </p>
       </template> -->
-    </UCard>
+      </UCard>
+    </div>
     <LazyDashboardSettingsSlideover />
   </div>
 </template>
