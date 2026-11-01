@@ -13,7 +13,8 @@ export const useWebPush = () => {
 
   const isElectronEnv = (): boolean => {
     if (typeof window === 'undefined') return false
-    return !!(window as any).electronAPI?.isElectron || (typeof navigator !== 'undefined' && /electron/i.test(navigator.userAgent))
+    const electronAPI = (window as unknown as { electronAPI?: { isElectron?: boolean } }).electronAPI
+    return !!electronAPI?.isElectron || (typeof navigator !== 'undefined' && /electron/i.test(navigator.userAgent))
   }
 
   const checkSupport = () => {
@@ -53,7 +54,11 @@ export const useWebPush = () => {
 
   const showNativeNotification = async (title: string, body?: string) => {
     if (typeof window === 'undefined') return
-    const electronAPI = (window as any).electronAPI
+    const electronAPI = (window as unknown as {
+      electronAPI?: {
+        system?: { showNotification?: (payload: { title: string, body?: string }) => Promise<boolean> }
+      }
+    }).electronAPI
     if (electronAPI?.system?.showNotification) {
       try {
         const res = await electronAPI.system.showNotification({ title, body })
@@ -157,8 +162,9 @@ export const useWebPush = () => {
 
     // 2. Standard Web Browser environment (Chrome, Edge, Firefox, Brave)
     try {
-      const resConfig = await hubFetch<{ success: boolean, data: any }>(`/api/v1/apps/${appId}/configs/public`)
-      const sysConfig: Record<string, string> = resConfig?.data?.values || resConfig?.data || {}
+      const resConfig = await hubFetch<{ success: boolean, data?: Record<string, unknown> }>(`/api/v1/apps/${appId}/configs/public`)
+      const configValues = resConfig?.data?.values
+      const sysConfig = (configValues ?? resConfig?.data ?? {}) as Record<string, string>
 
       let registration: ServiceWorkerRegistration | null = null
       try {
@@ -205,9 +211,12 @@ export const useWebPush = () => {
           if (fcmToken) {
             currentFcmToken.value = fcmToken
             try {
-              localStorage.setItem(`fcm_token_${appId}`, fcmToken)
-            } catch {
-              // ignore
+              await $fetch('/api/push/fcm-token', {
+                method: 'POST',
+                body: { fcmToken }
+              })
+            } catch (cookieErr) {
+              console.warn('[WebPush] Could not persist FCM token in HttpOnly cookie:', cookieErr)
             }
             subscriptionData = { fcmToken }
           }
@@ -235,9 +244,10 @@ export const useWebPush = () => {
               }
             }
             subscription.value = pushSubscription
-          } catch (pushErr: any) {
-            const msg = String(pushErr?.message || pushErr)
-            if (msg.includes('push service not available') || pushErr?.name === 'AbortError') {
+          } catch (pushErr) {
+            const pushErrInfo = pushErr as { message?: string, name?: string }
+            const msg = String(pushErrInfo?.message || pushErr)
+            if (msg.includes('push service not available') || pushErrInfo?.name === 'AbortError') {
               console.warn('[WebPush] Push service not available in browser. Falling back to local desktop notifications.')
             } else {
               throw pushErr
@@ -285,9 +295,10 @@ export const useWebPush = () => {
         t('settings.desktopNotifDesc', 'Receive desktop notifications.')
       )
       return true
-    } catch (err: any) {
-      const msg = String(err?.message || err)
-      if (msg.includes('push service not available') || err?.name === 'AbortError') {
+    } catch (err) {
+      const errInfo = err as { message?: string, name?: string }
+      const msg = String(errInfo?.message || err)
+      if (msg.includes('push service not available') || errInfo?.name === 'AbortError') {
         try {
           let desktopEndpoint = ''
           try {
@@ -356,13 +367,6 @@ export const useWebPush = () => {
         }
       }
 
-      let storedFcm = currentFcmToken.value
-      try {
-        if (!storedFcm) storedFcm = localStorage.getItem(`fcm_token_${appId}`)
-      } catch {
-        // ignore
-      }
-
       let storedDesktopEndpoint = ''
       try {
         storedDesktopEndpoint = localStorage.getItem(`desktop_endpoint_${appId}`) || ''
@@ -372,15 +376,12 @@ export const useWebPush = () => {
 
       const endpointToUnsub = identifier || storedDesktopEndpoint
 
-      if (endpointToUnsub || storedFcm) {
-        await hubFetch(`/api/v1/apps/${appId}/notifications/unsubscribe`, {
-          method: 'POST',
-          body: {
-            endpoint: endpointToUnsub || undefined,
-            fcmToken: storedFcm || undefined
-          }
-        }).catch(() => {})
-      }
+      // The FCM token lives in an HttpOnly cookie, so the server forwards the
+      // hub unsubscribe on our behalf.
+      await $fetch('/api/push/fcm-token', {
+        method: 'DELETE',
+        body: { endpoint: endpointToUnsub || undefined }
+      }).catch(() => {})
 
       try {
         localStorage.removeItem(`fcm_token_${appId}`)
@@ -400,6 +401,38 @@ export const useWebPush = () => {
       return false
     } finally {
       isLoading.value = false
+    }
+  }
+
+  // Moves a legacy localStorage FCM token into the HttpOnly cookie, then
+  // reports whether the server currently holds one. The token value never
+  // travels back to page scripts.
+  const syncFcmTokenCookie = async (): Promise<boolean> => {
+    let legacyToken: string | null = null
+    try {
+      legacyToken = localStorage.getItem(`fcm_token_${appId}`)
+    } catch {
+      // ignore
+    }
+
+    if (legacyToken) {
+      try {
+        await $fetch('/api/push/fcm-token', { method: 'POST', body: { fcmToken: legacyToken } })
+        try {
+          localStorage.removeItem(`fcm_token_${appId}`)
+        } catch {
+          // ignore
+        }
+      } catch {
+        // Unauthenticated or offline: keep the legacy key for the next run
+      }
+    }
+
+    try {
+      const res = await $fetch<{ success: boolean, data: { exists: boolean } }>('/api/push/fcm-token')
+      return !!res?.data?.exists
+    } catch {
+      return false
     }
   }
 
@@ -437,16 +470,10 @@ export const useWebPush = () => {
         if (registration) {
           try {
             const pushSubscription = await registration.pushManager.getSubscription()
-            let storedFcm = null
-            try {
-              storedFcm = localStorage.getItem(`fcm_token_${appId}`)
-            } catch {
-              // ignore
-            }
+            const hasServerToken = await syncFcmTokenCookie()
 
-            if (pushSubscription || storedFcm) {
+            if (pushSubscription || hasServerToken) {
               if (pushSubscription) subscription.value = pushSubscription
-              if (storedFcm) currentFcmToken.value = storedFcm
               isSubscribed.value = true
               return true
             }
