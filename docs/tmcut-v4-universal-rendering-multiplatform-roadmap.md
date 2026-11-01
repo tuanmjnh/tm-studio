@@ -946,6 +946,8 @@ Nên triển khai theo giai đoạn, giữ sản phẩm hiện tại hoạt đ�
 
 ### Phase 0 – Audit và đóng băng contract
 
+> **Trạng thái: PASS (2026-11-01).** Deliverable đầy đủ tại [v4-phase-0-audit.md](file:///D:/Applications/tm-studio/docs/v4-phase-0-audit.md): bản đồ kiến trúc, kiểm kê 20 tính năng theo runtime, đặc tả Project schema (app model vs DSL v3 + chuỗi migration v1→v3), 10 khoảng trống và 5 ADR cần chốt trước Phase 1.
+
 - Audit repo hiện tại.
 - Xác định Project JSON hiện tại.
 - Xác định Timeline/Timebase hiện tại.
