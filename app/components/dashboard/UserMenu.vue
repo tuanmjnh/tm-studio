@@ -167,6 +167,7 @@ const items = computed<DropdownMenuItem[][]>(() => [
       variant="ghost"
       block
       :square="collapsed"
+      :aria-label="collapsed ? (auth.user.value?.name || t('common.guest')) : undefined"
       class="data-[state=open]:bg-elevated"
       :ui="{ trailingIcon: 'text-dimmed' }"
     />

@@ -1430,7 +1430,9 @@
       "deleted": "Đã xóa thư mục \"{name}\"",
       "moved": "Đã chuyển vào thư mục \"{folder}\"",
       "removedFromFolder": "Đã gỡ tệp khỏi thư mục",
-      "noFolders": "Chưa có thư mục nào"
+      "noFolders": "Chưa có thư mục nào",
+      "actions": "Thao tác thư mục",
+      "colorOption": "Màu nhãn {color}"
     },
     "templateLibrary": {
       "title": "Thư viện mẫu TMCut",

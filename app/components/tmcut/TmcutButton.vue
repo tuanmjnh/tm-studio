@@ -12,6 +12,11 @@ interface Props {
   loading?: boolean
   disabled?: boolean
   fullWidth?: boolean
+  // Wrapper props that would otherwise fall through by accident: declaring
+  // ariaLabel keeps an icon-only call site named after Vue stops treating the
+  // attribute as an inherited attr, and label covers text-only call sites.
+  label?: string
+  ariaLabel?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -35,6 +40,8 @@ const props = withDefaults(defineProps<Props>(), {
     :loading="props.loading"
     :disabled="props.disabled"
     :block="props.fullWidth"
+    :label="props.label"
+    :aria-label="props.ariaLabel"
   >
     <slot v-if="$slots.default" />
   </UButton>

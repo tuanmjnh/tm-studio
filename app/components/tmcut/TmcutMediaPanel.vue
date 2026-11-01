@@ -762,6 +762,7 @@ function showInFolder(filePath?: string) {
             <button
               type="button"
               class="p-0.5 rounded hover:bg-accented text-muted hover:text-highlighted"
+              :aria-label="t('tmcut.folders.actions')"
               @click.stop
             >
               <UIcon name="i-lucide-more-vertical" class="size-3" />
@@ -1307,6 +1308,8 @@ function showInFolder(filePath?: string) {
               class="size-6 rounded-full transition-transform cursor-pointer border-2"
               :class="newFolderColor === c ? 'scale-115 border-white ring-2 ring-primary/50' : 'border-transparent hover:border-white/60'"
               :style="{ backgroundColor: c }"
+              :aria-label="t('tmcut.folders.colorOption', { color: c })"
+              :aria-pressed="newFolderColor === c"
               @click="newFolderColor = c"
             />
           </div>
@@ -1363,6 +1366,8 @@ function showInFolder(filePath?: string) {
               class="size-6 rounded-full transition-transform cursor-pointer border-2"
               :class="editingFolderColor === c ? 'scale-115 border-white ring-2 ring-primary/50' : 'border-transparent hover:border-white/60'"
               :style="{ backgroundColor: c }"
+              :aria-label="t('tmcut.folders.colorOption', { color: c })"
+              :aria-pressed="editingFolderColor === c"
               @click="editingFolderColor = c"
             />
           </div>

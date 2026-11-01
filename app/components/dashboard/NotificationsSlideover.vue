@@ -37,7 +37,7 @@ const getAvatarSrc = (sender?: { avatar?: string | { src: string } } | null): st
             variant="link"
             size="xs"
             icon="i-lucide-check-check"
-            label="Mark all as read"
+            :label="t('notifications.markAllRead')"
             @click="onMarkAll"
           />
         </div>

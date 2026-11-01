@@ -1430,7 +1430,9 @@
       "deleted": "Folder \"{name}\" deleted",
       "moved": "Asset moved to \"{folder}\"",
       "removedFromFolder": "Asset removed from folder",
-      "noFolders": "No folders created yet"
+      "noFolders": "No folders created yet",
+      "actions": "Folder actions",
+      "colorOption": "Tag color {color}"
     },
     "templateLibrary": {
       "title": "TMCut Template Library",

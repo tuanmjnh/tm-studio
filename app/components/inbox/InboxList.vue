@@ -187,7 +187,12 @@ defineShortcuts({
           size="xs"
         >
           <template #trailing>
-            <button type="button" class="cursor-pointer hover:opacity-75 ms-1" @click="emit('clearSearch')">
+            <button
+              type="button"
+              class="cursor-pointer hover:opacity-75 ms-1"
+              :aria-label="t('inbox.clearSearch')"
+              @click="emit('clearSearch')"
+            >
               <UIcon name="i-lucide-x" class="size-3" />
             </button>
           </template>
@@ -347,6 +352,8 @@ defineShortcuts({
           <button
             type="button"
             class="pt-0.5 shrink-0 text-muted hover:text-warning transition-colors cursor-pointer"
+            :aria-label="t(mail.starred ? 'inbox.unstar' : 'inbox.star')"
+            :aria-pressed="mail.starred"
             @click.stop="emit('toggleStar', mail)"
           >
             <UIcon
