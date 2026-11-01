@@ -9,11 +9,8 @@
  * mediaUrl() / toURL (the privileged media:// protocol) before rendering.
  */
 
+import { tmcutHostIpc } from '~/utils/tmcut/hostBridge'
 import { filmstripTimes, secToTicks, ticksToSec } from '@tmcut-core'
-
-function tmcutIpc() {
-  return typeof window !== 'undefined' ? window.electronAPI?.tmcut : undefined
-}
 
 export interface TmcutFrameJob {
   id: string | number
@@ -54,10 +51,10 @@ const clipStripCache = new Map<string, string[]>()
 const clipStripInFlight = new Map<string, Promise<string[]>>()
 
 export function useTmcutFrames() {
-  const available = computed(() => !!tmcutIpc())
+  const available = computed(() => !!tmcutHostIpc())
 
   async function extractFrame(src: string, atSec: number, width = 320): Promise<string | null> {
-    const ipc = tmcutIpc()
+    const ipc = tmcutHostIpc()
     if (!ipc || !src || !Number.isFinite(atSec)) return null
     try {
       const result = await ipc.extractFrame({ src, atSec, width })
@@ -70,7 +67,7 @@ export function useTmcutFrames() {
   /** Bounded-concurrency batch extraction (segment thumbnail rows). */
   async function extractFrames(jobs: TmcutFrameJob[], concurrency = 3): Promise<Map<string | number, string>> {
     const frames = new Map<string | number, string>()
-    if (!tmcutIpc() || jobs.length === 0) return frames
+    if (!tmcutHostIpc() || jobs.length === 0) return frames
     let cursor = 0
     async function worker() {
       while (cursor < jobs.length) {

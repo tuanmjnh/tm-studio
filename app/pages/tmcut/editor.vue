@@ -12,6 +12,7 @@ import { useTmcutTemplates } from '~/composables/useTmcutTemplates'
 import { findCanvasPreset, canvasFpsValue, normalizeCanvas } from '~/utils/tmcut/canvas'
 import { instantiateTemplate } from '@tmcut-core'
 import { parseTemplateFile } from '~/utils/tmcut/templateIo'
+import { tmcutHostBridge } from '~/utils/tmcut/hostBridge'
 import type { TmcutTrack } from '~/composables/useTmcutProject'
 
 definePageMeta({ layout: 'studio' })
@@ -89,8 +90,9 @@ onMounted(async () => {
   // block at the top of this file).
   const { setMcpEventEmitter } = await import('~/composables/useTmcutExportQueue')
   setMcpEventEmitter((event) => {
-    if (window.electronAPI?.mcp?.respond) {
-      window.electronAPI.mcp.respond(event.payload.requestId || '', event)
+    const bridge = tmcutHostBridge()
+    if (bridge?.mcp?.respond) {
+      bridge.mcp.respond(event.payload.requestId || '', event)
     }
   })
 })
@@ -188,7 +190,7 @@ function handleSaveAsTemplate() {
  */
 async function handleImportTemplateIntoProject() {
   if (!currentProject.value) return
-  const api = window.electronAPI
+  const api = tmcutHostBridge()
   if (!api?.dialog || !api?.fileManager) {
     toast.add({ title: t('tmcut.templateLibrary.importFailedToast', { count: 0 }), color: 'error', icon: 'i-lucide-file-x' })
     return

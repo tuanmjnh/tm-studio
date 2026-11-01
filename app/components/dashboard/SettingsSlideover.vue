@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { tmcutHostBridge } from '~/utils/tmcut/hostBridge'
+
 const { locale, setLocale: setI18nLocale, t } = useI18n()
 const { isSettingsSlideoverOpen } = useDashboard()
 const router = useRouter()
@@ -10,7 +12,7 @@ const isStorageModalOpen = ref(false)
 // hydrate differently on server vs desktop and warn.
 const isElectron = ref(false)
 onMounted(() => {
-  isElectron.value = !!window.electronAPI?.isElectron
+  isElectron.value = !!tmcutHostBridge()?.isElectron
 })
 
 const locales: Array<{ code: 'en' | 'vi', name: string, language: string, dir: 'ltr' | 'rtl', messages: Record<string, unknown> }> = [

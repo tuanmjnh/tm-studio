@@ -10,6 +10,7 @@ import { canvasFpsValue } from '~/utils/tmcut/canvas'
 import { clipDurationSec, clipDurationTicks, clipStartTicks } from '~/utils/tmcut/clipTime'
 import { applyMediaAnimPreset, effectDefaultParams, groupEffectsByCategory, registryEntries, humanizeKey, filterPresets, setLutPresetOnClip, activeLutPreset } from '~/utils/tmcut/fxLibrary'
 import type { MediaAnimPreset } from '~/utils/tmcut/fxLibrary'
+import { tmcutHostIpc } from '~/utils/tmcut/hostBridge'
 
 const { t } = useI18n()
 const toast = useToast()
@@ -348,13 +349,14 @@ async function runStabilization(forcedLevel?: TmcutStabilizeLevel) {
   const src = clip.value.src
   const level = forcedLevel || clip.value.stabilizeLevel || 'medium'
 
-  if (!window.electronAPI?.tmcut) return
+  const ipc = tmcutHostIpc()
+  if (!ipc) return
   updateClip(clipId, {
     stabilizeStatus: 'processing'
   })
 
   try {
-    const res = await window.electronAPI.tmcut.stabilizeVideo({
+    const res = await ipc.stabilizeVideo({
       filePath: src,
       options: { level }
     })
@@ -762,7 +764,7 @@ const storagePath = ref('')
 onMounted(async () => {
   void ensureFonts()
   try {
-    const dirs = await window.electronAPI?.tmcut?.getPaths()
+    const dirs = await tmcutHostIpc()?.getPaths()
     storagePath.value = dirs?.projects || ''
   } catch {
     storagePath.value = ''

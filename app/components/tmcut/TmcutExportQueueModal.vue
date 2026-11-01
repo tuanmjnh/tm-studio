@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useTmcutExportQueue } from '~/composables/useTmcutExportQueue'
+import { tmcutHostBridge } from '~/utils/tmcut/hostBridge'
 import type { TmcutExportJob } from '~/composables/useTmcutExportQueue'
 
 const open = defineModel<boolean>('open', { default: false })
@@ -22,14 +23,16 @@ const {
 } = useTmcutExportQueue()
 
 function openFile(path: string) {
-  if (path && window.electronAPI?.openPath) {
-    window.electronAPI.openPath(path)
+  const bridge = tmcutHostBridge()
+  if (path && bridge?.openPath) {
+    bridge.openPath(path)
   }
 }
 
 function openFolder(path: string) {
-  if (path && window.electronAPI?.showItemInFolder) {
-    window.electronAPI.showItemInFolder(path)
+  const bridge = tmcutHostBridge()
+  if (path && bridge?.showItemInFolder) {
+    bridge.showItemInFolder(path)
   }
 }
 

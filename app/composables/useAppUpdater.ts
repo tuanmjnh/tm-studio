@@ -1,4 +1,5 @@
 import type { AppUpdateStatus } from '#shared/types/electron'
+import { tmcutHostBridge } from '~/utils/tmcut/hostBridge'
 
 const status = ref<AppUpdateStatus['state']>('idle')
 const currentVersion = ref('')
@@ -17,7 +18,7 @@ export function useAppUpdater() {
   const toast = useToast()
   const { t } = useI18n()
 
-  const isElectron = computed(() => !!window.electronAPI?.isElectron)
+  const isElectron = computed(() => !!tmcutHostBridge()?.isElectron)
   const checking = computed(() => status.value === 'checking')
   const downloading = computed(() => status.value === 'downloading')
   const downloaded = computed(() => status.value === 'downloaded')
@@ -25,7 +26,7 @@ export function useAppUpdater() {
 
   function initListeners() {
     if (import.meta.server || listenerRegistered) return
-    const updater = window.electronAPI?.appUpdater
+    const updater = tmcutHostBridge()?.appUpdater
     if (!updater) return
 
     listenerRegistered = true
@@ -61,7 +62,7 @@ export function useAppUpdater() {
   }
 
   async function checkForUpdates(silent = false) {
-    const updater = window.electronAPI?.appUpdater
+    const updater = tmcutHostBridge()?.appUpdater
     if (!updater) {
       if (!silent) {
         toast.add({
@@ -118,7 +119,7 @@ export function useAppUpdater() {
   }
 
   async function startDownload() {
-    const updater = window.electronAPI?.appUpdater
+    const updater = tmcutHostBridge()?.appUpdater
     if (!updater) return
 
     status.value = 'downloading'
@@ -141,7 +142,7 @@ export function useAppUpdater() {
   }
 
   function quitAndInstall() {
-    const updater = window.electronAPI?.appUpdater
+    const updater = tmcutHostBridge()?.appUpdater
     if (!updater) return
     updater.quitAndInstall()
   }

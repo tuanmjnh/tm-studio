@@ -13,6 +13,7 @@ import { toURL } from '~/utils/ffmpegHelper'
 import { TMCUT_ASSET_MIME } from '~/utils/tmcut/dnd'
 import type { TmcutAssetDragPayload } from '~/utils/tmcut/dnd'
 import { clipStartSec, clipEndSec, clipDurationSec, clipStartTicks, clipDurationTicks } from '~/utils/tmcut/clipTime'
+import { tmcutHostIpc } from '~/utils/tmcut/hostBridge'
 
 const { t } = useI18n()
 
@@ -812,7 +813,7 @@ async function handleAutoCaptions() {
   }
   captionBusy.value = true
   try {
-    const audio = await window.electronAPI?.tmcut.extractAudio({ filePath: clip.src })
+    const audio = await tmcutHostIpc()?.extractAudio({ filePath: clip.src })
     if (!audio?.ok || !audio.path) throw new Error(audio?.error || 'Audio extraction failed')
     const data = await transcribe(audio.path, { format: 'verbose_json' })
     const cues = (data.segments || [])

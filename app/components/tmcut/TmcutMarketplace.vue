@@ -2,6 +2,7 @@
 import { computed, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useTmcutAssetCenter } from '~/composables/useTmcutAssetCenter'
+import { useTmcutPlatform } from '~/composables/useTmcutPlatform'
 
 const { t } = useI18n()
 const toast = useToast()
@@ -18,7 +19,11 @@ const {
   canInstallEntry
 } = useTmcutAssetCenter()
 
-const isDesktop = computed(() => typeof window !== 'undefined' && !!window.electronAPI?.tmcut)
+// ADR-014: the host answer comes from the negotiated adapter, not from a
+// preload sniff. Installing a pack writes into the local library folder, so
+// the gate is the filesystem capability the desktop host declares.
+const platform = useTmcutPlatform()
+const isDesktop = computed(() => platform.info.capabilities.filesystem === true)
 
 const search = ref('')
 const activeCategory = ref('all')

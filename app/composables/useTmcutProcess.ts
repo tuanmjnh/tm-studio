@@ -18,6 +18,7 @@
  *    keeping a stale approval.
  */
 import { computed, ref } from 'vue'
+import { tmcutHostBridge } from '~/utils/tmcut/hostBridge'
 import type {
   ProcessDefinition,
   ProcessOpResult,
@@ -56,7 +57,7 @@ const validationIssues = ref<ProcessIssue[]>([])
 const nowIso = () => new Date().toISOString()
 
 function desktopApi() {
-  return typeof window !== 'undefined' ? window.electronAPI?.process : undefined
+  return tmcutHostBridge()?.process
 }
 
 function detectStorage() {

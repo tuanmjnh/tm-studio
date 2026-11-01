@@ -8,6 +8,7 @@ import { useFileSystem } from '~/composables/useFileSystem'
 import { compileTimelineToFfmpeg } from '~/utils/tmcut/compiler'
 import type { TmcutCompileMode } from '~/utils/tmcut/compiler'
 import { canvasFpsValue } from '~/utils/tmcut/canvas'
+import { tmcutHostBridge, tmcutHostIpc } from '~/utils/tmcut/hostBridge'
 import { useTmcutExportQueue } from '~/composables/useTmcutExportQueue'
 import { useTmcutPlatform } from '~/composables/useTmcutPlatform'
 import { useTmcutTelemetry } from '~/composables/useTmcutTelemetry'
@@ -24,7 +25,7 @@ const { pickFile, pickFolder } = useFileSystem()
 const taskManager = useToolTaskManager('ffmpeg')
 const { enqueueJob, activeJobsCount, queueModalOpen, activeJobId, cancelJob } = useTmcutExportQueue()
 // ADR-014: the host answer, not a global sniff. `isDesktop` used to read
-// `window.electronAPI` here; the adapter negotiates the same fact once and the
+// the preload global here; the adapter negotiates the same fact once and the
 // render dispatch now reads its capabilities instead of a second copy.
 const platform = useTmcutPlatform()
 const toast = useToast()
@@ -80,9 +81,10 @@ const gpuSupport = ref<{ nvenc: boolean, amf: boolean, qsv: boolean, gpus: strin
 const profileOverride = ref<'nvenc' | 'qsv' | 'amf' | 'cpu' | null>(null)
 
 async function detectHardware() {
-  if (window.electronAPI?.tools?.ffmpeg?.detectGpuSupport) {
+  const bridge = tmcutHostBridge()
+  if (bridge?.tools?.ffmpeg?.detectGpuSupport) {
     try {
-      const res = await window.electronAPI.tools.ffmpeg.detectGpuSupport()
+      const res = await bridge.tools.ffmpeg.detectGpuSupport()
       if (res) {
         gpuSupport.value = res
       }
@@ -232,7 +234,7 @@ function stopWatching() {
     offRenderDone()
     offRenderDone = null
   }
-  const api = window.electronAPI?.tmcut
+  const api = tmcutHostIpc()
   if (lastWatchedPath.value && api?.unwatchOutput) {
     api.unwatchOutput({ filePath: lastWatchedPath.value }).catch(() => {})
   }
@@ -240,7 +242,7 @@ function stopWatching() {
 }
 
 function startWatching(filePath: string) {
-  const api = window.electronAPI?.tmcut
+  const api = tmcutHostIpc()
   if (!api?.watchOutput || !api?.onRenderDone) return
   stopWatching()
   lastWatchedPath.value = filePath
@@ -733,14 +735,16 @@ async function cancelExport() {
 }
 
 function openResultFile() {
-  if (outputPath.value && window.electronAPI?.openPath) {
-    window.electronAPI.openPath(outputPath.value)
+  const bridge = tmcutHostBridge()
+  if (outputPath.value && bridge?.openPath) {
+    bridge.openPath(outputPath.value)
   }
 }
 
 function openResultFolder() {
-  if (outputPath.value && window.electronAPI?.showItemInFolder) {
-    window.electronAPI.showItemInFolder(outputPath.value)
+  const bridge = tmcutHostBridge()
+  if (outputPath.value && bridge?.showItemInFolder) {
+    bridge.showItemInFolder(outputPath.value)
   }
 }
 

@@ -1,15 +1,16 @@
 import type { DialogArgs, FileOptions, FileNode } from '#shared/types/electron'
+import { tmcutHostBridge } from '~/utils/tmcut/hostBridge'
 
 function dialogApi() {
-  return window.electronAPI?.dialog
+  return tmcutHostBridge()?.dialog
 }
 
 function fileApi() {
-  return window.electronAPI?.fileManager
+  return tmcutHostBridge()?.fileManager
 }
 
 export function useFileSystem() {
-  const isElectron = computed(() => !!window.electronAPI?.isElectron)
+  const isElectron = computed(() => !!tmcutHostBridge()?.isElectron)
 
   // ===== Dialog (file/folder pickers) =====
   function saveLastDir(pickedPath: string, isFolder = false) {

@@ -1,3 +1,4 @@
+import { tmcutHostBridge } from '~/utils/tmcut/hostBridge'
 import type {
   AiChatMessage,
   AiCompleteInput,
@@ -11,7 +12,7 @@ import type {
 import { useHub } from './useHub'
 
 function aiApi() {
-  return typeof window !== 'undefined' ? window.electronAPI?.tools?.aiGateway : undefined
+  return tmcutHostBridge()?.tools?.aiGateway
 }
 
 // ===== Web (browser) runtime: TM Hub AI relay through the local Nitro proxy =====

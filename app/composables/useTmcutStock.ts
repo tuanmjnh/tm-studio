@@ -16,6 +16,7 @@
 //  the served copy, falling back to `/api/v1/stock/download` when the CDN sends
 //  no CORS headers for the file itself.
 // =============================================================================
+import { tmcutHostIpc } from '~/utils/tmcut/hostBridge'
 import { computed, ref } from 'vue'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
 import {
@@ -162,7 +163,7 @@ export function useTmcutStock() {
 
     let payload: unknown
     if (provider.value === 'openverse') {
-      const ipc = typeof window !== 'undefined' ? window.electronAPI?.tmcut : undefined
+      const ipc = tmcutHostIpc()
       if (ipc?.stockSearch) {
         const response = await ipc.stockSearch({ url: request.url, headers: request.headers })
         if (!response?.ok) {

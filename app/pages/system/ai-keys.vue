@@ -5,6 +5,7 @@
 // local Key Vault (OS keychain AT-REST encryption) and per-surface tests.
 // =============================================================================
 import type { DropdownMenuItem } from '@nuxt/ui'
+import { tmcutHostBridge } from '~/utils/tmcut/hostBridge'
 import type { AiTaskStatus, AiGatewayStatus, AiKeyVaultStatus } from '#shared/types/electron'
 import { useHubAi } from '~/composables/useHubAi'
 import type { HubAiConnection, HubAiModel, HubAiProviderItem } from '~/composables/useHubAi'
@@ -177,7 +178,7 @@ const deleteModelTarget = ref<HubAiModel | null>(null)
 const isDeleting = ref(false)
 
 // ---- Electron Key Vault & Surfaces ------------------------------------------
-const hasElectron = computed(() => typeof window !== 'undefined' && !!window.electronAPI?.tools?.aiGateway)
+const hasElectron = computed(() => !!tmcutHostBridge()?.tools?.aiGateway)
 const loading = ref(false)
 const testing = ref<Record<string, boolean>>({})
 
@@ -905,7 +906,7 @@ async function refresh() {
     try {
       gatewayStatus.value = await gatewayStatusFn()
       surfaceTasks.value = await tasks()
-      const res = await window.electronAPI?.aiKeyStatus?.()
+      const res = await tmcutHostBridge()?.aiKeyStatus?.()
       vault.value = res?.ok && res.data ? res.data : null
     } catch {
       // keep previous
@@ -1431,7 +1432,7 @@ async function handleEncrypt() {
   migrating.value = true
   justEncrypted.value = false
   try {
-    const res = await window.electronAPI?.aiMigrateKeys?.()
+    const res = await tmcutHostBridge()?.aiMigrateKeys?.()
     if (res?.ok && res.data) {
       vault.value = res.data
       justEncrypted.value = res.data.plaintext === 0

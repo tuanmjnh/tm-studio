@@ -32,6 +32,7 @@ import type {
   TmcutRenderJob
 } from '@tmcut-core'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
+import { tmcutHostIpc } from '~/utils/tmcut/hostBridge'
 import { useTmcutExportQueue } from '~/composables/useTmcutExportQueue'
 import type { TmcutExportJob } from '~/composables/useTmcutExportQueue'
 
@@ -231,7 +232,10 @@ export function useTmcutPlatform(deps: TmcutPlatformDeps = {}): TmcutHostPlatfor
   let mediaHost: ReturnType<typeof useTmcutMedia> | null = null
   const mediaOf = () => mediaHost ?? (mediaHost = useTmcutMedia())
 
-  const desktop = deps.isDesktop?.value ?? mediaOf().isDesktop.value
+  // The host split reads the bridge accessor directly: capability negotiation
+  // must not instantiate the media composable (and with it the project store),
+  // because a component may only ask "what can this host do".
+  const desktop = deps.isDesktop?.value ?? tmcutHostIpc() !== undefined
   const info = desktop ? desktopInfo() : webInfo()
   const resolveSrc = deps.resolveSrc ?? ((src?: string | null) => mediaOf().resolveMediaSrc(src))
   const request = deps.request ?? ($fetch as unknown as PlatformRequest)

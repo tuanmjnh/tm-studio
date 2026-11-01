@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed } from 'vue'
+import { tmcutHostBridge } from '~/utils/tmcut/hostBridge'
+import { useTmcutPlatform } from '~/composables/useTmcutPlatform'
 import { toURL } from '~/utils/ffmpegHelper'
 
 const props = defineProps<{
@@ -11,10 +13,9 @@ const open = defineModel<boolean>('open', { default: false })
 
 const { t } = useI18n()
 
-const isDesktop = ref(false)
-onMounted(() => {
-  isDesktop.value = Boolean(window.electronAPI)
-})
+// ADR-014: host identity is negotiated once by the adapter, not re-sniffed here.
+const platform = useTmcutPlatform()
+const isDesktop = computed(() => platform.info.name === 'electron')
 
 const isAudio = computed(() => {
   if (!props.filePath) return false
@@ -33,14 +34,16 @@ const mediaUrl = computed(() => {
 })
 
 function showInFolder() {
-  if (props.filePath && window.electronAPI?.showItemInFolder) {
-    window.electronAPI.showItemInFolder(props.filePath)
+  const bridge = tmcutHostBridge()
+  if (props.filePath && bridge?.showItemInFolder) {
+    bridge.showItemInFolder(props.filePath)
   }
 }
 
 async function openDefaultPlayer() {
-  if (props.filePath && window.electronAPI?.openPath) {
-    await window.electronAPI.openPath(props.filePath)
+  const bridge = tmcutHostBridge()
+  if (props.filePath && bridge?.openPath) {
+    await bridge.openPath(props.filePath)
   }
 }
 </script>

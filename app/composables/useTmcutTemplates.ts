@@ -16,6 +16,7 @@ import {
   TICKS_PER_SECOND
 } from '@tmcut-core'
 import { normalizeCanvas, canvasFpsValue } from '~/utils/tmcut/canvas'
+import { tmcutHostBridge } from '~/utils/tmcut/hostBridge'
 import {
   buildTemplateFile,
   safeTemplateFileName,
@@ -327,7 +328,8 @@ export function useTmcutTemplates() {
   // ==========================================================================
 
   function isDesktop(): boolean {
-    return typeof window !== 'undefined' && !!window.electronAPI?.dialog && !!window.electronAPI?.fileManager
+    const bridge = tmcutHostBridge()
+    return !!bridge?.dialog && !!bridge?.fileManager
   }
 
   /** Web fallback: trigger a browser download of the file body. */
@@ -352,7 +354,7 @@ export function useTmcutTemplates() {
   async function exportTemplate(template: TmcutTemplate): Promise<{ ok: boolean, path?: string, canceled?: boolean }> {
     const text = buildTemplateFile(template)
     const fileName = safeTemplateFileName(template)
-    const api = isDesktop() ? window.electronAPI : null
+    const api = isDesktop() ? tmcutHostBridge() ?? null : null
     if (api?.dialog && api.fileManager) {
       const target = await api.dialog.saveFile({
         title: 'Export template',
@@ -373,7 +375,7 @@ export function useTmcutTemplates() {
    * failed files are skipped, never silently "repaired".
    */
   async function importTemplates(): Promise<{ imported: TmcutTemplate[], failed: number, canceled?: boolean }> {
-    const api = isDesktop() ? window.electronAPI : null
+    const api = isDesktop() ? tmcutHostBridge() ?? null : null
     const dialog = api?.dialog
     const fileManager = api?.fileManager
     let texts: string[]

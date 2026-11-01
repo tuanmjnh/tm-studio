@@ -13,6 +13,7 @@ import type { TmcutAssetDragPayload } from '~/utils/tmcut/dnd'
 import { filterAssetsByFolder, secToTicks, TICKS_PER_SECOND } from '@tmcut-core'
 import { clipDurationSec } from '~/utils/tmcut/clipTime'
 import { effectiveAssetKind } from '~/utils/tmcut/assetKind'
+import { tmcutHostBridge } from '~/utils/tmcut/hostBridge'
 
 /**
  * Left media dock: category tabs, asset bin (list/grid), folders, voiceover,
@@ -376,7 +377,7 @@ async function onMediaPanelDrop(e: DragEvent) {
       return
     }
     const paths = files
-      .map(file => window.electronAPI?.getPathForFile?.(file) ?? '')
+      .map(file => tmcutHostBridge()?.getPathForFile?.(file) ?? '')
       .filter(path => path.length > 0)
     if (paths.length === 0) return
     const result = await importFiles(paths)
@@ -578,8 +579,9 @@ function openFilePreview(filePath?: string, title?: string) {
 }
 
 function showInFolder(filePath?: string) {
-  if (filePath && window.electronAPI?.showItemInFolder) {
-    window.electronAPI.showItemInFolder(filePath)
+  const bridge = tmcutHostBridge()
+  if (filePath && bridge?.showItemInFolder) {
+    bridge.showItemInFolder(filePath)
   }
 }
 </script>

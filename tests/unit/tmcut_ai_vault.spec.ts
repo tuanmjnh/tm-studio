@@ -98,7 +98,10 @@ describe('TMCut AI key vault — page contract (R140)', () => {
   })
 
   it('reads the vault through the typed IPC call only', () => {
-    assert.ok(page.includes('window.electronAPI?.aiKeyStatus?.()'), 'page must fetch vault status via preload')
+    // The hostBridge accessor is the sanctioned way to reach the preload
+    // bridge (V4 G3); the pinned contract is that the page asks for the
+    // vault status through that typed call and never through a raw fetch.
+    assert.ok(page.includes('tmcutHostBridge()?.aiKeyStatus?.()'), 'page must fetch vault status via the host bridge')
   })
 
   it('tests go through the task-aware listModels (saved-key path), never a typed key', () => {
@@ -143,7 +146,7 @@ describe('TMCut AI key vault — page contract (R140)', () => {
     assert.ok(/v-if=.isElectron.[\s\S]{0,400}navigateAndClose\(.\/system\/ai-keys.\)/.test(slideover), 'the vault link itself must be Electron-gated')
     // Hydration-safe: flag flips after mount, never during SSR render.
     assert.ok(/isElectron = ref\(false\)/.test(slideover), 'flag must start false (SSR-safe)')
-    assert.ok(/onMounted\(\(\) => \{[\s\S]{0,80}isElectron\.value = !!window\.electronAPI\?\.isElectron/.test(slideover), 'flag set after mount only')
+    assert.ok(/onMounted\(\(\) => \{[\s\S]{0,80}isElectron\.value = !!tmcutHostBridge\(\)\?\.isElectron/.test(slideover), 'flag set after mount only')
   })
 
   it('the nav route exists for every system-group sibling pattern (hub seed)', () => {

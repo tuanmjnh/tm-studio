@@ -11,6 +11,7 @@
  * written — no junk files, no junk assets.
  */
 
+import { tmcutHostIpc } from '~/utils/tmcut/hostBridge'
 import { ref, onUnmounted } from 'vue'
 
 const MIN_RECORDING_SEC = 0.5
@@ -111,7 +112,7 @@ export function useTmcutRecorder() {
     saving.value = true
     try {
       const ext = blob.type.includes('mp4') ? 'm4a' : 'webm'
-      const ipc = typeof window !== 'undefined' ? window.electronAPI?.tmcut : undefined
+      const ipc = tmcutHostIpc()
       if (ipc) {
         const bytes = new Uint8Array(await blob.arrayBuffer())
         const saved = await ipc.saveRecording({ data: bytes, ext, prefix: options.prefix })

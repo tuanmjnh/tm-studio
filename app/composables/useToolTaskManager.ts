@@ -1,4 +1,5 @@
 import type { Ref } from 'vue'
+import { tmcutHostBridge } from '~/utils/tmcut/hostBridge'
 import type { TaskStatus, ToolTask, ToolsNamespace, YoutubeDownloadResponse, FfmpegRenderResponse } from '#shared/types/electron'
 
 export type ToolKind = 'youtube' | 'ffmpeg'
@@ -43,7 +44,7 @@ const globalStates: Record<ToolKind, GlobalState> = {
 }
 
 function getNamespace(kind: ToolKind): ToolsNamespace | undefined {
-  return window.electronAPI?.tools[kind]
+  return tmcutHostBridge()?.tools?.[kind]
 }
 
 function parsePercent(value: number | undefined): number {
@@ -139,7 +140,7 @@ function setupGlobalListeners(kind: ToolKind, api: ToolsNamespace, state: Global
 
 export function useToolTaskManager(kind: ToolKind) {
   const api = getNamespace(kind)
-  const isElectron = computed(() => !!window.electronAPI)
+  const isElectron = computed(() => !!tmcutHostBridge())
 
   const state = globalStates[kind]
   const exeCheck = state.exeCheck

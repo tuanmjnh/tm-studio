@@ -14,6 +14,7 @@
 //  reach 'installed'; a crash mid-flight recovers to 'catalog' on reload.
 // =============================================================================
 import { computed, ref } from 'vue'
+import { tmcutHostIpc } from '~/utils/tmcut/hostBridge'
 import {
   canInstall,
   canServeAfterTakedown,
@@ -30,7 +31,7 @@ import {
 } from '@tmcut-core'
 import type { AssetCenterCatalogEntry, AssetCenterInstallState, TakedownNotice, TakedownRegistry } from '@tmcut-core'
 
-type IpcAssetCenter = NonNullable<NonNullable<typeof window.electronAPI>['tmcut']>['assetCenter']
+type IpcAssetCenter = NonNullable<NonNullable<ReturnType<typeof tmcutHostIpc>>['assetCenter']>
 
 // Registry record shape (persisted through the controller's writeRegistry).
 // Mirrors @tmcut-core createInstalledAsset; kept structural so the registry
@@ -62,7 +63,7 @@ let ipcRef: IpcAssetCenter | null | undefined
 
 function assetCenterIpc(): IpcAssetCenter | null {
   if (ipcRef === undefined) {
-    ipcRef = window.electronAPI?.tmcut?.assetCenter ?? null
+    ipcRef = tmcutHostIpc()?.assetCenter ?? null
   }
   return ipcRef
 }

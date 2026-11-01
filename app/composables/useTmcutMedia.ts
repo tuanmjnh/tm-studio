@@ -1,3 +1,4 @@
+import { tmcutHostIpc } from '~/utils/tmcut/hostBridge'
 import { ref, computed } from 'vue'
 import type { TmcutAsset, TmcutAssetKind, TmcutMediaFolder } from '~/types/tmcut'
 import type { DownloadProgressPayload } from '#shared/types/electron'
@@ -65,10 +66,6 @@ const assetKeyIndex = computed(() => {
   return index
 })
 
-function tmcutIpc() {
-  return typeof window !== 'undefined' ? window.electronAPI?.tmcut : undefined
-}
-
 // ===== Web uploads (R152) =====
 // The web runtime ships picked files to the local Nitro server
 // (POST /api/v1/media/upload) and stores the returned /uploads/ URL as the
@@ -106,7 +103,7 @@ function mediaUrl(filePath: string): string {
 export function useTmcutMedia() {
   const { currentProject, addClipToTrack, updateClipsSrc } = useTmcutProject()
 
-  const isDesktop = computed(() => !!tmcutIpc())
+  const isDesktop = computed(() => !!tmcutHostIpc())
 
   const projectAssets = computed(() => {
     const pid = currentProject.value?.id
@@ -223,7 +220,7 @@ export function useTmcutMedia() {
     if (libraryLoaded.value) return
     libraryLoaded.value = true
     loadFolders()
-    const ipc = tmcutIpc()
+    const ipc = tmcutHostIpc()
     // Web runtime: keep assets whose bytes live on the local server
     // (/uploads/…); blob: URLs from a previous page load can never resolve
     // again, so they are dropped here (R152 — uploads made the library
@@ -268,7 +265,7 @@ export function useTmcutMedia() {
   }
 
   function persistLibrary() {
-    const ipc = tmcutIpc()
+    const ipc = tmcutHostIpc()
     if (!ipc) {
       // Web runtime: uploaded assets (/uploads/… URLs) persist through
       // reloads. Session-bound blob: URLs are filtered out — persisting them
@@ -326,7 +323,7 @@ export function useTmcutMedia() {
   }
 
   async function analyzeAsset(asset: TmcutAsset) {
-    const ipc = tmcutIpc()
+    const ipc = tmcutHostIpc()
     try {
       if (!ipc || typeof ipc.analyzeAsset !== 'function') {
         // No ffprobe in the browser: everything that reaches this path is a
@@ -638,7 +635,7 @@ export function useTmcutMedia() {
     url: string,
     options: { filename?: string, id?: string } = {}
   ): Promise<{ ok: boolean, path?: string, error?: string }> {
-    const ipc = tmcutIpc()
+    const ipc = tmcutHostIpc()
     if (!ipc?.downloadMedia) return { ok: false, error: 'desktop-only' }
     const downloaded = await ipc.downloadMedia({ url, filename: options.filename, id: options.id })
     if (!downloaded.ok || !downloaded.path) {
@@ -653,7 +650,7 @@ export function useTmcutMedia() {
 
   /** Cancel one in-flight download (no-op when the channel is unavailable). */
   async function cancelMediaDownload(id: string): Promise<boolean> {
-    const ipc = tmcutIpc()
+    const ipc = tmcutHostIpc()
     if (!ipc?.cancelDownload) return false
     return ipc.cancelDownload(id)
   }
@@ -662,13 +659,13 @@ export function useTmcutMedia() {
   function onMediaDownloadProgress(
     callback: (payload: DownloadProgressPayload) => void
   ): () => void {
-    const ipc = tmcutIpc()
+    const ipc = tmcutHostIpc()
     if (!ipc?.onDownloadProgress) return () => {}
     return ipc.onDownloadProgress(callback)
   }
 
   async function checkMissing() {
-    const ipc = tmcutIpc()
+    const ipc = tmcutHostIpc()
     if (assets.value.length === 0 || import.meta.server) return
     // Web: no stat-files IPC — the /uploads/** stream route answers every
     // request the server stores, so a ranged GET is authoritative proof of
@@ -892,7 +889,7 @@ export function useTmcutMedia() {
 
   async function generateProxy(asset: TmcutAsset, width = 960): Promise<boolean> {
     if (asset.kind !== 'video' || asset.status === 'missing') return false
-    const ipc = tmcutIpc()
+    const ipc = tmcutHostIpc()
     asset.proxyStatus = 'generating'
     asset.proxyPath = null
     // Web: the local Nitro server runs ffmpeg itself and stores the proxy

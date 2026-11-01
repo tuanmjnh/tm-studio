@@ -12,11 +12,8 @@
  * instead of offering fonts it could neither enumerate nor export.
  */
 
+import { tmcutHostIpc } from '~/utils/tmcut/hostBridge'
 import type { TmcutFontEntry } from '#shared/types/electron'
-
-function tmcutIpc() {
-  return typeof window !== 'undefined' ? window.electronAPI?.tmcut : undefined
-}
 
 export interface TmcutFontChoice {
   family: string
@@ -85,13 +82,13 @@ export function faceFileFor(choice: TmcutFontChoice, bold?: boolean, italic?: bo
 }
 
 export function useTmcutFonts() {
-  const available = computed(() => !!tmcutIpc())
+  const available = computed(() => !!tmcutHostIpc())
   const choices = ref<TmcutFontChoice[]>([])
   const loaded = ref(false)
 
   /** Idempotent: concurrent mounts share one promise; failures cache as []. */
   async function ensureFonts(): Promise<void> {
-    const ipc = tmcutIpc()
+    const ipc = tmcutHostIpc()
     if (!ipc || loaded.value) return
     facesPromise ??= ipc.listFonts().catch(() => [] as TmcutFontEntry[])
     try {

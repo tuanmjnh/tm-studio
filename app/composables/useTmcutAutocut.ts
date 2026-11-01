@@ -1,3 +1,4 @@
+import { tmcutHostIpc } from '~/utils/tmcut/hostBridge'
 import type { TmcutAsset } from '~/types/tmcut'
 import type { TmcutAnalysisResult } from '#shared/types/electron'
 import type { TmcutEdl, TmcutEdlSegment } from '@tmcut-core'
@@ -66,10 +67,6 @@ export interface AutocutAnalysis {
   aiItems: AiTriageItem[]
 }
 
-function tmcutIpc() {
-  return typeof window !== 'undefined' ? window.electronAPI?.tmcut : undefined
-}
-
 /**
  * The two detection passes (shots, silence) for one source, from the desktop
  * main process or — for a web asset, which already lives on the local server as
@@ -78,7 +75,7 @@ function tmcutIpc() {
  * on either runtime. Null when neither can read the file.
  */
 function resolveAnalyzer(filePath: string): ((kind: 'scenes' | 'silence') => Promise<TmcutAnalysisResult>) | null {
-  const ipc = tmcutIpc()
+  const ipc = tmcutHostIpc()
   if (ipc?.analyzeScenes && ipc.analyzeSilence) {
     return kind => (kind === 'scenes' ? ipc.analyzeScenes!({ filePath }) : ipc.analyzeSilence!({ filePath }))
   }

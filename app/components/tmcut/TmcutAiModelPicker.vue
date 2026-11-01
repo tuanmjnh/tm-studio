@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { tmcutHostBridge } from '~/utils/tmcut/hostBridge'
 import { useI18n } from 'vue-i18n'
 import { useHub } from '~/composables/useHub'
 import { useHubAi } from '~/composables/useHubAi'
@@ -62,7 +63,7 @@ const current = ref('')
 // read as "you have no providers".
 const hubError = ref<'' | 'signin' | 'unavailable'>('')
 
-const isDesktop = computed(() => typeof window !== 'undefined' && !!window.electronAPI?.tools?.aiGateway)
+const isDesktop = computed(() => !!tmcutHostBridge()?.tools?.aiGateway)
 const surfaceLabel = computed(() => props.labelKey ? t(props.labelKey) : t('tmcut.aiModelPicker.surfaceScript'))
 
 onMounted(async () => {
@@ -147,7 +148,7 @@ async function handleSelect() {
       }
 
       const up = props.task.toUpperCase()
-      const saved = await window.electronAPI?.setConfig({
+      const saved = await tmcutHostBridge()?.setConfig({
         [`AI_PROVIDER_${up}`]: selection.provider,
         [`AI_BASE_URL_${up}`]: selection.baseUrl,
         [`AI_MODEL_${up}`]: selection.model,

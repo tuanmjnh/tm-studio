@@ -4,6 +4,8 @@ import { useI18n } from 'vue-i18n'
 import { useFileSystem } from '~/composables/useFileSystem'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { useTmcutInsertAsset } from '~/composables/useTmcutInsertAsset'
+import { useTmcutPlatform } from '~/composables/useTmcutPlatform'
+import { tmcutHostBridge, tmcutHostIpc } from '~/utils/tmcut/hostBridge'
 import { secToTicks } from '@tmcut-core'
 
 const props = defineProps<{ embedded?: boolean }>()
@@ -51,7 +53,11 @@ const geminiVoices = [
 
 // The web build has no IPC: it reaches the local service through the Nitro
 // proxy (/api/v1/media/tts) and can only import server-stored audio.
-const isDesktop = computed(() => typeof window !== 'undefined' && !!window.electronAPI?.tmcut)
+// ADR-014: this panel drives local TTS processes and reads native config,
+// so it gates on the host identity the adapter negotiated rather than sniffing
+// the preload global.
+const platform = useTmcutPlatform()
+const isDesktop = computed(() => platform.info.name === 'electron')
 
 const chosenLocal = computed(() => managedVoices.value.find(voice => voice.id === selectedVoiceId.value) || null)
 const selectedEngineVoice = computed(() => chosenLocal.value?.engineName || selectedLocalVoice.value)
@@ -66,7 +72,7 @@ function readSavedSettings() {
   baseUrl.value = localStorage.getItem(LOCAL_URL_KEY) || DEFAULT_LOCAL_URL
   apiKey.value = ''
   geminiKeySaved.value = false
-  void window.electronAPI?.getConfig().then((config) => {
+  void tmcutHostBridge()?.getConfig().then((config) => {
     geminiKeySaved.value = !!config?.TMCUT_GEMINI_API_KEY
   }).catch(() => { geminiKeySaved.value = false })
 }
@@ -76,10 +82,11 @@ function saveLocalUrl() {
 }
 
 async function saveGeminiKey(): Promise<boolean> {
-  if (!apiKey.value.trim() || !window.electronAPI?.setConfig) return false
+  const bridge = tmcutHostBridge()
+  if (!apiKey.value.trim() || !bridge?.setConfig) return false
   geminiKeySaving.value = true
   try {
-    const result = await window.electronAPI.setConfig({ TMCUT_GEMINI_API_KEY: apiKey.value.trim() })
+    const result = await bridge.setConfig({ TMCUT_GEMINI_API_KEY: apiKey.value.trim() })
     if (!result?.success) throw new Error(t('tmcut.voice.keySaveFailed'))
     apiKey.value = ''
     geminiKeySaved.value = true
@@ -94,7 +101,7 @@ async function saveGeminiKey(): Promise<boolean> {
 }
 
 async function loadManagedVoices() {
-  const ipc = window.electronAPI?.tmcut
+  const ipc = tmcutHostIpc()
   managedVoices.value = ipc?.listManagedVoices ? await ipc.listManagedVoices() : []
   if (!managedVoices.value.some(voice => voice.id === selectedVoiceId.value)) {
     selectedVoiceId.value = managedVoices.value[0]?.id || ''
@@ -102,7 +109,7 @@ async function loadManagedVoices() {
 }
 
 async function checkLocalService() {
-  const ipc = window.electronAPI?.tmcut
+  const ipc = tmcutHostIpc()
   localBusy.value = true
   localError.value = ''
   try {
@@ -136,7 +143,7 @@ async function chooseSample() {
 }
 
 async function addVoice() {
-  const ipc = window.electronAPI?.tmcut
+  const ipc = tmcutHostIpc()
   if (!ipc?.addManagedVoice || !samplePath.value || !voiceName.value.trim()) return
   localBusy.value = true
   try {
@@ -156,7 +163,7 @@ async function addVoice() {
 }
 
 async function syncVoice() {
-  const ipc = window.electronAPI?.tmcut
+  const ipc = tmcutHostIpc()
   if (!ipc?.syncManagedVoice || !chosenLocal.value) return
   localBusy.value = true
   try {
@@ -172,7 +179,7 @@ async function syncVoice() {
 }
 
 async function deleteVoice() {
-  const ipc = window.electronAPI?.tmcut
+  const ipc = tmcutHostIpc()
   if (!ipc?.deleteManagedVoice || !chosenLocal.value) return
   const deleted = await ipc.deleteManagedVoice(chosenLocal.value.id)
   if (!deleted?.ok) {
@@ -198,7 +205,7 @@ async function importAndPlace(path: string, engine: 'local' | 'gemini') {
 }
 
 async function makeLocalVoiceover() {
-  const ipc = window.electronAPI?.tmcut
+  const ipc = tmcutHostIpc()
   const voice = selectedEngineVoice.value || localVoices.value[0]?.name || ''
   if (!voice) {
     toast.add({ title: t('tmcut.voice.noVoice'), color: 'warning' })
@@ -232,7 +239,7 @@ async function makeLocalVoiceover() {
 }
 
 async function makeGeminiVoiceover() {
-  const ipc = window.electronAPI?.tmcut
+  const ipc = tmcutHostIpc()
   if (!ipc?.synthesizeGeminiVoice) {
     toast.add({ title: t('tmcut.voice.geminiDesktopOnly'), color: 'warning' })
     return
@@ -252,12 +259,12 @@ async function makeGeminiVoiceover() {
 }
 
 async function addAutomaticCaptions(audioPath: string, offsetSec: number) {
-  const ipc = window.electronAPI?.tmcut
+  const ipc = tmcutHostIpc()
   if (!autoCaptions.value || !ipc?.extractAudio || !currentProject.value) return
   try {
     const audio = await ipc.extractAudio({ filePath: audioPath })
     if (!audio?.ok || !audio.path) throw new Error(audio?.error || t('tmcut.voice.captionFailed'))
-    const gateway = window.electronAPI?.tools?.aiGateway
+    const gateway = tmcutHostBridge()?.tools?.aiGateway
     if (!gateway?.transcribe) throw new Error(t('tmcut.voice.captionNeedsWhisper'))
     const response = await gateway.transcribe({ filePath: audio.path, format: 'verbose_json' })
     if (!response?.ok || !response.data) throw new Error(response?.error || t('tmcut.voice.captionFailed'))

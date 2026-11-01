@@ -106,6 +106,9 @@ function harness(initial: TmcutAsset[] = [], desktop = false) {
     useTmcutFrames: () => ({ available: ref(false), extractFrames: async () => new Map() }),
     onMounted: () => {}, onUnmounted: () => {},
     AUTOCUT_PREFS_DEFAULT, splitKeywords, classifyAssetKind,
+    // The page reaches the preload through the hostBridge accessor (V4 G3);
+    // the harness strips imports, so the accessor itself must be injected.
+    tmcutHostBridge: () => electronAPI,
     window: { electronAPI }, console: { error: () => {} }
   }
   const state = new Function(...Object.keys(scope), outputText)(...Object.values(scope)) as SourceState

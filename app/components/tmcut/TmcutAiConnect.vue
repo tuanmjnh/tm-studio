@@ -6,6 +6,7 @@ import { useHub } from '~/composables/useHub'
 import { useHubAi } from '~/composables/useHubAi'
 import { useTmcutAi } from '~/composables/useTmcutAi'
 import { AI_TASK_META, type AiTaskId } from '~/utils/tmcut/aiTasks'
+import { tmcutHostBridge } from '~/utils/tmcut/hostBridge'
 import {
   connectionBaseUrl,
   connectionModel,
@@ -75,7 +76,7 @@ const surfaces = ref<Record<SurfaceTask, SurfaceForm>>({
   triage: { custom: false, provider: '', baseUrl: '', apiKey: '', model: '' }
 })
 
-const isDesktop = computed(() => typeof window !== 'undefined' && !!window.electronAPI?.tools?.aiGateway)
+const isDesktop = computed(() => !!tmcutHostBridge()?.tools?.aiGateway)
 
 const selectedPreset = computed(() => presets.value.find(p => p.id === form.value.provider) || null)
 
@@ -255,7 +256,7 @@ async function handleSave() {
       values[`AI_MODEL_${up}`] = s.model.trim()
     }
 
-    const res = await window.electronAPI?.setConfig(values)
+    const res = await tmcutHostBridge()?.setConfig(values)
     if (!res?.success) throw new Error('set-config failed')
     // Saved config changed → every previous test verdict is stale.
     testResults.value = {}

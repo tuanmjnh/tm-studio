@@ -1,3 +1,4 @@
+import { tmcutHostIpc } from '~/utils/tmcut/hostBridge'
 import type { TmcutCanvas, TmcutCropRect, TmcutFitMode, FrameRate } from '~/types/tmcut'
 import { findCanvasPreset, normalizeCanvas, reframeTransform, canvasFpsValue } from '~/utils/tmcut/canvas'
 import { clipDurationSec, clipStartSec, clipEndSec, clipStartTicks, clipEndTicks } from '~/utils/tmcut/clipTime'
@@ -235,10 +236,6 @@ function toggleCropEditing(active?: boolean) {
   isCropEditing.value = typeof active === 'boolean' ? active : !isCropEditing.value
 }
 
-function tmcutIpc() {
-  return typeof window !== 'undefined' ? window.electronAPI?.tmcut : undefined
-}
-
 function normalizePath(input: string): string {
   return String(input || '').trim().replace(/\\/g, '/')
 }
@@ -387,7 +384,7 @@ function ensureDefaultTracks(project: TmcutProject) {
 
 async function persistProjectToDisk() {
   const project = currentProject.value
-  const ipc = tmcutIpc()
+  const ipc = tmcutHostIpc()
   if (!project || !ipc || import.meta.server) return
   saveStatus.value = 'saving'
   try {
@@ -444,7 +441,7 @@ async function loadProject(projectId: string) {
   // the honest signal for a "your edits may be stale" prompt.
   revisionAtLoad.value = null
 
-  const ipc = tmcutIpc()
+  const ipc = tmcutHostIpc()
   if (ipc && !import.meta.server) {
     try {
       const disk = (await ipc.readProject(projectId)) as TmcutProject | null
@@ -505,7 +502,7 @@ function syncProjectIndex(project: TmcutProject) {
 }
 
 async function detectRecovery(projectId: string) {
-  const ipc = tmcutIpc()
+  const ipc = tmcutHostIpc()
   if (!ipc || !currentProject.value) return
   try {
     const meta = await ipc.readProjectMeta(projectId)
@@ -533,7 +530,7 @@ async function detectRecovery(projectId: string) {
 
 async function applyRecovery() {
   const info = pendingRecovery.value
-  const ipc = tmcutIpc()
+  const ipc = tmcutHostIpc()
   if (!info || !ipc) return
   try {
     const recovery = (await ipc.readRecovery(info.id)) as TmcutProject | null
@@ -553,7 +550,7 @@ async function applyRecovery() {
 
 async function dismissRecovery() {
   const info = pendingRecovery.value
-  const ipc = tmcutIpc()
+  const ipc = tmcutHostIpc()
   if (info && ipc) {
     try {
       await ipc.deleteRecovery(info.id)
@@ -565,7 +562,7 @@ async function dismissRecovery() {
 }
 
 async function refreshProjects() {
-  const ipc = tmcutIpc()
+  const ipc = tmcutHostIpc()
   if (!ipc || import.meta.server) return
   try {
     const files = await ipc.listProjectFiles()
@@ -699,7 +696,7 @@ async function renameProject(projectId: string, name: string) {
     console.error('Failed to mirror renamed project:', error)
   }
 
-  const ipc = tmcutIpc()
+  const ipc = tmcutHostIpc()
   if (ipc) {
     try {
       await ipc.writeProject({ id: projectId, data: JSON.parse(JSON.stringify(project)) })
@@ -727,7 +724,7 @@ async function persistProjectMetadata(projectId: string, patch: Partial<TmcutPro
   } catch (error) {
     console.error('Failed to mirror project metadata:', error)
   }
-  const ipc = tmcutIpc()
+  const ipc = tmcutHostIpc()
   if (ipc && !import.meta.server) {
     try {
       await ipc.writeProject({ id: projectId, data: JSON.parse(JSON.stringify(data)) })
@@ -768,7 +765,7 @@ function duplicateProject(projectId: string, copySuffix = 'copy'): TmcutProject 
     console.error('Failed to mirror duplicated project:', error)
   }
 
-  const ipc = tmcutIpc()
+  const ipc = tmcutHostIpc()
   if (ipc) {
     try {
       void ipc.writeProject({ id: clone.id, data: JSON.parse(JSON.stringify(clone)) })
@@ -802,7 +799,7 @@ async function deleteProject(projectId: string) {
     saveStatus.value = 'idle'
   }
 
-  const ipc = tmcutIpc()
+  const ipc = tmcutHostIpc()
   if (ipc) {
     try {
       await ipc.deleteProject(projectId)
@@ -1693,7 +1690,7 @@ function removeTrackFromProject(trackId: string): boolean {
 // ===== Snapshots =====
 
 async function loadSnapshots() {
-  const ipc = tmcutIpc()
+  const ipc = tmcutHostIpc()
   const project = currentProject.value
   if (!ipc || !project || import.meta.server) {
     snapshots.value = []
@@ -1708,7 +1705,7 @@ async function loadSnapshots() {
 }
 
 async function createSnapshot(name?: string) {
-  const ipc = tmcutIpc()
+  const ipc = tmcutHostIpc()
   const project = currentProject.value
   if (!ipc || !project || import.meta.server) return
   saveProject()
@@ -1723,7 +1720,7 @@ async function createSnapshot(name?: string) {
 }
 
 async function restoreSnapshot(ts: number) {
-  const ipc = tmcutIpc()
+  const ipc = tmcutHostIpc()
   const project = currentProject.value
   if (!ipc || !project || import.meta.server) return
   try {
@@ -1739,7 +1736,7 @@ async function restoreSnapshot(ts: number) {
 }
 
 async function deleteSnapshot(ts: number) {
-  const ipc = tmcutIpc()
+  const ipc = tmcutHostIpc()
   const project = currentProject.value
   if (!ipc || !project || import.meta.server) return
   try {

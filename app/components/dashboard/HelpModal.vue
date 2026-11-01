@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import { tmcutHostBridge } from '~/utils/tmcut/hostBridge'
+
 const { t } = useI18n()
 const open = defineModel<boolean>('open', { default: false })
 
-const electronVersions = computed(() => window.electronAPI?.versions || { node: '', chrome: '', electron: '' })
-const isElectron = computed(() => !!window.electronAPI?.isElectron)
+const electronVersions = computed(() => tmcutHostBridge()?.versions || { node: '', chrome: '', electron: '' })
+const isElectron = computed(() => !!tmcutHostBridge()?.isElectron)
 
 const faqItems = computed(() => [
   {

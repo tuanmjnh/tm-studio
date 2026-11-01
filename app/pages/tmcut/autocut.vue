@@ -10,6 +10,7 @@ import { toURL } from '~/utils/ffmpegHelper'
 import { AUTOCUT_PREFS_KEY, AUTOCUT_PREFS_DEFAULT, parseAutocutPrefs, serializeAutocutPrefs, splitKeywords, joinKeywords } from '~/utils/tmcut/autocutPrefs'
 import { readStored } from '~/utils/tmcut/localStore'
 import { nextActiveIndex } from '~/utils/tmcut/autocutReview'
+import { tmcutHostBridge } from '~/utils/tmcut/hostBridge'
 
 const { t } = useI18n()
 const toast = useToast()
@@ -218,7 +219,7 @@ async function importSourceInput(droppedFiles?: File[]) {
     if (isDesktop.value) {
       let paths: string[]
       if (droppedFiles) {
-        paths = droppedFiles.map(file => window.electronAPI?.getPathForFile?.(file) || '')
+        paths = droppedFiles.map(file => tmcutHostBridge()?.getPathForFile?.(file) || '')
         if (paths.some(path => !path)) throw new Error(t('tmcut.media.importFailed'))
       } else {
         const picked = await pickFile({
