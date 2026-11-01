@@ -1,8 +1,8 @@
 import { ref, computed } from 'vue'
-import { TICKS_PER_SECOND, evaluateTimeline, isRamped, speedAt, ticksToSec } from '@tmcut-core'
+import { TICKS_PER_SECOND, createClock, evaluateTimeline, isRamped, speedAt, ticksToSec } from '@tmcut-core'
 import { useTmcutProject } from './useTmcutProject'
 import type { TmcutTimelineItem } from './useTmcutProject'
-import { clipEndSec, clipMediaTimeSec, clipStartSec } from '~/utils/tmcut/clipTime'
+import { clipMediaTimeSec, clipStartSec, lastRenderableTicks } from '~/utils/tmcut/clipTime'
 
 // Shared playback state across TMCut editor
 const playhead = ref(0) // Playhead position in seconds
@@ -61,12 +61,35 @@ export function useTmcutPlayback() {
     return clipMediaTimeSec(clip, at)
   }
 
-  // One evaluator pass per playhead position: the transition pair, the
-  // active video layer and their source positions all read this answer, so
-  // the preview never re-derives window/geometry math of its own.
+  // ADR-018: one boundary rule for every timeline consumer — a clip window is
+  // half-open, `[start, end)`, so it never paints on the first frame of the
+  // window after it (an inclusive end made adjacent captions overlap for one
+  // frame in BOTH preview and export). The playhead itself still rests on the
+  // end of the content, which is what the ruler and the timecode show, and
+  // that instant sits just past the last frame. So the position the canvas
+  // renders from is pulled back to the last frame's start — otherwise a
+  // project would go blank the moment it finished.
+  //
+  // The bound is `contentDuration`, NOT `totalDuration`: the latter carries a
+  // 5 s floor so the ruler never collapses (tmcut_playback_duration), and that
+  // padded tail is not part of the export. Clamping against it would leave the
+  // canvas black for the whole tail and only heal the last ruler pixel.
+  const playheadClock = computed(() => createClock(
+    currentProject.value?.canvas?.fps || { numerator: 30, denominator: 1 }
+  ))
+  const renderSeconds = computed(() => {
+    const endTicks = Math.round(contentDuration.value * TICKS_PER_SECOND)
+    const atTicks = Math.round(playhead.value * TICKS_PER_SECOND)
+    if (!(endTicks > 0) || atTicks < endTicks) return playhead.value
+    return ticksToSec(lastRenderableTicks(playheadClock.value, endTicks))
+  })
+
+  // One evaluator pass per render position: the transition pair, the active
+  // video layer, the active text overlays and their source positions all read
+  // this answer, so the preview never re-derives window math of its own.
   const playheadEvaluation = computed(() => evaluateTimeline(
     currentProject.value,
-    Math.round(playhead.value * TICKS_PER_SECOND)
+    Math.round(renderSeconds.value * TICKS_PER_SECOND)
   ))
 
   // Transition crossfade state (roadmap B3 / core C5): while the playhead
@@ -130,18 +153,21 @@ export function useTmcutPlayback() {
     return null
   })
 
-  // Active text overlays at current playhead — across EVERY text track,
-  // so parallel caption/watermark tracks all render (R122).
-  const activeTextClips = computed(() => {
+  // Active text overlays at the render position — across EVERY text track, so
+  // parallel caption/watermark tracks all render (R122). The evaluator owns
+  // which clips are live (ADR-018), so the preview reads its layer list
+  // instead of testing a window of its own; hidden rows stay hidden the way
+  // the video path already treats them.
+  const activeTextClips = computed<TmcutTimelineItem[]>(() => {
     const tracks = currentProject.value?.timeline?.tracks
     if (!tracks) return []
     const out: TmcutTimelineItem[] = []
-    for (const track of tracks) {
-      if (track.type !== 'text' || track.hidden) continue
-      for (const clip of track.items || []) {
-        const clipStart = clipStartSec(clip)
-        const clipEnd = clipEndSec(clip)
-        if (playhead.value >= clipStart && playhead.value <= clipEnd) out.push(clip)
+    for (const evaluation of playheadEvaluation.value.tracks) {
+      if (evaluation.type !== 'text' || evaluation.hidden) continue
+      const track = tracks.find(item => item.type === 'text' && item.id === evaluation.id)
+      for (const layer of evaluation.layers) {
+        const clip = track?.items?.find(item => item.id === layer.clipId)
+        if (clip) out.push(clip)
       }
     }
     return out
@@ -471,6 +497,7 @@ export function useTmcutPlayback() {
 
   return {
     playhead,
+    renderSeconds,
     isPlaying,
     zoom,
     videoRef,

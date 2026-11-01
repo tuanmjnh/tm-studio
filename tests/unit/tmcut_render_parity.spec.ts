@@ -9,8 +9,8 @@
  * Three subjects, all font-free:
  *  1. transform clip (scale 50, x 6, y -4, opacity 60) — pixel rect + alpha.
  *  2. speed-2 clip over a red→green source — timeline tick → source tick.
- *  3. a text overlay's enable window — where the export and the evaluator
- *     disagree on which frame the last one of a clip is.
+ *  3. the clip window boundary — the export, the evaluator and the preview all
+ *     stop a clip on the same frame (ADR-018, half-open `[start, end)`).
  *
  * Skips when no FFmpeg binary is available.
  */
@@ -19,8 +19,9 @@ import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { TICKS_PER_SECOND, evaluateTimeline } from '@tmcut-core'
+import { TICKS_PER_SECOND, createClock, evaluateTimeline } from '@tmcut-core'
 import { compileTimelineToFfmpeg } from '../../app/utils/tmcut/render'
+import { lastRenderableTicks } from '../../app/utils/tmcut/clipTime'
 import type { TmcutProject } from '../../app/composables/useTmcutProject'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
@@ -235,27 +236,26 @@ try {
     assert.ok(secondHalf.g > 180 && secondHalf.r < 90 && secondHalf.b < 90, `expected green, got ${JSON.stringify(secondHalf)}`)
   })
 
-  // --- 3. the clip window boundary ------------------------------------------
-  // `enable='between(t,start,end)'` is the window the export puts on every
-  // text overlay, and `between` includes its upper bound — so the overlay
-  // still paints on the first frame of the next window. This renders the same
-  // window as a plate (no font needed) to measure it instead of trusting the
-  // expression. Characterisation, not endorsement: ADR-018 in
-  // docs/v4-phase-0-audit.md §7 decides whether preview and export both move
-  // to the evaluator's half-open rule.
+  // --- 3. the clip window boundary (ADR-018) --------------------------------
+  // One rule for every consumer: a clip window is half-open, `[start, end)`.
+  // FFmpeg's between() INCLUDES its upper bound, so the previous export
+  // expression painted a finished caption onto the first frame of the window
+  // after it — and the preview agreed, so both were wrong together. gte*lt is
+  // measured here rather than trusted: the frame starting exactly at the end
+  // must be back to the background.
   const windowOutput = path.join(workDir, 'window.mp4').replace(/\\/g, '/')
   runFfmpeg([
     '-f', 'lavfi', '-i', `color=c=black:s=${WIDTH}x${HEIGHT}:r=30:d=3`,
     '-f', 'lavfi', '-i', `color=c=red:s=16x9:r=30:d=3`,
-    '-filter_complex', `[0:v][1:v]overlay=x=24:y=13:enable='between(t,1,2)'[v]`,
+    '-filter_complex', `[0:v][1:v]overlay=x=24:y=13:enable='gte(t,1)*lt(t,2)'[v]`,
     '-map', '[v]', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-y', windowOutput
   ])
 
-  check('FFmpeg between() paints the frame that starts exactly at the window end', () => {
+  check('the half-open window stops before the frame that starts at its end', () => {
     const before = pixel(decodeFrameIndex(windowOutput, 59), WIDTH >> 1, HEIGHT >> 1)
     assert.ok(before.r > 180, `frame 59 (1.967s) carries the plate, got ${JSON.stringify(before)}`)
     const boundary = pixel(decodeFrameIndex(windowOutput, 60), WIDTH >> 1, HEIGHT >> 1)
-    assert.ok(boundary.r > 180, `frame 60 (2.000s, the window end) STILL carries the plate, got ${JSON.stringify(boundary)}`)
+    assert.ok(boundary.r < 40, `frame 60 (2.000s, the window end) is back to the background, got ${JSON.stringify(boundary)}`)
     const after = pixel(decodeFrameIndex(windowOutput, 61), WIDTH >> 1, HEIGHT >> 1)
     assert.ok(after.r < 40, `frame 61 (2.033s) is back to the background, got ${JSON.stringify(after)}`)
   })
@@ -275,13 +275,26 @@ try {
   const windowCompiled = compileTimelineToFfmpeg(windowProject, 'window-export.mp4')
   const windowFilter = windowCompiled.args[windowCompiled.args.indexOf('-filter_complex') + 1]!
 
-  check('export text window is inclusive where the evaluator is half-open', () => {
+  check('export text window uses the evaluator half-open rule', () => {
     assert.ok(
-      windowFilter.includes(`enable='between(t,1,2)'`),
-      `expected the inclusive export window, got ${windowFilter}`
+      windowFilter.includes(`enable='gte(t,1)*lt(t,2)'`),
+      `expected the half-open export window, got ${windowFilter}`
     )
+    assert.ok(!windowFilter.includes('between(t,'), `no inclusive window may remain, got ${windowFilter}`)
     assert.equal(evaluateTimeline(windowProject, 2 * TICKS_PER_SECOND).layers.find(item => item.clipId === 'text-1'), undefined)
     assert.ok(evaluateTimeline(windowProject, TICKS_PER_SECOND).layers.find(item => item.clipId === 'text-1'), 'the window opens on its first frame')
+  })
+
+  // The same rule taken to the end of the timeline: parked at the total
+  // duration the playhead sits one instant past the last frame, where a
+  // half-open window answers "nothing" — so the preview renders from the start
+  // of that last frame instead (lastRenderableTicks, ADR-018).
+  check('the final frame of the timeline still renders its closing caption', () => {
+    const endTicks = 2 * TICKS_PER_SECOND
+    const at = lastRenderableTicks(createClock({ numerator: 30, denominator: 1 }), endTicks)
+    assert.equal(at, endTicks - 4000, 'one frame before the end, not past it')
+    assert.equal(evaluateTimeline(windowProject, endTicks).layers.find(item => item.clipId === 'text-1'), undefined, 'the raw end belongs to no clip')
+    assert.ok(evaluateTimeline(windowProject, at).layers.find(item => item.clipId === 'text-1'), 'the last frame keeps its text')
   })
 
   console.log(`\n=== All ${checks} render-parity checks passed ===`)

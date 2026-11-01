@@ -122,7 +122,10 @@ export function textOverlayFilter(clip: TextOverlayClip): string {
   const xArg = animXExpr ? `x='${xExpr}'` : `x=${xExpr}`
   const yArg = animYExpr ? `y='${yExpr}'` : `y=${yExpr}`
 
-  return `drawtext=${fontFileArg}text='${escaped}':fontsize=${fontSize}:fontcolor=${fontColorArg}:${xArg}:${yArg}:enable='between(t,${tStart},${tEnd})'${alphaArg}${styleArgs ? `:${styleArgs}` : ''}`
+  // ADR-018: the window is half-open, like the evaluator and the preview.
+  // between() includes its upper bound, which painted a finished caption on
+  // the first frame of the next window; gte*lt stops at the frame before.
+  return `drawtext=${fontFileArg}text='${escaped}':fontsize=${fontSize}:fontcolor=${fontColorArg}:${xArg}:${yArg}:enable='gte(t,${tStart})*lt(t,${tEnd})'${alphaArg}${styleArgs ? `:${styleArgs}` : ''}`
 }
 
 /**

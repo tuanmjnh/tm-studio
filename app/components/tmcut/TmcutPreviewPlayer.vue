@@ -25,6 +25,7 @@ const previewEngine = useTmcutPreviewEngine()
 const { currentProject, contentDuration, hasTimelineClips, selectedClipId, selectClip, updateClip, pushHistory, isCropEditing, toggleCropEditing } = useTmcutProject()
 const {
   playhead,
+  renderSeconds,
   isPlaying,
   videoRef,
   outgoingVideoRef,
@@ -432,9 +433,11 @@ const isTrackHidden = computed(() => !!activeVideoTrack.value?.hidden)
 // PREVIEW ONLY: the export pipeline does not render keyframes yet
 // (Phase K roadmap item) — never expose them as exported behavior.
 function localTicks(clip: { offset?: number }): number {
-  // C16-R3: playhead is SECONDS, the store offset is TICKS — snap the
-  // playhead into tick space first, then subtract.
-  return Math.round(secToTicks(playhead.value) - (clip.offset || 0))
+  // C16-R3: the render position is SECONDS, the store offset is TICKS — snap
+  // into tick space first, then subtract. renderSeconds (ADR-018) is the
+  // position the canvas actually draws from, so keyframes and text animation
+  // resolve on the same frame the layers were picked for.
+  return Math.round(secToTicks(renderSeconds.value) - (clip.offset || 0))
 }
 
 const isVideoMuted = computed(() => !!activeVideoTrack.value?.muted)
@@ -519,7 +522,7 @@ const activeAudioClips = computed(() => {
       // Reverse clips are skipped: HTMLMediaElement has no backward
       // playback, and starting one at the wrong end is worse than silence.
       if (clip.reverse) continue
-      if (playhead.value >= clipStartSec(clip) && playhead.value < clipEndSec(clip)) {
+      if (renderSeconds.value >= clipStartSec(clip) && renderSeconds.value < clipEndSec(clip)) {
         out.push({ clip, track })
       }
     }
@@ -537,7 +540,7 @@ const activeAudioSrcs = computed(() => activeAudioClips.value.map(({ clip, track
   return {
     id: clip.id,
     src: clip.src ? previewEngine.resolveSrc(clip.src) : '',
-    mediaTime: clipMediaTimeSec(clip, playhead.value),
+    mediaTime: clipMediaTimeSec(clip, renderSeconds.value),
     muted: !!track.muted || !!previewMuted.value,
     // Store volume is PERCENT 0..100 (v1 heritage, core audio.mjs) while
     // HTMLMediaElement.volume speaks 0..1 — normalize + clamp before the
