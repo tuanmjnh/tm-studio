@@ -255,7 +255,13 @@ useHead({ title })
         </template>
 
         <template #empty>
-          <AdminEmptyState :title="t('common.no_notifications')" icon="i-lucide-bell-off" />
+          <UEmpty
+            size="xl"
+            icon="i-lucide-bell-off"
+            :title="t('common.no_notifications')"
+            :description="t('common.no_data_desc')"
+            :actions="[{ label: t('common.refresh'), onClick: () => fetchNotify(), variant: 'soft' }]"
+          />
         </template>
       </LazyGridList>
     </div>
