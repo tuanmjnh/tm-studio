@@ -188,6 +188,7 @@ Khai báo tại [dsl.ts](file:///D:/Applications/tm-studio/packages/core/types/d
 | G8 | Không có WebCodecs/muxer | `grep VideoEncoder/mediabunny` = 0 | Phase 5 làm mới hoàn toàn |
 | G9 | Downloader (yt-dlp) chưa tồn tại trong repo | chỉ resolve binary + updater, không có lệnh tải | Phase 6 |
 | G10 | `@tmcut-core` alias ≠ tên package (`tmcut-core`) | [nuxt.config.ts:21](file:///D:/Applications/tm-studio/nuxt.config.ts#L21) vs [packages/core/package.json](file:///D:/Applications/tm-studio/packages/core/package.json) | dễ nhầm khi publish/đóng gói |
+| G11 | Biên "frame cuối của một clip" không thống nhất | evaluator nửa mở ([evaluate.mjs](file:///D:/Applications/tm-studio/packages/core/src/evaluate.mjs)) vs preview `t ≤ end` ([useTmcutPlayback.ts:144](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L144)) vs export `between(t,start,end)` ([text.ts:125](file:///D:/Applications/tm-studio/app/utils/tmcut/render/text.ts#L125)) | preview ↔ export đang **khớp nhau** nhưng cùng sai một frame: chữ clip vẫn vẽ trên frame đầu của cửa sổ kế (đo bằng pixel, [render-parity spec](file:///D:/Applications/tm-studio/tests/unit/tmcut_render_parity.spec.ts) case 3). Chỉ text overlay dùng `enable=`; video/sticker qua concat nên đã frame-exact. Chốt ở ADR-018 |
 
 **Chấm Phase 1 acceptance của V4 (đo hôm nay)**
 
@@ -225,6 +226,7 @@ Nguyên tắc xuyên suốt: **mỗi mốc phải giữ hành vi người dùng 
 | ADR-015 | FFmpeg giữ vai trò gì? | Giữ làm backend "compat" desktop + server; WebCodecs là backend web mặc định khi đủ codec. Cả hai sau cùng một `Encoder` interface. |
 | ADR-016 | Golden-frame lưu ở đâu? | PNG nhỏ (≤ 512×288) trong `tests/fixtures/golden/`, so bằng sai số trung bình + ngưỡng pixel lệch; không so hash tuyệt đối. |
 | ADR-017 | Đồng bộ package name | Đổi alias `@tmcut-core` → package `tmcut-core`, hoặc đổi tên package; chọn một, ghi vào Phase 1. |
+| ADR-018 | Một clip kết thúc ở **frame nào**? | Evaluator nửa mở (`start ≤ t < end`), nhưng preview chữ dùng `t ≤ end` ([useTmcutPlayback.ts:144](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L144)) và export chữ dùng `enable='between(t,start,end)'` ([text.ts:125](file:///D:/Applications/tm-studio/app/utils/tmcut/render/text.ts#L125)) — `between` **bao gồm** `end`, nên hai bên đang cùng vẽ đè chữ lên frame đầu của cửa sổ kế. Đã đo bằng pixel trong [tmcut_render_parity.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_render_parity.spec.ts): frame có pts đúng bằng `end` vẫn mang plate overlay. **Đề xuất: chốt nửa mở cho mọi consumer của timeline** — export đổi `enable='gte(t,start)*lt(t,end)'`, preview bỏ `<=` và thay bằng clamp "frame cuối timeline" (khi playhead == total duration thì evaluate tại `total − 1 frame`) để chữ không biến mất ở frame cuối video. Tác động: project cũ mất 1 frame chữ tại chỗ giáp ranh (đúng hành vi mong muốn, nhưng là đổi output → cần user duyệt + test migration). |
 
 ---
 

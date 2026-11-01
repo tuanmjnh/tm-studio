@@ -6,9 +6,11 @@
  * against geometry DERIVED FROM THE EVALUATOR — not from the compiler's own
  * transform helper, which would make the check circular.
  *
- * Two subjects, both font-free:
+ * Three subjects, all font-free:
  *  1. transform clip (scale 50, x 6, y -4, opacity 60) — pixel rect + alpha.
  *  2. speed-2 clip over a red→green source — timeline tick → source tick.
+ *  3. a text overlay's enable window — where the export and the evaluator
+ *     disagree on which frame the last one of a clip is.
  *
  * Skips when no FFmpeg binary is available.
  */
@@ -52,12 +54,20 @@ function runFfmpeg(args: string[]): void {
   assert.equal(res.status, 0, `ffmpeg failed: ${res.stderr}`)
 }
 
-function decodeFrame(file: string, atSec: number): Uint8Array {
-  const target = path.join(workDir, `frame-${++decoded}.rgba`)
-  runFfmpeg(['-ss', atSec.toFixed(3), '-i', file, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-y', target])
+function decodeTo(target: string, seekArgs: string[]): Uint8Array {
+  runFfmpeg([...seekArgs, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-y', target])
   const bytes = new Uint8Array(fs.readFileSync(target))
   assert.equal(bytes.length, WIDTH * HEIGHT * 4, 'decoded frame is one canvas RGBA frame')
   return bytes
+}
+
+function decodeFrame(file: string, atSec: number): Uint8Array {
+  return decodeTo(path.join(workDir, `frame-${++decoded}.rgba`), ['-ss', atSec.toFixed(3), '-i', file])
+}
+
+/** Frame-exact decode: `-ss` seeks to the nearest keyframe, boundary checks need `n`. */
+function decodeFrameIndex(file: string, index: number): Uint8Array {
+  return decodeTo(path.join(workDir, `frame-${++decoded}.rgba`), ['-i', file, '-vf', `select=eq(n\\,${index})`])
 }
 
 function pixel(frame: Uint8Array, x: number, y: number): { r: number, g: number, b: number } {
@@ -223,6 +233,55 @@ try {
     assert.ok(firstHalf.r > 180 && firstHalf.g < 90 && firstHalf.b < 90, `expected red, got ${JSON.stringify(firstHalf)}`)
     const secondHalf = pixel(decodeFrame(speedOutput, 0.75), WIDTH >> 1, HEIGHT >> 1)
     assert.ok(secondHalf.g > 180 && secondHalf.r < 90 && secondHalf.b < 90, `expected green, got ${JSON.stringify(secondHalf)}`)
+  })
+
+  // --- 3. the clip window boundary ------------------------------------------
+  // `enable='between(t,start,end)'` is the window the export puts on every
+  // text overlay, and `between` includes its upper bound — so the overlay
+  // still paints on the first frame of the next window. This renders the same
+  // window as a plate (no font needed) to measure it instead of trusting the
+  // expression. Characterisation, not endorsement: ADR-018 in
+  // docs/v4-phase-0-audit.md §7 decides whether preview and export both move
+  // to the evaluator's half-open rule.
+  const windowOutput = path.join(workDir, 'window.mp4').replace(/\\/g, '/')
+  runFfmpeg([
+    '-f', 'lavfi', '-i', `color=c=black:s=${WIDTH}x${HEIGHT}:r=30:d=3`,
+    '-f', 'lavfi', '-i', `color=c=red:s=16x9:r=30:d=3`,
+    '-filter_complex', `[0:v][1:v]overlay=x=24:y=13:enable='between(t,1,2)'[v]`,
+    '-map', '[v]', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-y', windowOutput
+  ])
+
+  check('FFmpeg between() paints the frame that starts exactly at the window end', () => {
+    const before = pixel(decodeFrameIndex(windowOutput, 59), WIDTH >> 1, HEIGHT >> 1)
+    assert.ok(before.r > 180, `frame 59 (1.967s) carries the plate, got ${JSON.stringify(before)}`)
+    const boundary = pixel(decodeFrameIndex(windowOutput, 60), WIDTH >> 1, HEIGHT >> 1)
+    assert.ok(boundary.r > 180, `frame 60 (2.000s, the window end) STILL carries the plate, got ${JSON.stringify(boundary)}`)
+    const after = pixel(decodeFrameIndex(windowOutput, 61), WIDTH >> 1, HEIGHT >> 1)
+    assert.ok(after.r < 40, `frame 61 (2.033s) is back to the background, got ${JSON.stringify(after)}`)
+  })
+
+  const windowProject = baseProject('Parity window')
+  windowProject.timeline.tracks[1]!.items = [{
+    id: 'text-1',
+    trackId: 't1',
+    text: 'X',
+    offset: TICKS_PER_SECOND,
+    in: 0,
+    out: TICKS_PER_SECOND,
+    speed: 1,
+    fontSize: 24,
+    color: 'white'
+  }]
+  const windowCompiled = compileTimelineToFfmpeg(windowProject, 'window-export.mp4')
+  const windowFilter = windowCompiled.args[windowCompiled.args.indexOf('-filter_complex') + 1]!
+
+  check('export text window is inclusive where the evaluator is half-open', () => {
+    assert.ok(
+      windowFilter.includes(`enable='between(t,1,2)'`),
+      `expected the inclusive export window, got ${windowFilter}`
+    )
+    assert.equal(evaluateTimeline(windowProject, 2 * TICKS_PER_SECOND).layers.find(item => item.clipId === 'text-1'), undefined)
+    assert.ok(evaluateTimeline(windowProject, TICKS_PER_SECOND).layers.find(item => item.clipId === 'text-1'), 'the window opens on its first frame')
   })
 
   console.log(`\n=== All ${checks} render-parity checks passed ===`)
