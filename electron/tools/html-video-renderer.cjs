@@ -9,12 +9,13 @@ const { getToolsBinaries } = require('./paths.cjs')
 
 const CHANNEL = 'tmcut:renderHtmlVideo'
 const PROGRESS_CHANNEL = 'tmcut:htmlVideoProgress'
-const MAX_HTML_BYTES = 2 * 1024 * 1024
-const MAX_FRAMES = 1800
-// Rates an offscreen Chromium can actually screenshot in order. Shared by
-// request validation and the platform capture, so the two never disagree.
-const MIN_FPS = 15
-const MAX_FPS = 60
+// ADR-019: one composition is one render contract on every host. These bounds
+// and this frame count come from `@tmcut-core` — the same values the Nitro
+// endpoint validates against — so a composition the studio accepts cannot be
+// refused, or cut to a different number of frames, by only one of the hosts.
+// `htmlVideo.mjs` is a leaf module with no imports, which is what lets the main
+// process require it directly.
+const { HTML_VIDEO_LIMITS: LIMITS, frameCountFor } = require('../../packages/core/src/htmlVideo.mjs')
 
 // Fonts and images must be resident before the first seek, or frame 0 of a
 // composition renders without its glyphs.
@@ -30,13 +31,21 @@ function validateRenderOptions(options = {}) {
   const css = typeof options.css === 'string' ? options.css : ''
   const errors = []
 
-  if (!Number.isSafeInteger(width) || width < 64 || width > 3840 || width % 2 !== 0) errors.push('width-must-be-even-64-3840')
-  if (!Number.isSafeInteger(height) || height < 64 || height > 2160 || height % 2 !== 0) errors.push('height-must-be-even-64-2160')
-  if (!Number.isInteger(fps) || fps < MIN_FPS || fps > MAX_FPS) errors.push(`fps-must-be-${MIN_FPS}-${MAX_FPS}`)
-  if (!Number.isFinite(duration) || duration < 1 || duration > 120) errors.push('duration-must-be-1-120')
-  if (Number.isFinite(duration) && Number.isInteger(fps) && duration * fps > MAX_FRAMES) errors.push('frame-limit-exceeded')
+  if (!Number.isSafeInteger(width) || width < LIMITS.minWidth || width > LIMITS.maxWidth || width % 2 !== 0) {
+    errors.push(`width-must-be-even-${LIMITS.minWidth}-${LIMITS.maxWidth}`)
+  }
+  if (!Number.isSafeInteger(height) || height < LIMITS.minHeight || height > LIMITS.maxHeight || height % 2 !== 0) {
+    errors.push(`height-must-be-even-${LIMITS.minHeight}-${LIMITS.maxHeight}`)
+  }
+  if (!Number.isFinite(fps) || fps < LIMITS.minFps || fps > LIMITS.maxFps) {
+    errors.push(`fps-must-be-${LIMITS.minFps}-${LIMITS.maxFps}`)
+  }
+  if (!Number.isFinite(duration) || duration < LIMITS.minDurationSec || duration > LIMITS.maxDurationSec) {
+    errors.push(`duration-must-be-${LIMITS.minDurationSec}-${LIMITS.maxDurationSec}`)
+  }
+  if (Number.isFinite(duration) && Number.isFinite(fps) && frameCountFor(duration, fps) > LIMITS.maxFrames) errors.push('frame-limit-exceeded')
   if (!html.trim()) errors.push('html-required')
-  if (Buffer.byteLength(html, 'utf8') + Buffer.byteLength(css, 'utf8') > MAX_HTML_BYTES) errors.push('composition-too-large')
+  if (Buffer.byteLength(html, 'utf8') + Buffer.byteLength(css, 'utf8') > LIMITS.maxHtmlBytes) errors.push('composition-too-large')
   if (!outputPath || !path.isAbsolute(outputPath) || path.extname(outputPath).toLowerCase() !== '.mp4') errors.push('invalid-output-path')
 
   return errors.length
@@ -155,7 +164,7 @@ async function openCaptureSession({ html, css, width, height }, deps = {}) {
 function createElectronPlatformCapture(deps = {}) {
   return {
     open: request => openCaptureSession(request, deps),
-    supportsFps: fps => Number.isInteger(fps) && fps >= MIN_FPS && fps <= MAX_FPS
+    supportsFps: fps => Number.isFinite(fps) && fps >= LIMITS.minFps && fps <= LIMITS.maxFps
   }
 }
 
@@ -175,7 +184,7 @@ async function renderHtmlVideo(options, deps = {}) {
   let temporaryPath = ''
   let stderr = ''
   let frameCount = 0
-  const totalFrames = Math.round(value.duration * value.fps)
+  const totalFrames = frameCountFor(value.duration, value.fps)
 
   try {
     const outputDir = path.dirname(value.outputPath)
@@ -241,10 +250,8 @@ function registerHtmlVideoRenderer() {
 module.exports = {
   CHANNEL,
   PROGRESS_CHANNEL,
-  MAX_HTML_BYTES,
-  MAX_FRAMES,
-  MIN_FPS,
-  MAX_FPS,
+  // Exported for the renderer's own test: the bounds are core's, not a copy.
+  LIMITS,
   validateRenderOptions,
   sanitizeCompositionHtml,
   buildCompositionDocument,

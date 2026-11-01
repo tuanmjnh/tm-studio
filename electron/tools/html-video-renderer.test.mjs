@@ -7,7 +7,7 @@ import test from 'node:test'
 import { createRequire } from 'node:module'
 
 const require = createRequire(import.meta.url)
-const { validateRenderOptions, sanitizeCompositionHtml, buildCompositionDocument, ffmpegArgs, openCaptureSession, createElectronPlatformCapture, renderHtmlVideo, MAX_FRAMES } = require('./html-video-renderer.cjs')
+const { validateRenderOptions, sanitizeCompositionHtml, buildCompositionDocument, ffmpegArgs, openCaptureSession, createElectronPlatformCapture, renderHtmlVideo, LIMITS } = require('./html-video-renderer.cjs')
 
 function validOptions(outputPath, extra = {}) {
   return {
@@ -33,14 +33,14 @@ test('validation rejects unsafe or oversized render requests before launching Ch
   const base = validOptions(path.join(tmpdir(), 'composition.mp4'))
   for (const overrides of [
     { width: 65 },
-    { height: 2200 },
+    { height: LIMITS.maxHeight + 2 },
     { fps: 120 },
-    { duration: 121 },
+    { duration: LIMITS.maxDurationSec + 1 },
     { html: ' ' },
     { css: 'x'.repeat(2 * 1024 * 1024) },
     { outputPath: '../relative.mp4' },
     { outputPath: path.join(tmpdir(), 'composition.webm') },
-    { duration: MAX_FRAMES / 15 + 1 }
+    { duration: LIMITS.maxFrames / 15 + 1 }
   ]) {
     assert.equal(validateRenderOptions({ ...base, ...overrides }).ok, false, JSON.stringify(overrides))
   }
@@ -295,9 +295,29 @@ test('capture session destroys its window when the composition fails to load', a
 
 test('electron capture host answers the platform contract for the rates it can shoot', async () => {
   const capture = createElectronPlatformCapture(sessionDeps())
-  for (const fps of [14, 15.5, 61, 0, null, '30']) assert.equal(capture.supportsFps(fps), false, String(fps))
-  for (const fps of [15, 30, 60]) assert.equal(capture.supportsFps(fps), true, String(fps))
+  for (const fps of [61, 0, -1, Number.NaN, null, '30']) assert.equal(capture.supportsFps(fps), false, String(fps))
+  for (const fps of [1, 10, 14, 15, 15.5, 29.97, 30, 60]) assert.equal(capture.supportsFps(fps), true, String(fps))
   const session = await capture.open({ ...COMPOSITION, fps: 30 })
   assert.equal(typeof session.seek, 'function')
   await session.close()
+})
+
+// ADR-019: the desktop host used to reject rates the web host accepted, so the
+// same composition produced a video in one runtime and an error in the other.
+test('desktop bounds are the core render contract, not a second copy', async () => {
+  const { HTML_VIDEO_LIMITS, frameCountFor } = await import('../../packages/core/src/htmlVideo.mjs')
+  assert.deepEqual(LIMITS, HTML_VIDEO_LIMITS, 'main process must read core limits')
+
+  const base = validOptions(path.join(tmpdir(), 'composition.mp4'))
+  // Rates and durations the studio can author and Nitro accepts: the desktop
+  // validator has to take them too, whole or fractional.
+  for (const overrides of [{ fps: 1 }, { fps: 10 }, { fps: 14 }, { fps: 29.97 }, { duration: HTML_VIDEO_LIMITS.minDurationSec }, { height: 2160 }]) {
+    const result = validateRenderOptions({ ...base, ...overrides })
+    assert.equal(result.ok, true, `${JSON.stringify(overrides)} -> ${JSON.stringify(result.errors)}`)
+  }
+  // And the same frame ceiling: every bound is legal on its own, the product
+  // is not — which is exactly how the web host reports it too.
+  assert.equal(validateRenderOptions({ ...base, fps: HTML_VIDEO_LIMITS.maxFps, duration: HTML_VIDEO_LIMITS.maxDurationSec }).ok, false)
+  assert.equal(validateRenderOptions({ ...base, css: 'x'.repeat(HTML_VIDEO_LIMITS.maxHtmlBytes) }).ok, false)
+  assert.equal(frameCountFor(base.duration, base.fps), Math.round(base.duration * base.fps), 'frame math is core frame math')
 })

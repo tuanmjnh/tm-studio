@@ -109,29 +109,36 @@ async function main() {
     assert.deepEqual(seen, ['clip.mp4', null], 'the host owns the mapping, adapter only forwards')
   })
 
-  await check('capture bounds equal each host validator', async () => {
+  await check('both hosts report the one render contract window (ADR-019)', async () => {
     await freshStore()
     const web = useTmcutPlatform({ isDesktop: { value: false }, resolveSrc: () => '', request: fakeRequest({}).request })
     const desktop = useTmcutPlatform({ isDesktop: { value: true }, resolveSrc: () => '', request: fakeRequest({}).request })
 
-    for (const fps of [1, 30, HTML_VIDEO_LIMITS.maxFps]) {
+    for (const fps of [HTML_VIDEO_LIMITS.minFps, 10, 14, 15, 30, HTML_VIDEO_LIMITS.maxFps]) {
       assert.equal(web.capture.supportsFps({ numerator: fps, denominator: 1 }), true, `web accepts ${fps}`)
+      assert.equal(desktop.capture.supportsFps({ numerator: fps, denominator: 1 }), true, `desktop accepts ${fps}`)
     }
-    for (const fps of [0, HTML_VIDEO_LIMITS.maxFps + 1, 29.5]) {
-      assert.equal(web.capture.supportsFps({ numerator: Math.round(fps * 2), denominator: 2 }), false, `web rejects ${fps}`)
+    // 29.97 is a legal composition rate in the spec validator; the desktop host
+    // used to require a whole number, which is the same asymmetry as the window.
+    for (const rate of [{ numerator: 30000, denominator: 1001 }, { numerator: 59, denominator: 2 }]) {
+      assert.equal(web.capture.supportsFps(rate), true, `web accepts ${rate.numerator}/${rate.denominator}`)
+      assert.equal(desktop.capture.supportsFps(rate), true, `desktop accepts ${rate.numerator}/${rate.denominator}`)
     }
-    assert.equal(desktop.capture.supportsFps({ numerator: 15, denominator: 1 }), true)
-    assert.equal(desktop.capture.supportsFps({ numerator: 60, denominator: 1 }), true)
-    assert.equal(desktop.capture.supportsFps({ numerator: 14, denominator: 1 }), false, 'below the render validator')
-    assert.equal(desktop.capture.supportsFps({ numerator: 61, denominator: 1 }), false, 'above the render validator')
+    for (const fps of [0, HTML_VIDEO_LIMITS.maxFps + 1]) {
+      const rate = { numerator: fps, denominator: 1 }
+      assert.equal(web.capture.supportsFps(rate), false, `web rejects ${fps}`)
+      assert.equal(desktop.capture.supportsFps(rate), false, `desktop rejects ${fps}`)
+    }
+    assert.equal(web.capture.supportsFps(Number.NaN), false, 'a rate that is not a number is not a rate')
     assert.equal(web.capture.supportsFps(30), true, 'a plain number is a legal rate too')
 
-    // The numbers above are copies of two validators living elsewhere. Read the
-    // originals so a change there fails this spec instead of shipping a
-    // capability report the host then refuses.
+    // The window is only shared if the main process really reads core. Before
+    // ADR-019 it kept its own `const MIN_FPS = 15`, so a 10 fps composition
+    // rendered on web and was refused on desktop; a re-appearing local bound
+    // must fail here rather than reopen that split.
     const electron = read('electron/tools/html-video-renderer.cjs')
-    assert.match(electron, /const MIN_FPS = 15/, 'Electron render window floor')
-    assert.match(electron, /const MAX_FPS = 60/, 'Electron render window ceiling')
+    assert.match(electron, /require\('\.\.\/\.\.\/packages\/core\/src\/htmlVideo\.mjs'\)/, 'main reads the core contract')
+    assert.doesNotMatch(electron, /const (MIN_FPS|MAX_FPS|MAX_FRAMES|MAX_HTML_BYTES) =/, 'no second copy of the bounds')
     const spec = read('packages/core/src/htmlVideo.mjs')
     assert.match(spec, /minFps: 1/, 'composition spec floor used by the web host')
     assert.match(spec, /maxFps: 60/, 'composition spec ceiling used by the web host')

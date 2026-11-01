@@ -67,18 +67,17 @@ export type TmcutHostPlatform = TmcutPlatformAdapter & {
 }
 
 /**
- * Frame rates the Electron HTML-video path accepts: its own validator window
- * (15..60), narrower than the composition spec window (1..60) the Nitro server
- * enforces. That difference is gap G6 in numbers, and
- * tmcut_platform_adapter.spec.ts pins both against their host sources.
+ * A rate inside the one composition window.
+ *
+ * ADR-019: both hosts answer with `HTML_VIDEO_LIMITS`, because the Electron
+ * validator now reads that same object instead of keeping its own 15..60 copy —
+ * so a rate the studio can author is renderable on whichever host takes the
+ * job. Fractional rates (29.97 = 30000/1001) are legal on both hosts as well,
+ * which is what the spec validator has always accepted.
  */
-const ELECTRON_CAPTURE_MIN_FPS = 15
-const ELECTRON_CAPTURE_MAX_FPS = 60
-
-/** Integer rate inside a host's inclusive window. */
 function rateInRange(rate: FrameRate | number, min: number, max: number): boolean {
   const fps = typeof rate === 'number' ? rate : rationalToFloat(rate)
-  return Number.isInteger(fps) && fps >= min && fps <= max
+  return Number.isFinite(fps) && fps >= min && fps <= max
 }
 
 const QUEUE_STATUS_BY_JOB: Record<TmcutExportJob['status'], TmcutRenderJob['status']> = {
@@ -259,9 +258,7 @@ export function useTmcutPlatform(deps: TmcutPlatformDeps = {}): TmcutHostPlatfor
     info,
     media: { resolveSrc },
     capture: {
-      supportsFps: rate => desktop
-        ? rateInRange(rate, ELECTRON_CAPTURE_MIN_FPS, ELECTRON_CAPTURE_MAX_FPS)
-        : rateInRange(rate, HTML_VIDEO_LIMITS.minFps, HTML_VIDEO_LIMITS.maxFps),
+      supportsFps: rate => rateInRange(rate, HTML_VIDEO_LIMITS.minFps, HTML_VIDEO_LIMITS.maxFps),
       open: async () => {
         throw new Error(
           desktop

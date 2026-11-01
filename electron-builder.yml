@@ -14,6 +14,10 @@ files:
   # ffmpeg argv, also used by server/api/v1/media/analyze.post.ts); without it
   # the packaged app throws MODULE_NOT_FOUND on the first AutoCut analysis.
   - shared/**/*
+  # The main process requires the HTML-video bounds from core (ADR-019) so both
+  # hosts validate a composition against the same window. htmlVideo.mjs is a
+  # leaf — it imports nothing — so this single file is the whole dependency.
+  - packages/core/src/htmlVideo.mjs
   - packages/core/dist/**/*
   - .output/**/*
   - public/icon.ico
