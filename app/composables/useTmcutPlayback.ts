@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import { TICKS_PER_SECOND, isRamped, speedAt } from '@tmcut-core'
+import { TICKS_PER_SECOND, evaluateTimeline, isRamped, speedAt, ticksToSec } from '@tmcut-core'
 import { useTmcutProject } from './useTmcutProject'
 import type { TmcutTimelineItem } from './useTmcutProject'
 import { clipEndSec, clipMediaTimeSec, clipStartSec } from '~/utils/tmcut/clipTime'
@@ -61,64 +61,70 @@ export function useTmcutPlayback() {
     return clipMediaTimeSec(clip, at)
   }
 
+  // One evaluator pass per playhead position: the transition pair, the
+  // active video layer and their source positions all read this answer, so
+  // the preview never re-derives window/geometry math of its own.
+  const playheadEvaluation = computed(() => evaluateTimeline(
+    currentProject.value,
+    Math.round(playhead.value * TICKS_PER_SECOND)
+  ))
+
   // Transition crossfade state (roadmap B3 / core C5): while the playhead
   // sits inside a transition window BOTH clips are live — the INCOMING
   // clip carries `transitionIn`, the OUTGOING clip is the neighbor whose
-  // end lands on the window end (an intact pair). Broken pairs (neighbor
-  // moved/trimmed since) return null and render as a plain cut, matching
-  // what the export badge warns about until R3.
+  // end lands on the window end (an intact pair). Core's `evaluateTimeline`
+  // owns the window/role/progress/source math for BOTH stored clip shapes
+  // (DSL v3 and the app's flat offset/in/out); a broken pair (neighbor
+  // moved/trimmed since) yields no window and renders as a plain cut,
+  // matching what the export badge warns about until R3.
   const transitionCrossfade = computed(() => {
-    const videoTrack = currentProject.value?.timeline?.tracks?.find(t => t.type === 'video')
-    const items = videoTrack?.items
+    const items = currentProject.value?.timeline?.tracks?.find(t => t.type === 'video')?.items
     if (!items?.length) return null
-    const at = playhead.value
-    for (const incoming of items) {
-      const ti = incoming.transitionIn
-      if (!ti || !(ti.duration > 0)) continue
-      const winStart = clipStartSec(incoming)
-      const winEnd = winStart + ti.duration / TICKS_PER_SECOND
-      if (at < winStart || at >= winEnd) continue
-      // The incoming clip must still cover the playhead — a split or trim
-      // inside the window broke the pair (render as a plain cut).
-      const incomingEnd = clipEndSec(incoming)
-      if (at >= incomingEnd) continue
-      const outgoing = items.find(o =>
-        o.id !== incoming.id
-        && Math.abs(clipEndSec(o) - winEnd) < 0.005)
-      if (!outgoing) continue
-      return {
-        incoming,
-        outgoing,
-        type: ti.type,
-        progress: Math.min(1, (at - winStart) / Math.max(0.001, winEnd - winStart)),
-        outgoingMediaTime: mediaTimeAt(outgoing, at)
-      }
+    const layers = playheadEvaluation.value.tracks.find(track => track.type === 'video')?.layers ?? []
+    const incomingLayer = layers.find(layer => layer.transition?.role === 'incoming')
+    if (!incomingLayer?.transition?.type) return null
+    const outgoingLayer = layers.find(layer =>
+      layer.clipId !== incomingLayer.clipId && layer.transition?.role === 'outgoing')
+    if (!outgoingLayer || outgoingLayer.sourceTicks === null) return null
+    const incoming = items.find(item => item.id === incomingLayer.clipId)
+    const outgoing = items.find(item => item.id === outgoingLayer.clipId)
+    if (!incoming || !outgoing) return null
+    return {
+      incoming,
+      outgoing,
+      type: incomingLayer.transition.type,
+      progress: incomingLayer.transition.progress,
+      outgoingMediaTime: ticksToSec(outgoingLayer.sourceTicks)
     }
-    return null
   })
 
   // Active video clip at current playhead. With parallel video tracks
   // (CapCut-style layering) the TOP track wins: the header/track rows
   // render the store array in order, so index 0 IS the top row and also
-  // the topmost rendered layer.
+  // the topmost rendered layer. Within a track the latest-starting live
+  // layer is on top (that is also the incoming clip of a transition).
   const activeVideoClip = computed(() => {
-    if (!currentProject.value?.timeline?.tracks) return null
+    const tracks = currentProject.value?.timeline?.tracks
+    if (!tracks) return null
     const crossfade = transitionCrossfade.value
-    const videoTracks = currentProject.value.timeline.tracks.filter(t => t.type === 'video')
-    for (const videoTrack of videoTracks) {
-      if (videoTrack.hidden) continue
-      for (const clip of videoTrack.items || []) {
-        // Inside a transition window the OUTGOING clip owns the second
-        // layer — the main element always renders the INCOMING clip.
-        if (crossfade && clip.id === crossfade.outgoing.id) continue
-        const clipStart = clipStartSec(clip)
-        const clipEnd = clipEndSec(clip)
-        if (playhead.value >= clipStart && playhead.value < clipEnd) {
-          return {
-            clip,
-            mediaCurrentTime: mediaTimeAt(clip, playhead.value)
-          }
-        }
+    const videoTracks = tracks.filter(track => track.type === 'video')
+    const videoEvaluations = playheadEvaluation.value.tracks.filter(track => track.type === 'video')
+    for (let index = 0; index < videoEvaluations.length; index++) {
+      const evaluation = videoEvaluations[index]
+      if (!evaluation || evaluation.hidden) continue
+      // Inside a transition window the OUTGOING clip owns the second
+      // layer — the main element always renders the INCOMING clip.
+      const live = evaluation.layers.filter(layer =>
+        !(crossfade && layer.clipId === crossfade.outgoing.id))
+      const top = live[live.length - 1]
+      if (!top) continue
+      const clip = videoTracks[index]?.items.find(item => item.id === top.clipId)
+      if (!clip) continue
+      return {
+        clip,
+        mediaCurrentTime: top.sourceTicks === null
+          ? mediaTimeAt(clip, playhead.value)
+          : ticksToSec(top.sourceTicks)
       }
     }
     return null
