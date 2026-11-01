@@ -178,7 +178,7 @@ Khai báo tại [dsl.ts](file:///D:/Applications/tm-studio/packages/core/types/d
 
 | # | Gap | Bằng chứng | Hệ quả |
 |---|---|---|---|
-| G1 | Không có `renderAt(timestamp)` / timeline evaluator | `grep renderAt` = 0; core barrel không export evaluator | Phase 2 phải viết mới; preview/export không thể dùng chung logic |
+| G1 | ~~Không có `renderAt(timestamp)` / timeline evaluator~~ **Đã xử lý ở M1 (2026-11-01)** | [evaluate.mjs](file:///D:/Applications/tm-studio/packages/core/src/evaluate.mjs) export `evaluateTimeline`; 19 test trong [evaluate.test.mjs](file:///D:/Applications/tm-studio/packages/core/test/evaluate.test.mjs) | Preview/export đã có một nguồn resolve chung; adoption vào preview là M2 |
 | G2 | Preview ≠ export | preview CSS ([TmcutPreviewPlayer.vue:823](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L823)) vs `drawtext` ([text.ts:125](file:///D:/Applications/tm-studio/app/utils/tmcut/render/text.ts#L125)) | lệch font/shadow/mask là bug tiềm ẩn, không có golden-frame test |
 | G3 | Không có interface Platform Adapter | chỉ có `TmcutPreviewEngine` (2 capability) ([useTmcutPreviewEngine.ts:26](file:///D:/Applications/tm-studio/app/composables/useTmcutPreviewEngine.ts#L26)) | Phase 1 phải định nghĩa adapter cho media/decode/capture/encode |
 | G4 | Export phụ thuộc FFmpeg ở cả 2 runtime | desktop spawn; web Nitro spawn | không chạy được trên Vercel serverless (Phase 7 chặn) |
@@ -193,9 +193,9 @@ Khai báo tại [dsl.ts](file:///D:/Applications/tm-studio/packages/core/types/d
 
 | Tiêu chí | Kết quả | Ghi chú |
 |---|---|---|
-| Core chạy trong browser và Node test | **PASS** | alias trỏ source; 390/390 node tests |
+| Core chạy trong browser và Node test | **PASS** | alias trỏ source; 409/409 node tests (sau M1) |
 | Project serialize/deserialize không phụ thuộc Electron | **PASS** | localStorage + JSON thuần; IPC là optional |
-| Timeline evaluation có unit tests | **PARTIAL** | phép toán timeline có test; **evaluator chưa tồn tại** |
+| Timeline evaluation có unit tests | **PASS** | `evaluateTimeline` + 19 test thuần Node (M1); idempotent theo `t`, không đọc `Date.now()` |
 | Migration project cũ có test | **PASS** | 2 spec app + `v1compat` core |
 
 ---
@@ -205,7 +205,7 @@ Khai báo tại [dsl.ts](file:///D:/Applications/tm-studio/packages/core/types/d
 | Mốc | Nội dung | Deliverable | Gate |
 |---|---|---|---|
 | **M0 — Contract freeze** (xong) | Audit này + chốt §4.5 | `docs/v4-phase-0-audit.md` | Review xong; không đổi code |
-| **M1 — Adapter + evaluator skeleton** | `PlatformAdapter` (media/capture/encode/clock) + `evaluateTimeline(timeline, t)` trả danh sách layer đã resolve (không vẽ) | core API + unit tests thuần Node | evaluator idempotent theo `t`, không đọc `Date.now()` |
+| **M1 — Adapter + evaluator skeleton** (evaluator xong 2026-11-01; adapter còn lại) | `PlatformAdapter` (media/capture/encode/clock) + `evaluateTimeline(timeline, t)` trả danh sách layer đã resolve (không vẽ) | `packages/core/src/evaluate.mjs` + `test/evaluate.test.mjs` | evaluator idempotent theo `t`, không đọc `Date.now()` — **PASS** |
 | **M2 — DOM renderer dùng evaluator** | Preview đọc layer từ evaluator thay vì tự tính CSS; export FFmpeg vẫn nguyên | preview giữ pixel tương đương hiện tại | golden-frame test đầu tiên (tĩnh: canvas + text) |
 | **M3 — Chuyển transform/mask/transition sang model chung** | `toRenderClip` trả layer trung gian; builder FFmpeg và DOM cùng đọc | một nguồn nghĩa | so ảnh preview vs frame FFmpeg với tolerance |
 | **M4 — Hợp nhất HTML capture** | Một engine capture (chọn `playwright-core` hoặc WebContents) cho cả hai runtime | 1 contract, 2 transport | cùng composition → cùng hash frame |
