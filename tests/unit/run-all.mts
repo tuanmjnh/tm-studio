@@ -1,6 +1,6 @@
 /**
- * TMCut spec runner — every tests/unit/tmcut_*.spec.ts in one command
- * (`pnpm test:tmcut`). Each spec is a standalone script (they install
+ * Unit spec runner — every tests/unit/{tmcut,docs}_*.spec.ts in one command
+ * (`pnpm test`). Each spec is a standalone script (they install
  * global shims and import the store as a module-level singleton, so one
  * process per spec keeps them independent), and the runner fails on the
  * first non-zero exit. The FFmpeg smoke spec is opt-in via --smoke
@@ -17,7 +17,7 @@ const unit = join(here)
 
 const includeSmoke = process.argv.includes('--smoke')
 const specs = readdirSync(unit)
-  .filter(f => f.startsWith('tmcut_') && f.endsWith('.spec.ts'))
+  .filter(f => (f.startsWith('tmcut_') || f.startsWith('docs_')) && f.endsWith('.spec.ts'))
   .filter(f => includeSmoke || !f.includes('smoke'))
   .sort()
 

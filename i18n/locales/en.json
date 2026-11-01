@@ -2675,6 +2675,8 @@
     "or": "or",
     "done": "Done",
     "actions": "Actions",
+    "list": "List",
+    "grid": "Grid",
     "name": "Name",
     "loadMore": "Load more",
     "all": "All",
@@ -2931,11 +2933,35 @@
     "me": "me"
   },
   "docs": {
-    "description": "API reference and architecture of the TM Hub control plane.",
+    "description": "Documentation center: guides, API reference and articles synced from TM Hub.",
     "searchPlaceholder": "Search endpoints, modules, descriptions…",
+    "searchArticles": "Search articles…",
     "allModules": "All modules",
     "moduleFilter": "Module",
-    "endpointsCount": "{filtered} of {total} endpoints"
+    "endpointsCount": "{filtered} of {total} endpoints",
+    "allCategories": "All categories",
+    "articlesCount": "{filtered} of {total} articles",
+    "selectArticle": "Select a document",
+    "sourceHub": "From Hub",
+    "sourceLocal": "Bundled",
+    "updatedAt": "Updated {date}",
+    "openInHub": "Manage in Hub",
+    "offlineTitle": "Showing bundled documentation",
+    "noArticlesTitle": "No articles found",
+    "noArticlesDesc": "No document matches the current filters. Clear the search or refresh from TM Hub.",
+    "emptyArticle": "This document has no content yet.",
+    "noEndpoints": "No endpoint matches the filters.",
+    "categories": {
+      "docs": "Reference",
+      "guide": "Guide",
+      "custom": "Custom"
+    },
+    "bundled": {
+      "guideTitle": "TMCut Studio User Guide",
+      "guideDesc": "End-to-end walkthrough: sign-in, hub connection, AI keys, the TMCut workflow and troubleshooting.",
+      "referenceTitle": "TM Platform Reference & API Documentation",
+      "referenceDesc": "Central documentation for TM Hub and satellites (SDK, architecture, roadmap, APIs)."
+    }
   },
   "notifications": {
     "pushTitle": "Push Notifications",

@@ -1,100 +1,147 @@
 <script setup lang="ts">
-import { docsSdkDescriptionFor, docsUsageCodeFor, HUB_DOCS_CONTENT, type HubDocsContent, type DocsRoadmapStatus } from '#shared/docs/content'
+import { formatTimeAgo } from '@vueuse/core'
+import type { DocsArticle, DocsCategory, DocsContentType, HubContentRow } from '~/types/docs'
+import { bundledDocsArticles } from '~/utils/docs/bundled'
 import { getErrorMessage } from '~/shared/utils/errors'
 
-const { t, locale } = useI18n()
-const notify = useNotify()
+definePageMeta({
+  middleware: () => {
+    if (import.meta.client) {
+      const auth = useAuth()
+      if (!auth.isAuthenticated.value) return navigateTo('/login')
+    }
+  }
+})
 
+const { t } = useI18n()
+const notify = useNotify()
+const { hubFetch, appId, hubUrl } = useHub()
 const { title, description } = useAdminPageChrome({
   titleKey: 'nav.docs',
   descKey: 'docs.description'
 })
-
 useHead({ title })
 
-// Single source of truth lives in tm-hub (`shared/docs/content.ts`), served by
-// GET /api/v1/apps/:appId/docs. This frozen copy is only used while the hub is
-// unreachable so the page still renders when offline.
-const content = ref<HubDocsContent>(HUB_DOCS_CONTENT)
-const reloading = ref(false)
-const { hubFetch, appId } = useHub()
+const hubRows = ref<HubContentRow[]>([])
+const loading = ref(false)
+const loadError = ref('')
+const search = ref('')
+const category = ref<'all' | DocsCategory>('all')
+const selectedId = ref('')
 
 const appBaseName = computed(() => String(appId ?? '').split('_')[0] || 'tm-studio')
 const appDisplayId = computed(() => String(appId ?? '') || 'tm-studio')
+const hubContentUrl = computed(() => `${hubUrl}/administration/content`)
 
-async function fetchDocsContent() {
+const CATEGORY_ORDER: Record<DocsCategory, number> = { guide: 0, docs: 1, custom: 2 }
+const DOC_CATEGORIES = new Set(['docs', 'guide', 'custom'])
+
+function toArticle(row: HubContentRow): DocsArticle | null {
+  if (!row?.key || !row.title || row.isPublished === false) return null
+  if (!DOC_CATEGORIES.has(row.category)) return null
+  return {
+    id: row._id ? `hub:${row._id}` : `hub:${row.key}`,
+    key: row.key,
+    title: row.title,
+    description: row.description,
+    category: row.category as DocsCategory,
+    contentType: row.contentType,
+    data: row.data,
+    version: row.version,
+    updatedAt: row.updatedAt,
+    source: 'hub'
+  }
+}
+
+// Bundled entries first so the page still has content offline; hub rows win on key.
+const articles = computed<DocsArticle[]>(() => {
+  const merged = new Map<string, DocsArticle>()
+  for (const article of bundledDocsArticles(t)) merged.set(article.key, article)
+  for (const article of hubRows.value.map(toArticle)) {
+    if (article) merged.set(article.key, article)
+  }
+  return [...merged.values()]
+})
+
+function byRecency(a: DocsArticle, b: DocsArticle) {
+  const byCategory = CATEGORY_ORDER[a.category] - CATEGORY_ORDER[b.category]
+  if (byCategory !== 0) return byCategory
+  const aTime = a.updatedAt ? Date.parse(a.updatedAt) : 0
+  const bTime = b.updatedAt ? Date.parse(b.updatedAt) : 0
+  return bTime - aTime
+}
+
+const filtered = computed(() => {
+  const query = search.value.trim().toLowerCase()
+  return articles.value
+    .filter((article) => {
+      const inCategory = category.value === 'all' || article.category === category.value
+      const inQuery = !query
+        || article.title.toLowerCase().includes(query)
+        || (article.description ?? '').toLowerCase().includes(query)
+        || article.key.toLowerCase().includes(query)
+      return inCategory && inQuery
+    })
+    .sort(byRecency)
+})
+
+const activeArticle = computed(() => filtered.value.find(article => article.id === selectedId.value)
+  ?? filtered.value[0]
+  ?? null)
+
+const categoryOptions = computed(() => [
+  { label: t('docs.allCategories'), value: 'all' },
+  { label: t('docs.categories.guide'), value: 'guide' },
+  { label: t('docs.categories.docs'), value: 'docs' },
+  { label: t('docs.categories.custom'), value: 'custom' }
+])
+
+const articleOptions = computed(() => filtered.value.map(article => ({ label: article.title, value: article.id })))
+
+function formatLabel(type: DocsContentType) {
+  return type.toUpperCase()
+}
+
+function categoryIcon(value: DocsCategory) {
+  if (value === 'guide') return 'i-lucide-book-open'
+  if (value === 'custom') return 'i-lucide-puzzle'
+  return 'i-lucide-file-text'
+}
+
+function updatedLabel(article: DocsArticle) {
+  return article.updatedAt ? formatTimeAgo(new Date(article.updatedAt)) : t('docs.sourceLocal')
+}
+
+async function fetchArticles() {
   if (import.meta.server) return
-  reloading.value = true
+  loading.value = true
+  loadError.value = ''
   try {
-    const res = await hubFetch<{ success: boolean, data: HubDocsContent }>(
-      `/api/v1/apps/${encodeURIComponent(appDisplayId.value)}/docs`
+    const res = await hubFetch<{ success: boolean, data: HubContentRow[] }>(
+      `/api/v1/content?appId=${encodeURIComponent(appDisplayId.value)}`
     )
-    if (res.success && res.data) content.value = res.data
+    hubRows.value = Array.isArray(res?.data) ? res.data : []
   } catch (err) {
-    // Fallback copy keeps the page usable when tm-hub is unreachable.
-    notify.error(t('nav.docs'), getErrorMessage(err, key => t(key)))
+    loadError.value = getErrorMessage(err, key => t(key))
+    notify.error(t('nav.docs'), loadError.value)
   } finally {
-    reloading.value = false
+    loading.value = false
   }
 }
 
-const section = computed(() => (locale.value === 'vi' ? content.value.vi : content.value.en))
-
-const { copy } = useClipboard()
-const copiedKey = ref('')
-
-async function copyCode(key: string, code: string) {
-  await copy(code)
-  copiedKey.value = key
-  setTimeout(() => {
-    if (copiedKey.value === key) copiedKey.value = ''
-  }, 1500)
-}
-
-const apis = computed(() => section.value.apis)
-
-const searchQuery = ref('')
-const selectedModule = ref('ALL')
-
-const modulesList = computed(() => {
-  const set = new Set(apis.value.map(a => a.module))
-  return ['ALL', ...Array.from(set)]
-})
-
-const filteredApis = computed(() => {
-  return apis.value.filter((api) => {
-    const matchModule = selectedModule.value === 'ALL' || api.module === selectedModule.value
-    const q = searchQuery.value.trim().toLowerCase()
-    const matchQuery = !q
-      || api.path.toLowerCase().includes(q)
-      || api.desc.toLowerCase().includes(q)
-      || api.module.toLowerCase().includes(q)
-    return matchModule && matchQuery
-  })
-})
-
-function getMethodBadgeColor(method: string) {
-  switch (method) {
-    case 'GET': return 'success'
-    case 'POST': return 'primary'
-    case 'PUT':
-    case 'PATCH': return 'warning'
-    case 'DELETE': return 'error'
-    default: return 'neutral'
-  }
-}
-
-function roadmapColor(status: DocsRoadmapStatus): 'success' | 'warning' | 'neutral' {
-  if (status === 'shipped') return 'success'
-  if (status === 'in_progress') return 'warning'
-  return 'neutral'
-}
-
-onMounted(fetchDocsContent)
+onMounted(fetchArticles)
 
 const mobileBar = useMobileBar()
+mobileBar.registerActions(computed(() => [
+  {
+    icon: 'i-lucide-refresh-cw',
+    label: t('common.refresh'),
+    onSelect: fetchArticles
+  }
+]))
 mobileBar.registerInfo(computed(() => ({
-  count: filteredApis.value.length
+  count: filtered.value.length,
+  loading: loading.value
 })))
 </script>
 
@@ -103,20 +150,24 @@ mobileBar.registerInfo(computed(() => ({
     <template #right>
       <div class="flex items-center gap-2">
         <UButton
-          to="/system/hub-integration"
-          icon="i-lucide-radio-tower"
-          color="primary"
+          :to="hubContentUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+          icon="i-lucide-settings-2"
           variant="soft"
+          color="neutral"
           size="sm"
-          :label="t('nav.hub_integration', 'Kết Nối Hub')"
+          class="hidden sm:inline-flex"
+          :label="t('docs.openInHub')"
         />
         <UButton
           icon="i-lucide-refresh-cw"
-          variant="ghost"
+          variant="soft"
+          color="neutral"
           size="sm"
           :aria-label="t('common.refresh')"
-          :loading="reloading"
-          @click="fetchDocsContent"
+          :loading="loading"
+          @click="fetchArticles"
         />
       </div>
     </template>
@@ -126,276 +177,136 @@ mobileBar.registerInfo(computed(() => ({
         <template #left>
           <div class="flex items-center gap-2 w-full min-w-0 sm:w-auto">
             <UInput
-              v-model="searchQuery"
+              v-model="search"
               icon="i-lucide-search"
-              :aria-label="t('docs.searchPlaceholder')"
-              :placeholder="t('docs.searchPlaceholder')"
+              :aria-label="t('docs.searchArticles')"
+              :placeholder="t('docs.searchArticles')"
               size="sm"
-              class="flex-1 min-w-0 sm:flex-none sm:w-64"
+              class="flex-1 min-w-0 sm:w-64"
             />
             <USelect
-              v-model="selectedModule"
-              :items="modulesList.map(m => ({ label: m === 'ALL' ? t('docs.allModules') : m, value: m }))"
+              v-model="category"
+              :items="categoryOptions"
               size="sm"
-              class="w-36 shrink-0 sm:w-40"
-              :aria-label="t('docs.moduleFilter')"
+              class="w-32 shrink-0 sm:w-40"
+              :aria-label="t('docs.allCategories')"
             />
           </div>
         </template>
         <template #right>
-          <div class="hidden sm:flex">
-            <UBadge
-              :label="t('docs.endpointsCount', { filtered: filteredApis.length, total: apis.length })"
-              variant="subtle"
-              size="sm"
-            />
-          </div>
+          <UBadge
+            :label="t('docs.articlesCount', { filtered: filtered.length, total: articles.length })"
+            variant="subtle"
+            size="sm"
+          />
         </template>
       </UDashboardToolbar>
     </template>
 
     <template #footer>
-      <SharedListFooter :count="filteredApis.length" />
+      <SharedListFooter :count="filtered.length" :has-more="false" :loading="loading" />
     </template>
 
-    <div class="flex flex-col gap-6 w-full pb-24 lg:pb-6">
-      <!-- 1. Core Architecture Cards -->
-      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        <UCard v-for="card in section.architecture" :key="card.title" :class="[card.hoverClass, 'transition-colors']">
-          <div class="flex items-center gap-3">
-            <div class="p-2.5 rounded-lg shrink-0" :class="card.iconClass">
-              <UIcon :name="card.icon" class="flex w-5 h-5" />
-            </div>
-            <div class="space-y-1 min-w-0">
-              <h3 class="font-semibold text-sm truncate">
-                {{ card.title }}
-              </h3>
-              <p class="text-xs text-muted leading-relaxed line-clamp-3">
-                {{ card.desc }}
-              </p>
-            </div>
-          </div>
-        </UCard>
+    <div class="flex flex-col gap-4 w-full h-full min-h-0 pb-24 lg:pb-6">
+      <UAlert
+        v-if="loadError"
+        color="warning"
+        variant="subtle"
+        icon="i-lucide-wifi-off"
+        :title="t('docs.offlineTitle')"
+        :description="loadError"
+      />
+
+      <div v-if="articleOptions.length" class="lg:hidden">
+        <USelect
+          v-model="selectedId"
+          :items="articleOptions"
+          :placeholder="activeArticle?.title || t('docs.selectArticle')"
+          :aria-label="t('docs.selectArticle')"
+          size="sm"
+          class="w-full"
+        />
       </div>
 
-      <!-- 2. Provider & Connections Roadmap -->
-      <UCard>
-        <template #header>
-          <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-            <div class="flex items-center gap-2">
-              <UIcon name="i-lucide-map" class="w-4 h-4 text-primary" />
-              <h3 class="font-semibold text-sm">
-                {{ section.roadmap.title }}
-              </h3>
-            </div>
-            <UBadge :label="section.roadmap.updatedLabel" variant="subtle" size="xs" />
-          </div>
-          <p class="text-xs text-muted mt-1">
-            {{ section.roadmap.description }}
-          </p>
-        </template>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-          <div
-            v-for="item in section.roadmap.items"
-            :key="item.phase"
-            class="rounded-lg border border-default p-3 space-y-2"
+      <div class="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(240px,300px)_1fr]">
+        <aside class="hidden lg:flex lg:flex-col lg:sticky lg:top-4 gap-1.5">
+          <button
+            v-for="article in filtered"
+            :key="article.id"
+            type="button"
+            class="w-full rounded-lg border px-3 py-2.5 text-left transition-colors"
+            :class="activeArticle?.id === article.id
+              ? 'border-primary/40 bg-primary/5'
+              : 'border-default hover:bg-muted/50'"
+            :aria-current="activeArticle?.id === article.id ? 'page' : undefined"
+            @click="selectedId = article.id"
           >
             <div class="flex items-center justify-between gap-2">
-              <span class="text-[11px] font-mono font-semibold text-muted">Phase {{ item.phase }}</span>
+              <span class="truncate text-xs font-semibold text-highlighted">{{ article.title }}</span>
+              <UIcon :name="categoryIcon(article.category)" class="size-3.5 shrink-0 text-muted" />
+            </div>
+            <p v-if="article.description" class="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-muted">
+              {{ article.description }}
+            </p>
+            <div class="mt-1.5 flex items-center gap-2">
               <UBadge
-                :label="item.statusLabel"
-                :color="roadmapColor(item.status)"
+                :label="formatLabel(article.contentType)"
                 variant="subtle"
-                size="xs"
-              />
-            </div>
-            <p class="text-xs font-medium text-highlighted">
-              {{ item.title }}
-            </p>
-            <p class="text-[11px] text-muted leading-relaxed">
-              {{ item.desc }}
-            </p>
-          </div>
-        </div>
-      </UCard>
-
-      <!-- 2.5 Setup & Configuration Guide -->
-      <UCard v-if="section.setupGuide">
-        <template #header>
-          <div class="flex items-center gap-2">
-            <UIcon name="i-lucide-book-open-check" class="w-4 h-4 text-primary" />
-            <h3 class="font-semibold text-sm">{{ section.setupGuide.title }}</h3>
-          </div>
-          <p class="text-xs text-muted mt-1">{{ section.setupGuide.description }}</p>
-        </template>
-
-        <div class="space-y-4">
-          <div v-for="(step, idx) in section.setupGuide.steps" :key="idx"
-            class="rounded-lg border border-default p-4 space-y-2">
-            <h4 class="text-xs font-semibold text-highlighted flex items-center gap-2">
-              <span class="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold">{{ idx + 1 }}</span>
-              {{ step.title }}
-            </h4>
-            <p class="text-xs text-muted leading-relaxed">{{ step.desc }}</p>
-            <div v-if="step.code" class="overflow-hidden rounded-lg bg-neutral-900 dark:bg-elevated text-dimmed mt-2">
-              <div class="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-1">
-                <span class="text-[10px] font-semibold uppercase tracking-wider text-dimmed">Config / Shell</span>
-                <UButton :icon="copiedKey === 'step_' + idx ? 'i-lucide-check' : 'i-lucide-copy'" color="neutral"
-                         variant="ghost" size="xs" class="text-dimmed hover:text-white"
-                         :aria-label="copiedKey === 'step_' + idx ? t('common.copied') : t('common.copy')"
-                         @click="copyCode('step_' + idx, step.code)" />
-              </div>
-              <pre class="p-3 text-xs overflow-x-auto font-mono"><code>{{ step.code }}</code></pre>
-            </div>
-          </div>
-        </div>
-      </UCard>
-
-      <!-- 3. Client SDK Usage -->
-      <UCard>
-        <template #header>
-          <div class="flex items-center gap-2">
-            <UIcon name="i-lucide-terminal" class="w-4 h-4 text-primary" />
-            <h3 class="font-semibold text-sm">
-              {{ section.sdk.title }}
-            </h3>
-          </div>
-        </template>
-
-        <div class="space-y-3">
-          <p class="text-xs text-toned">
-            {{ docsSdkDescriptionFor(section.sdk.description, appBaseName) }}
-          </p>
-
-          <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-            <div class="space-y-0.5">
-              <p class="text-xs font-medium text-highlighted">
-                {{ section.sdk.install }}
-              </p>
-              <p class="text-[11px] text-muted">
-                {{ section.sdk.installHint }}
-              </p>
-            </div>
-            <UButton
-              :to="section.sdk.githubUrl"
-              target="_blank"
-              rel="noopener noreferrer"
-              icon="i-lucide-github"
-              :label="section.sdk.githubLabel"
-              variant="soft"
-              color="neutral"
-              size="xs"
-            />
-          </div>
-
-          <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <div
-              v-for="command in section.sdk.installCommands"
-              :key="command.label"
-              class="overflow-hidden rounded-lg bg-neutral-900 dark:bg-elevated text-dimmed"
-            >
-              <div class="flex items-center justify-between gap-2 border-b border-white/10 dark:border-white/10 px-4 py-1">
-                <span class="text-[10px] font-semibold uppercase tracking-wider text-dimmed">
-                  {{ command.label }}
-                </span>
-                <UButton
-                  :icon="copiedKey === command.label ? 'i-lucide-check' : 'i-lucide-copy'"
-                  color="neutral"
-                  variant="ghost"
-                  size="xs"
-                  class="text-dimmed hover:text-white"
-                  :title="copiedKey === command.label ? section.sdk.copiedLabel : section.sdk.copyLabel"
-                  :aria-label="copiedKey === command.label ? section.sdk.copiedLabel : section.sdk.copyLabel"
-                  @click="copyCode(command.label, command.code)"
-                />
-              </div>
-              <pre class="p-4 text-xs overflow-x-auto font-mono"><code>{{ command.code }}</code></pre>
-            </div>
-          </div>
-
-          <div class="flex items-center justify-between gap-2 pt-1">
-            <p class="text-xs font-medium text-highlighted">
-              {{ section.sdk.usage }}
-            </p>
-          </div>
-
-          <div class="overflow-hidden rounded-lg bg-neutral-900 dark:bg-elevated text-dimmed">
-            <div class="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-1">
-              <span class="text-[10px] font-semibold uppercase tracking-wider text-dimmed">TypeScript</span>
-              <UButton
-                :icon="copiedKey === 'usage' ? 'i-lucide-check' : 'i-lucide-copy'"
                 color="neutral"
-                variant="ghost"
                 size="xs"
-                class="text-dimmed hover:text-white"
-                :title="copiedKey === 'usage' ? section.sdk.copiedLabel : section.sdk.copyLabel"
-                :aria-label="copiedKey === 'usage' ? section.sdk.copiedLabel : section.sdk.copyLabel"
-                @click="copyCode('usage', docsUsageCodeFor(section.sdk.usageCode, appDisplayId, 'NUXT_PUBLIC_HUB_URL'))"
               />
+              <span class="text-[10px] text-dimmed">{{ updatedLabel(article) }}</span>
             </div>
-            <pre class="p-4 text-xs overflow-x-auto font-mono"><code>{{ docsUsageCodeFor(section.sdk.usageCode, appDisplayId, 'NUXT_PUBLIC_HUB_URL') }}</code></pre>
-          </div>
-        </div>
-      </UCard>
+          </button>
+        </aside>
 
-      <!-- 4. REST API Specifications -->
-      <UCard>
-        <template #header>
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <UIcon name="i-lucide-network" class="w-4 h-4 text-primary" />
-              <h3 class="font-semibold text-sm">
-                {{ section.api.title }}
-              </h3>
-            </div>
-            <UBadge :label="section.api.prefixLabel" variant="subtle" size="xs" />
-          </div>
-        </template>
+        <section class="min-w-0">
+          <UCard v-if="activeArticle">
+            <template #header>
+              <div class="flex flex-col gap-2">
+                <div class="flex flex-wrap items-center gap-2">
+                  <h2 class="text-sm font-semibold text-highlighted">
+                    {{ activeArticle.title }}
+                  </h2>
+                  <UBadge
+                    :label="formatLabel(activeArticle.contentType)"
+                    variant="subtle"
+                    color="neutral"
+                    size="xs"
+                  />
+                  <UBadge
+                    :label="activeArticle.source === 'hub' ? t('docs.sourceHub') : t('docs.sourceLocal')"
+                    :color="activeArticle.source === 'hub' ? 'success' : 'neutral'"
+                    variant="subtle"
+                    size="xs"
+                  />
+                  <span v-if="activeArticle.updatedAt" class="text-[11px] text-dimmed">
+                    {{ t('docs.updatedAt', { date: formatTimeAgo(new Date(activeArticle.updatedAt)) }) }}
+                  </span>
+                </div>
+                <p v-if="activeArticle.description" class="text-xs leading-relaxed text-muted">
+                  {{ activeArticle.description }}
+                </p>
+              </div>
+            </template>
 
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr class="border-b border-default text-muted font-medium">
-                <th class="py-2.5 px-3">
-                  {{ section.api.headers.module }}
-                </th>
-                <th class="py-2.5 px-3">
-                  {{ section.api.headers.method }}
-                </th>
-                <th class="py-2.5 px-3 font-mono">
-                  {{ section.api.headers.endpoint }}
-                </th>
-                <th class="py-2.5 px-3">
-                  {{ section.api.headers.description }}
-                </th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-default">
-              <tr
-                v-for="api in filteredApis"
-                :key="api.path + api.method"
-                class="hover:bg-muted/50 transition-colors"
-              >
-                <td class="py-2.5 px-3 font-medium whitespace-nowrap text-highlighted">
-                  {{ api.module }}
-                </td>
-                <td class="py-2.5 px-3 whitespace-nowrap">
-                  <UBadge :color="getMethodBadgeColor(api.method)" variant="subtle" size="xs">
-                    {{ api.method }}
-                  </UBadge>
-                </td>
-                <td class="py-2.5 px-3 font-mono text-primary font-medium whitespace-nowrap">
-                  {{ api.path }}
-                </td>
-                <td class="py-2.5 px-3 text-muted">
-                  {{ api.desc }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </UCard>
+            <DocsArticleView
+              :article="activeArticle"
+              :app-base-name="appBaseName"
+              :app-display-id="appDisplayId"
+            />
+          </UCard>
+
+          <UEmpty
+            v-else
+            size="xl"
+            icon="i-lucide-library-big"
+            :title="t('docs.noArticlesTitle')"
+            :description="t('docs.noArticlesDesc')"
+            :actions="[{ label: t('common.refresh'), onClick: fetchArticles, variant: 'soft' }]"
+          />
+        </section>
+      </div>
     </div>
   </BasePage>
 </template>

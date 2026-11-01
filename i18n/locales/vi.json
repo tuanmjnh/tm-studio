@@ -2675,6 +2675,8 @@
     "or": "hoặc",
     "done": "Xong",
     "actions": "Hành động",
+    "list": "Danh sách",
+    "grid": "Lưới",
     "name": "Tên",
     "loadMore": "Tải thêm",
     "all": "Tất cả",
@@ -2931,11 +2933,35 @@
     "me": "tôi"
   },
   "docs": {
-    "description": "Tham chiếu API và kiến trúc của TM Hub control plane.",
+    "description": "Trung tâm tài liệu: hướng dẫn sử dụng, tham chiếu API và các bài viết đồng bộ từ TM Hub.",
     "searchPlaceholder": "Tìm endpoint, module, mô tả…",
+    "searchArticles": "Tìm bài viết…",
     "allModules": "Tất cả module",
     "moduleFilter": "Module",
-    "endpointsCount": "{filtered} / {total} endpoint"
+    "endpointsCount": "{filtered} / {total} endpoint",
+    "allCategories": "Tất cả danh mục",
+    "articlesCount": "{filtered} / {total} bài viết",
+    "selectArticle": "Chọn tài liệu",
+    "sourceHub": "Từ Hub",
+    "sourceLocal": "Đóng gói sẵn",
+    "updatedAt": "Cập nhật {date}",
+    "openInHub": "Quản lý trên Hub",
+    "offlineTitle": "Đang hiển thị tài liệu đóng gói sẵn",
+    "noArticlesTitle": "Không có bài viết",
+    "noArticlesDesc": "Không tài liệu nào khớp bộ lọc hiện tại. Xoá từ khoá hoặc làm mới từ TM Hub.",
+    "emptyArticle": "Tài liệu này chưa có nội dung.",
+    "noEndpoints": "Không endpoint nào khớp bộ lọc.",
+    "categories": {
+      "docs": "Tham chiếu",
+      "guide": "Hướng dẫn",
+      "custom": "Tuỳ biến"
+    },
+    "bundled": {
+      "guideTitle": "Hướng dẫn sử dụng TMCut Studio",
+      "guideDesc": "Đi từ đầu đến cuối: đăng nhập, kết nối Hub, khoá AI, quy trình TMCut và khắc phục sự cố.",
+      "referenceTitle": "Tham chiếu nền tảng TM & tài liệu API",
+      "referenceDesc": "Tài liệu trung tâm cho TM Hub và các app con (SDK, kiến trúc, lộ trình, API)."
+    }
   },
   "notifications": {
     "pushTitle": "Thông báo Push",
