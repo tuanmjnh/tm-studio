@@ -3,9 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
 import { useTmcutMediaImport } from '~/composables/useTmcutMediaImport'
-import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { useTmcutUiPrefs } from '~/composables/useTmcutUiPrefs'
-import { useTmcutEditorLayout } from '~/composables/useTmcutEditorLayout'
 import { useTmcutEditorCanvas } from '~/composables/useTmcutEditorCanvas'
 import { useTmcutEditorDialogs } from '~/composables/useTmcutEditorDialogs'
 import { useAgentProposalCount } from '~/composables/useTmcutAgentTools'
@@ -23,14 +21,10 @@ const route = useRoute()
 const router = useRouter()
 const {
   currentProject,
-  contentDuration,
   loadProject,
   saveProject,
   saveStatus,
   lastSavedAt,
-  pendingRecovery,
-  applyRecovery,
-  dismissRecovery,
   refreshProjects,
   loadSnapshots,
   pushHistory,
@@ -38,18 +32,12 @@ const {
   currentRevision
 } = useTmcutProject()
 
-const {
-  isDesktop,
-  loadLibrary,
-  checkMissing
-} = useTmcutMedia()
+const { loadLibrary, checkMissing } = useTmcutMedia()
 
-const { formatTimecode } = useTmcutPlayback()
 const { handleImportMedia } = useTmcutMediaImport()
 const { shortcutsOpen } = useTmcutUiPrefs()
 const {
   showExportModal,
-  voiceStudioOpen,
   showSnapshotModal,
   aiScriptModalOpen,
   aiEditorModalOpen,
@@ -59,22 +47,7 @@ const {
   closeAllDialogs
 } = useTmcutEditorDialogs()
 
-const { canvasLabel, statusCanvasLabel, canvasMenuItems, handleDuplicateAs } = useTmcutEditorCanvas()
-
-// Hardware status chip (design #2 "GPU" indicator — honest data only):
-// WebGPU availability is really detectable; the engine side names the
-// export backend (FFmpeg on desktop, preview-only on the web).
-const hasWebGPU = ref(false)
-const hardwareLabel = computed(() => {
-  const gpu = hasWebGPU.value ? 'WebGPU' : 'WebGL'
-  return `${gpu} · ${isDesktop.value ? 'FFmpeg' : t('tmcut.workspace.previewOnly')}`
-})
-
-// Status footer data: total timeline clip count
-const clipCount = computed(() => (
-  (currentProject.value?.timeline?.tracks || [])
-    .reduce((n, track) => n + (track.items?.length || 0), 0)
-))
+const { canvasLabel, canvasMenuItems, handleDuplicateAs } = useTmcutEditorCanvas()
 
 const { activeJobsCount, queueModalOpen } = useTmcutExportQueue()
 const toast = useToast()
@@ -89,11 +62,10 @@ const toast = useToast()
 useMcpRendererBridge()
 
 const projectId = computed(() => (route.query.project as string) || 'default')
-const compactPanel = ref<'media' | 'inspector' | null>(null)
 
-// Desktop dock sizes persist per browser; mobile overlays ignore them.
-// The resize handles read the same refs through the shared composable.
-const { layoutVars, timelineHeight, hydrateLayout } = useTmcutEditorLayout()
+// Shared with the toolbar (panel toggles) and the workspace (overlays on
+// compact viewports).
+const compactPanel = ref<'media' | 'inspector' | null>(null)
 
 const saveLabel = computed(() => {
   if (saveStatus.value === 'saving') return t('tmcut.save.saving')
@@ -104,22 +76,7 @@ const saveLabel = computed(() => {
 
 const staleRevision = computed(() => revisionAtLoad.value !== null && currentRevision() > revisionAtLoad.value)
 
-// ===== Recovery / Snapshots =====
-
-async function handleRestoreRecovery() {
-  await applyRecovery()
-  if (!pendingRecovery.value) {
-    toast.add({ title: t('tmcut.recovery.restored'), color: 'success' })
-  }
-}
-
-async function handleDismissRecovery() {
-  await dismissRecovery()
-}
-
 onMounted(async () => {
-  hasWebGPU.value = typeof navigator !== 'undefined' && 'gpu' in navigator
-  hydrateLayout()
   window.addEventListener('keydown', handleEditorKeydown)
   await loadProject(projectId.value)
   refreshProjects()
@@ -352,112 +309,6 @@ function handleEditorKeydown(e: KeyboardEvent) {
       />
     </template>
 
-    <!-- Full viewport Workspace (flush p-0) -->
-    <div
-      class="flex-1 flex flex-col min-h-0 bg-muted dark:bg-studio-canvas text-highlighted overflow-hidden select-none"
-      :style="layoutVars"
-    >
-      <!-- Recovery banner -->
-      <div
-        v-if="pendingRecovery"
-        class="flex items-center justify-between gap-3 px-4 py-2 bg-amber-500/10 border-b border-amber-500/30 text-amber-200 text-xs"
-      >
-        <span class="truncate">{{ t('tmcut.recovery.banner') }}</span>
-        <div class="flex items-center gap-2 shrink-0">
-          <UButton
-            size="xs"
-            variant="solid"
-            color="warning"
-            @click="handleRestoreRecovery"
-          >
-            {{ t('tmcut.recovery.restore') }}
-          </UButton>
-          <UButton
-            size="xs"
-            variant="soft"
-            color="neutral"
-            @click="handleDismissRecovery"
-          >
-            {{ t('tmcut.recovery.discard') }}
-          </UButton>
-        </div>
-      </div>
-
-      <!-- Center Workspace -->
-      <div class="relative flex-1 flex overflow-hidden min-h-0" @keydown.esc="compactPanel = null">
-        <TmcutMediaPanel
-          :mobile-open="compactPanel === 'media'"
-          @close="compactPanel = null"
-        />
-
-        <!-- Media dock resize handle (desktop only) -->
-        <TmcutResizeHandle panel="media" :label="t('tmcut.workspace.resizeMedia')" />
-
-        <!-- Center Player Preview (compact, CapCut-style). The column spans
-             the whole center panel so the HUD and the transport deck stretch
-             edge to edge; only the monitor inside the stage is fitted, so the
-             preview-quality selector resizes the picture — never the trays. -->
-        <main
-          class="flex-1 flex flex-col items-center justify-center bg-muted dark:bg-studio-canvas relative overflow-hidden min-w-0 min-h-0"
-        >
-          <div class="w-full h-full min-h-0 flex flex-col">
-            <TmcutPreviewPlayer />
-          </div>
-        </main>
-
-        <!-- Inspector dock resize handle (desktop only) -->
-        <TmcutResizeHandle panel="inspector" :label="t('tmcut.workspace.resizeInspector')" />
-
-        <!-- Right Inspector Panel -->
-        <aside
-          id="tmcut-inspector-panel"
-          class="absolute inset-y-0 right-0 z-20 xl:static w-72 xl:w-[var(--tmcut-inspector-w)] max-w-full border-l border-default bg-default flex-col overflow-y-auto p-4 shrink-0"
-          :class="compactPanel === 'inspector' ? 'flex' : 'hidden xl:flex'"
-        >
-          <div class="flex items-center justify-between gap-2 pb-2 border-b border-default mb-3">
-            <span class="text-xs font-semibold text-muted uppercase tracking-wider">
-              {{ t('tmcut.inspector') }}
-            </span>
-            <UButton
-              class="xl:hidden"
-              icon="i-lucide-x"
-              size="xs"
-              variant="ghost"
-              color="neutral"
-              :aria-label="t('tmcut.hotkeys.close')"
-              @click="compactPanel = null"
-            />
-          </div>
-
-          <TmcutInspector />
-        </aside>
-      </div>
-
-      <!-- Timeline resize handle -->
-      <TmcutResizeHandle panel="timeline" :label="t('tmcut.workspace.resizeTimeline')" />
-
-      <!-- Bottom Timeline (resizable, persisted) -->
-      <div
-        class="border-t border-default bg-default flex flex-col shrink-0 z-10 max-h-[55vh]"
-        :style="{ height: `${timelineHeight}px` }"
-      >
-        <TmcutTimeline
-          @open-export="showExportModal = true"
-          @open-voice-studio="voiceStudioOpen = true"
-        />
-      </div>
-
-      <!-- Status footer (design #2): honest project/engine info -->
-      <TmcutEditorStatusBar
-        :project-name="currentProject?.name"
-        :canvas-label="statusCanvasLabel"
-        :timecode="formatTimecode(contentDuration)"
-        :clip-count="clipCount"
-        :hardware-label="hardwareLabel"
-      />
-
-      <!-- Export, voice, snapshot, canvas and AI dialogs -->
-      <LazyTmcutEditorOverlays />
-    </div>
+    <TmcutEditorWorkspace v-model="compactPanel" />
   </BasePage>
 </template>

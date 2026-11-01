@@ -120,13 +120,13 @@ async function main() {
   await check('transport readouts and the End shortcut use the content length', async () => {
     const timeline = read('app/components/tmcut/TmcutTimeline.vue')
     const player = read('app/components/tmcut/TmcutPreviewPlayer.vue')
-    const editor = read('app/pages/tmcut/editor.vue')
+    const workspace = read('app/components/tmcut/TmcutEditorWorkspace.vue')
     const inspector = read('app/components/tmcut/TmcutInspector.vue')
     assert.match(timeline, /formatTimecode\(contentDuration\)/, 'the timeline footer reads the project length')
     assert.match(player, /formatTimecode\(contentDuration\b/, 'the program monitor reads the project length')
-    assert.match(editor, /formatTimecode\(contentDuration\)/, 'the status bar reads the project length')
+    assert.match(workspace, /formatTimecode\(contentDuration\)/, 'the status bar reads the project length')
     assert.match(inspector, /formatTimecode\(contentDuration\.value\)/, 'the details panel reads the project length')
-    for (const [name, source] of [['timeline', timeline], ['player', player], ['editor', editor], ['inspector', inspector]] as const) {
+    for (const [name, source] of [['timeline', timeline], ['player', player], ['workspace', workspace], ['inspector', inspector]] as const) {
       assert.doesNotMatch(source, /formatTimecode\(totalDuration(\.value)?\)/, `${name} must not label the padded ruler as the duration`)
     }
     assert.match(timeline, /seek\(contentDuration\.value\)/, 'End jumps to the end of content')

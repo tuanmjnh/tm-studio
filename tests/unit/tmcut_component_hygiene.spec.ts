@@ -139,11 +139,12 @@ describe('TMCut button delegates navigation and state to Nuxt UI', () => {
 
 describe('editor header keeps navigation and accessible project naming', () => {
   const editor = read('app/pages/tmcut/editor.vue')
-  // The right-side controls live in the extracted toolbar; the media dock was
-  // extracted too, so the toggles, their panels and the ids live in three
-  // different files — every half of the contract is still checked.
+  // The right-side controls live in the extracted toolbar; the media dock and
+  // the inspector panel were extracted too, so the toggles and both panels
+  // live in four different files — every half of the contract is still checked.
   const toolbar = read('app/components/tmcut/TmcutEditorToolbar.vue')
   const mediaPanel = read('app/components/tmcut/TmcutMediaPanel.vue')
+  const workspace = read('app/components/tmcut/TmcutEditorWorkspace.vue')
   const leftSlot = editor.match(/<template #left>([\s\S]*?)<\/template>/)?.[1] ?? ''
 
   it('renders back navigation and the studio nav popover inside the active left slot', () => {
@@ -162,7 +163,7 @@ describe('editor header keeps navigation and accessible project naming', () => {
   it('keeps collapsed workspace panels reachable through labelled controls', () => {
     for (const panel of ['media', 'inspector']) {
       assert.ok(toolbar.includes(`aria-controls="tmcut-${panel}-panel"`), `${panel} has an accessible toggle`)
-      const host = panel === 'media' ? mediaPanel : editor
+      const host = panel === 'media' ? mediaPanel : workspace
       assert.ok(host.includes(`id="tmcut-${panel}-panel"`), `${panel} has a matching panel`)
       assert.ok(toolbar.includes(`:aria-expanded="compactPanel === '${panel}'"`))
     }
@@ -421,10 +422,14 @@ describe('editor dialogs live in their own dock', () => {
   // shortcuts) through useTmcutEditorDialogs.
   const editor = read('app/pages/tmcut/editor.vue')
   const overlays = read('app/components/tmcut/TmcutEditorOverlays.vue')
+  const workspace = read('app/components/tmcut/TmcutEditorWorkspace.vue')
   const dialogs = read('app/composables/useTmcutEditorDialogs.ts')
 
-  it('the page renders the dock instead of declaring dialogs inline', () => {
-    assert.match(editor, /<LazyTmcutEditorOverlays\b/)
+  it('the page mounts the workspace, which renders the dock instead of inline dialogs', () => {
+    // The workspace owns the editor session body, so it hosts the overlays;
+    // the page must not declare them itself.
+    assert.match(workspace, /<LazyTmcutEditorOverlays\b/)
+    assert.doesNotMatch(editor, /<LazyTmcutEditorOverlays\b/)
     assert.doesNotMatch(editor, /<UModal\b/)
     assert.doesNotMatch(
       editor,
@@ -467,10 +472,11 @@ describe('canvas contract lives in the editor canvas composable', () => {
   // dialog still shares one source of truth for the current size.
   const editor = read('app/pages/tmcut/editor.vue')
   const canvas = read('app/composables/useTmcutEditorCanvas.ts')
+  const workspace = read('app/components/tmcut/TmcutEditorWorkspace.vue')
 
   it('the page delegates canvas state to the composable', () => {
     assert.match(editor, /useTmcutEditorCanvas\(\)/)
-    for (const owned of ['canvasLabel', 'statusCanvasLabel', 'canvasMenuItems', 'handleDuplicateAs']) {
+    for (const owned of ['canvasLabel', 'canvasMenuItems', 'handleDuplicateAs']) {
       assert.ok(
         new RegExp(`^const \\{[^\\n]*\\b${owned}\\b[^\\n]*\\} = useTmcutEditorCanvas\\(\\)`, 'm').test(editor),
         `${owned} must come from useTmcutEditorCanvas`
@@ -480,6 +486,9 @@ describe('canvas contract lives in the editor canvas composable', () => {
         `${owned} must not be redeclared in the page`
       )
     }
+    // The status footer moved into the workspace, so it reads the label there.
+    assert.match(workspace, /statusCanvasLabel[^\n]*useTmcutEditorCanvas\(\)/)
+    assert.ok(!/const statusCanvasLabel = computed\(/.test(workspace), 'the label is not recomputed in the dock')
   })
 
   it('the composable owns every canvas mutation', () => {
@@ -497,5 +506,43 @@ describe('canvas contract lives in the editor canvas composable', () => {
   it('the aspect-ratio menu keeps its four groups in order', () => {
     // Presets, social presets, backgrounds, frame rates — one menu.
     assert.match(canvas, /return \[presetItems, socialItems, backgroundItems, fpsItems\]/)
+  })
+})
+
+describe('editor workspace shell lives in its own dock', () => {
+  // The page was a full editor: media bin, preview stage, inspector, timeline,
+  // recovery banner, status footer and dialogs all inline. The shell now sits
+  // in TmcutEditorWorkspace, so the page is only the navbar + toolbar wiring.
+  const editor = read('app/pages/tmcut/editor.vue')
+  const workspace = read('app/components/tmcut/TmcutEditorWorkspace.vue')
+  const docks = [
+    'TmcutMediaPanel',
+    'TmcutPreviewPlayer',
+    'TmcutInspector',
+    'TmcutTimeline',
+    'TmcutEditorStatusBar',
+    'TmcutResizeHandle',
+    'LazyTmcutEditorOverlays'
+  ]
+
+  it('the page keeps only chrome and mounts the workspace', () => {
+    assert.match(editor, /<TmcutEditorWorkspace v-model="compactPanel" \/>/)
+    for (const tag of docks) {
+      assert.doesNotMatch(editor, new RegExp(`<${tag}\\b`), `${tag} belongs to the workspace dock`)
+    }
+  })
+
+  it('the workspace renders every dock', () => {
+    for (const tag of docks) {
+      assert.ok(new RegExp(`<${tag}[\\s/>]`).test(workspace), `the workspace must render ${tag}`)
+    }
+    assert.match(workspace, /defineModel<'media' \| 'inspector' \| null>/)
+  })
+
+  it('the workspace owns recovery, dock sizes and footer metrics', () => {
+    for (const owned of ['pendingRecovery', 'applyRecovery', 'dismissRecovery', 'hydrateLayout', 'statusCanvasLabel', 'clipCount', 'hardwareLabel']) {
+      assert.ok(new RegExp(`\\b${owned}\\b`).test(workspace), `${owned} is computed by the workspace`)
+      assert.ok(!new RegExp(`\\b${owned}\\b`).test(editor), `${owned} must not be wired in the page`)
+    }
   })
 })
