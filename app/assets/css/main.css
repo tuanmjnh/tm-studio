@@ -38,6 +38,9 @@
   --studio-ambient-primary: 18%;
   --studio-ambient-secondary: 14%;
   --studio-ambient-tertiary: 10%;
+  /* Mint is the AI accent. #2DD4A8 is only 1.89:1 on white, so light mode
+     swaps in a darker tint that can carry 10px text and icons. */
+  --studio-mint-accent: #077A5A;
 }
 
 .dark {
@@ -48,6 +51,7 @@
   --studio-ambient-primary: 26%;
   --studio-ambient-secondary: 20%;
   --studio-ambient-tertiary: 14%;
+  --studio-mint-accent: var(--color-studio-mint);
 }
 
 @utility glass-surface {

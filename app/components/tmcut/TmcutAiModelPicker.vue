@@ -220,7 +220,7 @@ async function handleTest() {
         <UIcon
           name="i-lucide-sparkles"
           class="w-3.5 h-3.5"
-          :class="current ? 'text-studio-mint' : 'text-dimmed'"
+          :class="current ? 'text-(--studio-mint-accent)' : 'text-dimmed'"
         />
         {{ t('tmcut.aiModelPicker.label') }}
       </span>
@@ -231,7 +231,7 @@ async function handleTest() {
         size="xs"
         class="max-w-[60%] truncate"
       >
-        <span class="mr-1 inline-block size-1.5 rounded-full bg-studio-mint" aria-hidden="true" />
+        <span class="mr-1 inline-block size-1.5 rounded-full bg-(--studio-mint-accent)" aria-hidden="true" />
         {{ current }}
       </UBadge>
     </div>
@@ -289,7 +289,7 @@ async function handleTest() {
     <p
       v-if="testResult"
       class="text-[10px]"
-      :class="testResult.state === 'ok' ? 'text-studio-mint' : 'text-red-600 dark:text-red-400'"
+      :class="testResult.state === 'ok' ? 'text-(--studio-mint-accent)' : 'text-red-600 dark:text-red-400'"
     >
       {{ testResult.detail }}
     </p>
