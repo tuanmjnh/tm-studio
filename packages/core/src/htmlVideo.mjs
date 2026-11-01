@@ -184,9 +184,16 @@ export function validateHtmlVideoSpec(spec = {}) {
   const height = source.height
   if (!isInteger(width) || width < HTML_VIDEO_LIMITS.minWidth || width > HTML_VIDEO_LIMITS.maxWidth) {
     errors.push(`width: must be an integer in ${HTML_VIDEO_LIMITS.minWidth}..${HTML_VIDEO_LIMITS.maxWidth}`)
+  } else if (width % 2 !== 0) {
+    // Not a quality preference: yuv420p subsamples chroma 2x2, so libx264 opens
+    // with "width not divisible by 2" and the encode yields no file at all.
+    // Naming it here is what makes both hosts fail the same way, and fail early.
+    errors.push(`width: ${width} must be even (the encoder subsamples chroma 2x2)`)
   }
   if (!isInteger(height) || height < HTML_VIDEO_LIMITS.minHeight || height > HTML_VIDEO_LIMITS.maxHeight) {
     errors.push(`height: must be an integer in ${HTML_VIDEO_LIMITS.minHeight}..${HTML_VIDEO_LIMITS.maxHeight}`)
+  } else if (height % 2 !== 0) {
+    errors.push(`height: ${height} must be even (the encoder subsamples chroma 2x2)`)
   }
 
   const fps = source.fps

@@ -87,6 +87,31 @@ test('html video: canvas and duration limits are enforced', () => {
   assert.equal(validateHtmlVideoSpec(spec({ fps: 60, durationSec: 30 })).valid, true)
 })
 
+// Measured against the app's own binary, not inferred from a spec sheet:
+// `ffmpeg -f lavfi -i color=red:s=1001x100 -c:v libx264 -pix_fmt yuv420p` dies
+// with "width not divisible by 2 (1001x100)" and writes a 0-byte file, while
+// s=1000x100 encodes. An odd canvas is therefore not a lower-quality render on
+// some host — it is a failed render everywhere, so the contract names it here
+// instead of letting each host discover it inside FFmpeg.
+test('html video: odd canvases are refused because the encoder cannot subsample them', () => {
+  const oddWidth = validateHtmlVideoSpec(spec({ width: 1001 }))
+  assert.equal(oddWidth.valid, false)
+  assert.match(oddWidth.errors.join(' '), /width: 1001 must be even/)
+
+  const oddHeight = validateHtmlVideoSpec(spec({ height: 1001 }))
+  assert.equal(oddHeight.valid, false)
+  assert.match(oddHeight.errors.join(' '), /height: 1001 must be even/)
+
+  assert.equal(validateHtmlVideoSpec(spec({ width: 1000, height: 100 })).valid, true)
+  // Every preset the studio offers has to pass its own contract.
+  for (const preset of HTML_VIDEO_PRESETS) {
+    assert.equal(preset.width % 2, 0, `${preset.id} width`)
+    assert.equal(preset.height % 2, 0, `${preset.id} height`)
+  }
+  // Out-of-range still reports the range, not the parity, of the same field.
+  assert.match(validateHtmlVideoSpec(spec({ width: 11 })).errors.join(' '), /must be an integer in/)
+})
+
 test('html video: oversized documents are refused before any browser starts', () => {
   const huge = spec({ html: `${spec().html}<!--${'x'.repeat(HTML_VIDEO_LIMITS.maxHtmlBytes)}-->` })
   const result = validateHtmlVideoSpec(huge)
