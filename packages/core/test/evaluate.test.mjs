@@ -1,7 +1,7 @@
 // @tmcut/core — timeline evaluation tests. Run: node --test test/
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { evaluateTimeline } from '../src/evaluate.mjs'
+import { evaluateClip, evaluateTimeline } from '../src/evaluate.mjs'
 import { TICKS_PER_SECOND } from '../src/time.mjs'
 
 const T = TICKS_PER_SECOND
@@ -237,5 +237,37 @@ describe('evaluateTimeline — ordering and flags', () => {
       speedPoints: [{ t: 0, speed: 1 }, { t: 2 * T, speed: 2 }]
     })]), 0).layers)
     assert.equal(layer.ramped, true)
+  })
+})
+
+describe('evaluateClip', () => {
+  it('resolves flat app-model fields without a timeline', () => {
+    const visual = evaluateClip({
+      scale: 150,
+      opacity: 40,
+      x: 12,
+      y: -8,
+      rotation: 5,
+      volume: 70,
+      keyframes: []
+    }, 0)
+    assert.deepEqual(visual, {
+      opacity: 0.4,
+      volume: 70,
+      transform: { x: 12, y: -8, scaleX: 1.5, scaleY: 1.5, rotation: 5 }
+    })
+  })
+
+  it('prefers keyframes, then flat fields, then the DSL transform', () => {
+    const visual = evaluateClip({
+      transform: { x: 4, scaleX: 0.5, rotation: 10, opacity: 0.8 },
+      keyframes: [{ t: 0, prop: 'scale', value: 200 }]
+    }, 0)
+    assert.equal(visual.transform.scaleX, 2)
+    assert.equal(visual.transform.scaleY, 2)
+    assert.equal(visual.transform.x, 4)
+    assert.equal(visual.transform.rotation, 10)
+    assert.equal(visual.opacity, 0.8)
+    assert.equal(visual.volume, 100)
   })
 })

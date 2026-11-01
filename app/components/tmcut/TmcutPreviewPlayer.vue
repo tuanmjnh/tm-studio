@@ -7,7 +7,7 @@ import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { computeFitObjectStyle, CROP_RATIO_PRESETS, clampCropRect, applyCropRatio, canvasFpsValue } from '~/utils/tmcut/canvas'
 import { textBoxPadding, textStrokeWidth, textShadowOffset } from '~/utils/tmcut/textStyle'
 import { effectCssParts } from '~/utils/tmcut/fxPreview'
-import { previewScale, evalKeyframe, gainAt, safeAreaRects, SAFE_AREA_PRESETS, TICKS_PER_SECOND, secToTicks, ticksToSec, maskCssMaskImage } from '@tmcut-core'
+import { previewScale, evalKeyframe, gainAt, evaluateClip, safeAreaRects, SAFE_AREA_PRESETS, TICKS_PER_SECOND, secToTicks, ticksToSec, maskCssMaskImage } from '@tmcut-core'
 import type { TmcutKeyframe, TmcutTextAnimationType } from '@tmcut-core'
 import { clipDurationTicks, clipStartSec, clipEndSec, clipMediaTimeSec } from '~/utils/tmcut/clipTime'
 import { useTmcutFrames } from '~/composables/useTmcutFrames'
@@ -696,18 +696,16 @@ function incomingRamp(type: string, p: number): { opacity: number, prepend?: str
 }
 
 // Per-clip visual (transform + opacity from keyframes/static fields);
-// shared by the main element and the outgoing crossfade layer.
+// shared by the main element and the outgoing crossfade layer. The numbers
+// come from core evaluateClip, the same evaluator the export compiler will
+// read (V4 M2) — this file only turns them into CSS and preview-scale px.
 function clipVisual(clip: { offset?: number, scale?: number, x?: number, y?: number, rotation?: number, opacity?: number, keyframes?: TmcutKeyframe[] }) {
-  const at = localTicks(clip)
-  const scale = (evalKeyframe(clip, 'scale', at) ?? clip.scale ?? 100) / 100
+  const visual = evaluateClip(clip, localTicks(clip))
   const preview = textScale.value || 1
-  const x = (evalKeyframe(clip, 'x', at) ?? clip.x ?? 0) * preview
-  const y = (evalKeyframe(clip, 'y', at) ?? clip.y ?? 0) * preview
-  const rot = clip.rotation || 0 // rotation has no keyframe UI (B1 scope)
-  const opacity = (evalKeyframe(clip, 'opacity', at) ?? clip.opacity ?? 100) / 100
+  const { x, y, scaleX, rotation } = visual.transform
   return {
-    transform: `translate(${x}px, ${y}px) scale(${scale}) rotate(${rot}deg)`,
-    opacity
+    transform: `translate(${x * preview}px, ${y * preview}px) scale(${scaleX}) rotate(${rotation}deg)`,
+    opacity: visual.opacity
   }
 }
 

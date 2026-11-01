@@ -1561,3 +1561,33 @@ export function compareFrames(
   actual: Uint8Array | Uint8ClampedArray,
   options?: TmcutFrameCompareOptions
 ): TmcutFrameCompareResult
+
+export interface CoreClipVisual {
+  /** 0..1 */
+  opacity: number
+  /** 0..100; fade envelope is NOT applied here. */
+  volume: number
+  transform: CoreEvaluatedTransform
+}
+
+/** One clip's visual/audio state at clip-local ticks (no timeline needed). */
+export function evaluateClip(
+  clip: {
+    keyframes?: TmcutKeyframe[]
+    scale?: number
+    opacity?: number
+    volume?: number
+    x?: number
+    y?: number
+    rotation?: number
+    transform?: {
+      x?: number
+      y?: number
+      scaleX?: number
+      scaleY?: number
+      rotation?: number
+      opacity?: number
+    }
+  } | null | undefined,
+  localTicks: number
+): CoreClipVisual

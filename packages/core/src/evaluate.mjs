@@ -134,6 +134,25 @@ function textOf(clip) {
   }
 }
 
+/**
+ * One clip's visual/audio state at clip-local ticks. Same math as a layer of
+ * `evaluateTimeline`, exposed for per-clip callers (preview layers, inspector
+ * badges, thumbnails) that do not build a timeline.
+ *
+ * @param {object|null|undefined} clip
+ * @param {number} localTicks
+ * @returns {{ opacity: number, volume: number, transform: object }}
+ *   `opacity` 0..1, `volume` percent 0..100 (fade envelope not applied).
+ */
+export function evaluateClip(clip, localTicks) {
+  const at = finiteOr(localTicks, 0)
+  return {
+    opacity: opacityOf(clip, at),
+    volume: volumeOf(clip, at),
+    transform: transformOf(clip, at)
+  }
+}
+
 function transitionAt(overlaps, clipId, at) {
   for (const overlap of overlaps) {
     if (at < overlap.startTicks || at >= overlap.endTicks) continue
@@ -165,10 +184,9 @@ function transitionOf(hit, clipsById) {
 function layerFor(clip, track, at, windows, clipsById) {
   const span = spanOf(clip)
   const localTicks = at - span.start
-  const opacity = opacityOf(clip, localTicks)
-  const volumePct = volumeOf(clip, localTicks)
+  const visual = evaluateClip(clip, localTicks)
   const trackVolume = clamp(finiteOr(track?.volume, 100), 0, 100)
-  const gain = (volumePct / 100) * (trackVolume / 100) * envelopeAt(clip, localTicks)
+  const gain = (visual.volume / 100) * (trackVolume / 100) * envelopeAt(clip, localTicks)
   return {
     clipId: clip.id,
     trackId: track?.id ?? null,
@@ -178,11 +196,11 @@ function layerFor(clip, track, at, windows, clipsById) {
     endTicks: span.end,
     localTicks,
     sourceTicks: sourceAt(clip, localTicks, span.duration),
-    visible: track?.hidden !== true && opacity > 0,
-    opacity,
+    visible: track?.hidden !== true && visual.opacity > 0,
+    opacity: visual.opacity,
     volume: clamp(gain, 0, 1),
     audible: track?.muted !== true && gain > 0,
-    transform: transformOf(clip, localTicks),
+    transform: visual.transform,
     effects: Array.isArray(clip.effects) ? clip.effects.map(effect => ({ ...effect })) : [],
     mask: clip.mask ?? null,
     transition: transitionOf(transitionAt(windows, clip.id, at), clipsById),
