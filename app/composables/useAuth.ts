@@ -44,6 +44,17 @@ interface HubMeData {
 // Module-scope state for proactive refresh and session expiry handling
 let proactiveRefreshTimer: ReturnType<typeof setTimeout> | null = null
 let isHandlingSessionExpired = false
+/**
+ * The one in-flight `/auth/refresh`, shared by EVERY `useAuth()` instance.
+ * A per-instance gate is not a gate: the plugin, each component and each
+ * `useHub()` call build their own instance (25 files call `useAuth()`), the hub
+ * ROTATES the refresh token, so the second concurrent caller presents the token
+ * that was just retired, gets `error.refreshTokenInvalid`, and
+ * `auth.client.ts` turns that into `handleSessionExpired()` — a logout in the
+ * middle of working. Safe to share because the refresh path never runs during
+ * SSR: `middleware/auth.global.ts` returns on `import.meta.server`.
+ */
+let refreshPromise: Promise<boolean> | null = null
 /** Instance-bound toast API derived from the auto-imported useToast(). */
 type ToastApi = ReturnType<typeof useToast>
 
@@ -293,8 +304,8 @@ export const useAuth = () => {
     }
   }
 
-  let refreshPromise: Promise<boolean> | null = null
-
+  // Reads the module-level `refreshPromise` (see the note there): the gate must
+  // be shared by every `useAuth()` instance, not one per call site.
   async function refresh(): Promise<boolean> {
     if (refreshPromise) return refreshPromise
 

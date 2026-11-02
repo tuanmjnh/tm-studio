@@ -366,6 +366,31 @@ async function main() {
     assert.equal(h.requests.refresh.length, 0)
   })
 
+  await check('two composable instances share one refresh request', async () => {
+    // The gate must hold across `useAuth()` calls, not just inside one: the
+    // plugin (`auth.client.ts`) and every component build their own instance,
+    // and the hub ROTATES the refresh token — so a second in-flight refresh
+    // with the same token answers 401 `error.refreshTokenInvalid`, which the
+    // plugin maps to `handleSessionExpired()` and the user is logged out
+    // mid-request. Observed live on 2026-11-02 while navigating the desktop app.
+    const h = harness({ refreshToken: 'cookie-refresh' })
+    const response = deferred<RefreshReply>()
+    h.http.refresh = () => response.promise
+    h.http.appStatuses = [401, 200]
+    const viaComponent = h.auth.refresh()
+    // A protected call through the plugin's wrapper: its 401 handler refreshes
+    // from the PLUGIN's instance, a different closure than the one above.
+    const viaPlugin = h.call('/api/v1/media/render')
+    assert.equal(h.requests.refresh.length, 1, 'one in-flight refresh for the whole app')
+    response.resolve(successReply())
+    assert.equal(await viaComponent, true)
+    assert.deepEqual(await viaPlugin, { ok: true, jobId: 'rj_test' }, 'the replay must still succeed')
+    assert.equal(h.requests.refresh.length, 1, 'the second caller must join, not re-send')
+    assert.equal(h.requests.me.length, 1, 'one refresh means one /me verification')
+    assert.equal(h.requests.app.length, 2, 'failed once, replayed once')
+    assert.equal(h.redirects.length, 0)
+  })
+
   console.log(`\n${passed} auth refresh checks passed; ${failed} FAILED`)
   if (failed) process.exitCode = 1
 }
