@@ -7,7 +7,7 @@
 // =============================================================================
 
 import { TICKS_PER_SECOND } from './time.mjs'
-import { splitRamp } from './retime.mjs'
+import { isRamped, splitRamp, trimRamp } from './retime.mjs'
 
 let clipCounter = 0
 let trackCounter = 0
@@ -282,28 +282,55 @@ export function moveClip(timeline, clipId, startTicks) {
 
 /**
  * Trim a clip edge. `edge` is 'in' or 'out'; `sourceTicks` is the new source
- * boundary. Trims keep ≥1 tick of media and shift the timeline start for
- * left trims (same math as the app editor).
+ * boundary. Trims keep ≥1 tick of media, and only content that PLAYS FIRST
+ * moves the clip along the timeline: an in-trim for a forward clip, an
+ * out-trim for a reversed one.
+ *
+ * A ramped clip that SHRINKS goes through `retime.trimRamp` (ADR-027): the
+ * curve is anchored to the SOURCE content it was drawn against, so the
+ * survivor keeps its own sub-curve and its own mean speed, and it moves by
+ * the ticks that content actually consumed — `delta / speed` only holds for a
+ * constant clip. Growing a ramp has no split analogue: the curve keeps its
+ * anchor and `speedAt` clamps over the extra head.
  */
 export function trimClip(timeline, clipId, edge, sourceTicks) {
   const found = findClip(timeline, clipId)
   if (!found || found.track.locked) return false
   const { clip } = found
   const speed = isFiniteNumber(clip.speed) && clip.speed > 0 ? clip.speed : 1
-  if (edge === 'in') {
-    const next = Math.max(0, Math.min(clip.source.out - 1, Math.round(sourceTicks)))
-    const delta = next - clip.source.in
-    clip.source.in = next
-    clip.timeline.start = Math.max(0, clip.timeline.start + Math.round(delta / speed))
-    clip.timeline.duration = Math.max(1, clipDurationTicks(clip))
-    return true
+  if (edge !== 'in' && edge !== 'out') return false
+  const flat = {
+    in: clip.source.in,
+    out: clip.source.out,
+    speed: clip.speed,
+    reverse: clip.reverse,
+    speedPoints: clip.speedPoints
   }
-  if (edge === 'out') {
-    clip.source.out = Math.max(clip.source.in + 1, Math.round(sourceTicks))
-    clip.timeline.duration = Math.max(1, clipDurationTicks(clip))
-    return true
+  const target = edge === 'in'
+    ? Math.max(0, Math.min(flat.out - 1, Math.round(sourceTicks)))
+    : Math.max(flat.in + 1, Math.round(sourceTicks))
+  const shrinks = edge === 'in' ? target > flat.in : target < flat.out
+  if (shrinks && isRamped(flat)) {
+    const half = trimRamp(flat, edge, target)
+    clip.source.in = half.in
+    clip.source.out = half.out
+    clip.speed = half.speed
+    if (half.speedPoints) clip.speedPoints = half.speedPoints
+    else delete clip.speedPoints
+    clip.timeline.start = Math.max(0, clip.timeline.start + half.shiftTicks)
+  } else if (edge === 'in') {
+    const delta = target - clip.source.in
+    clip.source.in = target
+    // A reversed clip consumes source DOWNWARDS, so raising `in` shaves what
+    // plays LAST and the clip keeps its position (ADR-027).
+    if (!clip.reverse) clip.timeline.start = Math.max(0, clip.timeline.start + Math.round(delta / speed))
+  } else {
+    const delta = clip.source.out - target
+    clip.source.out = target
+    if (clip.reverse) clip.timeline.start = Math.max(0, clip.timeline.start + Math.round(delta / speed))
   }
-  return false
+  clip.timeline.duration = Math.max(1, clipDurationTicks(clip))
+  return true
 }
 
 /**

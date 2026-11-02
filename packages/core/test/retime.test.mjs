@@ -1,7 +1,7 @@
 // tmcut-core — retime tests. Run: node --test "test/*.test.mjs"
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { validateSpeed, isRetimed, timelineToSource, sourceToTimeline, withSpeed, isRamped, speedAt, rampIntegral, rampTimelineToSource, SPEED_RAMP_PRESETS, buildRampPreset, rampSetptsExpr, splitSpeedPoints, splitRamp } from '../src/retime.mjs'
+import { validateSpeed, isRetimed, timelineToSource, sourceToTimeline, withSpeed, isRamped, speedAt, rampIntegral, rampTimelineToSource, SPEED_RAMP_PRESETS, buildRampPreset, rampSetptsExpr, splitSpeedPoints, splitRamp, rampElapsedForConsumed, trimRamp } from '../src/retime.mjs'
 import { TICKS_PER_SECOND } from '../src/time.mjs'
 
 const T = TICKS_PER_SECOND // 120000 ticks per second
@@ -312,6 +312,126 @@ describe('splitSpeedPoints + splitRamp (V4 G5 follow-up)', () => {
           assert.ok(Number.isFinite(half.speed) && half.speed >= 0.01, `bad speed: ${half.speed}`)
         }
         assert.deepEqual(contiguous(clip, r), [true, true, true], `source not partitioned once: ${JSON.stringify(r)}`)
+      }
+    }
+  })
+})
+
+// V4 ADR-027: trimming is a split whose discarded half is thrown away. The
+// curve stays anchored to the SOURCE content (the speed a source second had
+// when the user drew it), and the survivor takes its own mean speed because
+// the flat model derives timeline length from span/speed.
+describe('rampElapsedForConsumed + trimRamp (V4 ADR-027)', () => {
+  const D = 24 * T
+  const easeIn = () => buildRampPreset('ease-in', D, 1) // 0.5x -> 1.5x, mean 1x
+  const rampClip = () => ({ in: 0, out: D, speed: 1, speedPoints: easeIn() })
+
+  it('rampElapsedForConsumed inverts rampIntegral exactly', () => {
+    const clip = rampClip()
+    for (let t = 0; t <= D; t += T / 3) {
+      const back = rampElapsedForConsumed(clip, rampIntegral(clip, t))
+      assert.ok(Math.abs(back - t) < 1e-6, `t=${t} round-tripped to ${back}`)
+    }
+    // The two anchors this slice depends on: 9 s of source is the first 12 s
+    // of an ease-in 0.5x -> 1.5x clip, and the whole 24 s span is 24 s.
+    assert.equal(rampElapsedForConsumed(clip, 9 * T), 12 * T)
+    assert.equal(rampElapsedForConsumed(clip, D), D)
+  })
+
+  it('rampElapsedForConsumed uses the linear formula for a constant clip', () => {
+    const clip = { in: 0, out: 10 * T, speed: 2 }
+    assert.equal(rampElapsedForConsumed(clip, 6 * T), 3 * T)
+    assert.equal(rampElapsedForConsumed(clip, 0), 0)
+    assert.equal(rampElapsedForConsumed(clip, -5), 0, 'never returns a negative elapsed')
+  })
+
+  it('rampElapsedForConsumed walks every segment of a multi-point curve', () => {
+    const pts = [{ t: 0, speed: 1 }, { t: 4 * T, speed: 3 }, { t: 8 * T, speed: 1 }, { t: 12 * T, speed: 2 }]
+    const clip = { in: 0, out: 18 * T, speed: 1, speedPoints: pts }
+    for (const t of [T, 4 * T, 6 * T, 8 * T, 11 * T]) {
+      const back = rampElapsedForConsumed(clip, rampIntegral(clip, t))
+      assert.ok(Math.abs(back - t) < 1e-6, `crossing at ${t / T}s -> ${back / T}s`)
+    }
+    // Past the last control point the curve clamps to 2x: 8 s of source is 4 s.
+    assert.equal(rampElapsedForConsumed(clip, rampIntegral(clip, 12 * T) + 8 * T), 16 * T)
+  })
+
+  it('trimRamp re-anchors the curve when the in-edge is pulled forward', () => {
+    const r = trimRamp(rampClip(), 'in', 9 * T)
+    assert.equal(r.in, 9 * T)
+    assert.equal(r.out, 24 * T)
+    assert.equal(r.shiftTicks, 12 * T, 'the clip moves right by what it played away')
+    assert.ok(Math.abs(r.speed - 1.25) < 1e-9, `surviving 1.0x -> 1.5x mean: ${r.speed}`)
+    assert.equal(Math.round((r.out - r.in) / r.speed), 12 * T, 'the timeline length survives the trim')
+    assert.deepEqual(r.speedPoints, [{ t: 0, speed: 1 }, { t: 12 * T, speed: 1.5 }])
+  })
+
+  it('trimRamp keeps the head curve and does not move the clip on an out trim', () => {
+    const r = trimRamp(rampClip(), 'out', 9 * T)
+    assert.equal(r.in, 0)
+    assert.equal(r.out, 9 * T)
+    assert.equal(r.shiftTicks, 0)
+    assert.ok(Math.abs(r.speed - 0.75) < 1e-9, `head 0.5x -> 1.0x mean: ${r.speed}`)
+    assert.equal(Math.round((r.out - r.in) / r.speed), 12 * T)
+    assert.deepEqual(r.speedPoints, [{ t: 0, speed: 0.5 }, { t: 12 * T, speed: 1 }])
+  })
+
+  it('trimRamp of a constant clip returns exactly the classic numbers', () => {
+    const clip = { in: 2 * T, out: 10 * T, speed: 2 }
+    const head = trimRamp(clip, 'out', 6 * T)
+    assert.deepEqual(head, { in: 2 * T, out: 6 * T, speed: 2, speedPoints: null, shiftTicks: 0 })
+    const tail = trimRamp(clip, 'in', 4 * T)
+    assert.deepEqual(tail, { in: 4 * T, out: 10 * T, speed: 2, speedPoints: null, shiftTicks: 1 * T })
+  })
+
+  it('trimRamp shaves the end of the play order for a reversed in-trim', () => {
+    // Reversed playback consumes source downwards from `out`, so raising `in`
+    // removes what plays LAST: the clip keeps its position, shortens, and the
+    // surviving window still opens with the FIRST ticks of the curve.
+    const r = trimRamp({ ...rampClip(), reverse: true }, 'in', 9 * T)
+    assert.equal(r.shiftTicks, 0, 'a back-shaved clip must not move')
+    assert.equal(r.in, 9 * T)
+    assert.equal(r.out, 24 * T)
+    assert.equal(r.speedPoints[0].speed, 0.5, 'the curve phase follows the play order, not the source range')
+    assert.ok(r.speed > 0.8 && r.speed < 0.9, `mean of the early slow part: ${r.speed}`)
+    assert.equal(Math.round((r.out - r.in) / r.speed), Math.round(rampElapsedForConsumed(rampClip(), 15 * T)))
+  })
+
+  it('trimRamp shaves the front of the play order for a reversed out-trim', () => {
+    const r = trimRamp({ ...rampClip(), reverse: true }, 'out', 15 * T)
+    assert.equal(r.in, 0)
+    assert.equal(r.out, 15 * T)
+    assert.equal(r.shiftTicks, 12 * T, '1.5x down to 1.0x covers the first 9 s of source in 12 s')
+    assert.ok(Math.abs(r.speed - 1.25) < 1e-9, `surviving span 15 s over 12 s: ${r.speed}`)
+    assert.deepEqual(r.speedPoints, [{ t: 0, speed: 1 }, { t: 12 * T, speed: 1.5 }])
+  })
+
+  it('every trimRamp result replays its source range exactly once', () => {
+    const mountain = { in: T, out: 9 * T, speed: 0.5, speedPoints: buildRampPreset('mountain', 16 * T, 0.5) }
+    for (const clip of [rampClip(), { ...rampClip(), reverse: true }, mountain]) {
+      const span = clip.out - clip.in
+      // Precondition, or this test would prove nothing: the model's rule is
+      // that the curve spans the clip's derived length and its MEAN equals
+      // `speed`. A fixture that breaks it (curve over 8 s, length 16 s) fails
+      // here instead of blaming trimRamp for the author's arithmetic.
+      const length = span / validateSpeed(clip.speed)
+      assert.ok(Math.abs(rampIntegral(clip, length) - span) < 1,
+        `fixture does not hold the mean-preserving invariant: ${JSON.stringify(clip.speedPoints)}`)
+      for (const edge of ['in', 'out']) {
+        for (const target of [2 * T, 9 * T, 12 * T, 21 * T]) {
+          const r = trimRamp(clip, edge, target)
+          assert.ok(r.out - r.in >= 1, `empty source range after ${edge}@${target / T}: ${JSON.stringify(r)}`)
+          assert.ok(Number.isFinite(r.speed) && r.speed >= 0.01, `bad speed ${r.speed}`)
+          const keptSpan = r.out - r.in
+          const exact = rampIntegral(r, keptSpan / r.speed)
+          assert.ok(Math.abs(exact - keptSpan) < 1,
+            `${edge}@${target / T}s: mean ${r.speed} does not reproduce the ${keptSpan / T} s range (got ${exact / T})`)
+          // The integer length a consumer actually derives is `round(length)`,
+          // so the residual is at most a tick of the half's own speed.
+          const rounded = rampIntegral(r, Math.round(keptSpan / r.speed))
+          assert.ok(Math.abs(rounded - keptSpan) <= 2 * r.speed + 2,
+            `${edge}@${target / T}s covers ${rounded / T} s of a ${keptSpan / T} s range (speed ${r.speed})`)
+        }
       }
     }
   })

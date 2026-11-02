@@ -112,6 +112,57 @@ async function main() {
     assert.equal(tail.speed, 1.25)
   })
 
+  // V4 ADR-027: trim = a split whose discarded half is thrown away. These
+  // three checks cover the whole keyboard-trim chain — the UI-seconds entry,
+  // the ONE time map that converts the playhead to a source tick, and core
+  // trimClip re-phasing the curve.
+  await check('trimSelectedEdgeAt re-times a ramp: out-trim keeps the head curve', async () => {
+    const s = await freshStore()
+    const clip = s.addClipToTrack('video', { src: 'a.mp4', in: 0, out: tk(24), offset: 0 })!
+    s.updateClip(clip.id, { speedPoints: [{ t: 0, speed: 0.5 }, { t: tk(24), speed: 1.5 }] })
+    s.selectClip(clip.id)
+    assert.ok(s.trimSelectedEdgeAt('out', 12), 'the UI speaks seconds')
+    const live = videoClip(s, clip.id)
+    // The playhead sits at source 9 s (12 s of timeline at 0.5x -> 1.0x).
+    assert.equal(live.in, 0)
+    assert.equal(live.out, tk(9), 'the trim follows the speed integral, not in + t*speed')
+    assert.equal(live.speed, 0.75, 'the survivor carries its own mean')
+    assert.equal(durationTicks(live), tk(12), 'and therefore keeps the cut at the playhead')
+    assert.deepEqual(live.speedPoints, [{ t: 0, speed: 0.5 }, { t: tk(12), speed: 1 }])
+  })
+
+  await check('trimSelectedEdgeAt re-times a ramp: in-trim advances the clip', async () => {
+    const s = await freshStore()
+    const clip = s.addClipToTrack('video', { src: 'a.mp4', in: 0, out: tk(24), offset: 0 })!
+    s.updateClip(clip.id, { speedPoints: [{ t: 0, speed: 0.5 }, { t: tk(24), speed: 1.5 }] })
+    s.selectClip(clip.id)
+    assert.ok(s.trimSelectedEdgeAt('in', 12))
+    const live = videoClip(s, clip.id)
+    assert.equal(live.in, tk(9))
+    assert.equal(live.out, tk(24))
+    assert.equal(live.speed, 1.25)
+    assert.equal(startTicks(live), tk(12), 'the kept content played after the 12 s mark')
+    assert.equal(durationTicks(live), tk(12))
+    assert.deepEqual(live.speedPoints, [{ t: 0, speed: 1 }, { t: tk(12), speed: 1.5 }],
+      'the tail curve is re-anchored at its own t=0, not replayed from 0.5x')
+  })
+
+  await check('trimSelectedEdgeAt shaves the end of a reversed ramp without moving it', async () => {
+    const s = await freshStore()
+    const clip = s.addClipToTrack('video', { src: 'a.mp4', in: 0, out: tk(24), offset: 0 })!
+    s.updateClip(clip.id, { reverse: true, speedPoints: [{ t: 0, speed: 0.5 }, { t: tk(24), speed: 1.5 }] })
+    s.selectClip(clip.id)
+    assert.ok(s.trimSelectedEdgeAt('in', 12))
+    const live = videoClip(s, clip.id)
+    // Reversed playback runs out -> in, so 12 s of timeline sits at source 15 s,
+    // and that range is what plays LAST: the clip keeps its position.
+    assert.equal(live.in, tk(15))
+    assert.equal(live.out, tk(24))
+    assert.equal(startTicks(live), 0, 'a reversed in-trim shaves the tail of the playback')
+    assert.equal(live.speed, 0.75, '9 s of source over the 12 s still shown')
+    assert.equal(durationTicks(live), tk(12))
+  })
+
   await check('splitClip near an edge is refused and changes nothing', async () => {
     const s = await freshStore()
     const clip = s.addClipToTrack('video', { src: 'a.mp4', in: 0, out: tk(4) })!

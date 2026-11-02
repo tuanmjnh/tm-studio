@@ -19,7 +19,7 @@ import {
   validateTimeline
 } from '../src/timeline.mjs'
 import { secToTicks } from '../src/time.mjs'
-import { rampTimelineToSource } from '../src/retime.mjs'
+import { buildRampPreset, rampTimelineToSource } from '../src/retime.mjs'
 import { defaultTimeline } from '../src/project.mjs'
 
 function makeTimeline() {
@@ -245,5 +245,119 @@ describe('timeline', () => {
     assert.equal(removeTrack(timeline, added.id), true)
     assert.equal(timeline.tracks.length, 2)
     assert.deepEqual(timeline.tracks.map(track => track.id), ['t-text-1', 't-audio-1'])
+  })
+})
+
+// V4 ADR-027: trim = a split whose discarded half is thrown away. The curve
+// stays anchored to the SOURCE content it was drawn against, so the survivor
+// carries its own sub-curve AND its own mean speed (the flat model derives
+// length as span/speed), and only content that plays FIRST moves the clip.
+describe('trimClip honors the time map (V4 ADR-027)', () => {
+  const D = secToTicks(24)
+  // ease-in 0.5x -> 1.5x over 24 s, mean 1.0x: the first 12 s of timeline
+  // play only 9 s of source, so the 12 s playhead sits at source 9 s.
+  const ramped = (reverse = false) => ({
+    source: { in: 0, out: D },
+    speed: 1,
+    reverse,
+    timeline: { start: 0 },
+    speedPoints: buildRampPreset('ease-in', D, 1)
+  })
+
+  const clone = clip => JSON.parse(JSON.stringify(clip))
+  const flatOf = clip => ({
+    in: clip.source.in,
+    out: clip.source.out,
+    speed: clip.speed,
+    reverse: clip.reverse,
+    speedPoints: clip.speedPoints
+  })
+
+  it('an out-trim keeps the head curve and its own mean speed', () => {
+    const timeline = makeTimeline()
+    const clip = addClip(timeline, 'video', ramped())
+    assert.equal(trimClip(timeline, clip.id, 'out', secToTicks(9)), true)
+    assert.equal(clip.source.in, 0)
+    assert.equal(clip.source.out, secToTicks(9), 'the source the head really played')
+    assert.equal(clip.speed, 0.75, 'head mean = 9 s of source over the 12 s it played')
+    assert.deepEqual(clip.speedPoints, [{ t: 0, speed: 0.5 }, { t: secToTicks(12), speed: 1 }])
+    assert.equal(clip.timeline.start, 0, 'an out-trim never moves a forward clip')
+    assert.equal(clipDurationTicks(clip), secToTicks(12), 'the cut stays at the playhead')
+  })
+
+  it('an in-trim re-anchors the tail curve and advances the clip', () => {
+    const timeline = makeTimeline()
+    const clip = addClip(timeline, 'video', ramped())
+    assert.equal(trimClip(timeline, clip.id, 'in', secToTicks(9)), true)
+    assert.equal(clip.source.in, secToTicks(9))
+    assert.equal(clip.source.out, D)
+    assert.equal(clip.speed, 1.25, 'tail mean = 15 s of source over the 12 s left')
+    assert.deepEqual(clip.speedPoints, [{ t: 0, speed: 1 }, { t: secToTicks(12), speed: 1.5 }])
+    assert.equal(clip.timeline.start, secToTicks(12), 'the kept content played after the 12 s mark')
+    assert.equal(clipEndTicks(clip), D, 'the right edge is untouched')
+  })
+
+  it('a reversed out-trim moves the clip, a reversed in-trim does not', () => {
+    const timeline = makeTimeline()
+    const held = addClip(timeline, 'video', ramped(true))
+    assert.equal(trimClip(timeline, held.id, 'in', secToTicks(9)), true)
+    assert.equal(held.source.in, secToTicks(9), 'the shaved range is what plays LAST')
+    assert.equal(held.timeline.start, 0, 'so the clip keeps its position')
+
+    const moved = addClip(timeline, 'video', { ...ramped(true), timeline: { start: secToTicks(4) } })
+    assert.equal(trimClip(timeline, moved.id, 'out', secToTicks(15)), true)
+    assert.equal(moved.source.out, secToTicks(15), 'the shaved range is what plays FIRST')
+    assert.ok(moved.timeline.start > secToTicks(4), `reversed front trim must advance the clip, got ${moved.timeline.start}`)
+  })
+
+  it('the survivor shows the same source frame at the same timeline position', () => {
+    for (const reverse of [false, true]) {
+      for (const edge of ['in', 'out']) {
+        const timeline = makeTimeline()
+        const clip = addClip(timeline, 'video', ramped(reverse))
+        const before = clone(flatOf(clip))
+        const at = edge === 'in' ? secToTicks(9) : secToTicks(15)
+        assert.equal(trimClip(timeline, clip.id, edge, at), true)
+        const after = flatOf(clip)
+        const dur = clipDurationTicks(clip)
+        for (let t = 0; t <= dur; t += secToTicks(0.5)) {
+          const absolute = clip.timeline.start + t
+          const expected = rampTimelineToSource(before, absolute)
+          const got = rampTimelineToSource(after, t)
+          assert.ok(Math.abs(expected - got) <= 2,
+            `${reverse ? 'rev ' : ''}${edge}@${t}: ${expected} vs ${got} (absolute ${absolute})`)
+        }
+      }
+    }
+  })
+
+  it('a constant clip keeps the classic trim numbers, forward and reversed', () => {
+    const timeline = makeTimeline()
+    const clip = addClip(timeline, 'video', { source: { in: secToTicks(2), out: secToTicks(12) }, speed: 2, timeline: { start: secToTicks(1) } })
+    assert.equal(trimClip(timeline, clip.id, 'out', secToTicks(6)), true)
+    assert.equal(clip.timeline.start, secToTicks(1), 'a forward out-trim does not move')
+    assert.equal(clipDurationTicks(clip), secToTicks(2))
+    assert.equal(trimClip(timeline, clip.id, 'in', secToTicks(3)), true)
+    assert.deepEqual({ in: clip.source.in, out: clip.source.out, speed: clip.speed, points: clip.speedPoints ?? null, start: clip.timeline.start },
+      { in: secToTicks(3), out: secToTicks(6), speed: 2, points: null, start: secToTicks(1.5) })
+
+    // Measured pre-fix: these two rows were mirror-inverted (the in-trim moved
+    // the clip +0.25 s and the out-trim left it still).
+    const rev = addClip(timeline, 'video', { source: { in: 0, out: secToTicks(10) }, speed: 2, reverse: true, timeline: { start: secToTicks(4) } })
+    assert.equal(trimClip(timeline, rev.id, 'in', secToTicks(2)), true)
+    assert.deepEqual({ in: rev.source.in, out: rev.source.out, start: rev.timeline.start, dur: clipDurationTicks(rev) },
+      { in: secToTicks(2), out: secToTicks(10), start: secToTicks(4), dur: secToTicks(4) })
+    assert.equal(trimClip(timeline, rev.id, 'out', secToTicks(8)), true)
+    assert.deepEqual({ in: rev.source.in, out: rev.source.out, start: rev.timeline.start, dur: clipDurationTicks(rev) },
+      { in: secToTicks(2), out: secToTicks(8), start: secToTicks(5), dur: secToTicks(3) })
+  })
+
+  it('growing a ramp keeps the curve anchored instead of rescaling it', () => {
+    const timeline = makeTimeline()
+    const clip = addClip(timeline, 'video', { ...ramped(), source: { in: secToTicks(4), out: D } })
+    const pointsBefore = clone(clip.speedPoints)
+    assert.equal(trimClip(timeline, clip.id, 'in', secToTicks(2)), true)
+    assert.equal(clip.source.in, secToTicks(2), 'the grow is honoured')
+    assert.deepEqual(clip.speedPoints, pointsBefore, 'the curve is not re-phased by an expand')
   })
 })

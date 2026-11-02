@@ -288,6 +288,72 @@ export function splitRamp(clip, elapsedTicks) {
   }
 }
 
+/**
+ * Inverse of `rampIntegral`: the clip-local timeline ticks needed to consume
+ * `consumedTicks` of SOURCE. Solved segment by segment, exactly — within a
+ * segment the speed is linear, so the area is quadratic in x and
+ * `a.speed*x + k*x^2/2 = rem` has one non-negative root. The stable form
+ * `2*rem / (a + sqrt(a^2 + 2*k*rem))` also covers `k -> 0` (pure linear
+ * segment) without cancellation. Non-ramped clips use `consumed / speed`.
+ */
+export function rampElapsedForConsumed(clip, consumedTicks) {
+  const speed = validateSpeed(clip?.speed)
+  const want = Math.max(0, Number(consumedTicks) || 0)
+  const pts = sortedPoints(clip)
+  if (pts.length < 2) return want / speed
+  if (want <= pts[0].speed * pts[0].t) return want / pts[0].speed
+  let acc = pts[0].speed * pts[0].t
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const a = pts[i]
+    const b = pts[i + 1]
+    const width = b.t - a.t
+    const area = ((a.speed + b.speed) / 2) * width
+    if (want > acc + area) {
+      acc += area
+      continue
+    }
+    if (width <= 0) return b.t
+    const rem = want - acc
+    const k = (b.speed - a.speed) / width
+    const root = Math.sqrt(Math.max(0, a.speed * a.speed + 2 * k * rem))
+    return a.t + (2 * rem) / (a.speed + root)
+  }
+  const last = pts[pts.length - 1]
+  return last.t + (want - acc) / last.speed
+}
+
+/**
+ * Trim as "a split whose discarded half is thrown away" (V4 ADR-027). The
+ * curve stays anchored to the SOURCE content it was drawn against, the
+ * survivor gets that sub-curve re-anchored to its own t = 0, and `speed`
+ * becomes the survivor's mean so the derived timeline length still equals
+ * what the curve actually plays. Which end is shaved depends on the PLAY
+ * direction: a reversed clip consumes source downwards, so an in-trim takes
+ * off what plays last (the clip does not move) and an out-trim takes off what
+ * plays first (it does). Constant clips return the classic numbers.
+ *
+ * @param {{ in?: number, out?: number, speed?: number, reverse?: boolean, speedPoints?: Array<{t: number, speed: number}>|null }} clip
+ * @param {'in'|'out'} edge
+ * @param {number} targetTicks new source boundary for that edge
+ * @returns {{ in: number, out: number, speed: number, speedPoints: Array<object>|null, shiftTicks: number }}
+ */
+export function trimRamp(clip, edge, targetTicks) {
+  const speed = validateSpeed(clip?.speed)
+  const inT = finiteOr(clip?.in, 0)
+  const outT = finiteOr(clip?.out, 0)
+  const lo = Math.min(inT, outT)
+  const hi = Math.max(inT, outT)
+  const span = hi - lo
+  if (span < 2) return { in: lo, out: hi, speed, speedPoints: null, shiftTicks: 0 }
+  const cut = clamp(Math.round(Number(targetTicks) || 0), lo + 1, hi - 1)
+  const kept = edge === 'in' ? hi - cut : cut - lo
+  const trimsFront = (clip?.reverse === true) ? edge === 'out' : edge === 'in'
+  const elapsed = clamp(rampElapsedForConsumed(clip, trimsFront ? span - kept : kept), 1, span)
+  const map = splitRamp(clip, elapsed)
+  const half = trimsFront ? map.tail : map.head
+  return { ...half, shiftTicks: trimsFront ? Math.max(0, Math.round(elapsed)) : 0 }
+}
+
 /** Preset curve kinds (CapCut speed-curve menu). */
 export const SPEED_RAMP_PRESETS = ['ease-in', 'ease-out', 'mountain', 'valley']
 

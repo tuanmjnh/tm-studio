@@ -648,6 +648,12 @@ export function rampSetptsExpr(clip: { speedPoints?: TmcutSpeedPoint[] | null } 
 export interface TmcutSplitHalf { in: number, out: number, speed: number, speedPoints: TmcutSpeedPoint[] | null }
 export function splitSpeedPoints(points: TmcutSpeedPoint[] | null | undefined, cutTicks: number): { head: TmcutSpeedPoint[], tail: TmcutSpeedPoint[] }
 export function splitRamp(clip: { in?: number, out?: number, speed?: number, reverse?: boolean, speedPoints?: TmcutSpeedPoint[] | null } | null | undefined, elapsedTicks: number): { boundary: number, consumed: number, head: TmcutSplitHalf, tail: TmcutSplitHalf }
+// V4 ADR-027: trim = a split whose discarded half is thrown away.
+// `rampElapsedForConsumed` inverts `rampIntegral` (source ticks -> timeline
+// ticks). `trimRamp.shiftTicks` is how far the CLIP must move: nonzero only
+// when the removed content plays first.
+export function rampElapsedForConsumed(clip: { speed?: number, speedPoints?: TmcutSpeedPoint[] | null } | null | undefined, consumedTicks: number): number
+export function trimRamp(clip: { in?: number, out?: number, speed?: number, reverse?: boolean, speedPoints?: TmcutSpeedPoint[] | null } | null | undefined, edge: 'in' | 'out', targetTicks: number): TmcutSplitHalf & { shiftTicks: number }
 
 // --- Effects registry + normalize (Roadmap C6) ---
 // First wave: blur, sharpen, vignette, grain, chromakey, lut3d, stabilize,

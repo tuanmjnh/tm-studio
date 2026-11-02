@@ -27,6 +27,7 @@ import {
   insertClipRipple,
   closeGaps,
   splitRamp,
+  rampTimelineToSource,
   TICKS_PER_SECOND,
   canApplyTransition,
   applyTransition,
@@ -1328,11 +1329,16 @@ function trimSelectedEdgeAt(edge: 'in' | 'out', timeSec: number): boolean {
     const clip = track.items?.find(i => i.id === id)
     if (!clip) continue
     if (track.locked) return false
-    const speed = clip.speed || 1
     const start = clipStartTicks(clip)
     const end = clipEndTicks(clip)
     if (timeTicks <= start + margin || timeTicks >= end - margin) return false
-    const sourceTicks = Math.round(clip.in + (timeTicks - start) * speed)
+    // ONE time map for every edge: the source under the playhead is the speed
+    // integral of the clip (exact for a ramp, `in + t*speed` for a constant)
+    // and it runs DOWNWARDS from `out` when the clip is reversed. The linear
+    // formula this replaces was wrong for both, so a ramped trim cut the
+    // source at the wrong tick and the curve re-phasing in core could not
+    // recover the intended position.
+    const sourceTicks = Math.round(rampTimelineToSource(clip, timeTicks - start))
     return applyV3Edit(v3 => trimClip(v3, id, edge, sourceTicks)) === true
   }
   return false
