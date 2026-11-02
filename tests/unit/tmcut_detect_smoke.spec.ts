@@ -21,7 +21,6 @@ import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import detectionArgs from '../../shared/utils/detection-args.cjs'
 import { parseSceneOutput, parseSilenceOutput } from 'tmcut-core'
@@ -30,7 +29,11 @@ const { sceneDetectionArgs, silenceDetectionArgs } = detectionArgs
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 const FFMPEG = path.join(repoRoot, 'resources', 'ffmpeg.exe')
-const workDir = fs.mkdtempSync(path.join(tmpdir(), 'tmcut-detect-smoke-'))
+// Repo-local and git-ignored (`.golden-render-*/`), because this machine's
+// bundled binary cannot open an output file under `%TEMP%` at all: it dies with
+// `Error opening output …: Permission denied` (exit -13), which made this spec
+// unconditionally red here. Same convention as `tmcut_render_parity.spec.ts`.
+const workDir = fs.mkdtempSync(path.join(repoRoot, '.golden-render-detect-'))
 
 let passed = 0
 
@@ -132,4 +135,10 @@ function main() {
   console.log(`\n=== SMOKE: all ${passed} real-FFmpeg detection checks passed ===`)
 }
 
-main()
+// Cleanup even when a check fails, so a red run cannot litter the repo with
+// generated media (same shape as tmcut_render_smoke.spec.ts).
+try {
+  main()
+} finally {
+  fs.rmSync(workDir, { recursive: true, force: true })
+}
