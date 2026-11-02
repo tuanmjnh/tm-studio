@@ -1,4 +1,4 @@
-// @tmcut/core — public API declarations.
+// tmcut-core — public API declarations.
 // Types come from ../types/ (single source of truth); this file only binds
 // them to the runtime engine's function signatures. Checked by
 // tsconfig.check.json (pnpm typecheck:core), not by ESLint.

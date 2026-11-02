@@ -11,7 +11,7 @@ import { sceneDetectionArgs, silenceDetectionArgs } from '#shared/utils/detectio
  * main process (electron/tools/tmcut.controller.cjs analyzeScenes/analyzeSilence).
  * The browser cannot spawn ffmpeg, so this endpoint runs the SAME argument
  * shapes server-side over an already uploaded `/uploads/*` asset and returns
- * the raw log; the renderer parses it with the shared @tmcut/core readers, so
+ * the raw log; the renderer parses it with the shared tmcut-core readers, so
  * both runtimes score identically.
  *
  * Unlike the render endpoint there is no output file at all (`-f null -`): the

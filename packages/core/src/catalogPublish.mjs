@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — Catalog admin publishing workflow (roadmap v3 §26)
+//  tmcut-core — Catalog admin publishing workflow (roadmap v3 §26)
 //
 //  The publishing workflow that lives INSIDE this repo: before a catalog
 //  document (starter catalog or cached remote snapshot) is shipped, the

@@ -3,7 +3,7 @@
 //
 //  Renderer-side driver for the on-demand asset catalog. The pure state
 //  machine (license gate, install transitions, bounded-retry queue, restart
-//  recovery, storage report) lives in @tmcut/core (src/assetCenter.mjs);
+//  recovery, storage report) lives in tmcut-core (src/assetCenter.mjs);
 //  this composable only adapts it to Vue reactivity + the Electron I/O
 //  primitives (window.electronAPI.tmcut.assetCenter — see electron/tools/
 //  asset-center.controller.cjs).

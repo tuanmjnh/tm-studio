@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — platform
+//  tmcut-core — platform
 //  Host capability negotiation (V4 Phase 1 / M1, ADR-014).
 //
 //  The core never detects its host: the app builds ONE PlatformInfo at

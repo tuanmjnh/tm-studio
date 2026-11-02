@@ -1,4 +1,4 @@
-// @tmcut/core — golden-frame comparison tests. Run: node --test test/
+// tmcut-core — golden-frame comparison tests. Run: node --test test/
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { DEFAULT_FRAME_COMPARE, compareFrames } from '../src/pixels.mjs'

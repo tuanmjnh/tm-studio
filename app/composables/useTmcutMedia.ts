@@ -341,7 +341,7 @@ export function useTmcutMedia() {
       }
 
       // Single IPC round-trip (Phase 3 ElectronMediaRuntime pipeline);
-      // probe normalization stays renderer-side via @tmcut/core.
+      // probe normalization stays renderer-side via tmcut-core.
       const result = await ipc.analyzeAsset({ filePath: asset.path, kind: asset.kind })
       if (!result?.ok) {
         asset.status = 'missing'

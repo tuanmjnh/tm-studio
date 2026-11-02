@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — selection
+//  tmcut-core — selection
 //  Pure multi-select model (docs Phase 2). Selections are plain id arrays;
 //  expansion resolves group/link relations from the timeline so grouped or
 //  linked clips always move, duplicate and delete together.

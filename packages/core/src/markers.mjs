@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — markers
+//  tmcut-core — markers
 //  Pure marker operations on plain Timeline DSL v3 objects (docs Phase 2).
 // =============================================================================
 

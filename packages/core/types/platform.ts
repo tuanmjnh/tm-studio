@@ -3,7 +3,7 @@
 // a browser tab, a headless server) builds these objects and injects them;
 // feature gates read TmcutRuntimeInfo instead of sniffing globals.
 //
-// Clock is NOT a host service: createClock() in @tmcut/core owns the tick ->
+// Clock is NOT a host service: createClock() in tmcut-core owns the tick ->
 // frame math so every host agrees on frame boundaries.
 import type { FrameRate } from './dsl.js'
 import type { TmcutMediaMetadata } from './media.js'

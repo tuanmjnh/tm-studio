@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — clock
+//  tmcut-core — clock
 //  Frame-boundary math shared by every renderer (V4 Phase 1 / M1). The DOM
 //  preview loop, a WebCodecs frame loop and the FFmpeg timeline all need the
 //  same answers: which frame contains tick t, where does that frame start,

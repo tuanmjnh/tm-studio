@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — folders (Roadmap G-3)
+//  tmcut-core — folders (Roadmap G-3)
 //  Pure folder / album operations for media asset management.
 //  Zero-dependency, runtime-agnostic (docs Phase G).
 // =============================================================================

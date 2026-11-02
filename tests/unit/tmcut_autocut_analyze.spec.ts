@@ -5,7 +5,7 @@
  * the whole AutoCut pipeline — with a source already uploaded to the local
  * server — stopped with "requires the desktop app". `resolveAnalyzer` now
  * falls back to POST /api/v1/media/analyze for `/uploads/` assets, and the
- * returned log goes through the SAME @tmcut/core parsers as the desktop path.
+ * returned log goes through the SAME tmcut-core parsers as the desktop path.
  *
  * These checks drive the real composable with a scripted transport, so they
  * prove the routing AND that a detection log actually becomes an EDL.

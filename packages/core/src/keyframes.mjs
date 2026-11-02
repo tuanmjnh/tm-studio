@@ -1,4 +1,4 @@
-// @tmcut/core — keyframes: evaluation + easing (Roadmap C3).
+// tmcut-core — keyframes: evaluation + easing (Roadmap C3).
 //
 // A clip stores keyframes as `clip.keyframes: [{ t, prop, value, easing? }]`
 // where `t` is in timeline ticks (TICKS_PER_SECOND = 120000). The easing

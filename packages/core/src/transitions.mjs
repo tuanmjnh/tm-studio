@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — transitions (Roadmap C5)
+//  tmcut-core — transitions (Roadmap C5)
 //  Pure transition operations on plain Timeline DSL v3 objects.
 //
 //  Overlap model: a transition attaches to the FOLLOWING clip as

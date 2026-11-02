@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — media
+//  tmcut-core — media
 //  Ported from app/utils/tmcut/media.ts. Pure path/classify/format helpers.
 // =============================================================================
 

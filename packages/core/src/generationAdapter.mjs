@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — Generation adapter interface & capability manifest
+//  tmcut-core — Generation adapter interface & capability manifest
 //  (roadmap v3 §25 Phase 9)
 //
 //  This module defines the CONTRACT that any image/video generation provider

@@ -4,7 +4,7 @@
 //
 //  A THIN, path-confined I/O adapter. Per the runtime-adapter rule the whole
 //  download-queue state machine (concurrency, retries, license gate,
-//  recovery) lives in @tmcut/core and is driven renderer-side; this file only
+//  recovery) lives in tmcut-core and is driven renderer-side; this file only
 //  does what a renderer cannot: stream an HTTPS asset package to disk, verify
 //  its checksum, and keep the small on-disk registries. No queue logic here.
 //

@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — pixels
+//  tmcut-core — pixels
 //  Golden-frame comparison (V4 Phase 1 / M2 prep, ADR-016).
 //
 //  A renderer's output is raw RGBA (ImageData from a canvas, a decoded PNG

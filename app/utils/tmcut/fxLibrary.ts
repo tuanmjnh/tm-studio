@@ -107,7 +107,7 @@ export function transitionReasonKey(reason: string | undefined): string {
 // =============================================================================
 //  R128 — registry browsing helpers for the FX library + inspector.
 //  Everything here is DATA-DRIVEN from the core registries: adding an effect,
-//  a LUT preset or a transition in @tmcut/core shows up in both panels
+//  a LUT preset or a transition in tmcut-core shows up in both panels
 //  without touching this file (the option lists are never hard-coded).
 //  Store-free and pure so the node spec runner can exercise them.
 // =============================================================================

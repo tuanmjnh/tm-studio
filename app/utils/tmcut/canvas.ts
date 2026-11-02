@@ -1,5 +1,5 @@
 // Canvas geometry (presets, aspect math, fit styles, FFmpeg fit filters,
-// reframe) lives in @tmcut/core as the single source of truth since
+// reframe) lives in tmcut-core as the single source of truth since
 // Roadmap C0 — this module only preserves existing app import paths.
 //
 // C16: App migration to DSL v3 — normalizeCanvas now uses core's implementation

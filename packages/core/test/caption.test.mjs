@@ -1,4 +1,4 @@
-// @tmcut/core — caption / SRT tests (Roadmap C11). Run: node --test "test/*.test.mjs"
+// tmcut-core — caption / SRT tests (Roadmap C11). Run: node --test "test/*.test.mjs"
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {

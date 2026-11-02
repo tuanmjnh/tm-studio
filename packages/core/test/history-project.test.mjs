@@ -1,4 +1,4 @@
-// @tmcut/core — history + project tests. Run: node --test test/
+// tmcut-core — history + project tests. Run: node --test test/
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createHistory, pushBatch, coalesce } from '../src/history.mjs'

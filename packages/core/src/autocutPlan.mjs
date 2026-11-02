@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — AutoCut plan bridge (roadmap v3 Phase 7, §14)
+//  tmcut-core — AutoCut plan bridge (roadmap v3 Phase 7, §14)
 //
 //  The deterministic AutoCut pipeline (scene/silence scoring -> EDL) stays
 //  exactly as it is; this module converts its output into a standard AI

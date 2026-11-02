@@ -1,4 +1,4 @@
-// @tmcut/core — retime: speed/reverse time map (Roadmap C4).
+// tmcut-core — retime: speed/reverse time map (Roadmap C4).
 //
 // UNIT: every clip field (in/out) and every argument here is in timeline
 // TICKS (TICKS_PER_SECOND = 120000) — the DSL v3 unit. App code that

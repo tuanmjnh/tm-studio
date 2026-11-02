@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — editing
+//  tmcut-core — editing
 //  Multi-clip edit operations (docs Phase 2): set moves, duplicates,
 //  clipboard copy/paste, ripple delete and magnetic snapping. All pure and
 //  lock-aware: clips on locked tracks are skipped, never mutated.

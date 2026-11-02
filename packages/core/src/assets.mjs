@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — assets
+//  tmcut-core — assets
 //  Asset registry over plain objects (docs Phase 3, sections 16/48).
 //  The registry is runtime-agnostic data; persistence (assets.json,
 //  IndexedDB) and probing stay in the runtime adapters.

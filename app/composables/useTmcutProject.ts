@@ -1021,7 +1021,7 @@ function removeClip(clipId: string) {
 
 // ===== Core-backed editing (roadmap Phase 2 wiring) =====
 // C16-R3: the store holds ticks, so the bridge is the TICKS flavor of
-// @tmcut/core v1compat — an identity on time fields, no float
+// tmcut-core v1compat — an identity on time fields, no float
 // round-trips. Results merge back by clip id, and the app JSON history
 // wraps every op so undo keeps working.
 

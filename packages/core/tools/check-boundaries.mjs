@@ -1,7 +1,7 @@
 // =============================================================================
-//  @tmcut/core — architecture boundary check (docs section 57).
+//  tmcut-core — architecture boundary check (docs section 57).
 //  The core must never import: vue, nuxt, electron, node builtins,
-//  browser globals or IPC. Run: pnpm --filter @tmcut/core check
+//  browser globals or IPC. Run: pnpm --filter tmcut-core check
 // =============================================================================
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'

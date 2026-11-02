@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — time
+//  tmcut-core — time
 //  MediaTime (docs section 2) + rational FrameRate (docs section 3).
 //  Pure, zero dependencies. Ticks are plain numbers (JSON-safe); exact for
 //  any editable duration (120_000 ticks/s stays precise past 2^53).

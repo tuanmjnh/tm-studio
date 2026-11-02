@@ -932,7 +932,7 @@ export interface ProcessNamespace {
 
 /**
  * Roadmap v3 PART A — the Asset Center I/O surface. The download-queue
- * state machine lives renderer-side in @tmcut/core; these channels are
+ * state machine lives renderer-side in tmcut-core; these channels are
  * thin path-pinned primitives (the controller sanitizes entryId/version/
  * filename and refuses anything resolving outside the asset-center base).
  */

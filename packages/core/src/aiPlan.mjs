@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — AI Edit Plan (roadmap v3 PART C, §7.2/§7.3)
+//  tmcut-core — AI Edit Plan (roadmap v3 PART C, §7.2/§7.3)
 //
 //  The AI is NEVER the source of truth. A plan is structured data with a
 //  small, closed vocabulary of edit operations; this module (a) validates

@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — cache
+//  tmcut-core — cache
 //  Portable cache-key builder + proxy plan helpers (docs Phase 3: cache,
 //  proxy; sections 27-28). Zero dependencies: FNV-1a instead of node:crypto
 //  so keys compute identically in Electron, Web workers and plain node.

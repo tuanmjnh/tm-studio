@@ -126,7 +126,7 @@ const tmcut = exposeNamespace('tmcut', {
 })
 
 // On-demand Asset Center I/O (registry + verified downloads). The queue/
-// state machine lives renderer-side in @tmcut/core; these channels are
+// state machine lives renderer-side in tmcut-core; these channels are
 // thin path-pinned primitives (see asset-center.controller).
 const tmcutAssetCenter = exposeNamespace('tmcut:assetCenter', {
   invoke: [

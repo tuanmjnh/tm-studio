@@ -9,7 +9,7 @@
  * no fonts to download) so it renders identically offline and inside the
  * sandboxed preview iframe.
  *
- * These live in the host app, not in @tmcut/core: the core boundary check
+ * These live in the host app, not in tmcut-core: the core boundary check
  * forbids `window.`/`document.` in core sources (see tools/check-boundaries.mjs),
  * and a starter without a browser is not a composition.
  *

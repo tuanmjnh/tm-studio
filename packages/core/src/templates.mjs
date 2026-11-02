@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — templates
+//  tmcut-core — templates
 //  Timeline template engine & built-in catalog (Roadmap J-1).
 //  Zero-dependency, pure logic module for creating, instantiating, and
 //  managing timeline project templates with placeholders.

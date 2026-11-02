@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — waveform
+//  tmcut-core — waveform
 //  Ported from app/utils/tmcut/waveform.ts. Reduces raw PCM magnitudes to
 //  normalized 0..1 peak buckets for timeline rendering.
 // =============================================================================

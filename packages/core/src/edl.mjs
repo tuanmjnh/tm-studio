@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — edl
+//  tmcut-core — edl
 //  Edit Decision List validation (docs sections 38-40, 66). The EDL is the
 //  contract between media analysis / AI and the timeline: validate before
 //  any apply step, never trust model output shape.

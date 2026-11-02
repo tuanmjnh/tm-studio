@@ -1,4 +1,4 @@
-// @tmcut/core — clock tests. Run: node --test test/
+// tmcut-core — clock tests. Run: node --test test/
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createClock } from '../src/clock.mjs'

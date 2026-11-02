@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — effects registry (Roadmap C6)
+//  tmcut-core — effects registry (Roadmap C6)
 //  First-wave effect descriptors + validation + normalization for clip
 //  `effects: [{ type, params }]` (docs DSL v3, TmcutClipEffect).
 //

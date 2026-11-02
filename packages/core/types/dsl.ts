@@ -2,7 +2,7 @@
 // Mirrors docs/TMCut Architecture v3.md sections 2, 3 and 14.
 // Type-only package: no runtime code, no imports.
 
-/** Internal time unit: integer ticks. See TICKS_PER_SECOND in @tmcut/core. */
+/** Internal time unit: integer ticks. See TICKS_PER_SECOND in tmcut-core. */
 export type MediaTime = number
 
 export interface FrameRate {

@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — Asset takedown & license audit (roadmap v3 §26, local scope)
+//  tmcut-core — Asset takedown & license audit (roadmap v3 §26, local scope)
 //
 //  The marketplace-side workflow (admin publishing, takedown authoring,
 //  entitlements) lives on the control plane; what THIS app must do is obey

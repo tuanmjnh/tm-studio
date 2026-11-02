@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — AI Template Plan (roadmap v3 §6.5)
+//  tmcut-core — AI Template Plan (roadmap v3 §6.5)
 //
 //  "The AI should generate a Template Plan, not arbitrary serialized project
 //  JSON." This module defines the narrow plan vocabulary (canvas fields +

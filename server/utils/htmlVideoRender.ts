@@ -26,7 +26,7 @@ import { failJob, finishJob, reportOutTime, setJobDuration } from './renderJobs'
  *
  * Trust boundary: the HTML is user-authored. Remote requests are denied unless
  * the render opts in, and private/loopback/metadata hosts stay denied even
- * then (see isAllowedRenderUrl in @tmcut/core) — a composition must not be able
+ * then (see isAllowedRenderUrl in tmcut-core) — a composition must not be able
  * to use the renderer as an SSRF pivot.
  */
 

@@ -1,4 +1,4 @@
-// @tmcut/core — mask tests (R124 A3). Run: node --test "test/*.test.mjs"
+// tmcut-core — mask tests (R124 A3). Run: node --test "test/*.test.mjs"
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { normalizeMask, maskAlphaExpr, maskCssMaskImage, TMUTCUT_MASK_SHAPES } from '../src/mask.mjs'

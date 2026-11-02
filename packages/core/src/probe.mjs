@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — probe
+//  tmcut-core — probe
 //  Pure ffprobe output normalization (docs Phase 3: FFprobe adapter,
 //  metadata). Execution (spawning ffprobe) stays in the runtime adapter;
 //  this module turns raw JSON into MediaMetadata deterministically.

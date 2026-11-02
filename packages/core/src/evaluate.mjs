@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — evaluate
+//  tmcut-core — evaluate
 //  Timeline evaluation at an absolute tick position (V4 Phase 1 / M1).
 //
 //  This is the missing "what is on screen at t?" step: it resolves each

@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — Generation to Asset Center Bridge (Roadmap v1 P7)
+//  tmcut-core — Generation to Asset Center Bridge (Roadmap v1 P7)
 //  Converts generation job outputs → Asset Center catalog entries
 // =============================================================================
 

@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — timeline
+//  tmcut-core — timeline
 //  Pure timeline operations on plain Timeline DSL v3 objects (docs §14).
 //  No Vue, no Electron, no filesystem. All positions are integer ticks.
 //  Functions mutate the passed timeline object and return affected ids,

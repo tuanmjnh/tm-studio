@@ -13,11 +13,15 @@
  * These checks are structural, not about one file: any relative specifier that
  * resolves outside the repo is the same bug, whatever it points at.
  *
- * ADR-017 then unified the three names the same module went by (package
- * `tmcut-core`, app alias `@tmcut-core`, installed specifier `@tmcut/core`) so
- * that a name in an import is a fact about which file gets loaded. The third
- * name was the last split (G13, ADR-022): it resolved through `node_modules` to
- * a build artifact, so one process could hold two copies of one engine.
+ * ADR-017 then unified the three names the same module went by (the package
+ * name, an app alias carrying a hyphen, and an installed specifier carrying a
+ * slash) so that a name in an import is a fact about which file gets loaded.
+ * The third name was the last split (G13, ADR-022): it resolved through
+ * `node_modules` to a build artifact, so one process could hold two copies of
+ * one engine. Its literal survives nowhere outside `docs/`, this file included:
+ * the retired names are rebuilt from fragments below, because a banner naming a
+ * retired scope is how the split comes back — the module copied from it puts
+ * that name in an import.
  */
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -28,16 +32,17 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const SOURCE_DIRS = ['app', 'server', 'shared', 'tests', 'packages', 'electron', 'scripts']
 const SOURCE_EXT = new Set(['.ts', '.mts', '.mjs', '.js', '.cjs', '.vue'])
+const PROSE_EXT = new Set([...SOURCE_EXT, '.md'])
 const SKIP_DIRS = new Set(['node_modules', 'dist', '.nuxt', '.output', 'coverage'])
 
-function sources(dir: string, out: string[] = []): string[] {
+function sources(dir: string, out: string[] = [], extensions: Set<string> = SOURCE_EXT): string[] {
   const abs = join(ROOT, dir)
   if (!existsSync(abs)) return out
   for (const entry of readdirSync(abs, { withFileTypes: true })) {
     const rel = join(dir, entry.name)
     if (entry.isDirectory()) {
-      if (!SKIP_DIRS.has(entry.name)) sources(rel, out)
-    } else if (SOURCE_EXT.has(extname(entry.name))) {
+      if (!SKIP_DIRS.has(entry.name)) sources(rel, out, extensions)
+    } else if (extensions.has(extname(entry.name))) {
       out.push(rel)
     }
   }
@@ -152,6 +157,29 @@ function coreNamedSpecifiers(): CoreImport[] {
   return found
 }
 
+// The names no host resolves any more. Rebuilt from fragments so this file can
+// forbid them without spelling them.
+const RETIRED_NAMES = [OLD_ALIAS, PKG_ALIAS, ['@tmcut', 'types'].join('/')]
+
+// Comments and READMEs, not only specifiers: the retired specifier sat in 75 core
+// banners and 24 app/server/electron comments after ADR-022 removed the
+// dependency, and a module copied from one of those banners re-imports a name
+// that resolves through node_modules into a build artifact. `docs/` is excluded
+// by the walk — SOURCE_DIRS never held it — because the ADR records have to name
+// the retired specifier to explain the change.
+function retiredNameProse(): string[] {
+  const found: string[] = []
+  for (const dir of SOURCE_DIRS) {
+    for (const file of sources(dir, [], PROSE_EXT)) {
+      const text = readFileSync(join(ROOT, file), 'utf8')
+      for (const name of RETIRED_NAMES) {
+        if (text.includes(name)) found.push(`${file} -> ${name}`)
+      }
+    }
+  }
+  return found
+}
+
 // Where the app graph maps the core, and what each config calls it.
 function aliasKeys(): string[] {
   const nuxt = readFileSync(join(ROOT, 'nuxt.config.ts'), 'utf8')
@@ -178,8 +206,8 @@ describe('core source boundary', () => {
   })
 
   it('nothing imports the core through the pre-ADR-017 alias', () => {
-    // Specifiers, not prose: this file's own header names the old alias to
-    // explain the change, and that must not fail the guard.
+    // Specifiers only; prose is pinned by the retired-name guard below. This file
+    // spells both names from fragments, so neither guard trips on it.
     const stale = coreNamedSpecifiers()
       .filter(entry => entry.specifier === OLD_ALIAS || entry.specifier.startsWith(OLD_ALIAS + '/'))
       .map(entry => `${entry.file} -> ${entry.specifier}`)
@@ -211,6 +239,14 @@ describe('core source boundary', () => {
       readFileSync(join(ROOT, 'pnpm-lock.yaml'), 'utf8').includes(PKG_ALIAS),
       false,
       'the lockfile resolves no scoped core name')
+  })
+
+  it('no source or README outside docs names a retired core name', () => {
+    // ADR-022 removed the dependency; this closes the prose half. The count is
+    // measured, not assumed: 75 files under packages/core (file banners and the
+    // READMEs) plus 24 comments in app/, server/, shared/, electron/ and
+    // tests/unit/ carried the installed specifier before the sweep.
+    assert.deepEqual(retiredNameProse(), [], 'one name, in code and in prose')
   })
 
   it('the packaged app contains every core module the main process loads', () => {

@@ -1,4 +1,4 @@
-// @tmcut/core — v1compat tests. Run: node --test "test/*.test.mjs"
+// tmcut-core — v1compat tests. Run: node --test "test/*.test.mjs"
 // v1 fixtures mirror the app TmcutTimelineItem shape structurally
 // (no app imports — the core stays dependency-free).
 import { describe, it } from 'node:test'

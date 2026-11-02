@@ -1,4 +1,4 @@
-// @tmcut/core — effects registry tests (Roadmap C6). Run: node --test "test/*.test.mjs"
+// tmcut-core — effects registry tests (Roadmap C6). Run: node --test "test/*.test.mjs"
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { EFFECT_REGISTRY, validateEffect, normalizeEffects, buildFfmpegEffectFilters, fxCapabilities, clampEffectParam, lut3dChain } from '../src/effects.mjs'

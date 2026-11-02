@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — Video Provider Adapter Interface (Roadmap v1 §7, P7)
+//  tmcut-core — Video Provider Adapter Interface (Roadmap v1 §7, P7)
 //  Pure ESM JavaScript with JSDoc type annotations
 // =============================================================================
 

@@ -23,7 +23,7 @@ if (existsSync(srcIndexDts)) {
 }
 
 // 3. Prepare dist/generationAdapter.d.ts
-const genAdapterDts = `// @tmcut/core — generationAdapter declarations
+const genAdapterDts = `// tmcut-core — generationAdapter declarations
 export interface CapabilityManifest {
   schemaVersion: number
   providerId: string

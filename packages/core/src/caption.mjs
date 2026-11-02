@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — caption
+//  tmcut-core — caption
 //  Subtitle helpers (Roadmap C11): word-safe cue splitting, SRT
 //  parse/serialize and the glue from Whisper transcripts to caption TEXT
 //  clips. Cue times are SECONDS (Whisper/SRT native); clip times are v3

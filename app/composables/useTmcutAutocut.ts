@@ -71,7 +71,7 @@ export interface AutocutAnalysis {
  * The two detection passes (shots, silence) for one source, from the desktop
  * main process or — for a web asset, which already lives on the local server as
  * a `/uploads/` file — from POST /api/v1/media/analyze. Both run the same
- * ffmpeg filters and hand back the raw log, so @tmcut/core scores identically
+ * ffmpeg filters and hand back the raw log, so tmcut-core scores identically
  * on either runtime. Null when neither can read the file.
  */
 function resolveAnalyzer(filePath: string): ((kind: 'scenes' | 'silence') => Promise<TmcutAnalysisResult>) | null {
@@ -88,7 +88,7 @@ function resolveAnalyzer(filePath: string): ((kind: 'scenes' | 'silence') => Pro
 /**
  * AutoCut pipeline driver (roadmap section 65.6): scene/silence detection
  * in main, optional Whisper transcript via the AI gateway, pure scoring
- * in @tmcut/core, draft project application without touching sources.
+ * in tmcut-core, draft project application without touching sources.
  */
 export function useTmcutAutocut() {
   const { createProject, addClipToTrack, switchCanvas } = useTmcutProject()

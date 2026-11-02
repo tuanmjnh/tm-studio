@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — recovery
+//  tmcut-core — recovery
 //  Ported from app/utils/tmcut/recovery.ts. Decides whether an autosaved
 //  recovery file should be offered or force-applied (docs section 50).
 // =============================================================================

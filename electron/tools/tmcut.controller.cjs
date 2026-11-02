@@ -175,7 +175,7 @@ function fnv1aHex(text) {
   return (hash >>> 0).toString(16).padStart(8, '0')
 }
 
-// Portable cache key (mirror of @tmcut/core src/cache.mjs — keep in sync).
+// Portable cache key (mirror of tmcut-core src/cache.mjs — keep in sync).
 // Replaces the old sha1 scheme so Electron and future Web runtimes share
 // one layout (docs sections 27-28). Stale sha1-named files are simply
 // orphaned cache and regenerate on demand. The `v2:` prefix marks the
@@ -447,7 +447,7 @@ async function extractWaveform(filePath, buckets = 200) {
 }
 
 // Full ffprobe JSON (format + streams). Raw output only — normalization
-// stays in @tmcut/core (normalizeProbe) per the runtime-adapter rule.
+// stays in tmcut-core (normalizeProbe) per the runtime-adapter rule.
 function probeMediaJson(filePath) {
   return new Promise((resolve) => {
     let child = null
@@ -501,7 +501,7 @@ function probeMediaJson(filePath) {
 }
 
 // Run ffmpeg and capture stderr text (scene/silence detectors log there).
-// Returns { code, log }. Parsing stays in @tmcut/core (analysis module).
+// Returns { code, log }. Parsing stays in tmcut-core (analysis module).
 function runFfmpegLog(args, timeoutMs) {
   return new Promise((resolve) => {
     let child = null
@@ -1398,7 +1398,7 @@ function registerTmcutController() {
   // not imported yet — a video dropped straight onto the timeline — so this is
   // analyzeAsset without every side effect: no thumbnail, no filmstrip, no
   // waveform, nothing written. Raw ffprobe JSON only; normalization stays in
-  // @tmcut/core (normalizeProbe), per the runtime-adapter rule above.
+  // tmcut-core (normalizeProbe), per the runtime-adapter rule above.
   ipcMain.handle(`${moduleName}:probeMedia`, async (_event, args) => {
     const safePath = isUserMediaPath(args?.filePath)
     if (!safePath) return { ok: false, error: 'Invalid path' }

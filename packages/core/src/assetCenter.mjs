@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — asset center
+//  tmcut-core — asset center
 //  Pure, runtime-agnostic data model + queue logic for the on-demand Asset
 //  Center (roadmap v3 PART A). Runtime adapters (Electron IPC) do the
 //  downloading and file I/O; this module owns the state machine so it can

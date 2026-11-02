@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — stabilize
+//  tmcut-core — stabilize
 //  Portable argument plans for 2-pass video stabilization via vidstab
 //  (Roadmap E-5).
 //  Pass 1: vidstabdetect extracts camera motion vectors into a .trf file.

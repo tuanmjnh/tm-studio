@@ -1,4 +1,4 @@
-// @tmcut/core — frame plan tests (Roadmap C14). Run: node --test "test/*.test.mjs"
+// tmcut-core — frame plan tests (Roadmap C14). Run: node --test "test/*.test.mjs"
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { filmstripTimes, frameTimesForSegments, clampFrameTime } from '../src/frames.mjs'

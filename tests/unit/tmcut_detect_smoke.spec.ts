@@ -9,7 +9,7 @@
  * 'vsync'" — a plain exit-code failure no string assertion can see.
  *
  * This generates a clip with one hard cut and one silent half, runs BOTH
- * shared vectors verbatim, and feeds the logs through the same @tmcut/core
+ * shared vectors verbatim, and feeds the logs through the same tmcut-core
  * parsers the renderer uses, so the whole desktop/web detection contract is
  * covered end to end.
  *

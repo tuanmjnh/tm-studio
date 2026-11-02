@@ -1,4 +1,4 @@
-// @tmcut/core — canvas tests. Run: node --test "test/*.test.mjs"
+// tmcut-core — canvas tests. Run: node --test "test/*.test.mjs"
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {

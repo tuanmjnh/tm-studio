@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — Audio orchestration (roadmap v3 PART H, Phase 8 §24)
+//  tmcut-core — Audio orchestration (roadmap v3 PART H, Phase 8 §24)
 //
 //  Deterministic planners that turn an EDITED TIMELINE SHAPE + a set of
 //  RIGHTS-CLEARED audio candidates into standard Edit Plan operations

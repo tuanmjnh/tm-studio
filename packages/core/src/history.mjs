@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — history
+//  tmcut-core — history
 //  Command-pattern undo/redo over plain timeline snapshots (docs §19).
 //  Commands are serializable data ({ name, label, before, after }), so the
 //  same log can drive UI undo, AI rollback and crash recovery (docs §50).

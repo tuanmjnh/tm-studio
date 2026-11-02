@@ -1,4 +1,4 @@
-// @tmcut/core — retime tests. Run: node --test "test/*.test.mjs"
+// tmcut-core — retime tests. Run: node --test "test/*.test.mjs"
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { validateSpeed, isRetimed, timelineToSource, sourceToTimeline, withSpeed, isRamped, speedAt, rampIntegral, rampTimelineToSource, SPEED_RAMP_PRESETS, buildRampPreset, rampSetptsExpr } from '../src/retime.mjs'

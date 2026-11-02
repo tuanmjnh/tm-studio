@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — canvas
+//  tmcut-core — canvas
 //  Ported from app/utils/tmcut/canvas.ts (docs Phase 4: Canvas Engine).
 //  Pure geometry: presets, orientation, fit styles, ffmpeg fit filters and
 //  reframe math. Canvas fps is rational (docs section 3); numeric inputs

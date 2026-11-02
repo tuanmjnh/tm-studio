@@ -4,7 +4,7 @@
  * AutoCut's two detection passes, as ONE argv source for both runtimes: the
  * Electron main process (tmcut.controller.cjs) and the web endpoint
  * (server/api/v1/media/analyze.post.ts). They must stay byte-identical — the
- * renderer parses both logs with the same @tmcut/core readers, so any drift
+ * renderer parses both logs with the same tmcut-core readers, so any drift
  * changes the EDL between desktop and web.
  *
  * It also pins the FFmpeg build contract: `-vsync` was removed in the bundled

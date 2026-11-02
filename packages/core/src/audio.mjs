@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — audio
+//  tmcut-core — audio
 //  Fade in/out + gain math (Roadmap C12). Fades live on the clip as
 //  `fade?: { in, out }` in TICKS; volume stays 0..100 (v1 heritage).
 //  gainAt returns the linear 0..1 multiplier a player or the compiler

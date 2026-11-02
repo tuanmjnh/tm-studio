@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — Crash recovery & support diagnostics (roadmap v3 §26 Phase 10)
+//  tmcut-core — Crash recovery & support diagnostics (roadmap v3 §26 Phase 10)
 //
 //  Local-only diagnostics to help users recover from crashes and provide
 //  useful information when filing support tickets. No data leaves the machine

@@ -1,4 +1,4 @@
-// @tmcut/core — stabilize tests (Roadmap E-5). Run: node --test "test/*.test.mjs"
+// tmcut-core — stabilize tests (Roadmap E-5). Run: node --test "test/*.test.mjs"
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {

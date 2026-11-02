@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — v1compat
+//  tmcut-core — v1compat
 //  Transitional bridge between the app's flat timeline shape (numeric
 //  opacity/scale, path srcs) and the DSL v3 engine (integer ticks,
 //  rational transforms, assetId+locator). Structural typing only — no app

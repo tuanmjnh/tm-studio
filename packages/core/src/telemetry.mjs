@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — Telemetry with privacy controls (roadmap v3 §26 Phase 10)
+//  tmcut-core — Telemetry with privacy controls (roadmap v3 §26 Phase 10)
 //
 //  Local-first, opt-in telemetry. No data leaves the machine unless the user
 //  explicitly enables "Send anonymous usage statistics" AND clicks "Send now"

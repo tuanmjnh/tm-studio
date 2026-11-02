@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — frames
+//  tmcut-core — frames
 //  Frame-timestamp planning (Roadmap C14): WHERE to cut filmstrips,
 //  segment thumbnails and HUD snapshots. Core only MATHS the tick lists —
 //  converting to seconds (ticksToSec) and running FFmpeg `-ss` belongs to

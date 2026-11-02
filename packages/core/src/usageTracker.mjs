@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — Usage & cost limits tracker (roadmap v3 §26 Phase 10)
+//  tmcut-core — Usage & cost limits tracker (roadmap v3 §26 Phase 10)
 //
 //  Local-only, privacy-respecting tracker for:
 //  - AI provider token/credit usage per session & project

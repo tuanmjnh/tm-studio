@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — project
+//  tmcut-core — project
 //  Project defaults, track guarantees and v1 -> v3 migration (docs §14, §59).
 //  v1 is the current app shape (float seconds, numeric fps, path-based src).
 //  Migration is lossless: legacy paths survive under clip.locator until a

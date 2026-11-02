@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — analysis
+//  tmcut-core — analysis
 //  Pure media-analysis helpers for AutoCut (docs sections 39-40, Phase 16).
 //  The Electron runtime executes ffmpeg and returns RAW stderr text; this
 //  module parses it and scores segments per AutoCut profile. No process,

@@ -1,5 +1,5 @@
 // =============================================================================
-//  @tmcut/core — Marketplace Catalog (Roadmap v1 P7)
+//  tmcut-core — Marketplace Catalog (Roadmap v1 P7)
 //  Starter catalog entries for licensed music, SFX, and fonts.
 //  These are APPROVED entries that ship with the app (sample type, no download).
 // =============================================================================
