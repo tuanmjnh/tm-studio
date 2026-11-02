@@ -631,7 +631,7 @@ export function transitionWindows(
 // this section returns and makes no geometry decision of its own.
 export type TmcutXfadeShape
   = 'crossfade' | 'wipe' | 'softwipe' | 'slide' | 'squeeze' | 'diag' | 'band' | 'comb'
-    | 'corner' | 'iris' | 'hole' | 'rect' | 'pie' | 'unavailable'
+    | 'corner' | 'iris' | 'hole' | 'rect' | 'pie'
 export type TmcutXfadeFidelity = 'exact' | 'shape' | 'approximate'
 
 /** How far a shape has travelled at progress p (0 = outgoing whole, 1 = incoming). */
@@ -686,14 +686,6 @@ export interface TmcutPreviewRamp {
  * would only uncover the canvas behind it); `slide` moves both layers.
  */
 export function previewTransitionRamp(type: string, p: number): TmcutPreviewRamp
-
-/**
- * The xfade name the export may emit: a key whose row is `unavailable` (the
- * binary was measured crashing on it) degrades to `fade`, which is what the
- * preview already paints for it. Duration and offset are untouched, so the
- * timeline does not shift. Names with no row pass through unchanged.
- */
-export function renderableXfadeName(name: string): string
 
 // --- Retime: speed/reverse time map (Roadmap C4) ---
 // All clip fields and arguments are in TIMELINE TICKS (120000/s).

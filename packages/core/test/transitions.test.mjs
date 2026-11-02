@@ -9,15 +9,14 @@ import {
   transitionWindows,
   XFADE_PREVIEW,
   XFADE_POSITION_LAWS,
-  previewTransitionRamp,
-  renderableXfadeName
+  previewTransitionRamp
 } from '../src/transitions.mjs'
 import { addClip } from '../src/timeline.mjs'
 import { defaultTimeline } from '../src/project.mjs'
 import { secToTicks, TICKS_PER_SECOND } from '../src/time.mjs'
 
 const SHAPES = ['crossfade', 'wipe', 'softwipe', 'slide', 'squeeze', 'diag', 'band', 'comb',
-  'corner', 'iris', 'hole', 'rect', 'pie', 'unavailable']
+  'corner', 'iris', 'hole', 'rect', 'pie']
 const FIDELITIES = ['exact', 'shape', 'approximate']
 
 // Two adjacent 2 s clips: A [0..2s], B [2s..4s] (addClip appends).
@@ -288,7 +287,7 @@ describe('xfade preview geometry (V4 G16)', () => {
         if (tail.shape === 'hole') assert.match(last, /circle 0\.00% at/)
         if (tail.shape === 'pie') assert.match(last, /#000 360\.00deg/)
       }
-      assert.equal(head.incoming.opacity, key === 'zoom-in' || key === 'zoomin' || key === 'fadeblack' || key === 'fadewhite' || head.shape === 'crossfade' || head.shape === 'unavailable' ? 0 : 1, `${key} head opacity`)
+      assert.equal(head.incoming.opacity, key === 'zoom-in' || key === 'zoomin' || key === 'fadeblack' || key === 'fadewhite' || head.shape === 'crossfade' ? 0 : 1, `${key} head opacity`)
       assert.equal(tail.incoming.opacity, 1, `${key} tail opacity`)
     }
   })
@@ -376,32 +375,40 @@ describe('xfade preview geometry (V4 G16)', () => {
     }
   })
 
-  it('squeezev is painted as a plain fade because the binary cannot render it', () => {
-    // Measured: xfade=transition=squeezev exits 0xC0000005 on solid plates at
-    // 320x180 and 640x360 and on testsrc2 -> smptebars, while squeezeh works.
-    // The catalog still publishes the key, so the preview must not promise a
-    // squeeze the export cannot produce.
-    assert.equal(XFADE_PREVIEW.squeezev.shape, 'unavailable')
-    assert.match(XFADE_PREVIEW.squeezev.note, /crashes/)
-    assert.equal(previewTransitionRamp('squeezev', 0.5).incoming.opacity, 0.5)
+  it('every key paints a reveal of its own — nothing is degraded to a fade', () => {
+    // There used to be one exception: `squeezev` carried shape `unavailable`
+    // because a probe put the xfade window at offset=0.6 on 1.2 s plates, where
+    // the filter reads past the first input and dies. On the window the export
+    // actually emits (offset = firstInputLength - duration) all 45 keys render,
+    // so the vocabulary for "the binary refuses this name" is gone and no key
+    // may fall back to a bare opacity ramp.
+    assert.equal(XFADE_PREVIEW.squeezev.shape, 'squeeze')
+    assert.ok(!SHAPES.includes('unavailable'), 'the shape retired with its last row')
+    for (const key of KNOWN_TRANSITIONS) {
+      const ramp = previewTransitionRamp(key, 0.5)
+      if (ramp.shape === 'crossfade') continue // an opacity ramp IS the geometry
+      const css = ramp.incoming.clipPath || ramp.incoming.maskImage || ramp.incoming.transform
+      assert.ok(css, `${key} (${ramp.shape}) reaches p=0.5 with no reveal geometry`)
+      assert.equal(ramp.incoming.opacity, 1, `${key} (${ramp.shape}) fades as well as reveals`)
+    }
   })
 
-  it('the export is handed a renderable name for every key', () => {
-    // The preview degrades `unavailable` to a fade; the graph must too, or the
-    // user watches a crossfade and the render dies mid-encode. This asks the
-    // question per key rather than hardcoding `squeezev`, so a second measured
-    // crash degrades automatically and no reachable name can be emitted twice.
-    const degraded = []
-    for (const key of KNOWN_TRANSITIONS) {
-      const name = renderableXfadeName(key)
-      assert.equal(XFADE_PREVIEW[name].shape === 'unavailable', false,
-        `${key} would emit "${name}", which the binary is measured crashing on`)
-      if (name !== key) degraded.push(`${key}->${name}`)
-    }
-    assert.deepEqual(degraded, ['squeezev->fade'], 'only the measured crash may degrade')
-    // The horizontal sibling renders, and a name with no row is not a defect.
-    assert.equal(renderableXfadeName('squeezeh'), 'squeezeh')
-    assert.equal(renderableXfadeName('hlslice'), 'hlslice')
+  it('the two squeezes paint perpendicular fronts', () => {
+    // Their area curves are identical — each covers exactly `travel` of the box
+    // — so a sweep of mean luminance cannot tell them apart and the letters were
+    // swapped for a whole slice without any spec noticing. What separates them is
+    // the axis the band front moves along, which is what the pixels say (guards
+    // tmcut_transition_preview and tmcut_render_smoke measure it on solid plates).
+    assert.equal(XFADE_PREVIEW.squeezeh.travel, 'y')
+    assert.equal(XFADE_PREVIEW.squeezev.travel, 'x')
+    const h = previewTransitionRamp('squeezeh', 0.5).incoming.maskImage
+    const v = previewTransitionRamp('squeezev', 0.5).incoming.maskImage
+    assert.match(h, /linear-gradient\(to bottom/, 'squeezeh must band from the top and bottom edges')
+    assert.match(v, /linear-gradient\(to right/, 'squeezev must band from the left and right edges')
+    // The band family names the same variable, and its letters are measured too:
+    // horzopen cuts a horizontal band (front along y), vertopen a vertical one.
+    assert.equal(XFADE_PREVIEW.horzopen.travel, 'y')
+    assert.equal(XFADE_PREVIEW.vertopen.travel, 'x')
   })
 
   it('the disc radius that covers the box is aspect-independent', () => {

@@ -196,20 +196,54 @@ function main() {
     assert.ok(unknownFc.includes('acrossfade='))
   })
 
-  check('V4 G16: a key the bundled binary dies on exports as the fade the preview showed', () => {
-    // `squeezev` is offered by the catalog and `xfadeNameFor` resolves it
-    // faithfully, so this used to emit `xfade=transition=squeezev` — and the
-    // shipped FFmpeg exits 0xC0000005 after 28 of 60 frames on that name
-    // (measured, not recalled: tmcut_transition_preview.spec.ts re-spawns it).
-    // The preview already paints this key as a plain fade, so the user watched
-    // a crossfade and then the render died: the export was the only side that
-    // was wrong. Degradation keeps duration and offset, so nothing shifts.
-    const fc = xfadeGraph('squeezev')
-    assert.ok(fc.includes('xfade=transition=fade:duration=0.500:offset=3.500'),
-      'the export still hands the binary a transition it crashes on')
-    assert.ok(!fc.includes('squeezev'), 'an unrenderable name must not reach the filtergraph')
-    // Only the name that crashes degrades — its horizontal sibling renders.
+  check('V4 G16: both squeezes reach the filtergraph under their own name', () => {
+    // `squeezev` used to be rewritten to `fade` here, because a probe recorded it
+    // crashing — on a window this file does not emit. On the tail-aligned window
+    // the binary finishes it (60/60 frames, exit 0, at 320x180, 640x360 and
+    // 1920x1080; tmcut_transition_preview re-spawns it), so the export asks for
+    // what the preview paints. Degrading it would render a crossfade the user
+    // never chose, which is the same divergence G16 exists to remove.
+    assert.ok(xfadeGraph('squeezev').includes('xfade=transition=squeezev:duration=0.500:offset=3.500'),
+      'the export still refuses a key the binary renders')
     assert.ok(xfadeGraph('squeezeh').includes('xfade=transition=squeezeh:duration=0.500:offset=3.500'))
+  })
+
+  check('V4 G16: every xfade window ends where the input it consumes ends', () => {
+    // xfade eats the TAIL of its first input, so `offset + duration` must land
+    // exactly on that input's end. A window that stops short leaves frames with
+    // nowhere to go and the filter reads past them — measured: the same squeezev
+    // chain that finishes 60/60 at the tail offset exits 0xC0000005 partway
+    // through when placed 0.2 s early. This is the guard the name blacklist was
+    // standing in for, and it is the one that actually protects a render.
+    //
+    // The expected chain lengths are read off the TIMELINE, not off the
+    // compiler's accumulator: 4 s of clip 1, then each further pair adds its own
+    // clip and gives back the overlap it just consumed.
+    const project = xfadeProject('wipe-left') as unknown as {
+      timeline: { tracks: Array<{ items: unknown[] }> }
+    }
+    project.timeline.tracks[0]!.items.push({
+      id: 'vclip3',
+      trackId: 'v1',
+      src: 'clip3.mp4',
+      offset: tk(7),
+      in: 0,
+      out: tk(4),
+      speed: 1,
+      transitionIn: { type: 'squeezev', duration: tk(0.5) }
+    })
+    const compiled = compileTimelineToFfmpeg(project as unknown as TmcutProject, 'out.mp4')
+    const graph = compiled.args[compiled.args.indexOf('-filter_complex') + 1]!
+    const windows = [...graph.matchAll(/xfade=transition=\w+:duration=([\d.]+):offset=([\d.]+)/g)]
+    assert.equal(windows.length, 2, 'the fixture stopped producing two overlaps')
+    const chainLengths = [4, 4 + 4 - 0.5]
+    windows.forEach((m, i) => {
+      const dur = Number(m[1])!
+      const offset = Number(m[2])!
+      assert.ok(offset > 0, `xfade #${i + 1} opens at ${offset} — the compiler clamped, so the window cannot be tail-aligned`)
+      assert.ok(Math.abs(offset + dur - chainLengths[i]!) < 1e-6,
+        `xfade #${i + 1} runs ${offset}..${offset + dur} on an input that ends at ${chainLengths[i]} — xfade reads past the first input and can die mid-encode`)
+    })
   })
 
   check('compileTimelineToFfmpeg supports GIF output with palettegen/paletteuse', () => {

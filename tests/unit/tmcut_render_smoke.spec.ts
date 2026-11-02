@@ -22,7 +22,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { compileTimelineToFfmpeg, mapXfadeTransition } from '../../app/utils/tmcut/render'
-import { TICKS_PER_SECOND, previewTransitionRamp } from 'tmcut-core'
+import { TICKS_PER_SECOND, previewTransitionRamp, XFADE_PREVIEW } from 'tmcut-core'
 import type { TmcutProject } from '../../app/composables/useTmcutProject'
 
 // C16-R3: store items are integer TICKS — fixtures follow the store.
@@ -148,6 +148,40 @@ function meanLuma(frame: Buffer, x0: number, x1: number): number {
   return sum / ((x1 - x0) * 180) / 255
 }
 
+/**
+ * Which axis a band reveal moves along, and how far it has come, read off the
+ * row and column means of one frame. The axis the picture VARIES along is the
+ * axis the front travels along, and the share of lines past half brightness is
+ * how much of the box the incoming has covered so far. On the hard-edged
+ * squeezes the chosen axis spans about 1.0 while the other stays under 0.05, so
+ * the reading is not a coin toss — and a crossfade, which has no front to
+ * locate, comes back flat (the control in the G16 check).
+ */
+function bandFront(frame: Buffer): { axis: 'x' | 'y', depth: number, decisiveness: number } {
+  const cols: number[] = []
+  for (let x = 0; x < 320; x++) {
+    let sum = 0
+    for (let y = 0; y < 180; y++) sum += frame[y * 320 + x]!
+    cols.push(sum / 180 / 255)
+  }
+  const rows: number[] = []
+  for (let y = 0; y < 180; y++) {
+    let sum = 0
+    for (let x = 0; x < 320; x++) sum += frame[y * 320 + x]!
+    rows.push(sum / 320 / 255)
+  }
+  const span = (v: number[]): number => Math.max(...v) - Math.min(...v)
+  const colSpread = span(cols)
+  const rowSpread = span(rows)
+  const axis = colSpread > rowSpread ? 'x' : 'y'
+  const means = axis === 'x' ? cols : rows
+  return {
+    axis,
+    depth: means.filter(v => v > 0.5).length / means.length,
+    decisiveness: Math.abs(colSpread - rowSpread)
+  }
+}
+
 /** Whole frame plus the left / centre / right quarter columns, per frame. */
 function renderedProfile(file: string, from: number, count: number) {
   const frames = decodeFrames(file, from, count)
@@ -176,10 +210,6 @@ function revealedBoxAt(type: string, p: number): { left: number, right: number }
 function stripCover(type: string, p: number, x0: number, x1: number): number {
   const box = revealedBoxAt(type, p)
   return Math.max(0, Math.min(x1, box.right) - Math.max(x0, box.left)) / (x1 - x0)
-}
-
-function renderedCoverage(file: string, from: number, count: number): number[] {
-  return decodeFrames(file, from, count).map(f => meanLuma(f, 0, 320))
 }
 
 function main() {
@@ -479,24 +509,42 @@ function main() {
     }
   })
 
-  check('the key the registry calls unrenderable is degraded in a real project graph (V4 G16 export leg)', () => {
-    // What this grades is the CONTRACT, not the crash: a project carries the key,
-    // the graph must carry `fade`, and the window must survive the swap. Measured
-    // here as well (see the roadmap G16 note): this compiled graph finishes even
-    // when the degradation is mutated off, because its window is the legal one
-    // (`offset = firstClipLength - duration`, here 2.0 - 0.4 = 1.600). The crash
-    // the registry was written from reproduces on the bare probe chain, whose
-    // `offset=0.6` is not legal for 1.2 s plates. Grading both shapes is what
-    // keeps that finding from becoming an assumption again.
-    const { fc, out } = renderPlates('squeezev', 'plate_squeezev.mp4')
-    assert.ok(!fc.includes('squeezev'), 'a name the registry calls unrenderable reached the filtergraph')
-    assert.ok(fc.includes('xfade=transition=fade:duration=0.400:offset=1.600'),
-      'the degraded key lost the window the timeline describes')
-    const frames = renderedCoverage(out, 48, 14)
-    const ramp = frames.slice(1, 13)
-    assert.ok(ramp.every((value, i) => Math.abs(value - (i + 1) / 12) < 0.03),
-      `the real project did not render the plain fade the preview paints: ${ramp.map(v => v.toFixed(3)).join(' ')}`)
-    // Its sibling is untouched by the degradation and still squeezes.
+  check('a real exported project paints the squeeze its registry row promises (V4 G16 export leg)', () => {
+    // This leg used to grade a degrade: the project carried `squeezev`, the graph
+    // wrote `fade` into it, and the check asserted the swap was still there. The
+    // crash that justified the swap turned out to need an xfade window this
+    // compiler never emits (`offset` 0.2 s short of the first input's end), so the
+    // honest question is the product one: does a real project, through the real
+    // graph and the real encoder, arrive from the edges the model names? Area
+    // cannot ask it — both squeezes cover exactly `travel` of the box — so read
+    // the band front off the frame.
+    const measured: string[] = []
+    for (const key of ['squeezev', 'squeezeh'] as const) {
+      const { fc, out } = renderPlates(key, `plate_${key}.mp4`)
+      assert.ok(fc.includes(`xfade=transition=${key}:duration=0.400:offset=1.600`),
+        `the export still refuses to emit the ${key} window the timeline describes: ${fc.slice(0, 200)}`)
+      const declared = XFADE_PREVIEW[key].travel
+      assert.ok(declared === 'x' || declared === 'y', `${key}: registry travel "${declared}" is not an axis`)
+      // Frame 48 is the last pure-outgoing frame, so 54 carries progress 6/12.
+      const front = bandFront(decodeFrames(out, 48, 14)[6]!)
+      assert.ok(front.decisiveness > 0.5,
+        `${key}: neither axis carries a front (spreads differ by ${front.decisiveness.toFixed(2)}) — this grade cannot locate a band`)
+      assert.equal(front.axis, declared,
+        `${key} arrives along ${front.axis} in the exported file, but the registry (and so the preview) says ${declared} — the two halves of the product disagree on the shape of the cut`)
+      const predicted = previewTransitionRamp(key, 0.5)
+      assert.ok(Math.abs(front.depth - predicted.travel) <= 0.05,
+        `${key} has covered ${(front.depth * 100).toFixed(1)}% of its axis at p=0.5; the model says ${(predicted.travel * 100).toFixed(1)}%`)
+      measured.push(`${key}=${front.axis}`)
+    }
+    assert.notEqual(measured[0], measured[1], 'the two squeezes measured the same axis — the fixture stopped separating them')
+
+    // Control: a crossfade has no front, so the classifier must report a flat
+    // picture instead of picking an axis. Without it the block above could be
+    // reading encoder noise and still "find" the squeeze the registry promises.
+    const control = renderPlates('fade', 'plate_squeeze_control.mp4')
+    const flat = bandFront(decodeFrames(control.out, 48, 14)[6]!)
+    assert.ok(flat.decisiveness < 0.05,
+      `a plain fade now shows a front (spreads differ by ${flat.decisiveness.toFixed(2)}) — the band reading above grades nothing`)
     assert.equal(mapXfadeTransition('squeezeh'), 'squeezeh')
   })
 

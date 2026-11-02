@@ -504,12 +504,19 @@ const TRANSITION_PREVIEW: Record<string, FxTransitionPreview> = {
   'hrslice': { primitive: 'slice', axis: 'y', reverse: true },
   'vdslice': { primitive: 'slice', axis: 'x' },
   'vuslice': { primitive: 'slice', axis: 'x', reverse: true },
-  'squeezeh': { primitive: 'squeeze', axis: 'x' },
-  'squeezev': { primitive: 'squeeze', axis: 'y' },
-  'horzopen': { primitive: 'band', axis: 'x' },
-  'horzclose': { primitive: 'band', axis: 'x', close: true },
-  'vertopen': { primitive: 'band', axis: 'y' },
-  'vertclose': { primitive: 'band', axis: 'y', close: true },
+  // `axis` is the axis the FRONT travels along, the same variable core calls
+  // `travel`, and both come from the band geometry the bundled FFmpeg renders —
+  // never from the key name. `squeezeh` opens at the top and bottom edges and
+  // `horzopen`/`horzclose` cut a horizontal band, so all three are 'y' here even
+  // though their names say otherwise. Guard: `tmcut_fx_preview` pins this table
+  // against `XFADE_PREVIEW.travel`, and `tmcut_transition_preview` pins `travel`
+  // against pixels.
+  'squeezeh': { primitive: 'squeeze', axis: 'y' },
+  'squeezev': { primitive: 'squeeze', axis: 'x' },
+  'horzopen': { primitive: 'band', axis: 'y' },
+  'horzclose': { primitive: 'band', axis: 'y', close: true },
+  'vertopen': { primitive: 'band', axis: 'x' },
+  'vertclose': { primitive: 'band', axis: 'x', close: true },
   'hblur': { primitive: 'blur-in' },
   'pixelize': { primitive: 'pixelize' }
 }

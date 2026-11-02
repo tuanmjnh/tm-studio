@@ -6,7 +6,7 @@ import { opacityAlpha } from './graph'
 import { fadeFilter } from './audio'
 import { buildFfmpegFitFilters, buildFfmpegTransform } from '../canvas'
 import { xfadeNameFor } from '../fxCatalog'
-import { keyframeExpr, maskAlphaExpr, rampSetptsExpr, buildFfmpegEffectFilters, ticksToSec, renderableXfadeName } from 'tmcut-core'
+import { keyframeExpr, maskAlphaExpr, rampSetptsExpr, buildFfmpegEffectFilters, ticksToSec } from 'tmcut-core'
 
 /**
  * Maps a TMCut transition type into an FFmpeg xfade transition name
@@ -15,13 +15,19 @@ import { keyframeExpr, maskAlphaExpr, rampSetptsExpr, buildFfmpegEffectFilters, 
  * Electron ffmpeg controller resolve every key through the same table and can
  * never disagree; unknown keys fall back to a valid xfade name.
  *
- * V4 G16 adds the second half of that question. A name can be valid and still
- * unrenderable — `squeezev` is in the binary's own list but crashes it after
- * 28 of 60 frames — and core measured which ones, so the graph asks the same
- * registry the preview reads instead of discovering the crash mid-encode.
+ * V4 G16 adds the second half of that question — is a name the binary lists also
+ * a name it renders? It was, once, for `squeezev`: the shipped FFmpeg died
+ * mid-encode on it. Re-measured, that crash was this file's own window, not the
+ * name (the probe that recorded it used `offset=0.6` on 1.2 s plates, while xfade
+ * must end the overlap where the first input ends; see the header of
+ * `tmcut-core/transitions.mjs`). Every key now renders on the window emitted
+ * below, so the resolver stops at the catalog and asks for the same name the
+ * preview paints. The window is what keeps the export alive, and
+ * `tmcut_render_graph` pins it: `offset = runningDuration - transSec` puts the
+ * overlap at the tail of the first input for every pair.
  */
 export function mapXfadeTransition(type: string | undefined): string {
-  return renderableXfadeName(xfadeNameFor(type))
+  return xfadeNameFor(type)
 }
 
 export interface VideoPipelineContext {

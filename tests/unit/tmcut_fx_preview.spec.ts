@@ -5,8 +5,10 @@
 //   1. COVERAGE   — every registry effect, lut3d preset and catalog transition
 //                   has a preview adapter, so a new definition cannot ship as a
 //                   generic animation.
-//   2. HONESTY    — fidelity + export support are read from tmcut-core, and an
-//                   unknown id reports known:false instead of a guess.
+//   2. HONESTY    — fidelity + export support are read from tmcut-core, the axis
+//                   of a geometric reveal is core's measured `travel` rather than
+//                   the key name, and an unknown id reports known:false instead
+//                   of a guess.
 //   3. PARAMS     — the preview visibly responds to the clip's params, clamped
 //                   through the registry descriptor.
 //   4. MOTION     — with motion off no layer carries an animation at all, and a
@@ -20,7 +22,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { EFFECT_REGISTRY, KNOWN_TRANSITIONS, fxCapabilities, lut3dChain } from 'tmcut-core'
+import { EFFECT_REGISTRY, KNOWN_TRANSITIONS, XFADE_PREVIEW, fxCapabilities, lut3dChain } from 'tmcut-core'
 import {
   resolveFxPreview,
   effectAdapterKeys,
@@ -108,6 +110,59 @@ check('the fade family is exact, geometry is approximate, keying is illustrative
   assert.equal(anim('chromakey').status.fidelity, 'illustrative')
   assert.equal(anim('stabilize').status.fidelity, 'illustrative')
   assert.equal(anim('negate').status.fidelity, 'exact')
+})
+
+check('the squeeze and band cards animate on the axis core measured', () => {
+  // Core's `travel` is the axis the FRONT moves along, and
+  // `tmcut_transition_preview` pins it to FFmpeg pixels. The card table is
+  // private, so this pin reads the axis off the CSS the resolver really emits:
+  // a card that animates scaleX while core says the front travels y is the
+  // axis-swap bug that survived every recorded area measurement.
+  // `slice` and `smooth` are deliberately outside this guard: their `axis`
+  // names the stripe / gradient orientation, which core expresses through
+  // `from`, not `travel`.
+  const geometric = Object.entries(XFADE_PREVIEW)
+    .filter(([, row]) => row.shape === 'squeeze' || row.shape === 'band')
+    .map(([key, row]) => [key, row] as const)
+  assert.deepEqual(geometric.map(([key]) => key).sort(),
+    ['horzclose', 'horzopen', 'squeezeh', 'squeezev', 'vertclose', 'vertopen'],
+    'core rows on the travel axis')
+
+  // `tmfxt-sq-a-x`, `tmfxt-band-y`, `tmfxt-clip-x-close`
+  const nameAxis = (animation: string) => /^tmfxt-(?:sq-[ab]|band|clip)-([xy])/.exec(animation)?.[1] ?? null
+
+  for (const [key, row] of geometric) {
+    const layers = anim(key, true, {}, 'transition').layers
+    assert.equal(layers.some(l => l.animation), true, `${key} paints no reveal`)
+    const axes = new Set<string>()
+    const names: string[] = []
+    for (const layer of layers) {
+      const first = (layer.animation || '').split(' ')[0]
+      if (!first.startsWith('tmfxt-')) continue
+      names.push(first)
+      const axis = nameAxis(first)
+      if (axis) axes.add(axis)
+    }
+    assert.deepEqual([...axes], [row.travel], `${key} animates ${[...axes].join('+')}, core travel is ${row.travel}`)
+    if (row.shape === 'squeeze') {
+      assert.equal(names.filter(n => /^tmfxt-sq-a-/.test(n)).length, 1, `${key} scene A must squeeze too`)
+      assert.equal(names.filter(n => /^tmfxt-sq-b-/.test(n)).length, 1, `${key} scene B reveal`)
+    }
+    if (row.shape === 'band') {
+      assert.equal(names.some(n => n.startsWith('tmfxt-clip-')), row.mode === 'close',
+        `${key} mode ${row.mode} and the closed-band keyframe disagree`)
+    }
+  }
+
+  // The two squeezes must not collapse onto the same front.
+  const axisFor = (key: string) => {
+    for (const layer of anim(key, true, {}, 'transition').layers) {
+      const axis = nameAxis((layer.animation || '').split(' ')[0])
+      if (axis) return axis
+    }
+    return null
+  }
+  assert.notEqual(axisFor('squeezeh'), axisFor('squeezev'), 'both squeezes paint the same front')
 })
 
 // 3. PARAMS ------------------------------------------------------------------

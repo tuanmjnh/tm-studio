@@ -166,12 +166,23 @@ export function clearTransition(timeline, clipId) {
 //  never paint. This section is the single source of what a key LOOKS like.
 //
 //  Every row is measured, not designed. Method: solid black plate -> solid white
-//  plate through `xfade=transition=<name>:duration=0.4:offset=0.6` at 320x180
+//  plate through `xfade=transition=<name>:duration=0.4:offset=0.8` at 320x180
 //  with `resources/ffmpeg.exe` (N-126482-g903325e279-20260909), the 12 transition
 //  frames decoded as gray, then read twice — mean luminance is the fill fraction
 //  (0 and 255 make it exact) and the 50%-luminance crossing is the boundary
 //  position. `tests/unit/tmcut_transition_preview.spec.ts` re-runs the crossing
 //  read and fails if the laws below stop matching the binary.
+//
+//  The offset is not a free parameter: xfade's window must END where the first
+//  input ends (`offset = firstInputLength - duration`), which for these 1.2 s
+//  plates is 0.8. An earlier sweep used 0.6, which leaves 0.2 s of the first
+//  input with nowhere to go, and that placement — not the transition names — is
+//  what made `squeezev` die mid-encode (22-27 of 60 frames, exit 0xC0000005,
+//  unstable run to run; guards `tmcut_render_graph` and `tmcut_transition_preview`
+//  re-measure both sides of that line). Re-measured at the legal window, every
+//  fill-fraction number in `docs/v4-phase-0-audit.md` §8.1 reproduces unchanged;
+//  `squeezev` is the row whose verdict moved, and no key is unrenderable, so the
+//  `unavailable` shape and the export's name-degradation it drove are gone.
 //
 //  `fidelity` is part of the data, not a disclaimer: 'exact' = the law matched
 //  the measurement at >= 3 frames; 'shape' = the shape, direction and endpoints
@@ -261,12 +272,23 @@ export const XFADE_PREVIEW = {
   'smoothleft': { shape: 'softwipe', from: 'right', law: 'smoother', fidelity: 'shape', note: SOFT_EDGE },
   'smoothright': { shape: 'softwipe', from: 'left', law: 'smoother', fidelity: 'shape', note: SOFT_EDGE },
   'smoothup': { shape: 'softwipe', from: 'bottom', law: 'smoother', fidelity: 'shape', note: SOFT_EDGE },
-  'squeezeh': { shape: 'squeeze', travel: 'x', law: 'linear', fidelity: 'exact' },
-  // Measured crash, not a naming slip: xfade=transition=squeezev exits
-  // 0xC0000005 on solid plates at 320x180 and 640x360 and on testsrc2 ->
-  // smptebars, while squeezeh completes. A preview that paints this as a
-  // squeeze would be showing an effect the binary cannot render.
-  'squeezev': { shape: 'unavailable', law: 'linear', fidelity: 'approximate', note: 'xfade crashes the bundled binary' },
+  // The squeeze family, measured frame by frame on the window the export
+  // emits (`offset = firstInputLength - duration`): the incoming arrives as
+  // two hard-edged bands eating in from opposite edges, and the keys differ
+  // only in which pair. `squeezeh` opens at the top and bottom (rows 0-7 and
+  // 173-179 of 180 at p=1/12, all columns), `squeezev` at the left and right
+  // (cols 0-13 and 307-319 of 320, all rows) — so `travel` names the axis the
+  // FRONT moves along, the opposite letter from the name. The `band` rows
+  // above and below already follow that convention and measure correctly; an
+  // area curve cannot tell the two squeezes apart (each covers exactly
+  // `travel` of the box), which is how the swap survived until the render
+  // smoke spec started grading position.
+  'squeezeh': { shape: 'squeeze', travel: 'y', law: 'linear', fidelity: 'exact' },
+  // Renders, and is the mirror of the row above. It used to read `unavailable`
+  // because the probe that produced that verdict placed the window at
+  // `offset=0.6` on 1.2 s plates — not the tail-aligned window the graph
+  // builds — and xfade exits 0xC0000005 on `squeezev` only in that position.
+  'squeezev': { shape: 'squeeze', travel: 'x', law: 'linear', fidelity: 'exact' },
   'vertclose': { shape: 'band', travel: 'x', mode: 'close', law: 'smoother', fidelity: 'shape', note: SOFT_EDGE },
   'vertopen': { shape: 'band', travel: 'x', mode: 'open', law: 'smoother', fidelity: 'shape', note: SOFT_EDGE },
   'vdslice': { shape: 'comb', from: 'top', law: 'inOutQuad', fidelity: 'shape' },
@@ -444,9 +466,6 @@ export function previewTransitionRamp(type, p) {
       ))
       coverage = null
       break
-    case 'unavailable':
-      incoming.opacity = progress
-      break
     default: // 'crossfade'
       incoming.opacity = travel
       // A fade through black IS a two-partial-alpha composite: the dark canvas
@@ -492,23 +511,4 @@ export function transitionWindows(track) {
     windows.push({ fromId: outgoing.id, toId: clip.id, startTicks, endTicks })
   }
   return windows.sort((a, b) => a.startTicks - b.startTicks)
-}
-
-/**
- * The name the export is allowed to put after `xfade=transition=`.
- *
- * `unavailable` is not a style judgement: a row earns it only by the shipped
- * binary refusing to render the name (`squeezev` writes 28 of 60 frames and
- * exits 0xC0000005). The preview already degrades those keys to a plain fade,
- * so without this the render side is the only place still handing FFmpeg a
- * graph that dies mid-encode — a user who watched a crossfade gets a crash.
- * Degradation keeps duration and offset, so the timeline does not shift.
- *
- * A name with no row passes through: the app catalog only ever offers names the
- * binary listed in its own `xfade` help (guard `tmcut_fx_catalog`), so an
- * unlisted name is not evidence of a defect the way a measured row is.
- */
-export function renderableXfadeName(name) {
-  const row = XFADE_PREVIEW[name]
-  return row && row.shape === 'unavailable' ? 'fade' : name
 }
