@@ -7,8 +7,8 @@
  * eyeball:
  *  - capabilities per host, including the ones that must stay FALSE because the
  *    feature does not exist yet (webCodecs before roadmap M5);
- *  - the capture bounds, which are the two hosts' own validators — 15..60 for
- *    the Electron render path, the composition spec window for the server —
+ *  - the capture bounds, one window read from core by the only host that holds
+ *    a render session (ADR-019 made them one contract, ADR-023 left one engine),
  *    asserted against those source files so the numbers cannot drift;
  *  - both encoders: the desktop one maps the export queue onto `TmcutRenderJob`
  *    (status rename + the output path known up front), the web one starts a job
@@ -19,13 +19,34 @@
  *        tests/unit/tmcut_platform_adapter.spec.ts
  */
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { freshStore } from './helpers/tmcut_store_env'
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..')
 const read = (rel: string) => readFileSync(join(root, rel), 'utf8')
+
+/**
+ * What would make the main process an HTML-video capture host: a seek hook, an
+ * image-pipe encoder, or a page screenshot. ADR-021 measured two engines on one
+ * job — the server's animated, this one a still frame repeated — and ADR-023
+ * deleted the second, so a re-appearing one has to fail here rather than reopen
+ * that split on a user's composition.
+ */
+const CAPTURE_ENGINE_MARKERS = ['__tmcutSeek', 'image2pipe', 'capturePage']
+function desktopCaptureEngines(): string[] {
+  const found: string[] = []
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(join(root, dir), { withFileTypes: true })) {
+      const rel = `${dir}/${entry.name}`
+      if (entry.isDirectory()) walk(rel)
+      else if (/\.(cjs|js|mjs)$/.test(entry.name) && CAPTURE_ENGINE_MARKERS.some(marker => read(rel).includes(marker))) found.push(rel)
+    }
+  }
+  walk('electron')
+  return found
+}
 
 let passed = 0
 async function check(label: string, fn: () => void | Promise<void>) {
@@ -44,6 +65,15 @@ function fakeRequest(replies: Record<string, unknown[]>) {
     return queue.shift() as T
   }
   return { request, calls }
+}
+
+/** The message a host answers with when asked to drive a session it cannot. */
+type CaptureHost = { capture: { open(request: { html: string, width: number, height: number, fps: number }): Promise<unknown> } }
+async function openFailure(adapter: CaptureHost): Promise<string> {
+  const reason = await adapter.capture.open({ html: '<div/>', width: 64, height: 36, fps: 30 })
+    .then(() => null, (caught: unknown) => caught)
+  assert.ok(reason instanceof Error, 'a renderer that cannot drive a session must reject')
+  return reason.message
 }
 
 async function main() {
@@ -291,31 +321,40 @@ async function main() {
     assert.equal(web.capture.supportsFps(Number.NaN), false, 'a rate that is not a number is not a rate')
     assert.equal(web.capture.supportsFps(30), true, 'a plain number is a legal rate too')
 
-    // The window is only shared if the main process really reads core. Before
-    // ADR-019 it kept its own `const MIN_FPS = 15`, so a 10 fps composition
-    // rendered on web and was refused on desktop; a re-appearing local bound
-    // must fail here rather than reopen that split.
-    const electron = read('electron/tools/html-video-renderer.cjs')
-    assert.match(electron, /require\('\.\.\/\.\.\/packages\/core\/src\/htmlVideo\.mjs'\)/, 'main reads the core contract')
-    assert.doesNotMatch(electron, /const (MIN_FPS|MAX_FPS|MAX_FRAMES|MAX_HTML_BYTES) =/, 'no second copy of the bounds')
-    // Same rule for ADR-021: the desktop refuses a script-seek composition, and
-    // the predicate that decides "script-seek" must stay core's, so the editor's
-    // lint and the host's refusal can never drift apart.
-    assert.match(electron, /htmlVideoSeekContract\(html\) === 'script'/, 'main asks core about the seek contract')
-    assert.doesNotMatch(electron, /\/__hf\/\.(test|exec)\(/, 'main does not re-derive the seek predicate')
+    // The window is only shared if exactly one host reads it. Before ADR-019 the
+    // desktop kept its own `const MIN_FPS = 15`, so a 10 fps composition
+    // rendered on web and was refused on desktop; ADR-023 retired that second
+    // engine, so the guard is now structural: no main-process file may hold a
+    // capture pipeline, and the render host must take its bounds from core.
+    assert.deepEqual(desktopCaptureEngines(), [], 'the desktop holds no HTML-video engine')
+    const server = read('server/utils/htmlVideoRender.ts')
+    assert.match(server, /import \{[^}]*HTML_VIDEO_LIMITS[^}]*\} from 'tmcut-core'/, 'the render host reads the core contract')
+    assert.doesNotMatch(server, /const (MIN_FPS|MAX_FPS|MAX_FRAMES|MAX_HTML_BYTES) =/, 'and keeps no second copy of the bounds')
+    // Same rule for ADR-021: the predicate that decides whether a composition
+    // needs author JavaScript stays core's, so the editor's lint and any host's
+    // refusal can never drift apart.
+    assert.doesNotMatch(server, /\/__hf\/\.(test|exec)\(/, 'the render host does not re-derive the seek predicate')
+    // Being the only engine makes this file the only writer of a rendered
+    // composition, and its output dir is git-ignored: a fresh checkout had no
+    // `.data/uploads`, so the encode died on ENOENT (G15). It creates the dir now.
+    assert.match(server, /mkdir\(config\.uploads\.dir, \{ recursive: true \}\)/, 'the render host creates its output dir')
     const spec = read('packages/core/src/htmlVideo.mjs')
-    assert.match(spec, /minFps: 1/, 'composition spec floor used by the web host')
-    assert.match(spec, /maxFps: 60/, 'composition spec ceiling used by the web host')
+    assert.match(spec, /minFps: 1/, 'composition spec floor used by the render host')
+    assert.match(spec, /maxFps: 60/, 'composition spec ceiling used by the render host')
     assert.match(spec, /test: html => htmlVideoSeekContract\(html\) === 'declarative'/, 'lint and classification are one predicate')
   })
 
-  await check('capture.open names the process that actually holds the session', async () => {
+  await check('capture.open names the host that actually holds the session', async () => {
     await freshStore()
     const web = useTmcutPlatform({ isDesktop: { value: false }, resolveSrc: () => '', request: fakeRequest({}).request })
     const desktop = useTmcutPlatform({ isDesktop: { value: true }, resolveSrc: () => '', request: fakeRequest({}).request })
-    const request = { html: '<div/>', width: 64, height: 36, fps: 30 }
-    await assert.rejects(() => web.capture.open(request), /server\/utils\/htmlVideoRender\.ts/)
-    await assert.rejects(() => desktop.capture.open(request), /electron\/tools\/html-video-renderer\.cjs/)
+    const webError = await openFailure(web)
+    const desktopError = await openFailure(desktop)
+    assert.match(webError, /server\/utils\/htmlVideoRender\.ts/)
+    // ADR-023: the desktop job runs on the same server that serves the app, so
+    // the two hosts answer one message. A second string here means a second
+    // engine came back.
+    assert.equal(desktopError, webError, 'one host answer for both hosts')
   })
 
   await check('the desktop encoder is the export queue seen as a render job', async () => {

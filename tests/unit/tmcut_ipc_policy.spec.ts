@@ -147,6 +147,21 @@ await check('every tmcut handler main registers is invocable from the preload', 
   const unreachable = handles.filter(name => !invokes.has(name))
   assert.deepEqual(unreachable, [], `handlers the renderer cannot reach: ${unreachable.join(', ')}`)
   assert.ok(invokes.has('probeMedia'), 'the adapter probe needs its channel')
+
+  // The same pairing read from the other side, because that is the direction a
+  // retired transport leaves a hole: a channel the preload offers with no
+  // handler is a call that rejects at runtime, and the app can sit on it for
+  // months behind a `.catch(() => {})`. `watchOutput`/`unwatchOutput` are the
+  // proof (G14): main registered them under a kebab-case second convention,
+  // so the export modal's output watcher never started and nothing reported it.
+  const main = readFileSync(join(root, 'electron', 'main.cjs'), 'utf8')
+  const literalHandles = [...main.matchAll(/ipcMain\.handle\([`']tmcut:([A-Za-z-]+)/g)].map(m => m[1]!)
+  assert.ok(literalHandles.length > 0, 'main.cjs registers tmcut channels directly; the guard must see them')
+  const registered = new Set([...handles, ...literalHandles])
+  const orphans = [...invokes].filter(name => !registered.has(name)).sort()
+  assert.deepEqual(orphans, [], `channels with no handler: ${orphans.join(', ')}`)
+  const dead = literalHandles.filter(name => !invokes.has(name)).sort()
+  assert.deepEqual(dead, [], `main handlers the preload will not invoke: ${dead.join(', ')}`)
 })
 
 await check('choke point gates every later registration (R134)', async () => {

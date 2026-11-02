@@ -30,7 +30,6 @@ const TASK_EVENT_NAMES = [
 const PUSH_CHANNELS = [
   'app-updater:status-changed',
   'tmcut:renderDone',
-  'tmcut:htmlVideoProgress',
   // Roadmap v3 PART A: asset download progress pushes (jobId/entryId/
   // loaded/total) — the Asset Center queue's only main->renderer channel.
   'tmcut:assetCenter:progress',

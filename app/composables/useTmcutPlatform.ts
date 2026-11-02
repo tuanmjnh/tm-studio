@@ -11,10 +11,11 @@
  *  - `media` and `encoder` are wired here and have real consumers
  *    (`useTmcutPreviewEngine`, the export modal).
  *  - `capture` reports bounds only. No renderer can drive a per-frame capture
- *    session: the two live implementations sit in Electron main
- *    (`openCaptureSession`) and the Nitro server (`playwright-core`). `open()`
- *    therefore rejects and names where the session actually runs. Roadmap M4
- *    is what turns that into a real `open`.
+ *    session: one engine runs them, the Nitro server's playwright-core one, and
+ *    both hosts reach it through `POST /api/v1/media/html-video` — the desktop
+ *    app is served by that same server (ADR-023 retired the second engine this
+ *    process used to hold). `open()` therefore rejects and names where the
+ *    session actually runs. Roadmap M4 is what turns that into a real `open`.
  *  - `media.probe` answers "what is this file" (ADR-020) and writes nothing.
  *    The asset pipeline keeps owning persisted metadata: on desktop
  *    `analyzeAsset` still does its single round-trip that also produces the
@@ -40,6 +41,13 @@ import { useTmcutExportQueue } from '~/composables/useTmcutExportQueue'
 import type { TmcutExportJob } from '~/composables/useTmcutExportQueue'
 
 type PlatformRequest = <T>(url: string, init?: Record<string, unknown>) => Promise<T>
+
+/**
+ * ADR-023: one engine runs a capture session — the Nitro server's — and the
+ * desktop reaches it through the same server that serves the app, so the
+ * answer is the same on both hosts.
+ */
+const CAPTURE_SESSION_HOST = 'capture sessions run in the Nitro server (server/utils/htmlVideoRender.ts); use POST /api/v1/media/html-video'
 
 /** What the desktop encoder forwards to the export queue. */
 type ExportQueuePlan = Parameters<ReturnType<typeof useTmcutExportQueue>['enqueueJob']>[0]
@@ -285,11 +293,7 @@ export function useTmcutPlatform(deps: TmcutPlatformDeps = {}): TmcutHostPlatfor
     capture: {
       supportsFps: rate => rateInRange(rate, HTML_VIDEO_LIMITS.minFps, HTML_VIDEO_LIMITS.maxFps),
       open: async () => {
-        throw new Error(
-          desktop
-            ? 'capture sessions run in the Electron main process (electron/tools/html-video-renderer.cjs); use the tmcut:renderHtmlVideo job'
-            : 'capture sessions run in the Nitro server (server/utils/htmlVideoRender.ts); use POST /api/v1/media/html-video'
-        )
+        throw new Error(CAPTURE_SESSION_HOST)
       }
     },
     encoder,

@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { existsSync, createWriteStream } from 'node:fs'
-import { mkdtemp, rm, stat, unlink } from 'node:fs/promises'
+import { mkdtemp, mkdir, rm, stat, unlink } from 'node:fs/promises'
 import { randomBytes } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -235,6 +235,9 @@ export async function runHtmlVideoRender(opts: HtmlVideoRenderOptions): Promise<
   const out = join(config.uploads.dir, opts.outName)
 
   try {
+    // The output dir is git-ignored, so a fresh checkout has none and the first
+    // render dies on ENOENT at the encode step (G15).
+    await mkdir(config.uploads.dir, { recursive: true })
     const captured = await withBrowser(executablePath, async (browser) => {
       const context = await browser.newContext({
         viewport: { width: opts.width, height: opts.height },

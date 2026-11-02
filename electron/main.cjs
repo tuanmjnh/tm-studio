@@ -8,7 +8,6 @@ const { registerDialogController } = require('./tools/dialog.cjs')
 const { registerFileManagerController } = require('./tools/file-manager.cjs')
 const { registerAppUpdaterController } = require('./tools/app-updater.cjs')
 const { registerTmcutController } = require('./tools/tmcut.controller.cjs')
-const { registerHtmlVideoRenderer } = require('./tools/html-video-renderer.cjs')
 const { registerAssetCenterController } = require('./tools/asset-center.controller.cjs')
 const { registerAiGateway } = require('./tools/ai-gateway.cjs')
 // Production process artifacts (stage → artifact → gate): real files under
@@ -511,7 +510,10 @@ function scheduleRenderNotify(key) {
   }, 2000)
 }
 
-ipcMain.handle('tmcut:watch-output', (_event, { filePath }) => {
+// The channel names are camelCase because that is how the preload builds them
+// from its `tmcut` invoke list; `tmcut:watch-output` was a second convention
+// nothing invoked, so the export modal's output watcher silently never started.
+ipcMain.handle('tmcut:watchOutput', (_event, { filePath }) => {
   if (typeof filePath !== 'string' || !filePath) return false
   // Path traversal protection: resolve and check against allowed roots
   try {
@@ -547,7 +549,7 @@ ipcMain.handle('tmcut:watch-output', (_event, { filePath }) => {
   }
 })
 
-ipcMain.handle('tmcut:unwatch-output', (_event, { filePath }) => {
+ipcMain.handle('tmcut:unwatchOutput', (_event, { filePath }) => {
   stopOutputWatcher(typeof filePath === 'string' ? path.normalize(filePath) : '')
   return true
 })
@@ -582,7 +584,8 @@ app.whenReady().then(() => {
   // privileged root handlers.
   registerFileManagerController({ isTrustedSender })
   registerTmcutController()
-  registerHtmlVideoRenderer()
+  // No HTML-video renderer here (ADR-023): the job runs on the Nitro server's
+  // one engine on both hosts, and this process is served by that same server.
   // On-demand Asset Center. The queue lives renderer-side (core state
   // machine); this controller is the thin download/registry I/O adapter.
   // getWindow() is a getter because `win` is recreated on macOS activate.

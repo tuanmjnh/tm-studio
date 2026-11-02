@@ -14,12 +14,11 @@ files:
   # ffmpeg argv, also used by server/api/v1/media/analyze.post.ts); without it
   # the packaged app throws MODULE_NOT_FOUND on the first AutoCut analysis.
   - shared/**/*
-  # The main process reads the core from source: html-video-renderer.cjs
-  # requires the HTML-video bounds (ADR-019) and video-generation/controller.mjs
-  # imports the adapter registries, both from packages/core/src — the same
-  # artifact the alias `tmcut-core` gives the app and the tests. `dist/` is not
-  # shipped: it is a gitignored build artifact that silently lags src, and a
-  # main process loading two copies of one engine is the bug (G13). src is 51
+  # The main process reads the core from source: video-generation/controller.mjs
+  # imports the adapter registries from packages/core/src — the same artifact
+  # the alias `tmcut-core` gives the app and the tests. `dist/` is not shipped:
+  # it is a gitignored build artifact that silently lags src, and a main
+  # process loading two copies of one engine is the bug (G13). src is 51
   # files / 588 KB, so the whole tree is cheaper than tracking which leaves are
   # leaves — the transitive closure of a require() must be here or the app
   # throws MODULE_NOT_FOUND only in the packaged build.

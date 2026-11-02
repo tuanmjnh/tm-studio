@@ -59,9 +59,14 @@ export interface TmcutCaptureRequest {
 }
 
 /**
- * Stateful capture, matching both host implementations: Electron loads the
- * document in an offscreen BrowserWindow, Playwright in a headless Chrome tab;
- * both then seek (`__tmcutSeek(t)`), screenshot, and repeat without replaying.
+ * Stateful capture: the document loads once, then each frame is seeked
+ * (`__tmcutSeek(t)`) and screenshotted without ever replaying the animation.
+ *
+ * ADR-023: one host holds a session — the server that runs the headless browser
+ * (Playwright) — and the desktop reaches it through the same local server that
+ * serves the app, because the second engine this contract used to describe was
+ * retired. A renderer-side adapter therefore answers the bounds question
+ * (`supportsFps`) and refuses `open`, naming the endpoint that renders.
  */
 export interface TmcutCaptureSession {
   seek(atSec: number): Promise<void>

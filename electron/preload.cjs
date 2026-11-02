@@ -8,7 +8,6 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron')
 const PUSH_CHANNELS = [
   'app-updater:status-changed',
   'tmcut:renderDone',
-  'tmcut:htmlVideoProgress',
   'tmcut:assetCenter:progress',
   'tmcut:downloadProgress',
   // MCP server channels
@@ -113,7 +112,7 @@ const dialog = exposeNamespace('tools:dialog', {
 
 const tmcut = exposeNamespace('tmcut', {
   invoke: [
-    'renderHtmlVideo', 'getPaths', 'readAssetsFile', 'writeAssetsFile',
+    'getPaths', 'readAssetsFile', 'writeAssetsFile',
     'readProject', 'writeProject', 'listProjectFiles', 'readProjectMeta',
     'writeRecovery', 'readRecovery', 'deleteRecovery', 'deleteProject',
     'listSnapshots', 'saveSnapshot', 'readSnapshot', 'deleteSnapshot',
@@ -122,7 +121,7 @@ const tmcut = exposeNamespace('tmcut', {
     'analyzeScenes', 'analyzeSilence', 'listFonts',
     'watchOutput', 'unwatchOutput'
   ],
-  on: ['renderDone', 'downloadProgress', 'htmlVideoProgress']
+  on: ['renderDone', 'downloadProgress']
 })
 
 // On-demand Asset Center I/O (registry + verified downloads). The queue/

@@ -811,18 +811,6 @@ export interface DownloadProgressPayload {
 }
 
 export interface TmcutNamespace {
-  /** Capture and encode an HTML/CSS composition to an H.264 MP4 on the desktop. */
-  renderHtmlVideo(args: {
-    html: string
-    css?: string
-    width: number
-    height: number
-    fps: number
-    duration: number
-    outputPath: string
-    jobId?: string
-  }): Promise<{ ok: boolean, path?: string, size?: number, frames?: number, error?: string }>
-  onHtmlVideoProgress(callback: (payload: { jobId: string, frame: number, total: number }) => void): EventUnsubscriber
   getPaths(): Promise<TmcutDirs>
   readAssetsFile(): Promise<unknown>
   writeAssetsFile(data: unknown): Promise<boolean>
