@@ -15,7 +15,7 @@ import { resolve, sep } from 'node:path'
 
 export type UploadKind = 'video' | 'audio' | 'image'
 
-/** Mirrors the extension whitelist of @tmcut-core classifyAssetKind. */
+/** Mirrors the extension whitelist of tmcut-core classifyAssetKind. */
 export const UPLOAD_KIND_BY_EXT: Record<string, UploadKind> = {
   mp4: 'video', mov: 'video', mkv: 'video', webm: 'video', avi: 'video', m4v: 'video',
   mpg: 'video', mpeg: 'video', ts: 'video', wmv: 'video', flv: 'video',

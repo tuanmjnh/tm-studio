@@ -33,7 +33,7 @@ import {
 } from '~/types/timelineCommands'
 import {  secToTicks,
   TICKS_PER_SECOND
-} from '@tmcut-core'
+} from 'tmcut-core'
 
 // -----------------------------------------------------------------------------
 // Structured tool registry (self-describing for MCP / LLM tool schemas)

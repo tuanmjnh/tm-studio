@@ -34,8 +34,8 @@ import {
   isProviderHealthy,
   routeScene,
   routeStoryboard
-} from '@tmcut-core'
-import type { AssetCenterCatalogEntry } from '@tmcut-core'
+} from 'tmcut-core'
+import type { AssetCenterCatalogEntry } from 'tmcut-core'
 
 let passed = 0
 function check(name: string, fn: () => void) {

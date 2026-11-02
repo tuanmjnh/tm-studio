@@ -16,7 +16,7 @@ import path from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { compileTimelineToFfmpeg } from '../../app/utils/tmcut/render'
-import { TICKS_PER_SECOND } from '@tmcut-core'
+import { TICKS_PER_SECOND } from 'tmcut-core'
 import type { TmcutProject } from '../../app/composables/useTmcutProject'
 
 // C16-R3: store items are integer TICKS — fixtures follow the store.

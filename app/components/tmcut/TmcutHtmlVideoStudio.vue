@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { collectHtmlTokens, lintHtmlVideo, replaceHtmlTokens } from '@tmcut-core'
+import { collectHtmlTokens, lintHtmlVideo, replaceHtmlTokens } from 'tmcut-core'
 import { HTML_VIDEO_STARTERS, buildHtmlVideoPreviewDocument } from '~/utils/tmcut/htmlVideoStarters'
 import type { HtmlVideoStarter } from '~/utils/tmcut/htmlVideoStarters'
 import { useFileSystem } from '~/composables/useFileSystem'

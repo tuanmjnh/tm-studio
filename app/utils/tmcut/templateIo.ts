@@ -10,7 +10,7 @@
  *
  * Pure module: no Vue, no window, no Electron — the composable owns IO.
  */
-import { migrateTemplate, validateTemplate } from '@tmcut-core'
+import { migrateTemplate, validateTemplate } from 'tmcut-core'
 import type { TmcutTemplate } from '~/types/tmcut'
 
 export const TEMPLATE_FILE_KIND = 'tmcut-template'

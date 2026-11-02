@@ -1,12 +1,12 @@
 import type { TmcutTimelineItem } from '~/composables/useTmcutProject'
-import type { TmcutClock } from '@tmcut-core'
-import { ticksToSec, TICKS_PER_SECOND, isRamped, rampTimelineToSource } from '@tmcut-core'
+import type { TmcutClock } from 'tmcut-core'
+import { ticksToSec, TICKS_PER_SECOND, isRamped, rampTimelineToSource } from 'tmcut-core'
 
 /**
  * C16-R2/R3: single accessors for clip TIME GEOMETRY.
  *
  * C16-R3 flipped the store: `in`/`out`/`offset` are INTEGER TICKS
- * (TICKS_PER_SECOND = 120000, @tmcut-core time.mjs). This module is the
+ * (TICKS_PER_SECOND = 120000, tmcut-core time.mjs). This module is the
  * only place that knows, and it exposes BOTH units on purpose:
  *  - `*Sec` helpers: SECONDS for the UI/playhead world (unchanged since
  *    R2 — every pre-flip consumer keeps compiling and behaves the same);

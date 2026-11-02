@@ -12,7 +12,7 @@
 // =============================================================================
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { EFFECT_REGISTRY, secToTicks, TICKS_PER_SECOND } from '@tmcut-core'
+import { EFFECT_REGISTRY, secToTicks, TICKS_PER_SECOND } from 'tmcut-core'
 import { useTmcutAssetCenter } from '~/composables/useTmcutAssetCenter'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
 import { useTmcutProject } from '~/composables/useTmcutProject'

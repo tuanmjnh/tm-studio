@@ -1,6 +1,6 @@
 import type { RenderClip } from './clip'
 import type { CompileOptions, CompileResult, TmcutCompileRange } from './types'
-import { volumeExpr, keyframeExpr, panFilter } from '@tmcut-core'
+import { volumeExpr, keyframeExpr, panFilter } from 'tmcut-core'
 
 /**
  * Fade envelope for one clip's audio chain (roadmap R5, core C12).

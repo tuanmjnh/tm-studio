@@ -16,7 +16,7 @@
  * Pure + store-free so the node spec runner can exercise every definition.
  */
 import type { CSSProperties } from 'vue'
-import { EFFECT_REGISTRY, clampEffectParam, fxCapabilities, lut3dChain } from '@tmcut-core'
+import { EFFECT_REGISTRY, clampEffectParam, fxCapabilities, lut3dChain } from 'tmcut-core'
 import { TRANSITION_CATALOG } from './fxCatalog'
 
 export type FxPreviewKind = 'effect' | 'transition' | 'filter'

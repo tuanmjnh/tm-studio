@@ -5,7 +5,7 @@
 //   1. COVERAGE   — every registry effect, lut3d preset and catalog transition
 //                   has a preview adapter, so a new definition cannot ship as a
 //                   generic animation.
-//   2. HONESTY    — fidelity + export support are read from @tmcut-core, and an
+//   2. HONESTY    — fidelity + export support are read from tmcut-core, and an
 //                   unknown id reports known:false instead of a guess.
 //   3. PARAMS     — the preview visibly responds to the clip's params, clamped
 //                   through the registry descriptor.
@@ -20,7 +20,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { EFFECT_REGISTRY, KNOWN_TRANSITIONS, fxCapabilities, lut3dChain } from '@tmcut-core'
+import { EFFECT_REGISTRY, KNOWN_TRANSITIONS, fxCapabilities, lut3dChain } from 'tmcut-core'
 import {
   resolveFxPreview,
   effectAdapterKeys,

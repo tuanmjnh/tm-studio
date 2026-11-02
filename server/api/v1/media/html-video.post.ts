@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import { replaceHtmlTokens, validateHtmlVideoSpec } from '@tmcut-core'
+import { replaceHtmlTokens, validateHtmlVideoSpec } from 'tmcut-core'
 import { activeJobId, createJob } from '../../../utils/renderJobs'
 import { newHtmlVideoOutputName, resolveChromeExecutable, runHtmlVideoRender } from '../../../utils/htmlVideoRender'
 

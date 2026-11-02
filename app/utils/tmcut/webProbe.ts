@@ -13,7 +13,7 @@
  * instantiate the project store, and the desktop branch of the adapter does not
  * reach this code at all.
  */
-import type { TmcutAssetKind, TmcutMediaMetadata } from '@tmcut-core'
+import type { TmcutAssetKind, TmcutMediaMetadata } from 'tmcut-core'
 
 /** How long to wait before deciding the element will never answer. */
 const PROBE_TIMEOUT_MS = 15000

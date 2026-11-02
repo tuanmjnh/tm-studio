@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { TICKS_PER_SECOND, parseSrt, serializeSrt, cuesToCaptionClips, secToTicks, ticksToSec } from '@tmcut-core'
+import { TICKS_PER_SECOND, parseSrt, serializeSrt, cuesToCaptionClips, secToTicks, ticksToSec } from 'tmcut-core'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import type { TmcutTrack } from '~/composables/useTmcutProject'
 import { useTmcutContextMenu } from '~/composables/useTmcutContextMenu'

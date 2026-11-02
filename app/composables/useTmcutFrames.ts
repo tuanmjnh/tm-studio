@@ -10,7 +10,7 @@
  */
 
 import { tmcutHostIpc } from '~/utils/tmcut/hostBridge'
-import { filmstripTimes, secToTicks, ticksToSec } from '@tmcut-core'
+import { filmstripTimes, secToTicks, ticksToSec } from 'tmcut-core'
 
 export interface TmcutFrameJob {
   id: string | number

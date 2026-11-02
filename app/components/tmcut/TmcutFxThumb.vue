@@ -4,7 +4,7 @@
 //
 //  The component owns only PRESENTATION: the demo plates, the keyframes the
 //  resolver names, and WHEN motion runs. Which preview a definition gets — and
-//  what it is allowed to claim — comes from `fxPreview`/`@tmcut-core`, so a
+//  what it is allowed to claim — comes from `fxPreview`/`tmcut-core`, so a
 //  tile can never advertise a look the export does not produce, and adding a
 //  registry entry never means editing a switch here.
 //

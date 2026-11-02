@@ -15,7 +15,7 @@ import {
   runHealthChecks as runCoreHealthChecks,
   generateSupportBundle as buildSupportBundle,
   getRecoveryManifest
-} from '@tmcut-core'
+} from 'tmcut-core'
 
 export interface RecoveryManifest {
   hasCheckpoint: boolean

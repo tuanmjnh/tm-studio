@@ -15,7 +15,7 @@ import {
   generateTelemetryReport,
   TELEMETRY_CATEGORIES,
   TELEMETRY_ACTIONS
-} from '@tmcut-core'
+} from 'tmcut-core'
 
 export function useTmcutTelemetry() {
   const enabled = ref(isTelemetryEnabled())

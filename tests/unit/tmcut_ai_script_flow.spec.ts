@@ -16,7 +16,7 @@
  */
 import './helpers/tmcut_store_env'
 import assert from 'node:assert/strict'
-import { secToTicks } from '@tmcut-core'
+import { secToTicks } from 'tmcut-core'
 import { CURATED_SCRIPT_PRESETS, fitScenesToDuration, type TmcutAiScript } from '../../app/utils/tmcut/aiScript'
 
 type FetchOptions = { method?: string, body?: { messages?: Array<{ role: string, content: string }>, model?: string, maxTokens?: number }, timeout?: number }

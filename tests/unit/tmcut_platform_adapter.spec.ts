@@ -57,7 +57,7 @@ async function main() {
   if (!g.useToast) g.useToast = () => ({ add: () => {} })
 
   const { useTmcutPlatform } = await import('../../app/composables/useTmcutPlatform')
-  const { HTML_VIDEO_LIMITS } = await import('@tmcut-core')
+  const { HTML_VIDEO_LIMITS } = await import('tmcut-core')
 
   await check('the web host declares what a browser can and cannot do', async () => {
     await freshStore()

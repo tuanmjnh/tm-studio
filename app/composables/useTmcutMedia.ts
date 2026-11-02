@@ -28,7 +28,7 @@ import {
   secToTicks,
   FOLDER_TAG_COLORS
 
-} from '@tmcut-core'
+} from 'tmcut-core'
 
 const ASSET_STORAGE_KEY = 'tmcut_assets_v1'
 const FOLDER_STORAGE_KEY = 'tmcut_folders_v1'

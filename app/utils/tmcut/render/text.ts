@@ -2,7 +2,7 @@ import type { TextOverlayClip } from './types'
 import type { RenderGraph } from './graph'
 import { filterPathArg, opacityAlpha } from './graph'
 import { textBoxPadding, textStrokeWidth, textShadowOffset } from '../textStyle'
-import { keyframeExpr, maskAlphaExpr } from '@tmcut-core'
+import { keyframeExpr, maskAlphaExpr } from 'tmcut-core'
 import type { RenderClip } from './clip'
 
 /**

@@ -14,7 +14,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { HTML_VIDEO_STARTERS, buildHtmlVideoPreviewDocument, htmlVideoStarter } from '../../app/utils/tmcut/htmlVideoStarters'
 // The core is imported from source: the test runner does not resolve the app's
-// `@tmcut-core` alias, and dist/ is a build artifact. The path must stay inside
+// `tmcut-core` alias, and dist/ is a build artifact. The path must stay inside
 // this repo — `../../../tmcut-core/…` resolves to a sibling checkout of the old
 // standalone package, and a spec pointed at it stays green while asserting a
 // render contract core has already replaced (see tmcut_core_source.spec.ts).

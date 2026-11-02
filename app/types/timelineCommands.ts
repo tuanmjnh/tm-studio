@@ -5,7 +5,7 @@
 // =============================================================================
 
 import type { TmcutTimelineItem, TmcutTrack, TmcutProject } from '~/composables/useTmcutProject'
-import type { TmcutMarker } from '@tmcut-core'
+import type { TmcutMarker } from 'tmcut-core'
 
 // -----------------------------------------------------------------------------
 // Core Types

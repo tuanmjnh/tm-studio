@@ -1,5 +1,5 @@
 import type { TmcutTimelineItem, TmcutTrack } from '~/composables/useTmcutProject'
-import { classifyAssetKind, ticksToSec } from '@tmcut-core'
+import { classifyAssetKind, ticksToSec } from 'tmcut-core'
 import { clipDurationTicks } from '~/utils/tmcut/clipTime'
 
 /**

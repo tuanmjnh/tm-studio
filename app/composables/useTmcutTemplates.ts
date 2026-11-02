@@ -14,7 +14,7 @@ import {
   checkRequiredAssets,
   secToTicks,
   TICKS_PER_SECOND
-} from '@tmcut-core'
+} from 'tmcut-core'
 import { normalizeCanvas, canvasFpsValue } from '~/utils/tmcut/canvas'
 import { tmcutHostBridge } from '~/utils/tmcut/hostBridge'
 import {

@@ -4,8 +4,8 @@
 //  they run in the node spec runner; components own history + IPC concerns.
 // =============================================================================
 
-import { TICKS_PER_SECOND } from '@tmcut-core'
-import type { EFFECT_REGISTRY } from '@tmcut-core'
+import { TICKS_PER_SECOND } from 'tmcut-core'
+import type { EFFECT_REGISTRY } from 'tmcut-core'
 
 type EffectDescriptor = (typeof EFFECT_REGISTRY)[keyof typeof EFFECT_REGISTRY]
 type EffectItem = { type: string, params: Record<string, unknown> }

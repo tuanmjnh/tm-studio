@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { TICKS_PER_SECOND } from '@tmcut-core'
+import { TICKS_PER_SECOND } from 'tmcut-core'
 import {
   escapeDrawText,
   RenderGraph,

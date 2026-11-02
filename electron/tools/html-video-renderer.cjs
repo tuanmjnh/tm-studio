@@ -10,7 +10,7 @@ const { getToolsBinaries } = require('./paths.cjs')
 const CHANNEL = 'tmcut:renderHtmlVideo'
 const PROGRESS_CHANNEL = 'tmcut:htmlVideoProgress'
 // ADR-019: one composition is one render contract on every host. These bounds
-// and this frame count come from `@tmcut-core` — the same values the Nitro
+// and this frame count come from `tmcut-core` — the same values the Nitro
 // endpoint validates against — so a composition the studio accepts cannot be
 // refused, or cut to a different number of frames, by only one of the hosts.
 // `htmlVideo.mjs` is a leaf module with no imports, which is what lets the main

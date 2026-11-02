@@ -7,7 +7,7 @@
  * session-only blob: URLs. These checks pin:
  *  - the pure server helpers (range parsing, path-traversal guard,
  *    extension → kind/content-type maps),
- *  - that the extension whitelist stays in lockstep with @tmcut-core's
+ *  - that the extension whitelist stays in lockstep with tmcut-core's
  *    classifyAssetKind (an upload the library refuses to classify would
  *    strand bytes on disk with no asset),
  *  - the wiring contract: toURL passes /uploads/ through, importWebFiles
@@ -41,7 +41,7 @@ function check(name: string, fn: () => void) {
 }
 
 async function main() {
-  check('upload kind map stays in lockstep with @tmcut-core classifyAssetKind', () => {
+  check('upload kind map stays in lockstep with tmcut-core classifyAssetKind', () => {
     const samples = ['clip.mp4', 'CLIP.MOV', 'clip.webm', 'song.mp3', 'SONG.Wav', 'pic.png', 'pic.JPG', 'pic.tif']
     for (const name of samples) {
       if (uploadKindForName(name) !== classifyAssetKind(name)) {

@@ -1,7 +1,7 @@
 import { tmcutHostIpc } from '~/utils/tmcut/hostBridge'
 import type { TmcutAsset } from '~/types/tmcut'
 import type { TmcutAnalysisResult } from '#shared/types/electron'
-import type { TmcutEdl, TmcutEdlSegment } from '@tmcut-core'
+import type { TmcutEdl, TmcutEdlSegment } from 'tmcut-core'
 import {
   parseSceneOutput,
   parseSilenceOutput,
@@ -9,7 +9,7 @@ import {
   validateEdl,
   editPlanFromEdl,
   validateEditPlan
-} from '@tmcut-core'
+} from 'tmcut-core'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
 import { useTmcutAi } from '~/composables/useTmcutAi'

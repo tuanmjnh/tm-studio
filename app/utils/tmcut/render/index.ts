@@ -12,7 +12,7 @@ import { compileAudioOnly, compileBackgroundAudio } from './audio'
 import { compileVideoPipeline } from './video'
 import { buildVideoCodecArgs, buildAudioCodecArgs, buildGifPipeline } from './encoder'
 import { renderVideoClips, renderAudioClips, renderTextClips, renderClipDuration } from './clip'
-import { buildBackgroundSource } from '@tmcut-core'
+import { buildBackgroundSource } from 'tmcut-core'
 
 // Re-export all sub-modules for clean consuming
 export * from './types'

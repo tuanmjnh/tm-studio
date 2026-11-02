@@ -24,7 +24,7 @@ import path from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import detectionArgs from '../../shared/utils/detection-args.cjs'
-import { parseSceneOutput, parseSilenceOutput } from '@tmcut-core'
+import { parseSceneOutput, parseSilenceOutput } from 'tmcut-core'
 
 const { sceneDetectionArgs, silenceDetectionArgs } = detectionArgs
 

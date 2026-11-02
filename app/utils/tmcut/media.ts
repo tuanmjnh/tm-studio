@@ -8,4 +8,4 @@ export {
   classifyAssetKind,
   formatDurationSec,
   formatFileSize
-} from '@tmcut-core'
+} from 'tmcut-core'

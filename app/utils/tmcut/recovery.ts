@@ -9,4 +9,4 @@ export interface TmcutRecoveryInput {
   projectMtimeMs: number
 }
 
-export { decideRecovery } from '@tmcut-core'
+export { decideRecovery } from 'tmcut-core'

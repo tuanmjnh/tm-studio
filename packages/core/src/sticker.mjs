@@ -1,4 +1,4 @@
-// @tmcut-core — sticker catalog (R124 A6, CapCut §3.4).
+// tmcut-core — sticker catalog (R124 A6, CapCut §3.4).
 //
 // Stickers are UNICODE EMOJI inserted as text-track graphic layers: the
 // preview renders them through the browser's emoji font, the export draws

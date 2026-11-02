@@ -20,7 +20,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runInThisContext } from 'node:vm'
-import { KNOWN_TRANSITIONS } from '@tmcut-core'
+import { KNOWN_TRANSITIONS } from 'tmcut-core'
 import {
   FFMPEG_XFADE_NAMES,
   TRANSITION_CATEGORIES,

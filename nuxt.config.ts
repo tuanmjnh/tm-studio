@@ -18,7 +18,7 @@ export default defineNuxtConfig({
   },
 
   alias: {
-    '@tmcut-core': fileURLToPath(new URL('./packages/core/src/index.mjs', import.meta.url))
+    'tmcut-core': fileURLToPath(new URL('./packages/core/src/index.mjs', import.meta.url))
   },
 
   devtools: {
@@ -101,7 +101,7 @@ export default defineNuxtConfig({
     },
     resolve: {
       alias: {
-        '@tmcut-core': fileURLToPath(new URL('./packages/core/src/index.mjs', import.meta.url)),
+        'tmcut-core': fileURLToPath(new URL('./packages/core/src/index.mjs', import.meta.url)),
         'striptags': 'striptags/src/striptags.js'
       },
       dedupe: [

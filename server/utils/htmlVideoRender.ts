@@ -5,7 +5,7 @@ import { randomBytes } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Browser, BrowserContext, Page } from 'playwright-core'
-import { HTML_VIDEO_LIMITS, frameCountFor, isAllowedRenderUrl } from '@tmcut-core'
+import { HTML_VIDEO_LIMITS, frameCountFor, isAllowedRenderUrl } from 'tmcut-core'
 import { config } from '../config/index'
 import { failJob, finishJob, reportOutTime, setJobDuration } from './renderJobs'
 

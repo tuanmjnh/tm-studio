@@ -32,7 +32,7 @@ export interface HtmlVideoStarter {
   height: number
   fps: number
   durationSec: number
-  /** Industry ids from @tmcut-core's INDUSTRY_CATALOG. `general` fits anything. */
+  /** Industry ids from tmcut-core's INDUSTRY_CATALOG. `general` fits anything. */
   industries: string[]
   tags: string[]
   variables: HtmlVideoStarterVariable[]

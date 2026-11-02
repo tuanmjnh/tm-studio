@@ -7,7 +7,7 @@
 // (monochrome glyph there, color in preview — documented v1 gap).
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { STICKER_GROUPS, stickerMatches, TICKS_PER_SECOND, secToTicks } from '@tmcut-core'
+import { STICKER_GROUPS, stickerMatches, TICKS_PER_SECOND, secToTicks } from 'tmcut-core'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 

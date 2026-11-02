@@ -30,8 +30,8 @@ import {
   canApplyTransition,
   applyTransition,
   clearTransition
-} from '@tmcut-core'
-import type { CoreClipboard, TmcutTimeline, TmcutTextAnimationType, TmcutStabilizeLevel, TmcutStabilizeStatus } from '@tmcut-core'
+} from 'tmcut-core'
+import type { CoreClipboard, TmcutTimeline, TmcutTextAnimationType, TmcutStabilizeLevel, TmcutStabilizeStatus } from 'tmcut-core'
 
 // Type definitions for TMCut project
 /** R116: FFmpeg `blend` mode for compositing a clip over the track
@@ -74,7 +74,7 @@ export interface TmcutTimelineItem {
   stabilizedPath?: string | null
   stabilizeStatus?: TmcutStabilizeStatus
   /** C16-R3: source in/out and timeline offset are INTEGER TICKS
-   *  (TICKS_PER_SECOND = 120000, @tmcut-core time.mjs). Read them through
+   *  (TICKS_PER_SECOND = 120000, tmcut-core time.mjs). Read them through
    *  ~/utils/tmcut/clipTime accessors — never assume the unit elsewhere.
    *  speed stays a multiplier; fade/keyframes/transitionIn were already
    *  ticks. */
@@ -113,7 +113,7 @@ export interface TmcutTimelineItem {
   keyframes?: Array<{ t: number, prop: string, value: number, easing?: 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out' | 'step' }>
   /** Clip mask (R124 A3, CapCut §5.7): shape + normalized box + feather/
    *  rotation/invert. Geometry math (and the FFmpeg/CSS builders) live in
-   *  @tmcut-core mask.mjs — this only stores the parameters. Absent = no
+   *  tmcut-core mask.mjs — this only stores the parameters. Absent = no
    *  mask, byte-identical export and preview. */
   mask?: {
     shape: 'rectangle' | 'circle' | 'linear'

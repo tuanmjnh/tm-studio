@@ -6,7 +6,7 @@ import { useTmcutProject } from '~/composables/useTmcutProject'
 import { useTmcutInsertAsset } from '~/composables/useTmcutInsertAsset'
 import { useTmcutPlatform } from '~/composables/useTmcutPlatform'
 import { tmcutHostBridge, tmcutHostIpc } from '~/utils/tmcut/hostBridge'
-import { secToTicks } from '@tmcut-core'
+import { secToTicks } from 'tmcut-core'
 
 const props = defineProps<{ embedded?: boolean }>()
 const emit = defineEmits<{

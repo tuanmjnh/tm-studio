@@ -27,11 +27,11 @@
  * synthesised narration (P4/P7). Narration lines are COUNTED, not faked into an
  * audio track that would render silence.
  */
-import { TICKS_PER_SECOND, getAssemblyReadyAssets } from '@tmcut-core'
+import { TICKS_PER_SECOND, getAssemblyReadyAssets } from 'tmcut-core'
 import type { TmcutTimelineItem, TmcutTrack } from '~/composables/useTmcutProject'
 import type { GenerationJob, VideoBatch, VideoBatchItem } from '~/types/videoFactory'
 import type { AssemblyProfile, VideoTemplate } from '~/types/videoTemplate'
-import type { AssetCenterCatalogEntry } from '@tmcut-core'
+import type { AssetCenterCatalogEntry } from 'tmcut-core'
 import { labelFor } from '~/utils/tmcut/videoFactory'
 
 // -----------------------------------------------------------------------------

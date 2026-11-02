@@ -28,13 +28,13 @@ import {
   storageReport,
   takedownAudit,
   transitionInstall
-} from '@tmcut-core'
-import type { AssetCenterCatalogEntry, AssetCenterInstallState, TakedownNotice, TakedownRegistry } from '@tmcut-core'
+} from 'tmcut-core'
+import type { AssetCenterCatalogEntry, AssetCenterInstallState, TakedownNotice, TakedownRegistry } from 'tmcut-core'
 
 type IpcAssetCenter = NonNullable<NonNullable<ReturnType<typeof tmcutHostIpc>>['assetCenter']>
 
 // Registry record shape (persisted through the controller's writeRegistry).
-// Mirrors @tmcut-core createInstalledAsset; kept structural so the registry
+// Mirrors tmcut-core createInstalledAsset; kept structural so the registry
 // file stays runtime-agnostic JSON.
 interface InstalledRecord {
   entryId: string

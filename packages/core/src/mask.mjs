@@ -1,4 +1,4 @@
-// @tmcut-core — clip masks (R124 A3, CapCut §5.7).
+// tmcut-core — clip masks (R124 A3, CapCut §5.7).
 //
 // A mask restricts the VISIBLE area of a video clip to a shape with a
 // feathered edge, an optional rotation and an optional inversion. Stored

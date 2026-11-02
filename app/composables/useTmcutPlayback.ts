@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import { TICKS_PER_SECOND, createClock, evaluateTimeline, isRamped, speedAt, ticksToSec } from '@tmcut-core'
+import { TICKS_PER_SECOND, createClock, evaluateTimeline, isRamped, speedAt, ticksToSec } from 'tmcut-core'
 import { useTmcutProject } from './useTmcutProject'
 import type { TmcutTimelineItem } from './useTmcutProject'
 import { clipMediaTimeSec, clipStartSec, lastRenderableTicks } from '~/utils/tmcut/clipTime'

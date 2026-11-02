@@ -13,7 +13,7 @@
  *        tests/unit/tmcut_time_domain.spec.ts
  */
 import assert from 'node:assert/strict'
-import { TICKS_PER_SECOND, secToTicks, ticksToSec, ticksClipToV3, v3ClipToTicks, v1ClipToV3 } from '@tmcut-core'
+import { TICKS_PER_SECOND, secToTicks, ticksToSec, ticksClipToV3, v3ClipToTicks, v1ClipToV3 } from 'tmcut-core'
 import { clipDurationSec, clipEndSec, clipStartSec, clipMediaTimeSec, clipSourceRange, clipDurationTicks, clipStartTicks, clipEndTicks } from '../../app/utils/tmcut/clipTime'
 import { toRenderClip } from '../../app/utils/tmcut/render/clip'
 import type { TmcutTimelineItem } from '../../app/composables/useTmcutProject'

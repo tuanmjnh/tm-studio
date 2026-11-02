@@ -1,4 +1,4 @@
-// @tmcut-core — sticker catalog tests. Run: node --test "test/*.test.mjs"
+// tmcut-core — sticker catalog tests. Run: node --test "test/*.test.mjs"
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { STICKER_GROUPS, allStickers, stickerMatches } from '../src/sticker.mjs'

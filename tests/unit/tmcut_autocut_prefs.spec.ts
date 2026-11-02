@@ -10,7 +10,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { scoreSegments } from '@tmcut-core'
+import { scoreSegments } from 'tmcut-core'
 import {
   AUTOCUT_PREFS_KEY,
   AUTOCUT_PREFS_DEFAULT,

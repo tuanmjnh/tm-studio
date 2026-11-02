@@ -7,7 +7,7 @@
  * it is checked here on the pure planner plus the store's write/marking rules
  * with an injected project writer (no DOM, no Electron).
  */
-import { TICKS_PER_SECOND } from '@tmcut-core'
+import { TICKS_PER_SECOND } from 'tmcut-core'
 import { getBuiltinVideoTemplates } from '../../app/utils/tmcut/videoTemplatePresets'
 import { sampleRecordFor } from '../../app/utils/tmcut/videoTemplates'
 import {

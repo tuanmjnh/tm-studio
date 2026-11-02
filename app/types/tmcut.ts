@@ -131,4 +131,4 @@ export type {
   TmcutTemplatePlaceholder,
   TmcutTemplateCategory,
   TmcutTemplateIndustry
-} from '@tmcut-core'
+} from 'tmcut-core'

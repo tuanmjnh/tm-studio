@@ -29,8 +29,13 @@ import {
   listProviderAdapters
 } from '@tmcut/core/providerAdapter'
 
-// Adapter registry lives in @tmcut-core/generationAdapter — adapters registered
-// with registerGenerationAdapter() are retrievable with getGenerationAdapter().
+// Adapter registry lives in the core's generationAdapter module. Note the
+// specifier above: this file is the only place in the repo that reaches the core
+// through the installed package (`@tmcut/core/*` -> packages/core/dist) instead
+// of the `tmcut-core` alias -> packages/core/src, so it reads a build artifact
+// that goes stale whenever src changes without a rebuild.
+// Adapters registered with registerGenerationAdapter() are retrievable with
+// getGenerationAdapter().
 // (The previous local Map was never populated, so getMainAdapter always returned
 // null and every handler answered provider-gone.)
 function registerAllAdapters() {

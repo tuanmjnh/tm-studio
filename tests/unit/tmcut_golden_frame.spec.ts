@@ -10,7 +10,7 @@ import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { compareFrames } from '@tmcut-core'
+import { compareFrames } from 'tmcut-core'
 import { compileTimelineToFfmpeg } from '../../app/utils/tmcut/render'
 import type { TmcutProject } from '../../app/composables/useTmcutProject'
 

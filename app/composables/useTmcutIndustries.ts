@@ -1,8 +1,8 @@
-import { INDUSTRY_CATALOG } from '@tmcut-core'
+import { INDUSTRY_CATALOG } from 'tmcut-core'
 
 /**
  * Industry labels for the template library. The catalog (ids, English
- * labels, icons) lives in @tmcut-core; translated labels live in i18n under
+ * labels, icons) lives in tmcut-core; translated labels live in i18n under
  * `tmcut.templateLibrary.industries.<id>` and fall back to the catalog label
  * when a locale has not caught up yet.
  */
