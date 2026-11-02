@@ -1448,6 +1448,8 @@ export function replaceHtmlTokens(html: string, values?: Record<string, string |
 export function unresolvedHtmlTokens(html: string, values?: Record<string, unknown>): string[]
 export interface HtmlVideoLintIssue { code: string, level: 'error' | 'warn', message: string }
 export function lintHtmlVideo(html: string): HtmlVideoLintIssue[]
+export type HtmlVideoSeekContract = 'script' | 'declarative'
+export function htmlVideoSeekContract(html: string): HtmlVideoSeekContract
 export interface HtmlVideoSpecInput {
   html?: string
   width?: number

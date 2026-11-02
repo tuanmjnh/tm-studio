@@ -8,6 +8,7 @@ import {
   frameTimes,
   htmlVideoEscape,
   htmlVideoPreset,
+  htmlVideoSeekContract,
   isAllowedRenderUrl,
   isBlockedRenderHost,
   lintHtmlVideo,
@@ -117,6 +118,25 @@ test('html video: oversized documents are refused before any browser starts', ()
   const result = validateHtmlVideoSpec(huge)
   assert.equal(result.valid, false)
   assert.match(result.errors.join(' '), /byte limit/)
+})
+
+test('html video: the seek contract is classified by the same predicate the lint uses', () => {
+  // A script contract is what the studio teaches and what the live engine
+  // requires — and what a host that strips <script> cannot honor (ADR-021).
+  assert.equal(htmlVideoSeekContract(spec().html), 'script')
+  assert.equal(htmlVideoSeekContract('<div data-composition-id="t"></div><script>addEventListener("hf-seek", () => {})</script>'), 'script')
+  assert.equal(htmlVideoSeekContract('<div class="t" style="animation: e 1s"></div>'), 'declarative')
+  for (const empty of ['', null, undefined, 0]) assert.equal(htmlVideoSeekContract(empty), 'declarative')
+
+  // One predicate: classification may never disagree with the lint, or a host
+  // could refuse exactly what the editor just called valid.
+  for (const html of [spec().html, '<div data-composition-id="t"></div>', '<script>window.__hf = 1</script>']) {
+    const reported = lintHtmlVideo(html).some(issue => issue.code === 'missing-seek-contract')
+    assert.equal(reported, htmlVideoSeekContract(html) === 'declarative', html.slice(0, 40))
+  }
+  // And the shared contract still accepts a script composition: the refusal
+  // belongs to one host's transport, not to the render contract.
+  assert.equal(validateHtmlVideoSpec(spec()).valid, true)
 })
 
 test('html video: non-deterministic authoring is warned, not silently accepted', () => {

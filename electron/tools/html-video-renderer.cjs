@@ -15,7 +15,7 @@ const PROGRESS_CHANNEL = 'tmcut:htmlVideoProgress'
 // refused, or cut to a different number of frames, by only one of the hosts.
 // `htmlVideo.mjs` is a leaf module with no imports, which is what lets the main
 // process require it directly.
-const { HTML_VIDEO_LIMITS: LIMITS, frameCountFor } = require('../../packages/core/src/htmlVideo.mjs')
+const { HTML_VIDEO_LIMITS: LIMITS, frameCountFor, htmlVideoSeekContract } = require('../../packages/core/src/htmlVideo.mjs')
 
 // Fonts and images must be resident before the first seek, or frame 0 of a
 // composition renders without its glyphs.
@@ -46,6 +46,10 @@ function validateRenderOptions(options = {}) {
   if (Number.isFinite(duration) && Number.isFinite(fps) && frameCountFor(duration, fps) > LIMITS.maxFrames) errors.push('frame-limit-exceeded')
   if (!html.trim()) errors.push('html-required')
   if (Buffer.byteLength(html, 'utf8') + Buffer.byteLength(css, 'utf8') > LIMITS.maxHtmlBytes) errors.push('composition-too-large')
+  // ADR-021: this transport deletes every <script>, so a composition whose seek
+  // contract lives in a script cannot animate here — it would capture one
+  // frame per tick and still report success. Refuse the job instead of lying.
+  if (html.trim() && htmlVideoSeekContract(html) === 'script') errors.push('composition-requires-script-seek')
   if (!outputPath || !path.isAbsolute(outputPath) || path.extname(outputPath).toLowerCase() !== '.mp4') errors.push('invalid-output-path')
 
   return errors.length
@@ -63,7 +67,9 @@ function validateRenderOptions(options = {}) {
  * `__tmcutSeek` — CSS animations, SVG time, `<video>` time — while the
  * `window.__hf` contract that core's lint and the live Nitro engine use cannot
  * survive sanitization. Every app starter declares `__hf`, so none of them
- * animates on this transport; html-video-renderer.test.mjs pins both halves.
+ * animates on this transport, and `validateRenderOptions` therefore refuses a
+ * script-driven composition (`composition-requires-script-seek`) rather than
+ * encoding a still and calling it a render.
  */
 function sanitizeCompositionHtml(html) {
   return String(html || '')
@@ -258,9 +264,9 @@ async function renderHtmlVideo(options, deps = {}) {
  * Registered on every desktop boot and reachable from preload, but no `app/`
  * code calls it (ADR-021): `TmcutHtmlVideoStudio.vue` posts the same job to
  * `/api/v1/media/html-video` on both hosts, so the live HTML-video engine is
- * the Playwright one. This channel stays for the CSS-only compositions that
- * need an in-process renderer, and it must not be wired to a job until
- * `__tmcutSeek` can reach script-driven ones too.
+ * the Playwright one. This channel stays for CSS-only compositions that need
+ * an in-process renderer; anything the studio can actually author is refused by
+ * `validateRenderOptions` until `__tmcutSeek` can reach script-driven ones.
  */
 function registerHtmlVideoRenderer() {
   ipcMain.handle(CHANNEL, (event, options) => renderHtmlVideo(options, { sender: event.sender }))

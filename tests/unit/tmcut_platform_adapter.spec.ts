@@ -298,9 +298,15 @@ async function main() {
     const electron = read('electron/tools/html-video-renderer.cjs')
     assert.match(electron, /require\('\.\.\/\.\.\/packages\/core\/src\/htmlVideo\.mjs'\)/, 'main reads the core contract')
     assert.doesNotMatch(electron, /const (MIN_FPS|MAX_FPS|MAX_FRAMES|MAX_HTML_BYTES) =/, 'no second copy of the bounds')
+    // Same rule for ADR-021: the desktop refuses a script-seek composition, and
+    // the predicate that decides "script-seek" must stay core's, so the editor's
+    // lint and the host's refusal can never drift apart.
+    assert.match(electron, /htmlVideoSeekContract\(html\) === 'script'/, 'main asks core about the seek contract')
+    assert.doesNotMatch(electron, /\/__hf\/\.(test|exec)\(/, 'main does not re-derive the seek predicate')
     const spec = read('packages/core/src/htmlVideo.mjs')
     assert.match(spec, /minFps: 1/, 'composition spec floor used by the web host')
     assert.match(spec, /maxFps: 60/, 'composition spec ceiling used by the web host')
+    assert.match(spec, /test: html => htmlVideoSeekContract\(html\) === 'declarative'/, 'lint and classification are one predicate')
   })
 
   await check('capture.open names the process that actually holds the session', async () => {

@@ -336,9 +336,9 @@ test('desktop bounds are the core render contract, not a second copy', async () 
 //     as video. Nothing errored: the render "succeeded" 10 times over.
 // So a JS-driven composition — every starter in
 // app/utils/tmcut/htmlVideoStarters.ts, which is the whole authoring surface —
-// must not be exported through this transport. The module is kept because the
-// CSS-only half of the contract genuinely works here; these assertions are
-// what separates the two halves.
+// is refused by `validateRenderOptions` before anything launches. The module is
+// kept because the CSS-only half of the contract genuinely works here; these
+// assertions are what separates the two halves.
 const JS_DRIVEN_COMPOSITION = `<div data-composition-id="counter">
 <script>
 window.__hf = {
@@ -374,4 +374,49 @@ test('the desktop seek hook drives CSS/SVG/video time only — which is all it c
   // There is no fourth one, so a script-driven composition has no way to
   // receive a seek on this host.
   assert.doesNotMatch(seek, /__hf|hf-seek|postMessage/)
+})
+
+// The refusal is the point: before it, this transport answered a script-driven
+// composition with a still image and a success result.
+test('desktop validation refuses a composition it cannot seek instead of rendering a still', () => {
+  const base = validOptions(path.join(tmpdir(), 'composition.mp4'))
+  const refused = validateRenderOptions({ ...base, html: JS_DRIVEN_COMPOSITION })
+  assert.equal(refused.ok, false)
+  assert.deepEqual(refused.errors, ['composition-requires-script-seek'])
+
+  // Motion that lives in CSS/SVG/video time is exactly what this host can
+  // drive, so it stays accepted — the rule is about the seek contract, not
+  // about scripts appearing anywhere in a document.
+  assert.equal(validateRenderOptions({ ...base, html: '<main class="title">Hello</main>' }).ok, true)
+  assert.equal(validateRenderOptions({ ...base, html: '<svg data-composition-id="s"><script>0</script></svg>' }).ok, true)
+  // A composition that declares only the event contract is refused too, since
+  // the listener is stripped with the script that registers it.
+  assert.equal(validateRenderOptions({ ...base, html: '<div data-composition-id="d"><script>addEventListener(\'hf-seek\', () => {})</script></div>' }).ok, false)
+})
+
+test('the refusal happens before any window or FFmpeg process exists', async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'tmcut-html-video-refuse-'))
+  let windows = 0
+  let spawns = 0
+  class CountingWindow extends FakeCompositionWindow {
+    constructor(options) {
+      super(options)
+      windows += 1
+    }
+  }
+  try {
+    const result = await renderHtmlVideo(validOptions(path.join(dir, 'render.mp4'), { html: JS_DRIVEN_COMPOSITION }), {
+      BrowserWindow: CountingWindow,
+      spawn: () => {
+        spawns += 1
+        throw new Error('must not spawn')
+      },
+      binaries: { ffmpeg: 'ffmpeg-test' }
+    })
+    assert.equal(result.ok, false)
+    assert.equal(result.error, 'composition-requires-script-seek')
+    assert.deepEqual([windows, spawns], [0, 0], 'refused before launching anything')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })

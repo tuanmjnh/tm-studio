@@ -118,7 +118,7 @@ const LINT_RULES = [
   {
     code: 'missing-seek-contract',
     level: 'error',
-    test: html => !/__hf/.test(html) && !/hf-seek/.test(html),
+    test: html => htmlVideoSeekContract(html) === 'declarative',
     message: 'Expose the __hf seek contract — { duration, seek(t) } — or listen for the hf-seek event so frames can be requested one at a time.'
   },
   {
@@ -157,6 +157,22 @@ export function lintHtmlVideo(html) {
   return LINT_RULES
     .filter(rule => rule.test(source))
     .map(rule => ({ code: rule.code, level: rule.level, message: rule.message }))
+}
+
+/**
+ * Which seek contract a composition declares — one predicate, shared with the
+ * `missing-seek-contract` rule above so a host can never classify a document
+ * differently from the linter that tells the author about it.
+ *
+ * `script`: motion is driven from author JavaScript (`window.__hf` or the
+ * `hf-seek` event). A host that strips scripts cannot animate such a document
+ * at all — it captures one frame repeatedly and still reports success.
+ * `declarative`: motion lives in CSS/SVG/video time, which a host can drive
+ * without running any author code.
+ */
+export function htmlVideoSeekContract(html) {
+  const source = String(html || '')
+  return /__hf/.test(source) || /hf-seek/.test(source) ? 'script' : 'declarative'
 }
 
 // --- Spec validation ------------------------------------------------------
