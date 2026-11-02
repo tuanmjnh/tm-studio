@@ -7,7 +7,7 @@
 //  Each provider gets its own adapter file (e.g. generationSeedance.mjs)
 //  ONLY after its official API is verified per roadmap rule 12.
 //
-//  Current status (roadmap §25):
+//  Current status (roadmap v3 §25):
 //  - Seedance 2.5: PLANNED — no verified supported API yet
 //  - Google Flow: PLANNED — no verified supported API yet
 //

@@ -967,7 +967,7 @@ export function cancelBatch(
 
 /**
  * Expand one template into N input records by varying a single field — the
- * "one prompt × N variants" batch type from roadmap §6.
+ * "one prompt × N variants" batch type from factory roadmap §6.
  */
 export function expandVariants(
   template: VideoTemplate,

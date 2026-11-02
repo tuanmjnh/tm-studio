@@ -6,7 +6,7 @@
  * future Template Studio UI are thin wrappers — which is what makes the
  * immutability rules testable without a browser.
  *
- * Rules encoded here (roadmap §5):
+ * Rules encoded here (factory roadmap §5):
  *  - a published version is IMMUTABLE; editing forks a new draft version;
  *  - a draft is editable in place until it is published;
  *  - publishing validates first and keeps exactly one published version

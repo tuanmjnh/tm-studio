@@ -189,7 +189,7 @@ export function buildTemplateFromPlan(plan, options = {}) {
       return
     }
     // Placeholder clip: the template keeps the slot (position/duration),
-    // the media arrives at instantiate time (roadmap §6.5 placeholder flow).
+    // the media arrives at instantiate time (roadmap v3 §6.5 placeholder flow).
     addClip(timeline, op.trackType, {
       name: op.name || `${op.trackType} placeholder`,
       ...range

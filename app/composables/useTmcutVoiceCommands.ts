@@ -176,7 +176,7 @@ function extractEffectArgs(_text: string): Record<string, unknown> | null {
 
 function classifyRisk(tool: string): VoiceRisk {
   if (tool.startsWith('project.') || tool.startsWith('playback.')) return 'read'
-  // Roadmap §4: removing a clip is a reversible timeline edit (one undo step),
+  // Factory roadmap §4: removing a clip is a reversible timeline edit (one undo step),
   // unlike deleting a project/file or spending credits.
   return 'reversible'
 }
@@ -250,7 +250,7 @@ export function useTmcutVoiceCommands() {
       return { ok: result.ok, intent, result: result.data, error: result.error }
     }
 
-    // Reversible: DRAFT first (roadmap §4). The operation lands in the pending
+    // Reversible: DRAFT first (factory roadmap §4). The operation lands in the pending
     // proposal; the Agent panel previews it and the user applies it as one
     // undo group. Nothing touches the timeline before that confirmation.
     if (intent.risk === 'reversible') {

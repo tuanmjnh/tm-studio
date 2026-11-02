@@ -222,10 +222,10 @@ describe('effects (C6)', () => {
   })
 })
 
-// Roadmap §5.6 / §6.5 — the registry is the only source the preview surface may
+// Roadmap v1 §5.6 / §6.5 — the registry is the only source the preview surface may
 // read from: fidelity, export support and bounds all come from here, so a tile
 // can never claim more than the renderer delivers.
-describe('fx capabilities contract (roadmap §5-6)', () => {
+describe('fx capabilities contract (roadmap v1 §5-6)', () => {
   const FIDELITY = ['exact', 'approximate', 'illustrative']
 
   it('every descriptor declares a preview strategy and honest fidelity', () => {
@@ -250,7 +250,7 @@ describe('fx capabilities contract (roadmap §5-6)', () => {
   it('fidelity is a documented stance, not a default', () => {
     // Only where CSS runs the identical maths may a tile claim exact: negate /
     // mirror / letterbox / sepia. Blur sigma, colorbalance and the temporal
-    // families are approximations and must say so (roadmap §5.6).
+    // families are approximations and must say so (roadmap v1 §5.6).
     assert.equal(fxCapabilities('negate').fidelity, 'exact')
     assert.equal(fxCapabilities('letterbox').fidelity, 'exact')
     assert.equal(fxCapabilities('blur').fidelity, 'approximate')

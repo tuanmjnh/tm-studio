@@ -206,7 +206,7 @@ async function downloadPackage({ jobId, url, entryId, version, filename, expectS
         fail('oversize')
         return
       }
-      // Checksum gate: a mismatch must never be committed (roadmap §15).
+      // Checksum gate: a mismatch must never be committed (roadmap v3 §15).
       if (expectSha256 && sha256.toLowerCase() !== String(expectSha256).toLowerCase()) {
         fail('checksum')
         return
@@ -233,11 +233,11 @@ function registerAssetCenterController(getWindow) {
     }
   }
 
-  // Starter catalog ships inside the installer (roadmap §5: "only a small
+  // Starter catalog ships inside the installer (roadmap v3 §5: "only a small
   // starter set" — the full catalog is fetched on demand later). Sample
   // effect files live beside it and back the local-source test entries so
   // the whole download -> verify -> install -> use -> offline loop can be
-  // exercised with no network (roadmap §15 gate).
+  // exercised with no network (roadmap v3 §15 gate).
   ipcMain.handle(`${moduleName}:assetCenter:readStarterCatalog`, () => {
     const file = getResourcePath(path.join('tmcut-catalog', 'starter-catalog.json'))
     return readJsonSafe(file)

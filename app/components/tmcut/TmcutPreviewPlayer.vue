@@ -663,7 +663,7 @@ const videoObjectStyle = computed<Record<string, string>>(() => {
   return computeFitObjectStyle(clip.fit || 'fit', clip.focusX ?? 0.5, clip.focusY ?? 0.5, clip.cropRect) as Record<string, string>
 })
 
-// Text overlays scale with the rendered canvas size (roadmap §65.2):
+// Text overlays scale with the rendered canvas size (docs §65.2):
 // overlay units are canvas pixels, so multiply by the preview scale instead
 // of the old hardcoded 0.7 factor. The monitor wrapper enforces the canvas
 // aspect ratio, so the width-axis scale applies uniformly.

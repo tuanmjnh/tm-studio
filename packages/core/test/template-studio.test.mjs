@@ -88,7 +88,7 @@ test('checkRequiredAssets classifies satisfied vs missing vs ask-user', () => {
   assert.equal(res.missingAssets.length, 1)
   assert.equal(res.localNeeds.length, 1)
   // local needs never become "missing catalog assets" — the importer must
-  // ask the user, never substitute silently (roadmap §6.4).
+  // ask the user, never substitute silently (roadmap v3 §6.4).
   assert.equal(res.missingAssets[0].assetId, 'asset:not-installed')
 })
 

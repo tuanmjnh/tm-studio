@@ -1784,7 +1784,7 @@ export function validateTemplate(template) {
 /**
  * Migrate a raw (untrusted, possibly older) template object to the current
  * template schema. Returns { migrated, errors }: on any structural problem
- * the template is NOT usable and the caller must refuse it (roadmap §6.4:
+ * the template is NOT usable and the caller must refuse it (roadmap v3 §6.4:
  * validate schema + compatibility BEFORE anything else). A missing
  * schemaVersion means v1 (every template written before versioning).
  */
@@ -1814,7 +1814,7 @@ export function migrateTemplate(raw) {
 
 /**
  * Check a template's requiredAssets against the caller's installed-asset
- * view (roadmap §6.4 step 2 — rights/install state BEFORE building).
+ * view (roadmap v3 §6.4 step 2 — rights/install state BEFORE building).
  * Pure: the host supplies what is installed; this classifies the need.
  *
  * @param {object} template

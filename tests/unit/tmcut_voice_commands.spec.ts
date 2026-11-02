@@ -80,7 +80,7 @@ async function main() {
     const clipId = videoItems(store)[0]!.id
     store.selectClip(clipId)
     const staged = await voice.runTextCommand('xóa clip', { language: 'vi' })
-    if (!staged.ok || !staged.staged) throw new Error('remove clip should stage (roadmap §4)')
+    if (!staged.ok || !staged.staged) throw new Error('remove clip should stage (factory roadmap §4)')
     if (!videoItems(store).some(i => i.id === clipId)) throw new Error('clip must still exist before confirm')
     const applied = await voice.confirmStaged()
     if (!applied.ok) throw new Error('confirm failed')

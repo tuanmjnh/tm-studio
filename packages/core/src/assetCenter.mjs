@@ -12,7 +12,7 @@
 
 export const ASSET_CENTER_SCHEMA_VERSION = 1
 
-// Install lifecycle (roadmap §5 asset lifecycle). `downloading` and
+// Install lifecycle (roadmap v3 §5 asset lifecycle). `downloading` and
 // `verifying` must never be persisted as final states: a crashed app finds
 // them on recovery and re-queues them (recoverInstallStates).
 export const INSTALL_STATES = {
@@ -32,7 +32,7 @@ export const DOWNLOAD_STATES = {
   cancelled: 'cancelled'
 }
 
-// License review semantics (roadmap §5 license registry). "Unknown" and
+// License review semantics (roadmap v3 §5 license registry). "Unknown" and
 // "unreviewed" rights must NEVER render as approved.
 export const LICENSE_STATUS = {
   approved: 'approved',
@@ -160,7 +160,7 @@ export function canInstall(entry, { now = 0, entitlements = null } = {}) {
 }
 
 /**
- * Entitlements for paid assets (roadmap §26). Grants are issued by the
+ * Entitlements for paid assets (roadmap v3 §26). Grants are issued by the
  * catalog publisher and travel with the catalog payload:
  * `{ entryId, version, grantedAt, expiresAt?, signature? }`. The publisher
  * signs with an HMAC over `entryId:version` using the catalog's shared

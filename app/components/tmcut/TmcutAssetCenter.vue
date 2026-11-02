@@ -51,7 +51,7 @@ const applyBusy = ref<string | null>(null)
 
 onMounted(async () => {
   await load()
-  // Missing-asset health pass (roadmap §15): re-verify installed packages
+  // Missing-asset health pass (roadmap v3 §15): re-verify installed packages
   // once so a deleted/corrupted file flips to a recoverable 'missing' state.
   if (isDesktop.value) await verifyAll()
 })
@@ -252,7 +252,7 @@ function handleApply(entryId: string, assetKind: string) {
       </div>
     </div>
 
-    <!-- Audit banner (roadmap §26): installed copies hit by live notices -->
+    <!-- Audit banner (roadmap v3 §26): installed copies hit by live notices -->
     <div
       v-if="takedownAffected.length > 0"
       class="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-warning-500/10 border border-warning-500/30 text-[10px] text-warning-200"
@@ -299,7 +299,7 @@ function handleApply(entryId: string, assetKind: string) {
           </UBadge>
         </div>
 
-        <!-- Takedown notice (roadmap §26: notice beats license). Installed
+        <!-- Takedown notice (roadmap v3 §26: notice beats license). Installed
              copies keep working offline but show a warning + uninstall
              option; not-installed copies are hard-blocked. Never delete
              silently. -->

@@ -263,7 +263,7 @@ async function doDisconnect() {
 }
 
 // ============ ADD CONNECTION WIZARD ============
-// Category list mirrors roadmap §2 (provider-connections-upgrade-roadmap).
+// Category list mirrors connections roadmap §2 (provider-connections-upgrade-roadmap).
 // Labels/descriptions live in i18n (`connections.wizard.<key>_label/_desc`);
 // categories with no registered provider yet show an honest empty state —
 // Phase 4 registers non-AI categories incrementally.
@@ -293,7 +293,7 @@ function selectCategory(cat: typeof CATEGORIES[number]) {
   addStep.value = 'provider'
 }
 
-/** Providers offered for the chosen category (roadmap §2: wizard starts
+/** Providers offered for the chosen category (connections roadmap §2: wizard starts
  *  with a category, then a provider-specific form). Legacy code-registry
  *  providers carry no category — they show under custom. */
 const categoryProviders = computed(() => {
@@ -339,7 +339,7 @@ async function saveAddConnection() {
       if (v === '' && fieldIsSecret(p, k) && hasRow(p)) continue
       cleanedValues[k] = trimmed
     }
-    // Same canonical record for both screens (roadmap §2: no duplicate
+    // Same canonical record for both screens (connections roadmap §2: no duplicate
     // writes): AI credentials go through the AI endpoint which persists
     // name/environment/isShared alongside the AES-GCM secret.
     const saved = await connections.saveManual(p.key, cleanedValues, appId)

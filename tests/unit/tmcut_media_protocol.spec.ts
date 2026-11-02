@@ -1,5 +1,5 @@
 /**
- * media:// protocol module (R126, roadmap §190).
+ * media:// protocol module (R126, docs §190).
  *
  * The handler moved out of main.cjs and gained origin-scoped CORS, which
  * is what allows webSecurity:true again. The spec pins the contract

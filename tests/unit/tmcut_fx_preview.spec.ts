@@ -55,7 +55,7 @@ function check(label: string, fn: () => void) {
   console.log(`   ${label} PASSED`)
 }
 
-console.log('=== [TMCut roadmap §5-6 Fx preview contract] Starting ===\n')
+console.log('=== [TMCut roadmap v1 §5-6 Fx preview contract] Starting ===\n')
 
 // 1. COVERAGE ----------------------------------------------------------------
 check('every registry effect except the filters-tab lut3d has an effect adapter', () => {

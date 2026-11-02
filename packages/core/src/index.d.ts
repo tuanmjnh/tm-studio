@@ -1300,7 +1300,7 @@ export interface TmcutTemplate {
   schemaVersion?: number
   /** Content revision of THIS template (bump when the user edits it). */
   version?: number
-  /** Asset references derived from clip refs (roadmap §6.4 step 2). */
+  /** Asset references derived from clip refs (roadmap v3 §6.4 step 2). */
   requiredAssets?: TemplateRequiredAssetRef[]
   thumbnail?: string
   author?: string

@@ -76,7 +76,7 @@ const catalogLoaded = ref(false)
 const storageQuotaBytes = ref(0)
 const progressTick = ref(0)
 
-// Takedown & license audit (roadmap §26, local scope): notices arrive with
+// Takedown & license audit (roadmap v3 §26, local scope): notices arrive with
 // the catalog payload and persist locally so offline runs keep enforcing
 // them. A notice beats an approved license — installs are blocked and
 // already-installed copies are surfaced for warn + optional uninstall.
@@ -110,7 +110,7 @@ function takedownFor(entryId: string): TakedownNotice | null {
 const takedownAffected = computed(() =>
   takedownAudit(installed.value as Array<{ entryId?: string, state?: string }>, takedownRegistry.value))
 
-// Entitlements for paid assets (roadmap §26): grants ship with the catalog
+// Entitlements for paid assets (roadmap v3 §26): grants ship with the catalog
 // payload and persist locally so offline installs of already-purchased
 // assets keep working. Users only store/check grants — never mint them.
 const ENTITLEMENT_LOCAL_KEY = 'tmcut.asset.entitlements.v1'
@@ -404,7 +404,7 @@ async function install(entryId: string): Promise<{ ok: boolean, reason?: string 
   const entry = findEntry(entryId)
   if (!entry) return { ok: false, reason: 'unknown-entry' }
   // Notice beats license: a live takedown blocks install even when the
-  // license still reads 'approved' (roadmap §26 takedown gate).
+  // license still reads 'approved' (roadmap v3 §26 takedown gate).
   const takedown = canServeAfterTakedown(takedownRegistry.value, entryId)
   if (!takedown.allowed) return { ok: false, reason: 'takedown' }
   const gate = canInstall(entry, { now: Date.now(), entitlements: entitlements.value })
