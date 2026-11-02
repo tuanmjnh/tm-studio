@@ -15,12 +15,14 @@
  *
  * ADR-017 then unified the three names the same module went by (package
  * `tmcut-core`, app alias `@tmcut-core`, installed specifier `@tmcut/core`) so
- * that a name in an import is a fact about which file gets loaded.
+ * that a name in an import is a fact about which file gets loaded. The third
+ * name was the last split (G13, ADR-022): it resolved through `node_modules` to
+ * a build artifact, so one process could hold two copies of one engine.
  */
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
-import { dirname, extname, join, resolve, sep } from 'node:path'
+import { dirname, extname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
@@ -63,6 +65,62 @@ function escaping(): string[] {
     }
   }
   return found
+}
+
+// `packages/core/dist` is what `npm publish` ships and nothing else: it is
+// gitignored, so a source file that reads it depends on whether someone
+// happened to rebuild. Two hosts loading two copies of one engine is G13.
+const CORE_DIST_DIR = join(ROOT, 'packages', 'core', 'dist')
+
+function readsBuildArtifact(): string[] {
+  const found: string[] = []
+  for (const dir of SOURCE_DIRS) {
+    for (const file of sources(dir)) {
+      for (const specifier of relativeSpecifiers(file)) {
+        const target = resolve(ROOT, dirname(file), specifier)
+        if (target.startsWith(CORE_DIST_DIR + sep)) found.push(`${file} -> ${specifier}`)
+      }
+    }
+  }
+  return found
+}
+
+// Every core module the main process loads, plus whatever those modules import.
+// The packaged app only contains what electron-builder.yml lists, and a
+// missing leaf throws MODULE_NOT_FOUND in the build but never in dev.
+function coreClosure(): string[] {
+  const seen = new Set<string>()
+  const queue: string[] = []
+  for (const file of sources('electron')) {
+    for (const specifier of relativeSpecifiers(file)) {
+      const target = resolve(ROOT, dirname(file), specifier)
+      if (target.startsWith(join(ROOT, 'packages', 'core', 'src') + sep)) {
+        queue.push(relative(ROOT, target).split(sep).join('/'))
+      }
+    }
+  }
+  while (queue.length) {
+    const file = queue.shift()!
+    if (seen.has(file) || !existsSync(join(ROOT, file))) continue
+    seen.add(file)
+    for (const specifier of relativeSpecifiers(file)) {
+      queue.push(relative(ROOT, resolve(ROOT, dirname(file), specifier)).split(sep).join('/'))
+    }
+  }
+  return [...seen].sort()
+}
+
+function shippedPatterns(): string[] {
+  const yml = readFileSync(join(ROOT, 'electron-builder.yml'), 'utf8')
+  const block = yml.match(/\nfiles:\n([\s\S]*?)\n\S/)?.[1] ?? ''
+  return [...block.matchAll(/^\s*-\s*(\S+)\s*$/gm)].map(match => match[1])
+}
+
+function notShipped(files: string[]): string[] {
+  const patterns = shippedPatterns()
+  return files.filter(file => !patterns.some(pattern => pattern.endsWith('/**/*')
+    ? file.startsWith(pattern.slice(0, -'/**/*'.length) + '/')
+    : file === pattern))
 }
 
 const CORE_ENTRY = './packages/core/src/index.mjs'
@@ -128,17 +186,40 @@ describe('core source boundary', () => {
     assert.deepEqual(stale, [], 'the alias this slice removed cannot be spelled in an import')
   })
 
-  it('only the main process reaches the core as an installed package', () => {
-    // `@tmcut/core/*` resolves through node_modules to packages/core/dist, a
-    // build artifact; the alias `tmcut-core` resolves to packages/core/src.
-    // Loading both means two copies of one engine in one process, so the split
-    // is pinned where it is visible rather than left to grow.
+  it('nothing reads the core from the build artifact', () => {
+    // G13, measured: packages/core/dist/index.js (built 2026-10-31T10:57)
+    // contains no htmlVideoSeekContract, while src/htmlVideo.mjs has had it
+    // since ADR-021 — a rebuild was never run, and no gate could see it because
+    // dist is gitignored.
+    assert.deepEqual(readsBuildArtifact(), [], 'the built copy is not a source dependency')
+  })
+
+  it('the core is not installed as a package', () => {
+    // The third name resolved through node_modules into dist, so the main
+    // process ran a different engine than the alias gave the app and the tests.
+    // The `file:` dependency is gone, which makes the specifier unresolvable —
+    // so the declarations are pinned too, not only the imports.
     const packaged = coreNamedSpecifiers()
       .filter(entry => entry.specifier === PKG_ALIAS || entry.specifier.startsWith(PKG_ALIAS + '/'))
-    for (const entry of packaged) {
-      assert.ok(entry.file.startsWith('electron'), `${entry.file} uses ${entry.specifier}; only electron/ may load the built package`)
-    }
-    assert.ok(packaged.length > 0, 'the guard has something to guard')
+      .map(entry => `${entry.file} -> ${entry.specifier}`)
+    assert.deepEqual(packaged, [], 'no import names the core as an installed package')
+
+    const root = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as Record<string, Record<string, string>>
+    assert.equal(root.dependencies?.[PKG_ALIAS], undefined, 'the core is not a runtime dependency')
+    assert.equal(root.devDependencies?.[PKG_ALIAS], undefined, 'and not a dev dependency')
+    assert.equal(
+      readFileSync(join(ROOT, 'pnpm-lock.yaml'), 'utf8').includes(PKG_ALIAS),
+      false,
+      'the lockfile resolves no scoped core name')
+  })
+
+  it('the packaged app contains every core module the main process loads', () => {
+    // electron-builder ships exactly what `files:` lists, so a require() whose
+    // target is not listed fails in the build and never in dev. Before this
+    // slice the list held one hand-picked src leaf plus all of dist.
+    const closure = coreClosure()
+    assert.ok(closure.length > 0, 'the main process loads at least one core module')
+    assert.deepEqual(notShipped(closure), [], 'the whole transitive closure is shipped')
   })
 
   it('the alias is imported bare, never as a subpath', () => {
@@ -150,6 +231,17 @@ describe('core source boundary', () => {
       .map(entry => `${entry.file} -> ${entry.specifier}`)
       .filter(entry => !entry.endsWith('-> tmcut-core'))
     assert.deepEqual(aliased, [], 'no subpath import through the source alias')
+  })
+
+  it('the main process names the core only by a path, never by a package name', () => {
+    // Neither name can work in this host: the `tmcut-core` mapping belongs to
+    // Vite, so main would get ERR_MODULE_NOT_FOUND at startup, and the scoped
+    // name only "works" if the dependency comes back — which is exactly the
+    // silent load of dist that G13 measured.
+    const named = coreNamedSpecifiers()
+      .filter(entry => entry.file.startsWith('electron'))
+      .map(entry => `${entry.file} -> ${entry.specifier}`)
+    assert.deepEqual(named, [], 'main process reaches the core by relative path')
   })
 
   it('every spec that reads the engine loads the engine from packages/core', async () => {

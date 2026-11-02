@@ -54,7 +54,7 @@ app/layouts/         Layouts (default.vue with sidebar navigation)
 app/middleware/      Client route guards (auth.global.ts)
 electron/            Electron main process & preload scripts (main.cjs, preload.cjs + tmcut controllers)
 i18n/locales/        i18n files (en.json, vi.json)
-packages/core/       @tmcut/core — zero-dependency editing engine (deterministic timeline core)
+packages/core/       tmcut-core — zero-dependency editing engine (deterministic timeline core), read from src by every host
 server/api/          Local Nitro API endpoints (media, stock, process, ai relay)
 server/config/       Local runtime environment config
 shared/types/        Types used by BOTH the Vue app and the Nitro server (import via #shared/types/<file>)

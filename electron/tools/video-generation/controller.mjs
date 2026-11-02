@@ -22,18 +22,19 @@ import {
   createGenerationJobInput,
   createJobStatusResponse,
   createGenerationResult
-} from '@tmcut/core/generationAdapter'
+} from '../../../packages/core/src/generationAdapter.mjs'
 
 import {
   registerProviderAdapter,
   listProviderAdapters
-} from '@tmcut/core/providerAdapter'
+} from '../../../packages/core/src/providerAdapter.mjs'
 
-// Adapter registry lives in the core's generationAdapter module. Note the
-// specifier above: this file is the only place in the repo that reaches the core
-// through the installed package (`@tmcut/core/*` -> packages/core/dist) instead
-// of the `tmcut-core` alias -> packages/core/src, so it reads a build artifact
-// that goes stale whenever src changes without a rebuild.
+// Adapter registry lives in the core's generationAdapter + providerAdapter
+// modules, read from packages/core/src — the same artifact the `tmcut-core`
+// alias gives the app and the tests — and not from packages/core/dist, a
+// gitignored build artifact that goes stale whenever src changes without a
+// rebuild (G13). Both modules import nothing further, and electron-builder.yml
+// ships the src tree, so these paths also exist inside the packaged app.
 // Adapters registered with registerGenerationAdapter() are retrievable with
 // getGenerationAdapter().
 // (The previous local Map was never populated, so getMainAdapter always returned
