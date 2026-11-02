@@ -9,7 +9,8 @@ import {
   transitionWindows,
   XFADE_PREVIEW,
   XFADE_POSITION_LAWS,
-  previewTransitionRamp
+  previewTransitionRamp,
+  renderableXfadeName
 } from '../src/transitions.mjs'
 import { addClip } from '../src/timeline.mjs'
 import { defaultTimeline } from '../src/project.mjs'
@@ -383,6 +384,24 @@ describe('xfade preview geometry (V4 G16)', () => {
     assert.equal(XFADE_PREVIEW.squeezev.shape, 'unavailable')
     assert.match(XFADE_PREVIEW.squeezev.note, /crashes/)
     assert.equal(previewTransitionRamp('squeezev', 0.5).incoming.opacity, 0.5)
+  })
+
+  it('the export is handed a renderable name for every key', () => {
+    // The preview degrades `unavailable` to a fade; the graph must too, or the
+    // user watches a crossfade and the render dies mid-encode. This asks the
+    // question per key rather than hardcoding `squeezev`, so a second measured
+    // crash degrades automatically and no reachable name can be emitted twice.
+    const degraded = []
+    for (const key of KNOWN_TRANSITIONS) {
+      const name = renderableXfadeName(key)
+      assert.equal(XFADE_PREVIEW[name].shape === 'unavailable', false,
+        `${key} would emit "${name}", which the binary is measured crashing on`)
+      if (name !== key) degraded.push(`${key}->${name}`)
+    }
+    assert.deepEqual(degraded, ['squeezev->fade'], 'only the measured crash may degrade')
+    // The horizontal sibling renders, and a name with no row is not a defect.
+    assert.equal(renderableXfadeName('squeezeh'), 'squeezeh')
+    assert.equal(renderableXfadeName('hlslice'), 'hlslice')
   })
 
   it('the disc radius that covers the box is aspect-independent', () => {

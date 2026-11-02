@@ -6,7 +6,7 @@ import { opacityAlpha } from './graph'
 import { fadeFilter } from './audio'
 import { buildFfmpegFitFilters, buildFfmpegTransform } from '../canvas'
 import { xfadeNameFor } from '../fxCatalog'
-import { keyframeExpr, maskAlphaExpr, rampSetptsExpr, buildFfmpegEffectFilters, ticksToSec } from 'tmcut-core'
+import { keyframeExpr, maskAlphaExpr, rampSetptsExpr, buildFfmpegEffectFilters, ticksToSec, renderableXfadeName } from 'tmcut-core'
 
 /**
  * Maps a TMCut transition type into an FFmpeg xfade transition name
@@ -14,9 +14,14 @@ import { keyframeExpr, maskAlphaExpr, rampSetptsExpr, buildFfmpegEffectFilters, 
  * catalog (`app/utils/tmcut/fxCatalog.ts`) so the app graph and the legacy
  * Electron ffmpeg controller resolve every key through the same table and can
  * never disagree; unknown keys fall back to a valid xfade name.
+ *
+ * V4 G16 adds the second half of that question. A name can be valid and still
+ * unrenderable — `squeezev` is in the binary's own list but crashes it after
+ * 28 of 60 frames — and core measured which ones, so the graph asks the same
+ * registry the preview reads instead of discovering the crash mid-encode.
  */
 export function mapXfadeTransition(type: string | undefined): string {
-  return xfadeNameFor(type)
+  return renderableXfadeName(xfadeNameFor(type))
 }
 
 export interface VideoPipelineContext {

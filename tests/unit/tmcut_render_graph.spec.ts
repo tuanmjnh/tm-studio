@@ -24,6 +24,43 @@ function check(label: string, fn: () => void) {
   console.log(`   ${label} PASSED`)
 }
 
+// One video track, two 4 s clips overlapping by 0.5 s with `type` as the
+// incoming clip's transition. Two checks compile against it, so it lives here.
+function xfadeProject(type: string): TmcutProject {
+  return {
+    version: 1,
+    name: 'xfade Test',
+    canvas: { width: 1920, height: 1080, fps: 30 },
+    timeline: {
+      tracks: [
+        {
+          id: 'v1',
+          type: 'video',
+          name: 'Video',
+          items: [
+            { id: 'vclip1', trackId: 'v1', src: 'clip1.mp4', offset: 0, in: 0, out: tk(4), speed: 1 },
+            {
+              id: 'vclip2',
+              trackId: 'v1',
+              src: 'clip2.mp4',
+              offset: tk(3.5),
+              in: 0,
+              out: tk(4),
+              speed: 1,
+              transitionIn: { type, duration: tk(0.5) }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
+
+function xfadeGraph(type: string): string {
+  const result = compileTimelineToFfmpeg(xfadeProject(type), 'out.mp4')
+  return result.args[result.args.indexOf('-filter_complex') + 1]!
+}
+
 function main() {
   console.log('=== [TMCut Render Graph (Round 70 / R9) Test Suite] Starting tests ===\n')
 
@@ -146,48 +183,33 @@ function main() {
   })
 
   check('R128: new xfade keys compile end-to-end and unknown keys fall back to fade', () => {
-    const projectWith = (transitionType: string): TmcutProject => ({
-      version: 1,
-      name: 'xfade Test',
-      canvas: { width: 1920, height: 1080, fps: 30 },
-      timeline: {
-        tracks: [
-          {
-            id: 'v1',
-            type: 'video',
-            name: 'Video',
-            items: [
-              { id: 'vclip1', trackId: 'v1', src: 'clip1.mp4', offset: 0, in: 0, out: tk(4), speed: 1 },
-              {
-                id: 'vclip2',
-                trackId: 'v1',
-                src: 'clip2.mp4',
-                offset: tk(3.5),
-                in: 0,
-                out: tk(4),
-                speed: 1,
-                transitionIn: { type: transitionType, duration: tk(0.5) }
-              }
-            ]
-          }
-        ]
-      }
-    })
-    const filterComplex = (transitionType: string) => {
-      const result = compileTimelineToFfmpeg(projectWith(transitionType), 'out.mp4')
-      return result.args[result.args.indexOf('-filter_complex') + 1]!
-    }
     // R128 keys pass through fxCatalog -> xfadeNameFor -> literal xfade name.
     for (const transitionType of ['circleopen', 'fadeblack', 'smoothleft', 'zoomin']) {
       assert.ok(
-        filterComplex(transitionType).includes(`xfade=transition=${transitionType}:duration=0.500:offset=3.500`),
+        xfadeGraph(transitionType).includes(`xfade=transition=${transitionType}:duration=0.500:offset=3.500`),
         `missing xfade for ${transitionType}`
       )
     }
     // An unknown key must never break the graph: it degrades to a safe fade.
-    const unknownFc = filterComplex('star-wipe')
+    const unknownFc = xfadeGraph('star-wipe')
     assert.ok(unknownFc.includes('xfade=transition=fade:duration=0.500:offset=3.500'))
     assert.ok(unknownFc.includes('acrossfade='))
+  })
+
+  check('V4 G16: a key the bundled binary dies on exports as the fade the preview showed', () => {
+    // `squeezev` is offered by the catalog and `xfadeNameFor` resolves it
+    // faithfully, so this used to emit `xfade=transition=squeezev` — and the
+    // shipped FFmpeg exits 0xC0000005 after 28 of 60 frames on that name
+    // (measured, not recalled: tmcut_transition_preview.spec.ts re-spawns it).
+    // The preview already paints this key as a plain fade, so the user watched
+    // a crossfade and then the render died: the export was the only side that
+    // was wrong. Degradation keeps duration and offset, so nothing shifts.
+    const fc = xfadeGraph('squeezev')
+    assert.ok(fc.includes('xfade=transition=fade:duration=0.500:offset=3.500'),
+      'the export still hands the binary a transition it crashes on')
+    assert.ok(!fc.includes('squeezev'), 'an unrenderable name must not reach the filtergraph')
+    // Only the name that crashes degrades — its horizontal sibling renders.
+    assert.ok(xfadeGraph('squeezeh').includes('xfade=transition=squeezeh:duration=0.500:offset=3.500'))
   })
 
   check('compileTimelineToFfmpeg supports GIF output with palettegen/paletteuse', () => {

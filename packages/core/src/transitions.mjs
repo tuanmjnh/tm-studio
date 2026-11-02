@@ -493,3 +493,22 @@ export function transitionWindows(track) {
   }
   return windows.sort((a, b) => a.startTicks - b.startTicks)
 }
+
+/**
+ * The name the export is allowed to put after `xfade=transition=`.
+ *
+ * `unavailable` is not a style judgement: a row earns it only by the shipped
+ * binary refusing to render the name (`squeezev` writes 28 of 60 frames and
+ * exits 0xC0000005). The preview already degrades those keys to a plain fade,
+ * so without this the render side is the only place still handing FFmpeg a
+ * graph that dies mid-encode — a user who watched a crossfade gets a crash.
+ * Degradation keeps duration and offset, so the timeline does not shift.
+ *
+ * A name with no row passes through: the app catalog only ever offers names the
+ * binary listed in its own `xfade` help (guard `tmcut_fx_catalog`), so an
+ * unlisted name is not evidence of a defect the way a measured row is.
+ */
+export function renderableXfadeName(name) {
+  const row = XFADE_PREVIEW[name]
+  return row && row.shape === 'unavailable' ? 'fade' : name
+}

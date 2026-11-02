@@ -19,6 +19,10 @@
  *
  * `resources/ffmpeg.exe` is git-ignored, so a machine without the binary skips
  * rather than fails — same convention as `tmcut_fx_catalog.spec.ts`.
+ *
+ * The last block is the export's half of the same claim (V4 G16 leg 2): the key
+ * the binary crashes on must not reach the filtergraph, and the name the graph
+ * emits in its place has to render here, on the same plates.
  */
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
@@ -27,6 +31,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { XFADE_PREVIEW, previewTransitionRamp } from 'tmcut-core'
 import { FFMPEG_XFADE_NAMES, xfadeNameFor } from '../../app/utils/tmcut/fxCatalog'
+import { mapXfadeTransition } from '../../app/utils/tmcut/render'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const CANDIDATES = [
@@ -151,6 +156,21 @@ if (!BIN) {
   assert.equal(XFADE_PREVIEW.squeezev.shape, 'unavailable')
   assert.equal(previewTransitionRamp('squeezev', 0.5).incoming.opacity, 0.5)
 
+  // The export has to answer the same way. `squeezev` is still selectable in
+  // the catalog, so before V4 G16 the graph emitted it and the encode died
+  // after 28 of 60 frames while the preview had shown a crossfade the whole
+  // time. Ask the app's own resolver what name it would put in the filtergraph,
+  // then render that name on the same plates: it must produce all 12 frames.
+  const exported = mapXfadeTransition('squeezev')
+  assert.equal(exported, 'fade', 'the graph still resolves the crashing key to itself')
+  const rendered = coverage(BIN, exported)
+  assert.ok(rendered, `the degraded chain (${exported}) would not render — the export is still broken`)
+  assert.equal(rendered.length, 12)
+  assert.ok(rendered.every((value, i) => Math.abs(value - (i + 1) / 12) < 0.02),
+    'a plain fade is not a linear ramp any more — the degraded chain changed shape')
+  // Only the measured crash degrades; its sibling still renders as itself.
+  assert.equal(mapXfadeTransition('squeezeh'), 'squeezeh')
+
   // Same diagonal at three canvases: the model publishes one `coverage` curve
   // and claims it holds whatever the aspect, which is only true because the
   // front is a 45-degree line in proportions, not in pixels.
@@ -167,5 +187,5 @@ if (!BIN) {
   assert.ok(spread < 0.01,
     `the diagonal area curve moved ${(spread * 100).toFixed(1)}% of the frame across canvases — coverage is no longer aspect-free (limit 1%)`)
 
-  console.log(`OK    tmcut_transition_preview — ${checked} keys re-measured against the CSS model, diagbl aspect-stable, squeezev still refuses to render`)
+  console.log(`OK    tmcut_transition_preview — ${checked} keys re-measured against the CSS model, diagbl aspect-stable, squeezev still refuses to render and the export emits the fade that does`)
 }
