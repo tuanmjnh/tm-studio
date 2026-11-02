@@ -5,7 +5,8 @@
  *  (a) TRANSITION_CATALOG holds exactly 45 unique keys, well formed;
  *  (b) its key order is the frozen R128 list AND core KNOWN_TRANSITIONS
  *      (the anti-drift guard — do not weaken, do not reorder);
- *  (c) every `xfade` value is a documented FFmpeg xfade name;
+ *  (c) every `xfade` value is a documented FFmpeg xfade name, and — when a
+ *      binary is present — exactly the set the bundled FFmpeg advertises;
  *  (d) xfadeNameFor maps the 6 legacy TMCut keys and never emits garbage;
  *  (e) transitionsByCategory() covers every entry exactly once.
  *
@@ -16,7 +17,8 @@
  * resolve identically, input for input, to the app catalog.
  */
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runInThisContext } from 'node:vm'
@@ -101,6 +103,25 @@ interface ControllerMirror {
 const here = dirname(fileURLToPath(import.meta.url))
 
 /**
+ * `FFMPEG_XFADE_NAMES` is a hand-copy of what FFmpeg advertises, so nothing
+ * stops it from drifting away from the binary that actually runs the graph —
+ * and a name the binary does not know is not a warning: filter-init fails and
+ * the whole export dies. `resources/ffmpeg.exe` is git-ignored, so a fresh
+ * clone cannot answer this question; it says so instead of passing quietly.
+ */
+const ffmpeg = [
+  process.env.TOOLS_FFMPEG_PATH,
+  join(here, '..', '..', 'resources', process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg')
+].find(candidate => candidate && existsSync(candidate))
+
+function advertisedXfadeNames(bin: string): string[] {
+  const res = spawnSync(bin, ['-hide_banner', '-h', 'filter=xfade'], { encoding: 'utf8' })
+  assert.equal(res.status, 0, `ffmpeg -h filter=xfade failed: ${res.stderr}`)
+  // Help shape: five-space name, index, then the `..FV.......` capability column.
+  return [...res.stdout.matchAll(/^ {5,}([a-z]+) {2,}-?\d+ {2,}\.\.FV/gm)].map(match => match[1])
+}
+
+/**
  * Evaluates the mirrored block from the Electron controller in this realm so
  * the CJS resolver can be driven like the TS one. The block is pure data +
  * one function and contains no requires, so it is safe to evaluate.
@@ -158,6 +179,25 @@ function main() {
     assert.ok(FFMPEG_XFADE_NAMES.includes('custom'))
     assert.equal(TRANSITION_CATALOG.some(entry => entry.xfade === 'custom'), false)
   })
+
+  if (ffmpeg) {
+    check('the name list equals what the bundled binary advertises', () => {
+      const advertised = [...new Set(advertisedXfadeNames(ffmpeg))].sort()
+      assert.deepEqual(
+        [...FFMPEG_XFADE_NAMES].sort(),
+        advertised,
+        `the catalog list and ${ffmpeg} disagree — a name the binary does not advertise fails the whole export`
+      )
+      assert.ok(advertised.length >= 50, `only ${advertised.length} names parsed: the help shape changed, the guard is reading nothing`)
+      for (const entry of TRANSITION_CATALOG) {
+        assert.ok(advertised.includes(entry.xfade), `${entry.key} -> ${entry.xfade} is not advertised by this binary`)
+        assert.equal(entry.xfade === 'custom', false, 'custom needs an expr and cannot render as a bare name')
+        assert.ok(advertised.includes(xfadeNameFor(entry.key)), `${entry.key} resolves to an unadvertised name`)
+      }
+    })
+  } else {
+    console.log('   SKIPPED: no FFmpeg binary (set TOOLS_FFMPEG_PATH) — names checked against the documented set only')
+  }
 
   check('xfadeNameFor maps the 6 legacy keys and falls back safely', () => {
     for (const [key, xfade] of Object.entries(LEGACY_ALIASES)) {
