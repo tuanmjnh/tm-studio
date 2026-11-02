@@ -50,9 +50,19 @@ export function compileTimelineToFfmpeg(
   const textClips = renderTextClips(textTrack)
   const audioClips = renderAudioClips(audioTracks)
 
-  // Calculate total duration in seconds
+  // Timeline extent in seconds. Every track counts, because the store's
+  // contentDuration (useTmcutProject.ts) does: a caption that starts after the
+  // last frame of footage, or a timeline of captions only, is still content.
+  // Omitting the text track here cut those exports short — the drawtext window
+  // began after the base source had already ended, so the export showed bare
+  // background where the preview showed the caption (ADR-018 parity).
   let totalDuration = 0
+  let footageEnd = 0
   for (const clip of videoClips) {
+    footageEnd = Math.max(footageEnd, clip.offsetSec + renderClipDuration(clip))
+    totalDuration = Math.max(totalDuration, clip.offsetSec + renderClipDuration(clip))
+  }
+  for (const clip of textClips) {
     totalDuration = Math.max(totalDuration, clip.offsetSec + renderClipDuration(clip))
   }
   for (const clip of audioClips) {
@@ -154,6 +164,19 @@ export function compileTimelineToFfmpeg(
     if (options.lut3dPath) {
       graph.addFilterChain(`${currentVideoStream}${lutFileFilter(options.lut3dPath)}[v_graded]`)
       currentVideoStream = '[v_graded]'
+    }
+
+    // A caption that outlives the last frame of footage still has to be in the
+    // export. The preview draws it over the canvas background, so extend the bus
+    // with that same colour — after the LUT, because grading the footage must
+    // not grade the authored canvas. Only when a caption overflows, so no other
+    // export changes length.
+    const captionTail = textClips.length > 0 ? totalDuration - footageEnd : 0
+    if (captionTail > 0.001) {
+      graph.addFilterChain(
+        `${currentVideoStream}tpad=stop_mode=add:stop_duration=${captionTail.toFixed(3)}:color=${bgColor}[v_tailed]`
+      )
+      currentVideoStream = '[v_tailed]'
     }
 
     // Apply text overlays if any

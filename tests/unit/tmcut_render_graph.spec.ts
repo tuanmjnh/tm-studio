@@ -84,9 +84,12 @@ function main() {
     assert.ok(result.args.includes('-filter_complex'))
     const fc = result.args[result.args.indexOf('-filter_complex') + 1]!
     // R76: base layer now comes from core buildBackgroundSource() — 0x hex, r before d, 3-decimal duration.
-    assert.ok(fc.includes('color=c=0x123456:s=1920x1080:r=30:d=1.000[v_base]'))
+    // The 5s caption IS the timeline: the text track counts toward the export
+    // duration, so the base canvas runs as long as the caption (measured pixel
+    // by pixel in tmcut_text_pixel.spec.ts — a shorter base paints no text at all).
+    assert.ok(fc.includes('color=c=0x123456:s=1920x1080:r=30:d=5.000[v_base]'))
     assert.ok(fc.includes('drawtext=text=\'Hello Title\''))
-    assert.equal(result.duration, 1)
+    assert.equal(result.duration, 5)
   })
 
   check('compileTimelineToFfmpeg compiles video clips with transitions and text overlays', () => {
