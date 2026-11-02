@@ -206,6 +206,88 @@ export function rampTimelineToSource(clip, atTicks) {
   return clamp(src, lo, hi)
 }
 
+/**
+ * Split a speed curve at clip-local ticks `cutTicks`.
+ * `head` still runs on the original clock (t = 0 .. cutTicks) and gains a
+ * control point interpolated AT the cut; `tail` is the same curve re-anchored
+ * so the cut becomes its own t = 0. Concatenating the two reproduces the
+ * original curve exactly — which is what lets a split replay the same frames
+ * the uncut clip would have shown.
+ * Fewer than two valid points means "no curve": both halves come back empty
+ * so callers keep the classic constant-speed path byte-identical.
+ * @param {Array<{t: number, speed: number}>|null|undefined} points
+ * @param {number} cutTicks
+ * @returns {{ head: Array<{t: number, speed: number}>, tail: Array<{t: number, speed: number}> }}
+ */
+export function splitSpeedPoints(points, cutTicks) {
+  const pts = (Array.isArray(points) ? points : [])
+    .filter(p => p && Number.isFinite(p.t) && Number.isFinite(p.speed))
+    .map(p => ({ t: p.t, speed: p.speed < 0.01 ? 0.01 : p.speed }))
+    .sort((a, b) => a.t - b.t)
+  if (pts.length < 2) return { head: [], tail: [] }
+  const cut = Number.isFinite(cutTicks) ? Math.max(0, cutTicks) : 0
+  const atCut = speedAt({ speedPoints: pts }, cut)
+  const head = pts.filter(p => p.t < cut).map(p => ({ t: p.t, speed: p.speed }))
+  head.push({ t: cut, speed: atCut })
+  const tail = [{ t: 0, speed: atCut }]
+  for (const p of pts) {
+    if (p.t > cut) tail.push({ t: p.t - cut, speed: p.speed })
+  }
+  return { head, tail }
+}
+
+/**
+ * The time map a split must inherit: where the cut lands in the SOURCE and
+ * what each half's `speed` / `speedPoints` have to be.
+ *
+ * Both timeline models derive a clip's length from span/speed (the flat app
+ * store has no duration field at all, and the v3 bridge synthesizes one the
+ * same way), so a half that carries a curve whose mean is NOT its `speed`
+ * would silently resize the clip. The fix is therefore per-half, not per-
+ * curve: `speed` becomes that half's own mean and the curve is the exact
+ * sub-curve, which keeps the source partitioned once AND the cut exactly
+ * where the user put it. Constant clips return today's numbers unchanged.
+ *
+ * @param {{ in?: number, out?: number, speed?: number, reverse?: boolean, speedPoints?: Array<{t: number, speed: number}>|null }} clip
+ * @param {number} elapsedTicks clip-local timeline ticks before the cut
+ * @returns {{ boundary: number, consumed: number, head: object, tail: object }} `in`/`out` are SOURCE ticks
+ */
+export function splitRamp(clip, elapsedTicks) {
+  const speed = validateSpeed(clip?.speed)
+  const inT = finiteOr(clip?.in, 0)
+  const outT = finiteOr(clip?.out, 0)
+  const lo = Math.min(inT, outT)
+  const hi = Math.max(inT, outT)
+  const span = hi - lo
+  const rev = clip?.reverse === true
+  if (span < 2) {
+    const flat = { in: lo, out: hi, speed, speedPoints: null }
+    return { boundary: lo, consumed: 0, head: { ...flat }, tail: { ...flat } }
+  }
+  const duration = span / speed
+  const elapsed = clamp(Number.isFinite(elapsedTicks) ? elapsedTicks : 0, 0, duration)
+  const headTicks = Math.max(1, Math.round(elapsed))
+  const tailTicks = Math.max(1, Math.round(duration - elapsed))
+  const consumed = clamp(rampIntegral(clip, elapsed), 0, span)
+  const cut = Math.round(clamp(rev ? hi - consumed : lo + consumed, lo + 1, hi - 1))
+  const split = splitSpeedPoints(clip?.speedPoints, elapsed)
+  // A constant clip keeps its own speed on both halves — the mean formula
+  // would only add rounding noise to a number the user typed.
+  const ramped = isRamped(clip)
+  const half = (from, to, ticks, curve) => ({
+    in: from,
+    out: to,
+    speed: ramped ? validateSpeed(Math.max(1, to - from) / ticks) : speed,
+    speedPoints: curve.length >= 2 ? curve : null
+  })
+  return {
+    boundary: cut,
+    consumed,
+    head: rev ? half(cut, hi, headTicks, split.head) : half(lo, cut, headTicks, split.head),
+    tail: rev ? half(lo, cut, tailTicks, split.tail) : half(cut, hi, tailTicks, split.tail)
+  }
+}
+
 /** Preset curve kinds (CapCut speed-curve menu). */
 export const SPEED_RAMP_PRESETS = ['ease-in', 'ease-out', 'mountain', 'valley']
 

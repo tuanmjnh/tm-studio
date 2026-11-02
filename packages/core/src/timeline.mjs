@@ -7,6 +7,7 @@
 // =============================================================================
 
 import { TICKS_PER_SECOND } from './time.mjs'
+import { splitRamp } from './retime.mjs'
 
 let clipCounter = 0
 let trackCounter = 0
@@ -199,6 +200,7 @@ export function addClip(timeline, trackType, partial = {}) {
     focusX: partial.focusX,
     focusY: partial.focusY,
     cropRect: partial.cropRect,
+    speedPoints: partial.speedPoints,
     volume: partial.volume ?? 100,
     text: partial.text,
     color: partial.color ?? '#ffffff',
@@ -223,28 +225,45 @@ export function removeClip(timeline, clipId) {
 /**
  * Split the clip under `splitTimeTicks` into two clips.
  * Keeps ≥1 tick margin on each side. Returns the second clip or null.
+ *
+ * The cut inherits the clip's TIME MAP, not just the source boundary: speed,
+ * curve and direction all decide which source ticks sit on which side, and
+ * each half gets the mean speed that keeps its derived length on the cut
+ * (`retime.splitRamp`). Copying the whole curve to both halves — what this
+ * function did before — replays the ramp twice and skips the middle.
  */
 export function splitClip(timeline, clipId, splitTimeTicks) {
   const found = findClip(timeline, clipId)
   if (!found || found.track.locked) return null
   const { track, index, clip } = found
-  const speed = isFiniteNumber(clip.speed) && clip.speed > 0 ? clip.speed : 1
   const clipStart = clip.timeline.start
   const clipEnd = clipStart + clipDurationTicks(clip)
   if (splitTimeTicks <= clipStart || splitTimeTicks >= clipEnd) return null
 
   const elapsed = splitTimeTicks - clipStart
-  const splitSourceTime = clip.source.in + Math.round(elapsed * speed)
-  const originalOut = clip.source.out
-  clip.source.out = splitSourceTime
-  clip.timeline.duration = Math.max(1, splitTimeTicks - clipStart)
-
+  const map = splitRamp({
+    in: clip.source.in,
+    out: clip.source.out,
+    speed: clip.speed,
+    reverse: clip.reverse,
+    speedPoints: clip.speedPoints
+  }, elapsed)
+  // Clone the tail BEFORE rewriting the head, then hand it its own half.
   const second = {
     ...JSON.parse(JSON.stringify(clip)),
     id: nextClipId(),
-    source: { in: splitSourceTime, out: originalOut },
-    timeline: { start: splitTimeTicks, duration: Math.max(1, clipEnd - splitTimeTicks) }
+    source: { in: map.tail.in, out: map.tail.out },
+    timeline: { start: splitTimeTicks, duration: Math.max(1, clipEnd - splitTimeTicks) },
+    speed: map.tail.speed
   }
+  if (map.tail.speedPoints) second.speedPoints = map.tail.speedPoints
+  else delete second.speedPoints
+  clip.source.in = map.head.in
+  clip.source.out = map.head.out
+  clip.speed = map.head.speed
+  if (map.head.speedPoints) clip.speedPoints = map.head.speedPoints
+  else delete clip.speedPoints
+  clip.timeline.duration = Math.max(1, elapsed)
   // The tail's incoming neighbor changed: the inherited transition only
   // ever described the ORIGINAL pair (the first half keeps it — its start
   // still overlaps the previous clip) (R34/B3).

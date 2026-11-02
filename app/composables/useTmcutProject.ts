@@ -26,6 +26,7 @@ import {
   ungroupClips,
   insertClipRipple,
   closeGaps,
+  splitRamp,
   TICKS_PER_SECOND,
   canApplyTransition,
   applyTransition,
@@ -1267,21 +1268,36 @@ function splitClip(clipId: string, splitTime: number): boolean {
     }
 
     const elapsedOnTimeline = splitTicks - clipStart
-    const splitSourceTime = Math.round(clip.in + elapsedOnTimeline * speed)
+    // The cut inherits the clip's TIME MAP (speed, curve, direction) from the
+    // core — `retime.splitRamp`. The store has no duration field, so each
+    // half must leave with the mean speed that keeps its own length on the
+    // cut; copying the curve to both halves replayed the ramp and skipped
+    // the middle of the source.
+    const map = splitRamp({
+      in: clip.in,
+      out: clip.out,
+      speed,
+      reverse: clip.reverse,
+      speedPoints: clip.speedPoints
+    }, elapsedOnTimeline)
 
     pushHistory()
-    // First piece: keep original in, adjust out
-    const originalOut = clip.out
-    clip.out = splitSourceTime
-
-    // Second piece: starts at splitSourceTime, ends at originalOut, offset at splitTime
+    // Build the tail from the untouched clip, then rewrite the head in place.
     const secondClip: TmcutTimelineItem = {
       ...JSON.parse(JSON.stringify(clip)),
       id: `clip_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      in: splitSourceTime,
-      out: originalOut,
-      offset: splitTicks
+      in: map.tail.in,
+      out: map.tail.out,
+      offset: splitTicks,
+      speed: map.tail.speed
     }
+    if (map.tail.speedPoints) secondClip.speedPoints = map.tail.speedPoints
+    else delete secondClip.speedPoints
+    clip.in = map.head.in
+    clip.out = map.head.out
+    clip.speed = map.head.speed
+    if (map.head.speedPoints) clip.speedPoints = map.head.speedPoints
+    else delete clip.speedPoints
     // The tail's incoming neighbor changed (roadmap B3): the inherited
     // transition only ever described the ORIGINAL pair (the first half
     // keeps it — its start still touches the previous clip).

@@ -1,7 +1,7 @@
 // tmcut-core — retime tests. Run: node --test "test/*.test.mjs"
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { validateSpeed, isRetimed, timelineToSource, sourceToTimeline, withSpeed, isRamped, speedAt, rampIntegral, rampTimelineToSource, SPEED_RAMP_PRESETS, buildRampPreset, rampSetptsExpr } from '../src/retime.mjs'
+import { validateSpeed, isRetimed, timelineToSource, sourceToTimeline, withSpeed, isRamped, speedAt, rampIntegral, rampTimelineToSource, SPEED_RAMP_PRESETS, buildRampPreset, rampSetptsExpr, splitSpeedPoints, splitRamp } from '../src/retime.mjs'
 import { TICKS_PER_SECOND } from '../src/time.mjs'
 
 const T = TICKS_PER_SECOND // 120000 ticks per second
@@ -187,5 +187,132 @@ describe('speed ramping (R124 A4)', () => {
     assert.ok(!expr.includes('sqrt('), `expected linear form, got: ${expr}`)
     const evalU = jsify(expr)
     assert.ok(Math.abs(evalU(4) - 2) < 1e-6) // 4s source at 2x = 2s out
+  })
+})
+
+// V4 G5 follow-up: splitting a clip must inherit its TIME MAP, not copy it.
+// The flat model derives timeline length as span/speed, so a half keeps the
+// user's cut position only if its `speed` equals its own curve mean.
+describe('splitSpeedPoints + splitRamp (V4 G5 follow-up)', () => {
+  const D = 24 * T
+  const easeIn = () => buildRampPreset('ease-in', D, 1) // 0.5 -> 1.5, mean 1
+  const rampClip = () => ({ in: 0, out: D, speed: 1, speedPoints: easeIn() })
+
+  it('splitSpeedPoints keeps a constant clip constant', () => {
+    assert.deepEqual(splitSpeedPoints([], 5 * T), { head: [], tail: [] })
+    assert.deepEqual(splitSpeedPoints(null, 5 * T), { head: [], tail: [] })
+    assert.deepEqual(splitSpeedPoints(undefined, 5 * T), { head: [], tail: [] })
+    // One valid point is not a curve (isRamped false) — no invented segment.
+    assert.deepEqual(splitSpeedPoints([{ t: 0, speed: 2 }], 5 * T), { head: [], tail: [] })
+  })
+
+  it('splitSpeedPoints reproduces the original curve at every timeline position', () => {
+    const pts = easeIn()
+    for (const cut of [T, 6 * T, 12 * T, 20 * T, D - T]) {
+      const { head, tail } = splitSpeedPoints(pts, cut)
+      for (let t = 0; t <= D; t += T / 3) {
+        const want = speedAt({ speedPoints: pts }, t)
+        const got = t <= cut
+          ? speedAt({ speedPoints: head }, t)
+          : speedAt({ speedPoints: tail }, t - cut)
+        assert.ok(Math.abs(got - want) < 1e-9, `cut=${cut} t=${t}: ${got} != ${want}`)
+      }
+      // The halves must meet at the cut: no speed step where the playhead was.
+      assert.ok(Math.abs(speedAt({ speedPoints: head }, cut) - speedAt({ speedPoints: tail }, 0)) < 1e-9)
+    }
+  })
+
+  it('splitSpeedPoints re-anchors the tail to its own t=0', () => {
+    const pts = [{ t: 0, speed: 0.5 }, { t: 8 * T, speed: 1 }, { t: D, speed: 1.5 }]
+    const { head, tail } = splitSpeedPoints(pts, 8 * T)
+    assert.deepEqual(head, [{ t: 0, speed: 0.5 }, { t: 8 * T, speed: 1 }])
+    assert.deepEqual(tail, [{ t: 0, speed: 1 }, { t: 16 * T, speed: 1.5 }])
+    // A cut exactly on a control point does not duplicate it.
+    const atPoint = splitSpeedPoints(pts, 12 * T)
+    assert.equal(atPoint.head.filter(p => p.t === 12 * T).length, 1)
+    assert.equal(atPoint.tail[0].t, 0)
+  })
+
+  it('splitRamp on a constant clip returns the classic numbers', () => {
+    const r = splitRamp({ in: 2 * T, out: 10 * T, speed: 2 }, 1.5 * T)
+    assert.equal(r.boundary, 5 * T, 'elapsed * speed, same as before this slice')
+    assert.deepEqual(r.head, { in: 2 * T, out: 5 * T, speed: 2, speedPoints: null })
+    assert.deepEqual(r.tail, { in: 5 * T, out: 10 * T, speed: 2, speedPoints: null })
+  })
+
+  it('splitRamp puts the boundary where the ramp actually is', () => {
+    const r = splitRamp(rampClip(), 12 * T)
+    // 12 timeline seconds under 0.5 -> 1.0 (mean 0.75 over the first half)
+    // consume 9 source seconds, not the 12 the linear formula claims.
+    assert.equal(r.boundary, 9 * T)
+    assert.equal(r.head.out, 9 * T)
+    assert.equal(r.tail.in, 9 * T)
+    assert.equal(r.tail.out, D, 'the source is partitioned, nothing is skipped')
+  })
+
+  it('splitRamp gives each half the speed that keeps the cut in place', () => {
+    for (const cut of [2 * T, 6 * T, 12 * T, 19 * T]) {
+      const r = splitRamp(rampClip(), cut)
+      const headSpan = r.head.out - r.head.in
+      const tailSpan = r.tail.out - r.tail.in
+      assert.equal(r.head.speed, headSpan / cut, 'head speed must be its own mean')
+      assert.equal(r.tail.speed, tailSpan / (D - cut), 'tail speed must be its own mean')
+      // The flat model's ONLY length formula is span/speed — this is what
+      // keeps the tail where the user cut instead of shifting the timeline.
+      assert.equal(Math.round(headSpan / r.head.speed), cut)
+      assert.equal(Math.round(tailSpan / r.tail.speed), D - cut)
+      assert.equal(headSpan + tailSpan, D, 'no source duplicated or lost')
+    }
+  })
+
+  it('splitRamp replay covers the source exactly once', () => {
+    const clip = rampClip()
+    const cut = 12 * T
+    const r = splitRamp(clip, cut)
+    for (let t = 0; t < D; t += T / 2) {
+      const want = rampTimelineToSource(clip, t)
+      const half = t < cut ? r.head : r.tail
+      const got = rampTimelineToSource({ ...clip, ...half }, t < cut ? t : t - cut)
+      assert.ok(Math.abs(got - want) < 1, `t=${t}: replayed source ${got} != original ${want}`)
+    }
+  })
+
+  it('splitRamp past the last control point yields a constant tail that still finishes the source', () => {
+    const clip = { in: 0, out: 48 * T, speed: 2, speedPoints: [{ t: 0, speed: 2 }, { t: 12 * T, speed: 2 }] }
+    const r = splitRamp(clip, 16 * T)
+    assert.ok(isRamped({ ...clip, ...r.head }), 'the head still holds a curve')
+    assert.equal(r.tail.speedPoints, null, 'a flat tail is not a curve — it is constant at its own speed')
+    assert.equal(r.tail.speed, 2)
+    assert.equal(rampTimelineToSource({ ...clip, ...r.tail }, (r.tail.out - r.tail.in) / r.tail.speed), r.tail.out)
+  })
+
+  it('splitRamp of a reversed clip hands the LATE source to the head', () => {
+    const r = splitRamp({ in: 0, out: 10 * T, speed: 1, reverse: true }, 4 * T)
+    assert.equal(r.head.in, 6 * T, 'reverse plays out -> in: the first 4 s show the last 4 s')
+    assert.equal(r.head.out, 10 * T)
+    assert.equal(r.tail.in, 0)
+    assert.equal(r.tail.out, 6 * T)
+    const rr = splitRamp({ in: 0, out: D, speed: 1, reverse: true, speedPoints: easeIn() }, 12 * T)
+    assert.equal(rr.head.out, D)
+    assert.equal(rr.head.in, D - 9 * T)
+    assert.equal(rr.tail.out, D - 9 * T)
+    assert.equal(rr.tail.in, 0)
+  })
+
+  it('splitRamp never returns a degenerate or non-finite half', () => {
+    const contiguous = (clip, r) => (clip.reverse
+      ? [r.tail.in === clip.in, r.tail.out === r.head.in, r.head.out === clip.out]
+      : [r.head.in === clip.in, r.head.out === r.tail.in, r.tail.out === clip.out])
+    for (const clip of [rampClip(), { in: T, out: 5 * T, speed: 0.01 }, { in: 0, out: 6 * T, speed: 8, reverse: true }]) {
+      const dur = (clip.out - clip.in) / clip.speed
+      for (const cut of [1, Math.round(T / 4), Math.round(dur - 1)]) {
+        const r = splitRamp(clip, cut)
+        for (const half of [r.head, r.tail]) {
+          assert.ok(half.out > half.in, `empty source range: ${JSON.stringify(half)}`)
+          assert.ok(Number.isFinite(half.speed) && half.speed >= 0.01, `bad speed: ${half.speed}`)
+        }
+        assert.deepEqual(contiguous(clip, r), [true, true, true], `source not partitioned once: ${JSON.stringify(r)}`)
+      }
+    }
   })
 })

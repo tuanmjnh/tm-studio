@@ -86,6 +86,32 @@ async function main() {
     assert.equal(durationTicks(tail), tk(6))
   })
 
+  await check('splitClip re-times a speed ramp so the halves replay the source once', async () => {
+    // V4 G5 follow-up: the store has no duration field — length is derived as
+    // span/speed — so a ramped split must hand each half its OWN mean speed,
+    // otherwise the cut drifts or seconds of media are never shown.
+    const s = await freshStore()
+    const clip = s.addClipToTrack('video', { src: 'a.mp4', in: 0, out: tk(24), offset: 0 })!
+    s.updateClip(clip.id, { speedPoints: [{ t: 0, speed: 0.5 }, { t: tk(24), speed: 1.5 }] })
+    assert.equal(durationTicks(clip), tk(24), 'a mean-preserving curve keeps the length')
+    assert.ok(s.splitClip(clip.id, 12), 'the UI speaks seconds')
+    const [first, tail] = videoClipTrack(s).items!
+    // Boundary is the speed integral: 12 s at 0.5 -> 1.0 consumes 9 s.
+    assert.equal(first.in, 0)
+    assert.equal(first.out, tk(9))
+    assert.equal(tail.in, tk(9), 'the tail picks up where the head stops')
+    assert.equal(tail.out, tk(24))
+    // The cut stays where the creator put it.
+    assert.equal(durationTicks(first), tk(12))
+    assert.equal(durationTicks(tail), tk(12))
+    assert.equal(startTicks(tail), tk(12))
+    // Each half carries its own sub-curve, re-anchored to its own t=0.
+    assert.deepEqual(first.speedPoints, [{ t: 0, speed: 0.5 }, { t: tk(12), speed: 1 }])
+    assert.deepEqual(tail.speedPoints, [{ t: 0, speed: 1 }, { t: tk(12), speed: 1.5 }])
+    assert.equal(first.speed, 0.75)
+    assert.equal(tail.speed, 1.25)
+  })
+
   await check('splitClip near an edge is refused and changes nothing', async () => {
     const s = await freshStore()
     const clip = s.addClipToTrack('video', { src: 'a.mp4', in: 0, out: tk(4) })!

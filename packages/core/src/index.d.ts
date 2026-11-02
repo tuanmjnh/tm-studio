@@ -642,6 +642,12 @@ export function rampTimelineToSource(clip: { in?: number, out?: number, speed?: 
 export const SPEED_RAMP_PRESETS: string[]
 export function buildRampPreset(kind: string, durationTicks: number, baseSpeed?: number): TmcutSpeedPoint[]
 export function rampSetptsExpr(clip: { speedPoints?: TmcutSpeedPoint[] | null } | null | undefined, uVariable?: string): string | null
+// V4 G5 follow-up: a split inherits the time map. `in`/`out` of each half are
+// SOURCE ticks; `speed` is that half's own mean, which is what keeps its
+// derived length (span/speed) on the cut the user asked for.
+export interface TmcutSplitHalf { in: number, out: number, speed: number, speedPoints: TmcutSpeedPoint[] | null }
+export function splitSpeedPoints(points: TmcutSpeedPoint[] | null | undefined, cutTicks: number): { head: TmcutSpeedPoint[], tail: TmcutSpeedPoint[] }
+export function splitRamp(clip: { in?: number, out?: number, speed?: number, reverse?: boolean, speedPoints?: TmcutSpeedPoint[] | null } | null | undefined, elapsedTicks: number): { boundary: number, consumed: number, head: TmcutSplitHalf, tail: TmcutSplitHalf }
 
 // --- Effects registry + normalize (Roadmap C6) ---
 // First wave: blur, sharpen, vignette, grain, chromakey, lut3d, stabilize,

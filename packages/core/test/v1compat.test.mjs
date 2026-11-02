@@ -463,11 +463,22 @@ describe('v1compat', () => {
       for (const item of tracks[0].items) {
         assert.deepEqual(item.mask, MASK, `${item.id} lost its mask`)
         assert.equal(item.blend, 'multiply', `${item.id} lost its blend mode`)
-        assert.deepEqual(item.speedPoints, RAMP, `${item.id} lost its speed ramp`)
+        assert.ok(Array.isArray(item.speedPoints) && item.speedPoints.length >= 2, `${item.id} lost its speed ramp`)
         assert.equal(item.shadowColor, '#ff0000', `${item.id} lost its shadow colour`)
         assert.equal(item.strokeColor, '#00ff00', `${item.id} lost its outline colour`)
         assert.equal(item.bgColor, '#0000ff', `${item.id} lost its background plate`)
       }
+      // A duplicate is a verbatim clone of whatever the clip holds NOW (the
+      // split ran first, so it copies the head's curve); the two split halves
+      // inherit sub-curves around the cut — 6 timeline seconds of a 0.5 -> 1.5
+      // ramp anchored at 12 s reaches 1.0 there (V4 G5 follow-up).
+      const [head, tail, copy] = tracks[0].items
+      assert.deepEqual(copy.speedPoints, head.speedPoints, 'a clone keeps the current curve verbatim')
+      assert.deepEqual(head.speedPoints, [{ t: 0, speed: 0.5 }, { t: 6 * TICKS_PER_SECOND, speed: 1 }])
+      assert.deepEqual(tail.speedPoints, [{ t: 0, speed: 1 }, { t: 6 * TICKS_PER_SECOND, speed: 1.5 }])
+      assert.ok(head.out > 0 && head.out < tail.out, 'the split must move the source boundary')
+      assert.equal(head.out, tail.in, 'the tail picks up where the head stops')
+      assert.equal(copy.in, 2 * TICKS_PER_SECOND, 'a duplicate replays the same source range')
     })
 
     it('detects mask-only, blend-only and ramp-only changes (V4 G5)', () => {

@@ -19,6 +19,7 @@ import {
   validateTimeline
 } from '../src/timeline.mjs'
 import { secToTicks } from '../src/time.mjs'
+import { rampTimelineToSource } from '../src/retime.mjs'
 import { defaultTimeline } from '../src/project.mjs'
 
 function makeTimeline() {
@@ -85,6 +86,80 @@ describe('timeline', () => {
     assert.equal(splitClip(timeline, clip.id, 0), null)
     assert.equal(splitClip(timeline, clip.id, secToTicks(10)), null)
     assert.equal(splitClip(timeline, 'missing', secToTicks(5)), null)
+  })
+
+  // V4 G5 follow-up: the split must inherit the clip's TIME MAP. Before this
+  // slice the boundary used `elapsed * speed` and the curve was copied to
+  // both halves verbatim, so each half replayed its own curve from t=0 over
+  // a shorter span — measured below: 6 s of source never appeared.
+  it('re-times a speed ramp so the split replays every source second once', () => {
+    const timeline = makeTimeline()
+    const D = secToTicks(24)
+    const clip = addClip(timeline, 'video', {
+      source: { in: 0, out: D },
+      speedPoints: [{ t: 0, speed: 0.5 }, { t: D, speed: 1.5 }]
+    })
+    assert.ok(clip.speedPoints, 'addClip must carry the curve or a created clip cannot ramp')
+    const before = { in: 0, out: D, speed: clip.speed, speedPoints: clip.speedPoints }
+    const cut = secToTicks(12)
+    const second = splitClip(timeline, clip.id, cut)
+    assert.ok(second)
+    // 1) boundary = the speed integral (0.5 -> 1.0 over 12 s = 9 s of source)
+    assert.equal(clip.source.out, secToTicks(9))
+    assert.equal(second.source.in, secToTicks(9))
+    assert.equal(second.source.out, D)
+    // 2) the flat model derives length as span/speed, so each half must carry
+    //    its own mean: that is what keeps the cut exactly where the user put it
+    assert.equal(clipEndTicks(clip), cut, 'head must end on the cut')
+    assert.equal(clipDurationTicks(second), secToTicks(12))
+    assert.equal(totalDurationTicks(timeline), D)
+    // 3) the strongest one: at every timeline position the two halves show the
+    //    same source the single clip showed before the cut
+    const asFlat = c => ({ in: c.source.in, out: c.source.out, speed: c.speed, reverse: c.reverse, speedPoints: c.speedPoints })
+    for (let t = 0; t < D; t += secToTicks(1)) {
+      const want = rampTimelineToSource(before, t)
+      const got = t < cut
+        ? rampTimelineToSource(asFlat(clip), t)
+        : rampTimelineToSource(asFlat(second), t - cut)
+      assert.ok(Math.abs(got - want) < 1, `t=${t / secToTicks(1)}s: ${got / secToTicks(1)} != ${want / secToTicks(1)}`)
+    }
+    // 4) the curve is continuous across the cut: no speed step at the join
+    assert.equal(second.speedPoints[0].t, 0)
+    assert.equal(second.speedPoints[0].speed, 1, 'the tail starts where the head ended')
+  })
+
+  it('splitClip of a reversed clip hands the late source to the head', () => {
+    const timeline = makeTimeline()
+    const clip = addClip(timeline, 'video', { source: { in: 0, out: secToTicks(10) }, reverse: true })
+    const second = splitClip(timeline, clip.id, secToTicks(4))
+    assert.ok(second)
+    // Reverse plays out -> in, so the first 4 timeline seconds show the LAST
+    // 4 source seconds; the tail continues with the earlier 6 s.
+    assert.equal(clip.source.in, secToTicks(6))
+    assert.equal(clip.source.out, secToTicks(10))
+    assert.equal(second.source.in, 0)
+    assert.equal(second.source.out, secToTicks(6))
+    assert.equal(clipEndTicks(clip), secToTicks(4))
+    assert.equal(second.timeline.start, secToTicks(4))
+    assert.equal(totalDurationTicks(timeline), secToTicks(10))
+  })
+
+  it('a constant clip splits exactly as before this slice', () => {
+    const timeline = makeTimeline()
+    // 16 s of source at 2x = 8 s on the timeline, occupying [0, 8].
+    const clip = addClip(timeline, 'video', { source: { in: secToTicks(2), out: secToTicks(18) }, speed: 2 })
+    const second = splitClip(timeline, clip.id, secToTicks(5))
+    assert.ok(second)
+    assert.equal(clip.source.out, secToTicks(12), '5 s of timeline at 2x consume 10 s of source')
+    assert.equal(second.source.in, secToTicks(12))
+    assert.equal(second.source.out, secToTicks(18))
+    assert.equal(clip.speed, 2)
+    assert.equal(second.speed, 2)
+    assert.equal(clip.speedPoints, undefined)
+    assert.equal(second.speedPoints, undefined)
+    assert.equal(clipEndTicks(clip), secToTicks(5))
+    assert.equal(clipDurationTicks(second), secToTicks(3))
+    assert.equal(totalDurationTicks(timeline), secToTicks(8))
   })
 
   it('moves and trims clips', () => {
