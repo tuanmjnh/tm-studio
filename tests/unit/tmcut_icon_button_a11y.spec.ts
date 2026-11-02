@@ -111,6 +111,9 @@ describe('form controls expose an accessible name', () => {
   const controls: { at: string, tag: string, named: boolean }[] = []
   for (const file of files) {
     const src = readFileSync(join(ROOT, file), 'utf8')
+    // An `id` is only a name when something points at it, so collect the
+    // `for=` targets the file offers before judging any control.
+    const labelFors = new Set([...src.matchAll(/<label[^>]*\bfor=["']([^"']+)["']/g)].map(m => m[1]!))
     for (const match of src.matchAll(CONTROLS)) {
       const end = tagEnd(src, match.index + match[0].length)
       if (end === -1) continue
@@ -123,12 +126,18 @@ describe('form controls expose an accessible name', () => {
       }
       // A visible label can come from four places: an attribute on the control,
       // an enclosing UFormField, a native <label> wrapper, or slot text.
-      const byAttribute = /\s(aria-label|:aria-label|aria-labelledby|:aria-labelledby|label|:label|id|:id)=/.test(tag)
+      const byAttribute = /\s(aria-label|:aria-label|aria-labelledby|:aria-labelledby|label|:label)=/.test(tag)
+      // `id=` alone used to count as a name. It is not one: five search and
+      // inline-add fields on /system/ai-keys carried an id with no `label for`
+      // behind it, passed the guard, and reached the browser unnamed — a
+      // placeholder is not an accessible name either. Only a matching target counts.
+      const idTarget = tag.match(/\s(?::?id)="([^"{]+)"/)
+      const byLabelFor = idTarget ? labelFors.has(idTarget[1]!) : false
       const byFormField = inside(src, match.index, /<UFormField\b/g, '</UFormField>')
       const byNativeLabel = inside(src, match.index, /<label\b/g, '</label>')
       const bySlot = slot.length > 0
       const line = src.slice(0, match.index).split('\n').length
-      controls.push({ at: `${file}:${line}`, tag, named: byAttribute || byFormField || byNativeLabel || bySlot })
+      controls.push({ at: `${file}:${line}`, tag, named: byAttribute || byLabelFor || byFormField || byNativeLabel || bySlot })
     }
   }
 

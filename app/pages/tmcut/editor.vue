@@ -311,6 +311,12 @@ function handleEditorKeydown(e: KeyboardEvent) {
       />
     </template>
 
+    <!-- The navbar renders its title as a span, so a full-bleed workspace is a
+         page with no heading at all; this gives AT one without adding chrome. -->
+    <h1 class="sr-only">
+      {{ currentProject?.name || t('tmcut.editor') }}
+    </h1>
+
     <TmcutEditorWorkspace v-model="compactPanel" />
   </BasePage>
 </template>

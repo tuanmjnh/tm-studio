@@ -1637,6 +1637,7 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
               v-model="searchProvider"
               icon="i-lucide-search"
               size="sm"
+              :aria-label="t('common.search')"
               :placeholder="t('common.search')"
               :ui="{ trailing: 'pe-0.5' }"
               class="w-full"
@@ -1880,6 +1881,7 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
                 v-model="searchModel"
                 icon="i-lucide-search"
                 size="sm"
+                :aria-label="t('common.search')"
                 :placeholder="t('aiProviders.search_models_placeholder')"
               />
             </div>
@@ -2317,6 +2319,7 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
                 v-model="searchConnectionModel"
                 icon="i-lucide-search"
                 size="sm"
+                :aria-label="t('common.search')"
                 :placeholder="t('aiProviders.search_models_placeholder')"
               />
             </div>
@@ -2488,6 +2491,7 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
               v-model="inlineNewModelId"
               size="sm"
               class="min-w-[180px] flex-1"
+              :aria-label="t('aiProviders.model_id')"
               :placeholder="t('aiProviders.model_id_hint')"
               @keyup.enter="addInlineModelSubmit"
             />
@@ -2496,6 +2500,7 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
               v-model="inlineNewModelDisplayName"
               size="sm"
               class="min-w-[140px] flex-1"
+              :aria-label="t('aiProviders.display_name')"
               :placeholder="t('aiProviders.display_name')"
               @keyup.enter="addInlineModelSubmit"
             />
@@ -2569,6 +2574,7 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
             id="ai-keys-connect-search"
             v-model="connectSearch"
             icon="i-lucide-search"
+            :aria-label="t('common.search')"
             :placeholder="t('common.search')"
             class="w-full"
             autocomplete="off"
