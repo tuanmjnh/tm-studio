@@ -625,6 +625,68 @@ export function transitionWindows(
   track: TmcutTrack | { items?: readonly unknown[] } | null | undefined
 ): TmcutTransitionWindow[]
 
+// --- Transitions: preview geometry (V4 G16) ---
+// The numbers below are MEASURED against the bundled FFmpeg (solid-plate
+// renders of every xfade key), not chosen. The preview player applies the CSS
+// this section returns and makes no geometry decision of its own.
+export type TmcutXfadeShape
+  = 'crossfade' | 'wipe' | 'softwipe' | 'slide' | 'squeeze' | 'diag' | 'band' | 'comb'
+    | 'corner' | 'iris' | 'hole' | 'rect' | 'pie' | 'unavailable'
+export type TmcutXfadeFidelity = 'exact' | 'shape' | 'approximate'
+
+/** How far a shape has travelled at progress p (0 = outgoing whole, 1 = incoming). */
+export const XFADE_POSITION_LAWS: Record<string, (p: number) => number>
+/** Shape + law + fidelity per xfade key; every `KNOWN_TRANSITIONS` member has one. */
+export const XFADE_PREVIEW: Record<string, {
+  shape: TmcutXfadeShape
+  law: string
+  fidelity: TmcutXfadeFidelity
+  note?: string
+  from?: string
+  travel?: string
+  mode?: string
+  tint?: string
+}>
+/** Strip period for the slice family, as a fraction of the axis. */
+export const XFADE_COMB_PERIOD: number
+
+export interface TmcutPreviewLayerStyle {
+  opacity: number
+  clipPath?: string
+  transform?: string
+  maskImage?: string
+  webkitMaskImage?: string
+  maskSize?: string
+  webkitMaskSize?: string
+  maskRepeat?: string
+  webkitMaskRepeat?: string
+}
+
+export interface TmcutPreviewRamp {
+  shape: TmcutXfadeShape
+  law: string
+  fidelity: TmcutXfadeFidelity
+  note: string | null
+  /** What the law produced for this progress. */
+  travel: number
+  /**
+   * Covered fraction of the box, i.e. the area the CSS shape really keeps
+   * (`travel` squared for `diag` and `rect`); null when it depends on the
+   * canvas aspect.
+   */
+  coverage: number | null
+  progress: number
+  incoming: TmcutPreviewLayerStyle
+  outgoing: TmcutPreviewLayerStyle
+}
+
+/**
+ * The preview face of one xfade key at `p`. The incoming layer carries the
+ * reveal (the player paints it OVER the outgoing one, so clipping the outgoing
+ * would only uncover the canvas behind it); `slide` moves both layers.
+ */
+export function previewTransitionRamp(type: string, p: number): TmcutPreviewRamp
+
 // --- Retime: speed/reverse time map (Roadmap C4) ---
 // All clip fields and arguments are in TIMELINE TICKS (120000/s).
 export function validateSpeed(speed?: number): number

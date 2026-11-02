@@ -6,11 +6,18 @@ import {
   canApplyTransition,
   applyTransition,
   clearTransition,
-  transitionWindows
+  transitionWindows,
+  XFADE_PREVIEW,
+  XFADE_POSITION_LAWS,
+  previewTransitionRamp
 } from '../src/transitions.mjs'
 import { addClip } from '../src/timeline.mjs'
 import { defaultTimeline } from '../src/project.mjs'
 import { secToTicks, TICKS_PER_SECOND } from '../src/time.mjs'
+
+const SHAPES = ['crossfade', 'wipe', 'softwipe', 'slide', 'squeeze', 'diag', 'band', 'comb',
+  'corner', 'iris', 'hole', 'rect', 'pie', 'unavailable']
+const FIDELITIES = ['exact', 'shape', 'approximate']
 
 // Two adjacent 2 s clips: A [0..2s], B [2s..4s] (addClip appends).
 function pair() {
@@ -208,5 +215,179 @@ describe('transitions (C5)', () => {
     track.locked = true
     assert.equal(clearTransition(timeline, b.id), false)
     assert.equal(b.timeline.start, secToTicks(1.5)) // still shifted, untouched
+  })
+})
+
+describe('xfade preview geometry (V4 G16)', () => {
+  const FRAMES = Array.from({ length: 12 }, (_, i) => (i + 1) / 12)
+
+  // The fraction of the box an `inset()` or `polygon()` clip-path keeps, in
+  // proportion units. `pct()` rounds to 2 decimals of a percent, so a shape can
+  // be off by ~0.001 of the area from rounding alone — the tests below use a
+  // tolerance around that, not around the assertion they want to pass.
+  function shapeArea(css) {
+    if (css.startsWith('inset(')) {
+      const v = css.slice(6, -1).trim().split(/\s+/).map(part => Number.parseFloat(part) / 100)
+      const sides = v.length === 1
+        ? [v[0], v[0], v[0], v[0]]
+        : v.length === 2
+          ? [v[0], v[1], v[0], v[1]]
+          : v
+      const [top, right, bottom, left] = sides
+      return Math.max(0, 1 - top - bottom) * Math.max(0, 1 - left - right)
+    }
+    const points = css.slice(8, -1).split(',').map(pair =>
+      pair.trim().split(/\s+/).map(part => Number.parseFloat(part) / 100))
+    let area = 0
+    for (let i = 0; i < points.length; i++) {
+      const [x1, y1] = points[i]
+      const [x2, y2] = points[(i + 1) % points.length]
+      area += x1 * y2 - x2 * y1
+    }
+    return Math.abs(area) / 2
+  }
+
+  it('classifies every published key', () => {
+    for (const key of KNOWN_TRANSITIONS) {
+      const spec = XFADE_PREVIEW[key]
+      assert.ok(spec, `${key} has no preview geometry`)
+      assert.ok(SHAPES.includes(spec.shape), `${key}: unknown shape ${spec.shape}`)
+      assert.ok(spec.law in XFADE_POSITION_LAWS, `${key}: unknown law ${spec.law}`)
+      assert.ok(FIDELITIES.includes(spec.fidelity), `${key}: unknown fidelity ${spec.fidelity}`)
+    }
+    assert.deepEqual(Object.keys(XFADE_PREVIEW).sort(), [...KNOWN_TRANSITIONS].sort(),
+      'the geometry table and the published key list must not drift apart')
+  })
+
+  it('an unknown key falls back to a plain crossfade instead of inventing a wipe', () => {
+    const ramp = previewTransitionRamp('not-a-transition', 0.5)
+    assert.equal(ramp.shape, 'crossfade')
+    assert.equal(ramp.fidelity, 'approximate')
+    assert.equal(ramp.incoming.opacity, 0.5)
+    assert.equal(ramp.incoming.clipPath, undefined)
+  })
+
+  it('reveals nothing at the head and everything at the tail of the overlap', () => {
+    for (const key of KNOWN_TRANSITIONS) {
+      const head = previewTransitionRamp(key, 0)
+      const tail = previewTransitionRamp(key, 1)
+      if (head.coverage !== null) {
+        assert.equal(head.coverage, 0, `${key} leaks ${head.coverage} at p=0`)
+        assert.equal(tail.coverage, 1, `${key} leaves a hole at p=1 (${tail.coverage})`)
+      } else {
+        // The three families whose area depends on the canvas aspect still
+        // have to reach an empty and a full shape at the two endpoints.
+        const css = head.incoming.clipPath || head.incoming.maskImage
+        const last = tail.incoming.clipPath || tail.incoming.maskImage
+        assert.ok(css, `${key} has no reveal geometry at p=0`)
+        if (head.shape === 'iris') assert.match(css, /circle\(0\.00% at/)
+        if (head.shape === 'hole') assert.match(css, /circle 70\.71% at/)
+        if (head.shape === 'pie') assert.match(css, /#000 0\.00deg/)
+        if (tail.shape === 'iris') assert.match(last, /circle\(70\.71% at/)
+        if (tail.shape === 'hole') assert.match(last, /circle 0\.00% at/)
+        if (tail.shape === 'pie') assert.match(last, /#000 360\.00deg/)
+      }
+      assert.equal(head.incoming.opacity, key === 'zoom-in' || key === 'zoomin' || key === 'fadeblack' || key === 'fadewhite' || head.shape === 'crossfade' || head.shape === 'unavailable' ? 0 : 1, `${key} head opacity`)
+      assert.equal(tail.incoming.opacity, 1, `${key} tail opacity`)
+    }
+  })
+
+  it('travels forward, never back', () => {
+    for (const key of KNOWN_TRANSITIONS) {
+      let previousTravel = -1
+      let previousCoverage = -1
+      for (const p of FRAMES) {
+        const ramp = previewTransitionRamp(key, p)
+        assert.ok(ramp.travel >= 0 && ramp.travel <= 1, `${key} @${p}: travel ${ramp.travel}`)
+        assert.ok(ramp.travel >= previousTravel - 1e-12, `${key} @${p}: travel went backwards`)
+        previousTravel = ramp.travel
+        if (ramp.coverage !== null) {
+          assert.ok(ramp.coverage >= previousCoverage - 1e-12, `${key} @${p}: coverage went backwards`)
+          previousCoverage = ramp.coverage
+        }
+      }
+    }
+  })
+
+  it('reports the diagonal as an area, not as a front position', () => {
+    // `travel` is where the 45-degree front has reached; what the preview has to
+    // publish is the AREA it uncovered, which is leg^2 / 2 in a unit square =
+    // travel^2. Pinning the square is what keeps a future law change from
+    // silently re-defining coverage back to front position — and it is the only
+    // coverage in the table that is aspect-free, because the line is 45 degrees
+    // in proportions, not in pixels (measured identical at 320x180, 180x320,
+    // 200x200 to within 0.1% of the frame).
+    for (const key of ['diagbl', 'diagbr', 'diagtl', 'diagtr']) {
+      for (const p of FRAMES) {
+        const ramp = previewTransitionRamp(key, p)
+        assert.equal(ramp.coverage, ramp.travel * ramp.travel, `${key} @${p}: coverage ${ramp.coverage} != travel^2`)
+      }
+      assert.equal(previewTransitionRamp(key, 0.5).coverage, 0.25, `${key} mid-frame covers a quarter`)
+    }
+  })
+
+  it('paints exactly the area it claims to cover', () => {
+    // `coverage` is the number the render-parity spec compares against FFmpeg,
+    // but the browser never reads it — it clips to `incoming.clipPath`. If the
+    // two ever disagree, the spec grades a number the preview does not draw.
+    // This closes that loop without a browser: measure the published shape.
+    for (const key of KNOWN_TRANSITIONS) {
+      for (const p of [0, 0.2, 0.4, 0.5, 0.6, 0.8, 1]) {
+        const ramp = previewTransitionRamp(key, p)
+        const css = ramp.incoming.clipPath
+        if (ramp.coverage === null || !css || css.startsWith('circle(')) continue
+        const area = shapeArea(css)
+        assert.ok(Math.abs(area - ramp.coverage) < 0.002,
+          `${key} @${p}: the shape covers ${(area * 100).toFixed(2)}% but the model says ${(ramp.coverage * 100).toFixed(2)}% — ${css}`)
+      }
+    }
+  })
+
+  it('emits parseable CSS with no numbers left undefined', () => {
+    for (const key of KNOWN_TRANSITIONS) {
+      for (const p of [0, 0.25, 0.5, 0.75, 1]) {
+        const ramp = previewTransitionRamp(key, p)
+        for (const layer of [ramp.incoming, ramp.outgoing]) {
+          const json = JSON.stringify(layer)
+          assert.ok(!/NaN|undefined|null/.test(json), `${key} @${p}: ${json}`)
+          if (layer.clipPath) {
+            assert.match(layer.clipPath, /^(inset|circle|polygon)\(/, `${key} @${p}: ${layer.clipPath}`)
+            const opens = layer.clipPath.split('(').length - 1
+            assert.equal(layer.clipPath.split(')').length - 1, opens, `${key} unbalanced parens`)
+            assert.ok(!layer.clipPath.includes('-0.00%'), `${key} @${p}: negative inset ${layer.clipPath}`)
+          }
+          if (layer.maskImage) {
+            assert.match(layer.maskImage, /^(linear|radial|repeating-linear|conic)-gradient\(/, `${key} @${p}: ${layer.maskImage}`)
+            // The alpha-mask convention of this project is opaque #000 = visible.
+            assert.ok(layer.maskImage.includes('#000'), `${key} @${p}: mask has no opaque stop`)
+            assert.equal(layer.maskSize, '100% 100%')
+          }
+        }
+      }
+    }
+  })
+
+  it('only slide moves the outgoing layer, and only fadeblack dims it', () => {
+    for (const key of KNOWN_TRANSITIONS) {
+      const ramp = previewTransitionRamp(key, 0.5)
+      if (ramp.outgoing.transform) assert.equal(ramp.shape, 'slide', `${key} moves the outgoing layer`)
+      if (ramp.outgoing.opacity < 1) assert.equal(key, 'fadeblack', `${key} dims the outgoing layer`)
+    }
+  })
+
+  it('squeezev is painted as a plain fade because the binary cannot render it', () => {
+    // Measured: xfade=transition=squeezev exits 0xC0000005 on solid plates at
+    // 320x180 and 640x360 and on testsrc2 -> smptebars, while squeezeh works.
+    // The catalog still publishes the key, so the preview must not promise a
+    // squeeze the export cannot produce.
+    assert.equal(XFADE_PREVIEW.squeezev.shape, 'unavailable')
+    assert.match(XFADE_PREVIEW.squeezev.note, /crashes/)
+    assert.equal(previewTransitionRamp('squeezev', 0.5).incoming.opacity, 0.5)
+  })
+
+  it('the disc radius that covers the box is aspect-independent', () => {
+    // circle() percentages resolve against sqrt(w^2+h^2)/sqrt(2) and the
+    // covering radius is sqrt(w^2+h^2)/2, so the number is always 100/sqrt(2).
+    assert.match(previewTransitionRamp('circleopen', 1).incoming.clipPath, /circle\(70\.71% at 50% 50%\)/)
   })
 })

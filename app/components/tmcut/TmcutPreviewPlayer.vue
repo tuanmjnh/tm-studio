@@ -7,7 +7,7 @@ import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { computeFitObjectStyle, CROP_RATIO_PRESETS, clampCropRect, applyCropRatio, canvasFpsValue } from '~/utils/tmcut/canvas'
 import { textBoxPadding, textStrokeWidth, textShadowOffset } from '~/utils/tmcut/textStyle'
 import { effectCssParts } from '~/utils/tmcut/fxPreview'
-import { previewScale, evalKeyframe, gainAt, evaluateClip, textAnimationAt, safeAreaRects, SAFE_AREA_PRESETS, TICKS_PER_SECOND, secToTicks, maskCssMaskImage, resolveClipLayout } from 'tmcut-core'
+import { previewScale, evalKeyframe, gainAt, evaluateClip, textAnimationAt, safeAreaRects, SAFE_AREA_PRESETS, TICKS_PER_SECOND, secToTicks, maskCssMaskImage, resolveClipLayout, previewTransitionRamp } from 'tmcut-core'
 import type { TmcutKeyframe, TmcutTextAnimationType } from 'tmcut-core'
 import { clipDurationTicks, clipStartSec, clipEndSec, clipMediaTimeSec } from '~/utils/tmcut/clipTime'
 import { useTmcutFrames } from '~/composables/useTmcutFrames'
@@ -684,27 +684,21 @@ const textScale = computed(() =>
   previewScale(containerWidth.value, currentProject.value?.canvas?.width || 0)
 )
 
-// Per-type crossfade ramp for the INCOMING layer (roadmap B3). Fade and
-// dissolve are a pure complementary opacity ramp over the outgoing layer
-// — only ONE layer ramps, because source-over with two partial alphas
-// would bleed the black background through (0.5·in + 0.25·out). Wipes
-// reveal geometrically via clip-path, slide-left travels in (the monitor's
-// overflow-hidden clips the off-screen part), zoom-in scales up fading.
+// Crossfade ramp (roadmap B3, geometry owned by core since V4 G16): the
+// shape, travel law and CSS for every xfade key are measured against the
+// bundled FFmpeg in `tmcut-core/transitions.mjs`, so the monitor and the
+// export describe the same cut. Fade and dissolve stay a complementary
+// opacity ramp over the outgoing layer — only ONE layer ramps, because
+// source-over with two partial alphas would bleed the black background
+// through (0.5·in + 0.25·out). The reveal families paint on the INCOMING
+// layer (it sits on top, so clipping the outgoing would only uncover the
+// canvas behind it); `slide` is the one shape that moves both layers.
 // Export parity (xfade/acrossfade) lands with R3 — see the export badge.
-function incomingRamp(type: string, p: number): { opacity: number, prepend?: string, append?: string, clipPath?: string } {
-  switch (type) {
-    case 'wipe-left':
-      return { opacity: 1, clipPath: `inset(0 0 0 ${(1 - p) * 100}%)` }
-    case 'wipe-right':
-      return { opacity: 1, clipPath: `inset(0 ${(1 - p) * 100}% 0 0)` }
-    case 'slide-left':
-      return { opacity: 1, append: `translateX(${(1 - p) * 100}%)` }
-    case 'zoom-in':
-      return { opacity: p, prepend: `scale(${0.85 + 0.15 * p})` }
-    default: // 'fade' / 'dissolve'
-      return { opacity: p }
-  }
-}
+const xfadeRamp = computed(() => {
+  const cf = transitionCrossfade.value
+  if (!cf) return null
+  return previewTransitionRamp(cf.type, cf.progress)
+})
 
 // Per-clip visual (transform + opacity from keyframes/static fields);
 // shared by the main element and the outgoing crossfade layer. The numbers
@@ -792,28 +786,42 @@ const videoTransformStyle = computed(() => {
   }
 
   // Transition crossfade (roadmap B3): the main element is the INCOMING
-  // clip — ramp it (or wipe/slide/zoom it) over the outgoing layer.
+  // clip — core hands back the CSS that reveals it over the outgoing layer.
   const cf = transitionCrossfade.value
-  if (cf && cf.incoming.id === clip.id) {
-    const ramp = incomingRamp(cf.type, cf.progress)
-    style.opacity = base.opacity * ramp.opacity
-    if (ramp.clipPath) style.clipPath = ramp.clipPath
-    if (ramp.prepend) style.transform = `${ramp.prepend} ${style.transform}`
-    if (ramp.append) style.transform = `${style.transform} ${ramp.append}`
+  const ramp = xfadeRamp.value
+  if (cf && ramp && cf.incoming.id === clip.id) {
+    style.opacity = base.opacity * ramp.incoming.opacity
+    if (ramp.incoming.clipPath) style.clipPath = ramp.incoming.clipPath
+    // A transition that reveals with a gradient wins over the clip's own
+    // mask for the length of the overlap; both cannot share one mask-image.
+    if (ramp.incoming.maskImage) {
+      style.maskImage = ramp.incoming.maskImage
+      style.webkitMaskImage = ramp.incoming.webkitMaskImage || ramp.incoming.maskImage
+      style.maskSize = ramp.incoming.maskSize || '100% 100%'
+      style.webkitMaskSize = ramp.incoming.webkitMaskSize || '100% 100%'
+      style.maskRepeat = ramp.incoming.maskRepeat || 'no-repeat'
+      style.webkitMaskRepeat = ramp.incoming.webkitMaskRepeat || 'no-repeat'
+    }
+    if (ramp.incoming.transform) style.transform = `${style.transform} ${ramp.incoming.transform}`
   }
   return style
 })
 
 // OUTGOING crossfade layer style: the neighbor's own fit, transform and
-// opacity. The layer stays opaque (ramping only the incoming layer — see
-// incomingRamp) so the composite is a clean crossfade.
+// opacity. The layer usually stays opaque (ramping only the incoming layer —
+// see `xfadeRamp`) so the composite is a clean crossfade; a slide travels it
+// and a fade-through-black dims it, which is what the binary really does.
 const outgoingStyle = computed(() => {
   const cf = transitionCrossfade.value
-  if (!cf) return null
+  const ramp = xfadeRamp.value
+  if (!cf || !ramp) return null
   const clip = cf.outgoing
+  const base = clipVisual(clip)
+  if (ramp.outgoing.transform) base.transform = `${base.transform} ${ramp.outgoing.transform}`
+  base.opacity = base.opacity * ramp.outgoing.opacity
   return {
     ...fitStyle(clip),
-    ...clipVisual(clip)
+    ...base
   }
 })
 
