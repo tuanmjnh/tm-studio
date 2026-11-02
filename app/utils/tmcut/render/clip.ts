@@ -1,5 +1,6 @@
 import type { TmcutTimelineItem, TmcutTrack } from '~/composables/useTmcutProject'
-import { classifyAssetKind, ticksToSec } from 'tmcut-core'
+import type { TmcutCropRect, TmcutMask } from 'tmcut-core'
+import { classifyAssetKind, normalizeMask, resolveClipLayout, ticksToSec } from 'tmcut-core'
 import { clipDurationTicks } from '~/utils/tmcut/clipTime'
 
 /**
@@ -50,6 +51,14 @@ export interface RenderClip {
   fit: string
   focusX: number
   focusY: number
+  /** Normalized crop rect as stored (each fit adapter clamps it itself), null = none. */
+  cropRect: TmcutCropRect | null
+  /**
+   * Mask geometry sanitized by core `normalizeMask` — the same call
+   * `evaluateTimeline` puts on the layer (V4 M3), so the export's `geq` alpha
+   * and the preview's CSS mask start from one shape. null = no mask.
+   */
+  mask: TmcutMask | null
   transitionIn: { type: string, duration: number } | null
   /** Source item for core expression builders (keyframeExpr). */
   raw: TmcutTimelineItem
@@ -74,6 +83,10 @@ export interface RenderClip {
 export function toRenderClip(item: TmcutTimelineItem, track?: TmcutTrack | null): RenderClip {
   const src = item.src ?? null
   const footagePath = (item.stabilize && item.stabilizedPath) ? item.stabilizedPath : src
+  // V4 M3: fit/focus/crop and the mask come from the same core calls the
+  // evaluator makes, so the export can never place a frame differently from
+  // the layer the preview read.
+  const layout = resolveClipLayout(item)
   return {
     id: item.id,
     footagePath,
@@ -90,9 +103,11 @@ export function toRenderClip(item: TmcutTimelineItem, track?: TmcutTrack | null)
     y: item.y || 0,
     rotation: item.rotation || 0,
     volumePct: item.volume ?? 100,
-    fit: item.fit || 'fit',
-    focusX: item.focusX ?? 0.5,
-    focusY: item.focusY ?? 0.5,
+    fit: layout.fit,
+    focusX: layout.focusX,
+    focusY: layout.focusY,
+    cropRect: layout.cropRect,
+    mask: normalizeMask(item.mask),
     transitionIn: item.transitionIn ?? null,
     raw: item,
     trackMuted: !!track?.muted,

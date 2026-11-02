@@ -66,7 +66,7 @@ export function compileVideoPipeline(
     const fitFilters = buildFfmpegFitFilters(clip.fit, ctx.canvasW, ctx.canvasH, {
       focusX: clip.focusX,
       focusY: clip.focusY,
-      cropRect: clip.raw.cropRect,
+      cropRect: clip.cropRect,
       padColor: ctx.bgColor,
       rotation: clip.rotation
     })
@@ -95,7 +95,9 @@ export function compileVideoPipeline(
     const faded = opacityPct < 100
     // R124 A3: clip mask (CapCut §5.7). The core builder returns the
     // FFmpeg/CSS alpha geometry; '' means no mask (byte-identical export).
-    const maskExpr = maskAlphaExpr(clip.raw.mask)
+    // V4 M3: `clip.mask` is core-normalized (same call the evaluator puts on
+    // the layer), so the export and the preview cannot read different shapes.
+    const maskExpr = maskAlphaExpr(clip.mask)
     let alphaArg = ''
     if (maskExpr) {
       // Mask drives the alpha; opacity rides on top of it (a static aa=

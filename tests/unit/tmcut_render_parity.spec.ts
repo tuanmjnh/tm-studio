@@ -6,11 +6,15 @@
  * against geometry DERIVED FROM THE EVALUATOR — not from the compiler's own
  * transform helper, which would make the check circular.
  *
- * Three subjects, all font-free:
+ * Five subjects, all font-free:
  *  1. transform clip (scale 50, x 6, y -4, opacity 60) — pixel rect + alpha.
  *  2. speed-2 clip over a red→green source — timeline tick → source tick.
  *  3. the clip window boundary — the export, the evaluator and the preview all
  *     stop a clip on the same frame (ADR-018, half-open `[start, end)`).
+ *  4. the mask — the shape the model reports is the shape the export cuts,
+ *     including `invert` (V4 M3).
+ *  5. the transition — the window and the frame level follow the progress the
+ *     model reports, not the graph's own arithmetic (V4 M3).
  *
  * Skips when no FFmpeg binary is available.
  */
@@ -295,6 +299,157 @@ try {
     assert.equal(at, endTicks - 4000, 'one frame before the end, not past it')
     assert.equal(evaluateTimeline(windowProject, endTicks).layers.find(item => item.clipId === 'text-1'), undefined, 'the raw end belongs to no clip')
     assert.ok(evaluateTimeline(windowProject, at).layers.find(item => item.clipId === 'text-1'), 'the last frame keeps its text')
+  })
+
+  // --- 4. the mask the model reports is the mask the export paints ---------
+  // V4 M3: mask geometry used to be a verbatim passthrough on the layer and a
+  // `raw.mask` read in the compiler. Both builders call core normalizeMask, so
+  // the pixels below are the first proof that the shape the model reports is
+  // the shape that actually gets cut — and that `invert` travels.
+  const MASK_BOX = { shape: 'circle', x: 0.25, y: 0.2, w: 0.5, h: 0.6, feather: 0, rotation: 0, invert: false, axis: 'x' }
+
+  function maskedProject(name: string, invert: boolean): TmcutProject {
+    const project = baseProject(name)
+    project.timeline.tracks[0]!.items = [{
+      id: 'clip-m',
+      src: whiteSource,
+      in: 0,
+      out: 2 * TICKS_PER_SECOND,
+      offset: 0,
+      speed: 1,
+      opacity: 100,
+      scale: 100,
+      x: 0,
+      y: 0,
+      rotation: 0,
+      fit: 'fit',
+      mask: { ...MASK_BOX, invert }
+    }]
+    return project
+  }
+
+  /**
+   * The geq samples at `X/W`, `Y/H` with X the pixel index, so the oracle is
+   * written the same way from the layer's NORMALIZED mask: hypot of the
+   * axis-relative distance is < 1 inside the shape and > 1 outside it. Nothing
+   * here comes from the compiler's own fit/mask helpers.
+   */
+  function maskCoverage(mask: { x: number, y: number, w: number, h: number }, x: number, y: number): number {
+    const dx = (x / WIDTH - (mask.x + mask.w / 2)) / (mask.w / 2)
+    const dy = (y / HEIGHT - (mask.y + mask.h / 2)) / (mask.h / 2)
+    return Math.hypot(dx, dy)
+  }
+
+  const maskProject = maskedProject('Parity mask', false)
+  const maskLayer = evaluateTimeline(maskProject, 0.5 * TICKS_PER_SECOND).layers.find(item => item.clipId === 'clip-m')
+  check('the evaluator reports normalized mask geometry for the stored shape', () => {
+    assert.ok(maskLayer, 'clip-m should be live at 0.5s')
+    assert.ok(maskLayer.mask, 'a valid circle must report a mask')
+    assert.equal(maskLayer.mask.shape, 'circle')
+    assert.equal(maskLayer.mask.feather, 0, 'feather 0 stays a hard edge')
+  })
+
+  const maskOutput = render(maskProject, 'mask.mp4')
+  const maskFrame = decodeFrame(maskOutput, 0.5)
+
+  check('the export cuts exactly the ellipse the model describes', () => {
+    assert.ok(maskLayer?.mask, 'mask geometry needed for the oracle')
+    const painted: Array<[number, number]> = [[32, 18], [24, 18], [32, 12]]
+    const cleared: Array<[number, number]> = [[0, 18], [63, 18], [32, 1], [32, 34]]
+    for (const [x, y] of painted) {
+      assert.ok(maskCoverage(maskLayer.mask, x, y) < 0.75, `probe ${x},${y} is not well inside the model shape`)
+      const p = pixel(maskFrame, x, y)
+      near(p.r, 255, 8, `inside the mask at ${x},${y} shows the source`)
+      near(p.g, 255, 8, `inside the mask at ${x},${y} shows the source`)
+    }
+    for (const [x, y] of cleared) {
+      assert.ok(maskCoverage(maskLayer.mask, x, y) > 1.3, `probe ${x},${y} is not well outside the model shape`)
+      const p = pixel(maskFrame, x, y)
+      near(p.r, BG.r, 6, `outside the mask at ${x},${y} shows the canvas background`)
+      near(p.b, BG.b, 6, `outside the mask at ${x},${y} shows the canvas background`)
+    }
+  })
+
+  const invertedOutput = render(maskedProject('Parity mask inverted', true), 'mask-invert.mp4')
+  const invertedLayer = evaluateTimeline(maskedProject('Parity mask inverted', true), 0.5 * TICKS_PER_SECOND)
+    .layers.find(item => item.clipId === 'clip-m')
+  const invertedFrame = decodeFrame(invertedOutput, 0.5)
+
+  check('the invert flag in the model flips the painted side', () => {
+    assert.equal(invertedLayer?.mask?.invert, true, 'the model must carry invert through')
+    const centre = pixel(invertedFrame, 32, 18)
+    near(centre.r, BG.r, 6, 'inverted: the shape interior is cleared')
+    const corner = pixel(invertedFrame, 0, 1)
+    near(corner.r, 255, 8, 'inverted: outside the shape shows the source')
+  })
+
+  // --- 5. the transition window and ramp the model reports are the ones
+  // the export crossfades (V4 M3) ------------------------------------------
+  // Two achromatic plates: xfade blends the planes, and an affine
+  // limited-range round-trip preserves the blend, so the expected level is the
+  // model's own progress — not a number read off the graph.
+  const graySource = path.join(workDir, 'gray-64x36.mp4').replace(/\\/g, '/')
+  runFfmpeg([
+    '-f', 'lavfi', '-i', `color=c=#404040:s=${WIDTH}x${HEIGHT}:r=30:d=2`,
+    '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo',
+    '-shortest', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-y', graySource
+  ])
+
+  const transitionProject = baseProject('Parity transition')
+  transitionProject.timeline.tracks[0]!.items = [{
+    id: 'clip-t1',
+    src: graySource,
+    in: 0,
+    out: 2 * TICKS_PER_SECOND,
+    offset: 0,
+    speed: 1,
+    opacity: 100,
+    scale: 100,
+    x: 0,
+    y: 0,
+    rotation: 0,
+    fit: 'fit'
+  }, {
+    id: 'clip-t2',
+    src: whiteSource,
+    in: 0,
+    out: 2 * TICKS_PER_SECOND,
+    offset: Math.round(1.6 * TICKS_PER_SECOND),
+    speed: 1,
+    opacity: 100,
+    scale: 100,
+    x: 0,
+    y: 0,
+    rotation: 0,
+    fit: 'fit',
+    transitionIn: { type: 'fade', duration: Math.round(0.4 * TICKS_PER_SECOND) }
+  }]
+  const transitionOutput = render(transitionProject, 'transition.mp4')
+
+  check('the overlap window the model reports is the window both clips are live in', () => {
+    const at = Math.round(1.6 * TICKS_PER_SECOND)
+    const opening = evaluateTimeline(transitionProject, at).layers
+    assert.deepEqual(opening.map(layer => layer.clipId).sort(), ['clip-t1', 'clip-t2'], 'the window opens on its first tick')
+    const before = evaluateTimeline(transitionProject, at - 1).layers
+    assert.deepEqual(before.map(layer => layer.clipId), ['clip-t1'], 'one tick earlier is still a single clip')
+    const after = evaluateTimeline(transitionProject, 2 * TICKS_PER_SECOND).layers
+    assert.deepEqual(after.map(layer => layer.clipId), ['clip-t2'], 'the window end belongs to the incoming clip only')
+  })
+
+  check('the exported ramp follows the progress the model reports', () => {
+    for (const frame of [48, 51, 54, 57, 60]) {
+      const at = frame * (TICKS_PER_SECOND / 30)
+      const incoming = evaluateTimeline(transitionProject, at).layers.find(layer => layer.clipId === 'clip-t2')
+      assert.ok(incoming, `clip-t2 must be live at frame ${frame}`)
+      const progress = at >= 2 * TICKS_PER_SECOND ? 1 : incoming.transition?.progress
+      assert.notEqual(progress, undefined, `the model must report a progress at frame ${frame}`)
+      // Gray plate (64) into white plate (255), mixed by the MODEL's progress.
+      const expected = 64 + (255 - 64) * (progress as number)
+      const p = pixel(decodeFrameIndex(transitionOutput, frame), WIDTH >> 1, HEIGHT >> 1)
+      near(p.r, expected, 8, `frame ${frame}: export level vs model progress ${progress}`)
+      near(p.g, expected, 8, `frame ${frame}: the mix stays achromatic`)
+      near(p.b, expected, 8, `frame ${frame}: the mix stays achromatic`)
+    }
   })
 
   console.log(`\n=== All ${checks} render-parity checks passed ===`)

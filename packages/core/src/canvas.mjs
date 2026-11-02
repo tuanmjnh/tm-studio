@@ -187,6 +187,27 @@ function clamp01(value) {
   return Math.min(1, Math.max(0, value))
 }
 
+/**
+ * Media placement resolved from a stored clip: the same defaults
+ * `computeFitObjectStyle` (preview CSS) and `buildFfmpegFitFilters` (export
+ * filter chain) assume, so a renderer never re-guesses them. Focus goes
+ * through `clamp01` because that is exactly what the 'smart' fit does with it;
+ * `cropRect` passes through as stored because each builder clamps it itself —
+ * a third rule here could only disagree with them.
+ *
+ * V4 M3: `evaluateTimeline` puts this on every layer and `toRenderClip` feeds
+ * the FFmpeg compiler the same call, so the two renderers cannot diverge on
+ * fit, focus or crop.
+ */
+export function resolveClipLayout(clip) {
+  return {
+    fit: typeof clip?.fit === 'string' && clip.fit ? clip.fit : 'fit',
+    focusX: clamp01(clip?.focusX),
+    focusY: clamp01(clip?.focusY),
+    cropRect: clip?.cropRect ?? null
+  }
+}
+
 /** CSS object-fit/position for a fit mode (preview adapter). */
 export function computeFitObjectStyle(mode, focusX = 0.5, focusY = 0.5, cropRect) {
   if (mode === 'fill') return { objectFit: 'cover', objectPosition: '50% 50%' }

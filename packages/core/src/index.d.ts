@@ -431,8 +431,16 @@ export function findCanvasPresetByDimensions(width: number, height: number): Tmc
 export function ratioIdOf(width: number, height: number): string
 export function ratioLabel(width: number, height: number): string
 export function normalizeCanvas(canvas: unknown): TmcutCanvas
-export function computeFitObjectStyle(mode: string, focusX?: number, focusY?: number, cropRect?: { x: number, y: number, w: number, h: number }): { objectFit: 'contain' | 'cover' | 'fill', objectPosition: string }
-export function buildFfmpegFitFilters(mode: string, canvasW: number, canvasH: number, options?: { focusX?: number, focusY?: number, cropRect?: { x: number, y: number, w: number, h: number }, padColor?: string, rotation?: number }): string[]
+export function computeFitObjectStyle(mode: string, focusX?: number, focusY?: number, cropRect?: { x: number, y: number, w: number, h: number } | null): { objectFit: 'contain' | 'cover' | 'fill', objectPosition: string }
+export function buildFfmpegFitFilters(mode: string, canvasW: number, canvasH: number, options?: { focusX?: number, focusY?: number, cropRect?: { x: number, y: number, w: number, h: number } | null, padColor?: string, rotation?: number }): string[]
+
+/**
+ * Media placement resolved from a stored clip (V4 M3): the defaults the two fit
+ * adapters above already assume, so the evaluator's layer and the render clip
+ * cannot disagree on fit, focus or crop. `cropRect` comes back as stored —
+ * each adapter clamps it itself.
+ */
+export function resolveClipLayout(clip: { fit?: string | null, focusX?: number, focusY?: number, cropRect?: TmcutCropRect | null } | null | undefined): CoreEvaluatedLayout
 
 export interface TmcutFfmpegTransform {
   /** Standalone background source chain (`color=...`) — label it yourself. */
@@ -1521,6 +1529,20 @@ export interface CoreEvaluatedText {
   animation: CoreTextAnimation
 }
 
+/**
+ * Media placement resolved from the stored clip, with the defaults the two
+ * renderers already assume. `cropRect` passes through as stored: core clamps
+ * it inside `computeFitObjectStyle` (preview) and `buildFfmpegFitFilters`
+ * (export), so the model carries one rect rather than three clamping rules.
+ */
+export interface CoreEvaluatedLayout {
+  fit: string
+  /** 0..1 point the source is anchored on inside the box. */
+  focusX: number
+  focusY: number
+  cropRect: TmcutCropRect | null
+}
+
 /** One clip resolved at an absolute tick — renderer-agnostic, JSON-safe. */
 export interface CoreEvaluatedLayer {
   clipId: string
@@ -1539,7 +1561,9 @@ export interface CoreEvaluatedLayer {
   audible: boolean
   transform: CoreEvaluatedTransform
   effects: TmcutClipEffect[]
-  mask: unknown
+  /** Normalized mask geometry, null when absent or an unknown shape. */
+  mask: TmcutMask | null
+  layout: CoreEvaluatedLayout
   transition: CoreEvaluatedTransition | null
   text: CoreEvaluatedText | null
   /** True when `sourceTicks` came from a speed curve (>= 2 valid points). */

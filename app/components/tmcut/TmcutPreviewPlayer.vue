@@ -7,7 +7,7 @@ import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { computeFitObjectStyle, CROP_RATIO_PRESETS, clampCropRect, applyCropRatio, canvasFpsValue } from '~/utils/tmcut/canvas'
 import { textBoxPadding, textStrokeWidth, textShadowOffset } from '~/utils/tmcut/textStyle'
 import { effectCssParts } from '~/utils/tmcut/fxPreview'
-import { previewScale, evalKeyframe, gainAt, evaluateClip, textAnimationAt, safeAreaRects, SAFE_AREA_PRESETS, TICKS_PER_SECOND, secToTicks, maskCssMaskImage } from 'tmcut-core'
+import { previewScale, evalKeyframe, gainAt, evaluateClip, textAnimationAt, safeAreaRects, SAFE_AREA_PRESETS, TICKS_PER_SECOND, secToTicks, maskCssMaskImage, resolveClipLayout } from 'tmcut-core'
 import type { TmcutKeyframe, TmcutTextAnimationType } from 'tmcut-core'
 import { clipDurationTicks, clipStartSec, clipEndSec, clipMediaTimeSec } from '~/utils/tmcut/clipTime'
 import { useTmcutFrames } from '~/composables/useTmcutFrames'
@@ -653,14 +653,22 @@ function triggerCropTool() {
   toggleCropEditing()
 }
 
-// Media fitting styles (Phase 2): fit/fill/crop/stretch/smart
+// Media fitting styles (Phase 2): fit/fill/crop/stretch/smart.
+// V4 M3: the defaults come from core's one layout resolver — the same call
+// `evaluateTimeline` puts on the layer and `toRenderClip` feeds the FFmpeg
+// compiler — so the preview cannot drift into a fourth set of defaults.
+function fitStyle(clip: { fit?: string, focusX?: number, focusY?: number, cropRect?: { x: number, y: number, w: number, h: number } | null }): Record<string, string> {
+  const layout = resolveClipLayout(clip)
+  return computeFitObjectStyle(layout.fit, layout.focusX, layout.focusY, layout.cropRect) as Record<string, string>
+}
+
 const videoObjectStyle = computed<Record<string, string>>(() => {
   const clip = activeVideoClip.value?.clip
   if (!clip) return {}
   if (isCropActive.value) {
     return { objectFit: 'contain', objectPosition: '50% 50%' }
   }
-  return computeFitObjectStyle(clip.fit || 'fit', clip.focusX ?? 0.5, clip.focusY ?? 0.5, clip.cropRect) as Record<string, string>
+  return fitStyle(clip)
 })
 
 // Text overlays scale with the rendered canvas size (docs §65.2):
@@ -804,7 +812,7 @@ const outgoingStyle = computed(() => {
   if (!cf) return null
   const clip = cf.outgoing
   return {
-    ...computeFitObjectStyle(clip.fit || 'fit', clip.focusX ?? 0.5, clip.focusY ?? 0.5, clip.cropRect),
+    ...fitStyle(clip),
     ...clipVisual(clip)
   }
 })

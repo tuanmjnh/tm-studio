@@ -2,6 +2,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { evaluateClip, evaluateTimeline, textAnimationAt } from '../src/evaluate.mjs'
+import { maskAlphaExpr, maskCssMaskImage } from '../src/mask.mjs'
 import { TICKS_PER_SECOND } from '../src/time.mjs'
 
 const T = TICKS_PER_SECOND
@@ -448,5 +449,92 @@ describe('evaluateClip', () => {
     assert.equal(visual.transform.rotation, 10)
     assert.equal(visual.opacity, 0.8)
     assert.equal(visual.volume, 100)
+  })
+})
+
+// V4 M3: the layer is the answer BOTH renderers read. A mask or a fit mode
+// that only exists on the stored clip is not in the model yet, so a host that
+// consumes the layer alone (the WebCodecs/WASM renderers queued at M5/M8)
+// would have to re-derive app fields — the exact split M3 exists to remove.
+describe('evaluateTimeline — mask geometry', () => {
+  it('reports the sanitized geometry, not the stored fragment', () => {
+    const clip = videoClip({ mask: { shape: 'circle', x: 0.25, y: 0.2 } })
+    const layer = only(evaluateTimeline(timelineOf([clip]), 0).layers)
+    assert.deepEqual(layer.mask, {
+      shape: 'circle',
+      x: 0.25,
+      y: 0.2,
+      w: 1,
+      h: 1,
+      feather: 0,
+      rotation: 0,
+      invert: false,
+      axis: 'x'
+    })
+  })
+
+  it('clamps a stored value that escaped its range', () => {
+    const clip = videoClip({ mask: { shape: 'rectangle', x: 1.6, w: -0.4, feather: 300, rotation: -540 } })
+    const layer = only(evaluateTimeline(timelineOf([clip]), 0).layers)
+    assert.equal(layer.mask.x, 1)
+    assert.equal(layer.mask.w, 0.001)
+    assert.equal(layer.mask.feather, 100)
+    assert.equal(layer.mask.rotation, -180)
+  })
+
+  it('a shape no builder knows is no mask', () => {
+    // This used to be a lie in the other direction: `{ shape: 'star' }`
+    // reached the layer as truthy data, so "is this clip masked?" answered yes
+    // while BOTH alpha builders returned empty — masked in the model,
+    // unmasked on screen.
+    const clip = videoClip({ mask: { shape: 'star', x: 0.2, y: 0.2 } })
+    const layer = only(evaluateTimeline(timelineOf([clip]), 0).layers)
+    assert.equal(layer.mask, null)
+  })
+
+  it('absent and null both mean no mask', () => {
+    assert.equal(only(evaluateTimeline(timelineOf([videoClip()]), 0).layers).mask, null)
+    assert.equal(only(evaluateTimeline(timelineOf([videoClip({ mask: null })]), 0).layers).mask, null)
+  })
+
+  it('the geometry the layer reports is the geometry both builders render', () => {
+    // The sharing proof: normalizeMask runs inside maskAlphaExpr (export) and
+    // maskCssMaskImage (preview), so handing out its output can never move a
+    // pixel — and a renderer that reads only the layer gets the same edge.
+    const stored = { shape: 'circle', x: 0.2, y: 0.1, w: 0.6, h: 0.8, feather: 25, rotation: 30, invert: true, axis: 'y' }
+    const layer = only(evaluateTimeline(timelineOf([videoClip({ mask: stored })]), 0).layers)
+    assert.notEqual(maskAlphaExpr(layer.mask), '', 'a real mask must produce a real alpha expression')
+    assert.equal(maskAlphaExpr(layer.mask), maskAlphaExpr(stored))
+    assert.equal(maskCssMaskImage(layer.mask, 64, 36), maskCssMaskImage(stored, 64, 36))
+  })
+})
+
+describe('evaluateTimeline — media layout', () => {
+  it('resolves the fit defaults both renderers assume', () => {
+    const layer = only(evaluateTimeline(timelineOf([videoClip({ fit: 'fill', focusX: 0.3 })]), 0).layers)
+    assert.deepEqual(layer.layout, { fit: 'fill', focusX: 0.3, focusY: 0.5, cropRect: null })
+  })
+
+  it('passes a stored crop rect through untouched', () => {
+    // Core clamps the rect inside each builder (clamp01 in computeFitObjectStyle
+    // and buildFfmpegFitFilters), so the model hands the SAME geometry to both
+    // instead of normalizing twice with a third rule.
+    const cropRect = { x: 0.1, y: 0.2, w: 0.7, h: 0.6 }
+    const layer = only(evaluateTimeline(timelineOf([videoClip({ fit: 'crop', cropRect })]), 0).layers)
+    assert.equal(layer.layout.cropRect, cropRect)
+    assert.equal(layer.layout.fit, 'crop')
+  })
+
+  it('a non-finite focus falls back to the centre', () => {
+    const layer = only(evaluateTimeline(timelineOf([videoClip({ focusX: Number.NaN })]), 0).layers)
+    assert.equal(layer.layout.focusX, 0.5)
+  })
+
+  it('resolves layout for the flat app-store clip shape too', () => {
+    const flat = { id: 'a', type: 'video', offset: 0, in: 0, out: 2 * T, speed: 1, fit: 'crop', focusY: 0.25 }
+    const layer = only(evaluateTimeline({ tracks: [{ id: 'v1', type: 'video', items: [flat] }] }, 0).layers)
+    assert.equal(layer.layout.fit, 'crop')
+    assert.equal(layer.layout.focusY, 0.25)
+    assert.equal(layer.layout.focusX, 0.5)
   })
 })

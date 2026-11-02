@@ -4,8 +4,9 @@
 //
 //  This is the missing "what is on screen at t?" step: it resolves each
 //  active clip into a flat, renderer-agnostic layer (source position,
-//  transform, opacity, audio gain, transition role) so a DOM renderer and
-//  the FFmpeg compiler can consume ONE answer instead of re-deriving it.
+//  transform, opacity, audio gain, mask geometry, media layout, transition
+//  role) so a DOM renderer and the FFmpeg compiler can consume ONE answer
+//  instead of re-deriving it.
 //
 //  It draws nothing and knows nothing about pixels: units stay in the DSL
 //  v3 contract — ticks for time, 0..1 for opacity/scale/transform, percent
@@ -24,6 +25,8 @@
 import { evalKeyframe } from './keyframes.mjs'
 import { gainAt } from './audio.mjs'
 import { isRamped, rampTimelineToSource } from './retime.mjs'
+import { resolveClipLayout } from './canvas.mjs'
+import { normalizeMask } from './mask.mjs'
 import { TICKS_PER_SECOND } from './time.mjs'
 import { transitionWindows } from './transitions.mjs'
 import { clipSpan } from './timeline.mjs'
@@ -130,6 +133,16 @@ function transformOf(clip, localTicks) {
 function volumeOf(clip, localTicks) {
   const keyed = evalKeyframe(clip, 'volume', localTicks)
   return clamp(keyed ?? finiteOr(clip.volume, 100), 0, 100)
+}
+
+/**
+ * Mask geometry as the renderers see it. `normalizeMask` is the same call
+ * `maskAlphaExpr` (export) and `maskCssMaskImage` (preview) make internally,
+ * so publishing its output cannot move a pixel — and a shape neither builder
+ * knows becomes `null` here instead of truthy data on the layer.
+ */
+function maskOf(clip) {
+  return normalizeMask(clip.mask)
 }
 
 /**
@@ -275,7 +288,8 @@ function layerFor(clip, track, at, windows, clipsById) {
     audible: track?.muted !== true && gain > 0,
     transform: visual.transform,
     effects: Array.isArray(clip.effects) ? clip.effects.map(effect => ({ ...effect })) : [],
-    mask: clip.mask ?? null,
+    mask: maskOf(clip),
+    layout: resolveClipLayout(clip),
     transition: transitionOf(transitionAt(windows, clip.id, at), clipsById),
     text: textOf(clip, localTicks, span.duration),
     ramped: isRamped(clip),
