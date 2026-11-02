@@ -10,7 +10,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { parseCaptionCues, serializeCaptionCues, toCaptionCues } from '../../app/utils/tmcut/captions'
 import { htmlVideoStarter } from '../../app/utils/tmcut/htmlVideoStarters'
-import { replaceHtmlTokens, validateHtmlVideoSpec } from '../../../tmcut-core/src/index.mjs'
+import { replaceHtmlTokens, validateHtmlVideoSpec } from '../../packages/core/src/index.mjs'
 
 describe('toCaptionCues — timeline clips to cues', () => {
   it('drops empty text and non-positive spans', () => {
