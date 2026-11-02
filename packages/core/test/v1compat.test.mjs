@@ -427,6 +427,64 @@ describe('v1compat', () => {
       assert.equal(tail.out, 12 * TICKS_PER_SECOND)
     })
 
+    const MASK = { shape: 'circle', x: 0.5, y: 0.5, w: 0.6, h: 0.6, feather: 0.1, rotation: 0, invert: false, axis: 'x' }
+    const RAMP = [{ t: 0, speed: 0.5 }, { t: 12 * TICKS_PER_SECOND, speed: 1.5 }]
+    const EXTRA = {
+      mask: MASK,
+      blend: 'multiply',
+      speedPoints: RAMP,
+      text: 'Hello',
+      shadowColor: '#ff0000',
+      strokeColor: '#00ff00',
+      bgColor: '#0000ff'
+    }
+
+    it('carries mask, blend, the speed ramp and text colours across the ticks bridge (V4 G5)', () => {
+      const clip = tickClip(EXTRA)
+      const back = v3ClipToTicks(ticksClipToV3(clip, 'video'))
+      for (const key of Object.keys(EXTRA)) {
+        assert.deepEqual(back[key], clip[key], `${key} is dropped by the bridge`)
+      }
+    })
+
+    it('keeps mask, blend and the ramp on split and duplicate clones (V4 G5)', () => {
+      // Clone-based core ops copy the v3 clip verbatim and syncTicksResult
+      // builds a NEW flat item from that clone alone. Anything clipToV3 does
+      // not carry is therefore silently gone for the split tail and for the
+      // copy — a duplicated masked clip exports unmasked, and the preview
+      // reads the ramp from the same field (evaluate.mjs), so the copy also
+      // stops ramping.
+      const tracks = [{ id: 't-video-1', type: 'video', name: 'V', items: [tickClip({ id: 'x', ...EXTRA })] }]
+      const v3 = ticksTracksToV3(tracks)
+      assert.ok(splitClip(v3, 'x', 6 * TICKS_PER_SECOND))
+      assert.equal(duplicateClips(v3, ['x'], 20 * TICKS_PER_SECOND).length, 1)
+      assert.deepEqual(syncTicksResult(tracks, v3), { added: 2, updated: 1, removed: 0 })
+      assert.equal(tracks[0].items.length, 3)
+      for (const item of tracks[0].items) {
+        assert.deepEqual(item.mask, MASK, `${item.id} lost its mask`)
+        assert.equal(item.blend, 'multiply', `${item.id} lost its blend mode`)
+        assert.deepEqual(item.speedPoints, RAMP, `${item.id} lost its speed ramp`)
+        assert.equal(item.shadowColor, '#ff0000', `${item.id} lost its shadow colour`)
+        assert.equal(item.strokeColor, '#00ff00', `${item.id} lost its outline colour`)
+        assert.equal(item.bgColor, '#0000ff', `${item.id} lost its background plate`)
+      }
+    })
+
+    it('detects mask-only, blend-only and ramp-only changes (V4 G5)', () => {
+      // matchesV3 is the skip test: a field it ignores makes a mutated clone
+      // look "already equal", so syncTicksResult never writes it back.
+      const item = tickClip(EXTRA)
+      const clip = ticksClipToV3(item, 'video')
+      assert.ok(ticksMatchesV3(item, clip))
+      for (const [key, value] of [['mask', { ...MASK, feather: 0.4 }], ['blend', 'screen'], ['speedPoints', [{ t: 0, speed: 1 }, { t: 12 * TICKS_PER_SECOND, speed: 2 }]], ['shadowColor', '#123456'], ['strokeColor', '#654321'], ['bgColor', '#abcdef']]) {
+        assert.equal(
+          ticksMatchesV3(item, { ...clip, [key]: value }),
+          false,
+          `a ${key} change must sync back, not be skipped as equal`
+        )
+      }
+    })
+
     it('seconds bridge stays for migration (never used on the ticks store)', () => {
       // A legacy SECONDS item fed to the seconds bridge scales by TICKS;
       // feeding the SAME object to the ticks bridge would misread it —

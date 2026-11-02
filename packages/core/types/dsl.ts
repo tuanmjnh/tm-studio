@@ -102,10 +102,33 @@ export interface TmcutTimelineClip {
   focusX?: number
   focusY?: number
   cropRect?: TmcutCropRect
+  /** Composite mode over the track below (app R116); absent/'normal' = plain overlay. */
+  blend?: 'normal' | 'screen' | 'overlay' | 'multiply'
+  /** Clip mask (app R124 A3, CapCut §5.7): normalized 0..1 box of the clip
+      frame. mask.mjs owns the geometry math. Absent or null = no mask. */
+  mask?: {
+    shape: 'rectangle' | 'circle' | 'linear'
+    x: number
+    y: number
+    w: number
+    h: number
+    feather: number
+    rotation: number
+    invert: boolean
+    axis: 'x' | 'y'
+  } | null
+  /** Speed ramp (app R124 A4, CapCut §5.4): clip-local TICKS control points.
+      Absent/null/<2 points = constant `speed`; retime.mjs owns the math. */
+  speedPoints?: Array<{ t: MediaTime, speed: number }> | null
   /** 0..100, audio-bearing clips */
   volume?: number
   text?: string
   color?: string
+  /** Text effect colours (app R122): shadow/stroke/plate. Absent = the
+      built-in default, so clearing one means deleting the key, not ''. */
+  shadowColor?: string
+  strokeColor?: string
+  bgColor?: string
   fontSize?: number
   /** Font family shown by the preview overlay (roadmap C-1). */
   fontFamily?: string

@@ -77,6 +77,12 @@ function clipToV3(item, trackType, conv) {
     focusX: item.focusX,
     focusY: item.focusY,
     cropRect: item.cropRect,
+    blend: item.blend,
+    mask: item.mask,
+    // Ramp control points are clip-local TICKS in BOTH bridges: the speed
+    // ramp and the ticks store landed together, so no legacy file holds
+    // seconds here and the field must not go through the time converter.
+    speedPoints: item.speedPoints,
     volume: item.volume,
     text: item.text,
     color: item.color,
@@ -88,6 +94,9 @@ function clipToV3(item, trackType, conv) {
     align: item.align,
     shadow: item.shadow,
     stroke: item.stroke,
+    shadowColor: item.shadowColor,
+    strokeColor: item.strokeColor,
+    bgColor: item.bgColor,
     effects: Array.isArray(item.effects) ? item.effects : [],
     keyframes: Array.isArray(item.keyframes) ? item.keyframes : [],
     transitionIn: item.transitionIn,
@@ -154,6 +163,9 @@ function v3ClipToFlat(clip, conv) {
     align: clip.align,
     shadow: clip.shadow,
     stroke: clip.stroke,
+    shadowColor: clip.shadowColor,
+    strokeColor: clip.strokeColor,
+    bgColor: clip.bgColor,
     in: conv.fromSource(clip.source.in),
     out: conv.fromSource(clip.source.out),
     offset: conv.fromSource(clip.timeline.start),
@@ -169,6 +181,9 @@ function v3ClipToFlat(clip, conv) {
     focusX: clip.focusX,
     focusY: clip.focusY,
     cropRect: clip.cropRect,
+    blend: clip.blend,
+    mask: clip.mask,
+    speedPoints: clip.speedPoints,
     effects: clip.effects ?? [],
     keyframes: clip.keyframes ?? [],
     transitionIn: clip.transitionIn,
@@ -203,7 +218,7 @@ const COMPARE_NUMBERS = ['in', 'out', 'offset', 'speed', 'opacity', 'scale', 'x'
 // fontFamily/fontFile (C-1) must be compared so a font-only edit syncs
 // back AND split/paste/duplicate clones (which copy the v3 clip verbatim)
 // keep the picked face on their new flat items.
-const COMPARE_STRINGS = ['name', 'src', 'text', 'color', 'fit', 'groupId', 'linkId', 'fontFamily', 'fontFile', 'align', 'animIn', 'animOut', 'stabilizeLevel', 'stabilizedPath', 'stabilizeStatus']
+const COMPARE_STRINGS = ['name', 'src', 'text', 'color', 'fit', 'groupId', 'linkId', 'fontFamily', 'fontFile', 'align', 'animIn', 'animOut', 'stabilizeLevel', 'stabilizedPath', 'stabilizeStatus', 'blend', 'shadowColor', 'strokeColor', 'bgColor']
 // Text style flags (C-2): undefined and false compare EQUAL — flat items
 // from older projects lack the keys, so a strict compare would rewrite
 // every untouched clip on open. `reverse` is here too: flat items often
@@ -278,6 +293,37 @@ function sameCropRect(a, b) {
     && sameValue(num(a.h, 1), num(b.h, 1))
 }
 
+// mask { shape, x, y, w, h, feather, rotation, invert, axis }: absent and
+// null are the same "no mask". Compared field-by-field so a mask-only edit
+// (or a cleared one) syncs back instead of being skipped as equal (V4 G5).
+function sameMask(a, b) {
+  if (a == null && b == null) return true
+  if (a == null || b == null) return false
+  if ((a.shape ?? null) !== (b.shape ?? null)) return false
+  if ((a.axis ?? null) !== (b.axis ?? null)) return false
+  if ((a.invert ?? false) !== (b.invert ?? false)) return false
+  return sameValue(num(a.x, 0), num(b.x, 0))
+    && sameValue(num(a.y, 0), num(b.y, 0))
+    && sameValue(num(a.w, 1), num(b.w, 1))
+    && sameValue(num(a.h, 1), num(b.h, 1))
+    && sameValue(num(a.feather, 0), num(b.feather, 0))
+    && sameValue(num(a.rotation, 0), num(b.rotation, 0))
+}
+
+// speedPoints [{ t, speed }] in clip-local TICKS: absent, null and [] all
+// mean constant speed, matching retime.mjs. Deep-compared so a ramp-only
+// edit syncs back (V4 G5).
+function sameRamp(a, b) {
+  const arrA = Array.isArray(a) ? a : []
+  const arrB = Array.isArray(b) ? b : []
+  if (arrA.length !== arrB.length) return false
+  for (let i = 0; i < arrA.length; i++) {
+    if (!sameValue(num(arrA[i]?.t, 0), num(arrB[i]?.t, 0))) return false
+    if (!sameValue(num(arrA[i]?.speed, 1), num(arrB[i]?.speed, 1))) return false
+  }
+  return true
+}
+
 /** True when a flat item already matches a v3 clip (untouched clips skip). */
 export function v1MatchesV3(item, clip) {
   return matchesV3(item, clip, SECONDS)
@@ -308,6 +354,10 @@ function matchesV3(item, clip, conv) {
   if (!sameFade(item.fade, patch.fade)) return false
   // cropRect { x, y, w, h }: compared explicitly so crop adjustments sync back (R67/F-3).
   if (!sameCropRect(item.cropRect, patch.cropRect)) return false
+  // mask + speedPoints: a mask or ramp the user changes (or clears) must
+  // sync back instead of being skipped as equal (V4 G5).
+  if (!sameMask(item.mask, patch.mask)) return false
+  if (!sameRamp(item.speedPoints, patch.speedPoints)) return false
   // effects[]: deep-compared so an effects-only edit syncs back (R74).
   if (!sameEffects(item.effects, patch.effects)) return false
   // keyframes[]: deep-compared so a keyframe-only edit syncs back (R74).
