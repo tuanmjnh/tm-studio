@@ -613,7 +613,17 @@ export const KNOWN_TRANSITIONS: string[]
 export function canApplyTransition(timeline: TmcutTimeline, clipId: string, type: string, durationTicks: number): TmcutTransitionCheck
 export function applyTransition(timeline: TmcutTimeline, clipId: string, type: string, durationTicks: number): boolean
 export function clearTransition(timeline: TmcutTimeline, clipId: string): boolean
-export function transitionWindows(track: TmcutTrack): TmcutTransitionWindow[]
+/**
+ * Overlap windows of one track. Spans go through `clipSpan`, so the app store's
+ * flat clips (no `timeline`/`source`, just `offset` + `in`/`out`/`speed`)
+ * resolve exactly like DSL v3 ones — which is why `items` stays opaque here.
+ * The export compiler and the evaluator must read adjacency through this one
+ * call: the rule (a 1 ms tolerance over the 1e-4 s position grid) lives only in
+ * `transitions.mjs`.
+ */
+export function transitionWindows(
+  track: TmcutTrack | { items?: readonly unknown[] } | null | undefined
+): TmcutTransitionWindow[]
 
 // --- Retime: speed/reverse time map (Roadmap C4) ---
 // All clip fields and arguments are in TIMELINE TICKS (120000/s).

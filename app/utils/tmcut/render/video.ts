@@ -1,5 +1,6 @@
 import type { RenderGraph } from './graph'
 import type { RenderClip } from './clip'
+import type { TmcutTransitionWindow } from 'tmcut-core'
 import { renderClipDuration } from './clip'
 import { opacityAlpha } from './graph'
 import { fadeFilter } from './audio'
@@ -26,6 +27,14 @@ export interface VideoPipelineContext {
   hasAudio: boolean
   /** Base background stream label for image backgrounds (Phase 4). */
   bgBase?: string
+  /**
+   * V4 M3: the overlap windows core reports for the track, from
+   * `transitionWindows` — the same authority `evaluateTimeline` uses to decide
+   * whether a cut crossfades. The compiler must not re-decide it: its old
+   * seconds-scale check admitted a 50 ms error where core admits 1 ms, so a
+   * pair the preview played straight crossfaded in the file.
+   */
+  transitionWindows: TmcutTransitionWindow[]
 }
 
 /**
@@ -203,7 +212,10 @@ export function compileVideoPipeline(
     }
   }
 
-  // Concatenate video clips (roadmap R3: xfade & acrossfade when transitions exist)
+  // Concatenate video clips (roadmap R3: xfade & acrossfade when transitions
+  // exist). This flag only picks the CHAIN SHAPE — one concat or a fold that
+  // can hold xfade — so it stays a "does anything carry a transition" test.
+  // Whether a given cut crossfades is decided below, from the model windows.
   const hasTransitions = videoClips.some((c, i) => i > 0 && (c.transitionIn?.duration ?? 0) > 0)
   let currentVideoStream: string
   let currentAudioStream: string | null = null
@@ -226,23 +238,29 @@ export function compileVideoPipeline(
     for (let i = 1; i < videoClips.length; i++) {
       const prevClip = videoClips[i - 1]!
       const currClip = videoClips[i]!
-      const prevDur = renderClipDuration(prevClip)
       const currDur = renderClipDuration(currClip)
-      const ti = currClip.transitionIn
-      // transitionIn.duration always lived in ticks (v1compat passes it
-      // through untouched) — C16-R3 drops the old >1000 guess: decode is
-      // a plain ticksToSec now.
-      const transSec = ticksToSec(ti?.duration ?? 0)
-      const prevEnd = prevClip.offsetSec + prevDur
-      const isIntact = (ti?.duration ?? 0) > 0
-        && Math.abs(prevEnd - (currClip.offsetSec + transSec)) < 0.05
-        && transSec <= Math.min(prevDur, currDur)
+      // One question, one answer: is this cut an overlap the model reports?
+      // `fromId` must be the clip the export actually plays before this one,
+      // so a pair separated by an unrendered item falls through to concat
+      // exactly as it did when the compiler checked adjacency itself.
+      const window = ctx.transitionWindows.find(
+        w => w.fromId === prevClip.id && w.toId === currClip.id
+      ) ?? null
+      // Window spans are whole ticks; the old decode of `transitionIn.duration`
+      // was the same number, so valid pairs keep emitting identical arguments.
+      const transTicks = window ? window.endTicks - window.startTicks : 0
+      const transSec = ticksToSec(transTicks)
+      // A trim can leave a stored duration longer than either clip. The model
+      // still opens the window (it only tests adjacency), and xfade with an
+      // over-long duration is not well-defined, so the pair still concatenates.
+      const isIntact = transTicks > 0
+        && transTicks <= Math.min(prevClip.durationTicks, currClip.durationTicks)
 
       const nextV = `[v_in_${i}]`
       graph.addFilterChain(`${vStreams[i]}settb=1/${ctx.fps},fps=${ctx.fps}${nextV}`)
 
       if (isIntact) {
-        const transType = mapXfadeTransition(ti?.type)
+        const transType = mapXfadeTransition(currClip.transitionIn?.type)
         const offset = Math.max(0, runningDuration - transSec)
         const vOut = `[v_chain_${i}]`
         graph.addFilterChain(

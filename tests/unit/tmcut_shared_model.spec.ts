@@ -11,12 +11,13 @@
  * unknown mask shape read as "masked" in the model while both alpha builders
  * returned empty — masked on paper, unmasked on screen.
  *
- * Five subjects:
+ * Six subjects:
  *  1. mask geometry: layer == render clip == what both builders were given.
  *  2. layout: fit/focus/crop resolved once by core `resolveClipLayout`.
  *  3. the export graph carries the window and the mask the MODEL reports.
- *  4. the render layer stops reading mask/crop off `raw` (source guard).
- *  5. the preview reads its fit style through the same resolver.
+ *  4. the export asks core which cuts have a transition instead of re-deciding.
+ *  5. the render layer stops reading mask/crop off `raw` (source guard).
+ *  6. the preview reads its fit style through the same resolver.
  *
  * No FFmpeg binary needed — this is about the inputs each renderer is handed.
  */
@@ -29,7 +30,8 @@ import {
   evaluateTimeline,
   maskAlphaExpr,
   maskCssMaskImage,
-  ticksToSec
+  ticksToSec,
+  transitionWindows
 } from 'tmcut-core'
 import { toRenderClip } from '../../app/utils/tmcut/render/clip'
 import { compileTimelineToFfmpeg } from '../../app/utils/tmcut/render'
@@ -213,7 +215,56 @@ check('a clip with no mask emits no alpha pass at all', () => {
   assert.equal(evaluateTimeline(projectWith([videoItem()]), T).layers[0]!.mask, null)
 })
 
-// --- 4. the source stays on the model --------------------------------------
+// --- 4. the export asks the model which cuts have a transition --------------
+// Core admits a 1 ms adjacency error (`ADJACENCY_EPS`, because positions
+// round-trip the app's 1e-4 s grid). The compiler used to run its own check in
+// SECONDS with a 50 ms window, so a pair that sits 20 ms off — a trim the user
+// nudged, a drag released a hair early — had NO transition for the preview and
+// a full crossfade in the file. One model, one answer: the export must consume
+// `transitionWindows`, the same authority `evaluateTimeline` uses.
+const drifted = projectWith([
+  videoItem({ id: 'd-1', src: 'C:/media/a.mp4' }),
+  videoItem({
+    id: 'd-2',
+    src: 'C:/media/b.mp4',
+    // clip-1 ends at 2.000 s; the overlap model puts the cut at offset+duration,
+    // so 1.62 s sits exactly 20 ms past what the model would accept.
+    offset: Math.round(1.62 * T),
+    transitionIn: { type: 'fade', duration: overlap }
+  })
+])
+
+check('the model itself refuses to open a window for the 20 ms pair', () => {
+  // Without this, the next check would only prove the compiler is blind.
+  assert.deepEqual(transitionWindows(drifted.timeline.tracks[0]), [])
+  const layer = evaluateTimeline(drifted, T * 1.8).layers.find(l => l.clipId === 'd-2')!
+  assert.equal(layer.transition, null, 'a broken pair must not report a transition')
+})
+
+check('a pair the model does not call a transition is not crossfaded in the export', () => {
+  const driftedGraph = compileTimelineToFfmpeg(drifted, 'drifted.mp4').args
+  const driftedFilter = String(driftedGraph[driftedGraph.indexOf('-filter_complex') + 1])
+  assert.ok(
+    !driftedFilter.includes('xfade'),
+    `the export must concat where the preview shows no transition, got ${driftedFilter}`
+  )
+  assert.ok(
+    !driftedFilter.includes('acrossfade'),
+    'the audio lane may not crossfade a pair the video lane plays straight'
+  )
+})
+
+check('the intact pair still crossfades with the model window', () => {
+  // The other direction: consuming the windows must not lose real transitions.
+  const windows = transitionWindows(pair.timeline.tracks[0])
+  assert.equal(windows.length, 1)
+  assert.equal(windows[0]!.fromId, 'clip-1')
+  assert.equal(windows[0]!.toId, 'clip-2')
+  assert.equal(windows[0]!.endTicks - windows[0]!.startTicks, overlap)
+  assert.ok(filterGraph.includes('xfade='), 'the valid pair must still reach xfade')
+})
+
+// --- 5. the source stays on the model --------------------------------------
 check('the render layer no longer pulls mask or crop off the app item', () => {
   // `raw` exists for the expression builders (keyframeExpr, rampSetptsExpr),
   // which read unit-agnostic fields. Selecting mask/cropRect out of it re-opens
@@ -225,6 +276,23 @@ check('the render layer no longer pulls mask or crop off the app item', () => {
   assert.ok(!/raw\.mask|raw\.cropRect/.test(clip), 'clip.ts must resolve mask/cropRect through core')
   assert.ok(/normalizeMask\(item\.mask\)/.test(clip), 'clip.ts must call the same normalizer the evaluator calls')
   assert.ok(/resolveClipLayout\(item\)/.test(clip), 'clip.ts must call the same layout resolver the evaluator calls')
+})
+
+check('the export no longer carries its own adjacency tolerance', () => {
+  const video = readFileSync(join(ROOT, 'app/utils/tmcut/render/video.ts'), 'utf8')
+  const index = readFileSync(join(ROOT, 'app/utils/tmcut/render/index.ts'), 'utf8')
+  assert.ok(
+    /transitionWindows/.test(video),
+    'video.ts must read the windows core reports instead of testing adjacency itself'
+  )
+  assert.ok(
+    !/0\.05/.test(video),
+    'the 50 ms second-scale guess is the bug: one tolerance lives in core'
+  )
+  assert.ok(
+    /transitionWindows\(/.test(index),
+    'the compiler entry point must hand the pipeline the model windows'
+  )
 })
 
 check('the preview resolves fit, focus and crop from the same core call', () => {

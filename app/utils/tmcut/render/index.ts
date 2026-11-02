@@ -12,7 +12,7 @@ import { compileAudioOnly, compileBackgroundAudio } from './audio'
 import { compileVideoPipeline } from './video'
 import { buildVideoCodecArgs, buildAudioCodecArgs, buildGifPipeline } from './encoder'
 import { renderVideoClips, renderAudioClips, renderTextClips, renderClipDuration } from './clip'
-import { buildBackgroundSource } from 'tmcut-core'
+import { buildBackgroundSource, transitionWindows } from 'tmcut-core'
 
 // Re-export all sub-modules for clean consuming
 export * from './types'
@@ -145,14 +145,18 @@ export function compileTimelineToFfmpeg(
     // Apply text overlays if any
     currentVideoStream = applyTextOverlays(graph, currentVideoStream, textClips, { canvasW, canvasH, fps })
   } else {
-    // Case 2: Normal project with video clips — process pipeline
+    // Case 2: Normal project with video clips — process pipeline.
+    // The overlap windows come from core, which is also what the evaluator
+    // resolves them from: one adjacency rule (1 ms) for preview and export.
+    const windows = videoTrack ? transitionWindows(videoTrack) : []
     const videoPipeline = compileVideoPipeline(graph, videoClips, {
       canvasW,
       canvasH,
       fps,
       bgColor,
       hasAudio,
-      bgBase: backgroundStreamLabel
+      bgBase: backgroundStreamLabel,
+      transitionWindows: windows
     })
     currentVideoStream = videoPipeline.videoStream
     currentAudioStream = videoPipeline.audioStream

@@ -10,7 +10,7 @@ import {
 } from '../src/transitions.mjs'
 import { addClip } from '../src/timeline.mjs'
 import { defaultTimeline } from '../src/project.mjs'
-import { secToTicks } from '../src/time.mjs'
+import { secToTicks, TICKS_PER_SECOND } from '../src/time.mjs'
 
 // Two adjacent 2 s clips: A [0..2s], B [2s..4s] (addClip appends).
 function pair() {
@@ -110,6 +110,60 @@ describe('transitions (C5)', () => {
     ])
     items[0].out = secToTicks(1)
     assert.deepEqual(transitionWindows({ type: 'video', items }), [], 'trimmed neighbour breaks the pair')
+  })
+
+  it('pins the adjacency tolerance: grid drift is a cut, a real gap is not', () => {
+    // Positions round-trip the app's 1e-4 s grid (12 ticks), so a stored pair
+    // can sit a fraction of a millisecond off exact ticks. `ADJACENCY_EPS` is
+    // the ONLY place that tolerance lives, and BOTH the preview (through
+    // `evaluateTimeline`) and the export (through `transitionWindows`) read the
+    // same two calls — so the boundary must not drift silently in either
+    // direction. Widening it makes broken pairs crossfade; narrowing it drops
+    // real ones.
+    const EPS = TICKS_PER_SECOND / 1000 // 1 ms
+    const GRID_QUANTUM = TICKS_PER_SECOND / 10_000 // the app grid: 1e-4 s
+    assert.ok(GRID_QUANTUM < EPS, 'the grid must stay inside the tolerance')
+
+    const overlap = secToTicks(0.5)
+    const flatPairWith = drift => ({
+      type: 'video',
+      items: [
+        { id: 'a', type: 'video', in: 0, out: secToTicks(2), offset: 0, speed: 1 },
+        { id: 'b', type: 'video', in: 0, out: secToTicks(2), offset: secToTicks(1.5) + drift, speed: 1, transitionIn: { type: 'fade', duration: overlap } }
+      ]
+    })
+    // The window travels with the drifted clip; only its EXISTENCE is at stake.
+    const windowAt = drift => ({
+      fromId: 'a',
+      toId: 'b',
+      startTicks: secToTicks(1.5) + drift,
+      endTicks: secToTicks(2) + drift
+    })
+
+    for (const drift of [0, GRID_QUANTUM, -GRID_QUANTUM, EPS, -EPS]) {
+      assert.deepEqual(
+        transitionWindows(flatPairWith(drift)),
+        [windowAt(drift)],
+        `${drift} ticks of drift is inside the tolerance`
+      )
+    }
+    assert.deepEqual(transitionWindows(flatPairWith(EPS + 1)), [], '1 tick past it is a broken pair, not a transition')
+    assert.deepEqual(transitionWindows(flatPairWith(-EPS - 1)), [], 'and the same on the other side')
+    assert.deepEqual(transitionWindows(flatPairWith(50 * EPS)), [], 'the 50 ms the old export check admitted is 50x too loose')
+
+    // The same constant gates applying a transition onto a cut.
+    const near = (drift) => {
+      const { timeline, b } = pair()
+      b.timeline.start = secToTicks(2) + drift
+      return { timeline, clipId: b.id }
+    }
+    const atTolerance = near(EPS)
+    assert.equal(canApplyTransition(atTolerance.timeline, atTolerance.clipId, 'fade', overlap).ok, true)
+    const pastTolerance = near(EPS + 1)
+    assert.deepEqual(
+      canApplyTransition(pastTolerance.timeline, pastTolerance.clipId, 'fade', overlap),
+      { ok: false, reason: 'gap' }
+    )
   })
 
   it('re-applying replaces the previous shift instead of stacking', () => {
