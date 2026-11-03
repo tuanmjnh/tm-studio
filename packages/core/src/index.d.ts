@@ -202,6 +202,8 @@ export function mediaFileKey(input: unknown): string
 export function mediaFileName(input: unknown): string
 export function extensionOf(input: unknown): string
 export function classifyAssetKind(input: unknown): TmcutAssetKind | null
+/** True when the path is a still whose FFmpeg decoder accepts a raster size. */
+export function isVectorStillImage(input: unknown): boolean
 export function formatDurationSec(sec: unknown): string
 export function formatFileSize(bytes: unknown): string
 
@@ -507,7 +509,7 @@ export interface TmcutBackgroundSourceDescriptor {
   kind: 'source'
   chain: string
 }
-/** Image background: an FFmpeg INPUT (`-framerate <fps> -loop 1 -t <d> -i file`); apply `tail` to the labeled stream. */
+/** Image background: an FFmpeg INPUT (see `stillImageInputFlags`); apply `tail` to the labeled stream. */
 export interface TmcutBackgroundImageDescriptor {
   type: 'image'
   kind: 'input'
@@ -517,6 +519,22 @@ export interface TmcutBackgroundImageDescriptor {
 }
 export type TmcutBackgroundDescriptor = TmcutBackgroundSourceDescriptor | TmcutBackgroundImageDescriptor
 export function buildBackgroundSource(options: TmcutBackgroundOptions): TmcutBackgroundDescriptor
+
+export interface TmcutStillInputOptions {
+  /** Frame rate for the loop; unusable values fall back to 30. */
+  fps?: number
+  /** Raster box, sent ONLY for a vector still — a raster decoder rejects it. */
+  width?: number
+  height?: number
+  /** Seconds to bound the loop to; omit for an input longer than one clip. */
+  duration?: number
+}
+
+/**
+ * Input flags for a still image: always loops, and gives a vector still the
+ * box it should rasterise into.
+ */
+export function stillImageInputFlags(path: string, options?: TmcutStillInputOptions): string[]
 
 // --- Keyframes (Roadmap C3) ---
 export type TmcutKeyframeEasing = 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out' | 'step'

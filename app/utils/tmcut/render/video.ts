@@ -6,7 +6,7 @@ import { opacityAlpha } from './graph'
 import { fadeFilter } from './audio'
 import { buildFfmpegFitFilters, buildFfmpegTransform } from '../canvas'
 import { xfadeNameFor } from '../fxCatalog'
-import { keyframeExpr, maskAlphaExpr, rampSetptsExpr, buildFfmpegEffectFilters, ticksToSec } from 'tmcut-core'
+import { keyframeExpr, maskAlphaExpr, rampSetptsExpr, buildFfmpegEffectFilters, stillImageInputFlags, ticksToSec } from 'tmcut-core'
 
 /**
  * Maps a TMCut transition type into an FFmpeg xfade transition name
@@ -62,11 +62,17 @@ export function compileVideoPipeline(
   const aStreams: string[] = []
 
   for (const clip of videoClips) {
-    // Stills decode to a single frame and carry no audio lane: loop the image2
-    // demuxer so the segment has real frames (`-t` bounds it to the clip span
-    // plus transform headroom, both emitted BEFORE -i).
+    // Stills decode to a single frame and carry no audio lane: the core still
+    // law loops them and bounds the loop to the clip span plus transform
+    // headroom (both emitted BEFORE -i), and gives a vector still the canvas
+    // box to rasterise into — a PNG must not see those size options.
     const currentInputIdx = graph.addInput(clip.footagePath!, clip.isImage
-      ? ['-loop', '1', '-framerate', String(ctx.fps), '-t', (renderClipDuration(clip) + 0.5).toFixed(3)]
+      ? stillImageInputFlags(clip.footagePath!, {
+          fps: ctx.fps,
+          width: ctx.canvasW,
+          height: ctx.canvasH,
+          duration: renderClipDuration(clip) + 0.5
+        })
       : [])
 
     const speed = clip.speed

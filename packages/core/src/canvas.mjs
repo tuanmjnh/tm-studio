@@ -7,6 +7,58 @@
 // =============================================================================
 
 import { fpsToRational } from './time.mjs'
+import { isVectorStillImage } from './media.mjs'
+
+/**
+ * The input flags a still image needs, for any consumer that feeds one to
+ * FFmpeg.
+ *
+ * Two laws, both measured on the render binary rather than assumed:
+ *
+ * 1. A still must LOOP. It decodes to a single frame, so an unlooped input
+ *    gives a 3-second clip ONE frame (measured: 320x180 rgb24, 172800 bytes
+ *    for a 3 s window) and the segment silently collapses to a snapshot.
+ *    `-t` then bounds the loop to the caller's window.
+ * 2. A VECTOR still must be told what box to draw into. Without a size,
+ *    librsvg rasterises at the file's own width/height, or at 100x100 when
+ *    those are absent — so a logo that is only a `viewBox` lands as a
+ *    100x100 postage stamp that the fit filters then stretch across a 4K
+ *    canvas. `-width`/`-height` are the decoder's own options; it keeps the
+ *    aspect it resolved for the file inside that box, which for a file with
+ *    real width/height attributes is the file's own aspect, and for a
+ *    `viewBox`-only file is still 1:1 (a known gap, recorded in the roadmap).
+ *
+ * The pair is therefore sent ONLY for a vector still. Hand `-width` to a PNG
+ * input and FFmpeg refuses the whole export before building the graph
+ * ("Codec AVOption width ... has not been used for any stream"), which is why
+ * this function, not the call sites, decides the difference.
+ *
+ * @param {string} path          The still's path — decides the vector leg.
+ * @param {object} [options]
+ * @param {number} [options.fps]     Frame rate; unusable values fall back to 30.
+ * @param {number} [options.width]   Raster box width; ignored for a raster still.
+ * @param {number} [options.height]  Raster box height; ignored for a raster still.
+ * @param {number} [options.duration] Seconds to bound the loop to; omit for an
+ *   input that outlives a single clip (a canvas background).
+ * @returns {string[]} flags to emit before `-i`
+ */
+export function stillImageInputFlags(path, options = {}) {
+  const fps = Number(options.fps) > 0 ? Number(options.fps) : 30
+  const flags = ['-framerate', String(fps), '-loop', '1']
+  const width = positiveSize(options.width)
+  const height = positiveSize(options.height)
+  if (width && height && isVectorStillImage(path)) {
+    flags.push('-width', String(width), '-height', String(height))
+  }
+  const duration = Number(options.duration)
+  if (Number.isFinite(duration) && duration > 0) flags.push('-t', duration.toFixed(3))
+  return flags
+}
+
+function positiveSize(value) {
+  const size = Number(value)
+  return Number.isFinite(size) && size > 0 ? Math.floor(size) : 0
+}
 
 /**
  * Convert a DSL canvas color to an FFmpeg `color` source spec.
@@ -36,8 +88,9 @@ function toFfmpegColor(value) {
  *   FFmpeg INPUT (not a `movie=` filter: drive-letter colons like `D:/`
  *   break `:`-separated filter options, and `fps=` is not a movie demuxer
  *   option). The caller registers the file via
- *   `graph.addInput(file, inputFlags)` (flags carry `-framerate`,
- *   `-loop 1`, `-t <duration>`) and applies `tail` to the labeled stream.
+ *   `graph.addInput(file, inputFlags)` (flags come from
+ *   `stillImageInputFlags` — `-framerate`, `-loop 1`, `-t <duration>` and, for
+ *   a vector still, the raster box) and applies `tail` to the labeled stream.
  *
  * @param {object} options
  * @param {number} options.canvasW    Canvas width (evened).
@@ -67,13 +120,15 @@ export function buildBackgroundSource(options) {
     }
     // Cover-fit: scale to fill the canvas, crop the overflow, keep SAR 1.
     // No `-t` here: each consumer trims its own window (clip duration +
-    // headroom), so one looping input can serve the whole timeline.
+    // headroom), so one looping input can serve the whole timeline. The
+    // canvas box goes to the same still law a clip uses, so a vector
+    // background rasterises at the canvas instead of at 100x100.
     const tail = `scale=${canvasW}:${canvasH}:force_original_aspect_ratio=increase,crop=${canvasW}:${canvasH},setsar=1`
     return {
       type: 'image',
       kind: 'input',
       file: imgPath,
-      inputFlags: ['-framerate', String(fps), '-loop', '1'],
+      inputFlags: stillImageInputFlags(imgPath, { fps, width: canvasW, height: canvasH }),
       tail
     }
   }

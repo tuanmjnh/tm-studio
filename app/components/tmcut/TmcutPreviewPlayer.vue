@@ -7,12 +7,11 @@ import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { computeFitObjectStyle, CROP_RATIO_PRESETS, clampCropRect, applyCropRatio, canvasFpsValue } from '~/utils/tmcut/canvas'
 import { textBoxPadding, textStrokeWidth, textShadowOffset } from '~/utils/tmcut/textStyle'
 import { effectCssParts } from '~/utils/tmcut/fxPreview'
-import { previewScale, evalKeyframe, gainAt, evaluateClip, textAnimationAt, safeAreaRects, SAFE_AREA_PRESETS, TICKS_PER_SECOND, secToTicks, maskCssMaskImage, resolveClipLayout, previewTransitionRamp } from 'tmcut-core'
+import { previewScale, evalKeyframe, gainAt, evaluateClip, textAnimationAt, safeAreaRects, SAFE_AREA_PRESETS, TICKS_PER_SECOND, secToTicks, maskCssMaskImage, resolveClipLayout, previewTransitionRamp, classifyAssetKind } from 'tmcut-core'
 import type { TmcutKeyframe, TmcutTextAnimationType } from 'tmcut-core'
 import { clipDurationTicks, clipStartSec, clipEndSec, clipMediaTimeSec } from '~/utils/tmcut/clipTime'
 import { useTmcutFrames } from '~/composables/useTmcutFrames'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
-import { isImageFile } from '~/utils/ffmpegHelper'
 
 const { t } = useI18n()
 const toast = useToast()
@@ -341,17 +340,23 @@ const isCurrentClipStabilized = computed(() => {
   return !!(clip?.stabilize && clip?.stabilizedPath)
 })
 
-// Still-image clips (png/jpg/…) cannot decode in the <video> element — pointing
+// Still-image clips (png/jpg/svg/…) cannot decode in the <video> element — pointing
 // a video at an image renders an empty black frame. They get their own <img>
 // layer with the same fit/transform so the canvas shows the actual picture.
 // The asset library is authoritative when the clip src matches one; the file
 // extension is the fallback for clips whose asset entry moved or was replaced.
+// The fallback asks tmcut-core — the SAME question `toRenderClip` asks for the
+// export. It used to ask the app's legacy `isImageFile` list, which was a
+// second opinion carrying extensions core never heard of (`ico`, `img`,
+// `jfif`, `svg`); a clip named by one of those was painted here while the
+// compiler treated it as ordinary footage, and unlooped footage decodes to
+// one frame.
 const isCurrentClipImage = computed(() => {
   const src = activeVideoClip.value?.clip?.src
   if (!src) return false
   const asset = findAssetBySrc(src)
   if (asset) return asset.kind === 'image'
-  return isImageFile(src)
+  return classifyAssetKind(src) === 'image'
 })
 
 // Seek the outgoing layer to its frame once its metadata lands (the rAF

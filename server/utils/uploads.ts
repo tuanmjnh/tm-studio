@@ -20,7 +20,8 @@ export const UPLOAD_KIND_BY_EXT: Record<string, UploadKind> = {
   mp4: 'video', mov: 'video', mkv: 'video', webm: 'video', avi: 'video', m4v: 'video',
   mpg: 'video', mpeg: 'video', ts: 'video', wmv: 'video', flv: 'video',
   mp3: 'audio', wav: 'audio', m4a: 'audio', aac: 'audio', ogg: 'audio', flac: 'audio', wma: 'audio', opus: 'audio',
-  jpg: 'image', jpeg: 'image', png: 'image', webp: 'image', bmp: 'image', tiff: 'image', tif: 'image', gif: 'image'
+  jpg: 'image', jpeg: 'image', png: 'image', webp: 'image', bmp: 'image', tiff: 'image', tif: 'image', gif: 'image',
+  svg: 'image'
 }
 
 export function uploadKindForName(name: string): UploadKind | null {
@@ -41,9 +42,31 @@ export function uploadsContentTypeForName(name: string): string {
     mp3: 'audio/mpeg', wav: 'audio/wav', m4a: 'audio/mp4', aac: 'audio/aac',
     ogg: 'audio/ogg', flac: 'audio/flac', wma: 'audio/x-ms-wma', opus: 'audio/ogg',
     jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
-    bmp: 'image/bmp', tiff: 'image/tiff', tif: 'image/tiff', gif: 'image/gif'
+    bmp: 'image/bmp', tiff: 'image/tiff', tif: 'image/tiff', gif: 'image/gif',
+    svg: 'image/svg+xml'
   }
   return map[ext] || 'application/octet-stream'
+}
+
+/**
+ * Response headers for a served upload, by content type.
+ *
+ * An SVG document is a script container. The editor only ever loads one as an
+ * `<img>` src, where scripts do not run, but the stored file is also a URL a
+ * browser can navigate to, and `/uploads/**` is the app's OWN origin — a
+ * document that runs there reads the session. `sandbox` without `allow-scripts`
+ * gives the response its own opaque origin, so nothing it runs can touch the
+ * app's cookies or storage, and `default-src 'none'` closes the fetches a
+ * sandboxed document could still make. Inline styles stay allowed because SVG
+ * styling is inline by construction; every other content type is media data
+ * with no document semantics and gets nothing extra.
+ */
+export function uploadsSecurityHeaders(contentType: string): Record<string, string> {
+  if (contentType !== 'image/svg+xml') return {}
+  return {
+    'content-security-policy': 'default-src \'none\'; style-src \'unsafe-inline\'; sandbox',
+    'x-content-type-options': 'nosniff'
+  }
 }
 
 /**

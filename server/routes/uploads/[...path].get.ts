@@ -1,7 +1,7 @@
 import { createReadStream } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { config } from '../../config/index'
-import { parseUploadRange, resolveUploadFilePath, uploadsContentTypeForName } from '../../utils/uploads'
+import { parseUploadRange, resolveUploadFilePath, uploadsContentTypeForName, uploadsSecurityHeaders } from '../../utils/uploads'
 
 /**
  * Static serving for web-runtime media uploads. Whatever the upload
@@ -36,6 +36,9 @@ export default defineEventHandler(async (event) => {
   const size = info.size
   const contentType = uploadsContentTypeForName(target)
   setHeader(event, 'content-type', contentType)
+  for (const [header, value] of Object.entries(uploadsSecurityHeaders(contentType))) {
+    setHeader(event, header, value)
+  }
   setHeader(event, 'accept-ranges', 'bytes')
   setHeader(event, 'cache-control', 'public, max-age=3600')
 
