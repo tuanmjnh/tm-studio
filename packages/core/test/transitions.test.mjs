@@ -391,10 +391,21 @@ describe('xfade preview geometry (V4 G16)', () => {
     }
   })
 
-  it('only slide moves the outgoing layer, and only fadeblack dims it', () => {
+  it('the outgoing layer moves only where the render moves it, and dims only for fadeblack', () => {
+    // Three families touch the outgoing layer, and all three were measured on
+    // real content, not inferred (`tests/unit/tmcut_transition_preview.spec.ts`,
+    // fourth read): a slide travels it, a squeeze compresses it about the centre,
+    // a crop clips it because the window that closes is drawn over the black
+    // canvas. A fourth key doing the same is a claim nobody has rendered.
     for (const key of KNOWN_TRANSITIONS) {
       const ramp = previewTransitionRamp(key, 0.5)
-      if (ramp.outgoing.transform) assert.equal(ramp.shape, 'slide', `${key} moves the outgoing layer`)
+      if (ramp.outgoing.transform) {
+        assert.ok(ramp.shape === 'slide' || ramp.shape === 'squeeze',
+          `${key} (${ramp.shape}) moves the outgoing layer`)
+      }
+      if (ramp.outgoing.clipPath) {
+        assert.ok(XFADE_PREVIEW[key].crop === true, `${key} (${ramp.shape}) clips the outgoing layer`)
+      }
       if (ramp.outgoing.opacity < 1) assert.equal(key, 'fadeblack', `${key} dims the outgoing layer`)
     }
   })
@@ -497,6 +508,40 @@ describe('xfade preview geometry (V4 G16)', () => {
     assert.ok(XFADE_POSITION_LAWS.radialLag(0.5) < 0.5, 'the sweep must lag the linear ramp mid-window')
     assert.ok(XFADE_POSITION_LAWS.radialLag(0.5) > 0.35,
       `the sweep only lagged ${(XFADE_POSITION_LAWS.radialLag(0.5) * 100).toFixed(1)}% of the box`)
+  })
+
+  it('the squeeze compresses the outgoing picture and the crop shrinks a window over black', () => {
+    // Both facts come from the CONTENT read in
+    // `tests/unit/tmcut_transition_preview.spec.ts`, which predicts the picture
+    // and not only the covered area. A solid plate is blind to both: a squeeze
+    // moves pixels inside a uniform field, and the black outgoing plate IS the
+    // black field the crop family shows through.
+    // Measured with sources that encode their own columns, `squeezev` draws the
+    // outgoing at `centre + (k - centre) / (1 - p)`, i.e. `scaleX(1 - travel)`,
+    // and `squeezeh` does the same on the other axis.
+    assert.equal(previewTransitionRamp('squeezev', 0.5).outgoing.transform, 'scaleX(0.5000)')
+    assert.equal(previewTransitionRamp('squeezeh', 0.5).outgoing.transform, 'scaleY(0.5000)')
+    assert.equal(previewTransitionRamp('squeezev', 1).outgoing.transform, 'scaleX(0.0000)')
+    // The two `*crop` keys are one window that closes on the outgoing and then
+    // opens on the incoming, so each half has to be empty exactly where the
+    // other is full.
+    for (const [key, empty] of [['circlecrop', 'circle(0.00% at 50% 50%)'], ['rectcrop', 'inset(50.00%)']]) {
+      const early = previewTransitionRamp(key, 0.25)
+      const late = previewTransitionRamp(key, 0.75)
+      assert.equal(early.incoming.clipPath, empty, `${key} leaks the incoming before the mid-point`)
+      assert.equal(late.outgoing.clipPath, empty, `${key} keeps the outgoing after the mid-point`)
+      assert.equal(early.outgoing.clipPath, late.incoming.clipPath,
+        `${key}: the two halves are not the same window read backwards`)
+    }
+    assert.equal(previewTransitionRamp('circlecrop', 0).outgoing.clipPath, 'circle(70.71% at 50% 50%)')
+    assert.equal(previewTransitionRamp('rectcrop', 0).outgoing.clipPath, 'inset(0.00%)')
+    assert.equal(previewTransitionRamp('rectcrop', 1).outgoing.clipPath, 'inset(50.00%)')
+    // Only the crop family clips the outgoing; every other key leaves it whole,
+    // which is what the reveal-family comment in the player claims.
+    const clipped = Object.keys(XFADE_PREVIEW)
+      .filter(key => previewTransitionRamp(key, 0.25).outgoing.clipPath)
+    assert.deepEqual(clipped, ['circlecrop', 'rectcrop'],
+      `the outgoing is clipped for ${clipped.join(', ')} — those reveals belong on the incoming layer`)
   })
 
   it('the disc radius that covers the box is aspect-independent', () => {

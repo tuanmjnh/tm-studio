@@ -139,6 +139,186 @@ function measuredFrontAxis(buf: Buffer, p: number, w = W, h = H): 'x' | 'y' | 'n
 }
 
 /**
+ * The same window law, but painted with real picture content instead of two
+ * solid plates.
+ *
+ * A plate can only ever show luminance, so every read above answers "how much
+ * of the box is covered". On `testsrc2` over `smptebars` each pixel of the two
+ * sources has its own colour, so a rendered pixel can be matched to the clip it
+ * came from: the fourth read asks WHICH clip is on top at this exact pixel.
+ * Geometry that survives a hue edge, a moving needle and burned-in text is
+ * geometry, not a luminance coincidence.
+ *
+ * The list is derived, not hand-picked: every key the registry calls `exact`
+ * is graded, minus the blends. At a crossfade every pixel is a weighted mix of
+ * both clips, so "which clip is this pixel from" has no answer there — grading
+ * it would only re-measure the alpha law the plate reads already cover.
+ */
+const FOOTAGE_KEYS = Object.keys(XFADE_PREVIEW).filter(key =>
+  XFADE_PREVIEW[key]!.fidelity === 'exact' && XFADE_PREVIEW[key]!.shape !== 'crossfade')
+const FOOTAGE_SOURCES = ['testsrc2', 'smptebars']
+const FOOTAGE_SRC = (name: string) => `${name}=s=${W}x${H}:r=30:d=${CLIP_SEC}`
+// The prep chain the app's own compiled graph emits, so the frames the sources
+// are graded on are the frames the transition received.
+const FOOTAGE_PREP = `scale=${W}:${H}:force_original_aspect_ratio=decrease,`
+  + `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,setsar=1,settb=1/30,fps=30,format=gbrp`
+// A pixel two sources agree on cannot be attributed to either one, so it is
+// set aside instead of being counted as a pass. Measured: 57600 pixels of the
+// grid, this is the summed absolute channel difference it takes to tell them.
+const FOOTAGE_SEP = 48
+// How far one pixel may sit from the picture the model predicts before the read
+// calls it off-model, summed over the three channels. Measured across the whole
+// `exact` sweep: the mean lands near 11 and the tail is the resampler, not the
+// geometry, so anything past a full channel-step of 64 per channel is a real
+// disagreement. A pixel inside the model's own edge band is allowed to be off —
+// a CSS front and an FFmpeg front are one pixel apart there, and `painted` says
+// which of the two the preview will actually paint.
+const OFF_MODEL_ERROR = 192
+
+/** One source alone, as rgb24 frames — the ground truth for every pixel. */
+function renderSource(bin: string, name: string): Buffer | null {
+  const res = spawnSync(bin, [
+    '-hide_banner', '-loglevel', 'error',
+    '-f', 'lavfi', '-i', FOOTAGE_SRC(name),
+    '-filter_complex', `[0:v]${FOOTAGE_PREP}[v]`, '-map', '[v]',
+    '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'
+  ], { maxBuffer: 1 << 30, encoding: 'buffer', timeout: 120_000 })
+  return res.status === 0 ? res.stdout : null
+}
+
+/** The same two sources through one xfade window, as rgb24 frames. */
+function renderContentRamp(bin: string, xfade: string): Buffer | null {
+  const res = spawnSync(bin, [
+    '-hide_banner', '-loglevel', 'error',
+    '-f', 'lavfi', '-i', FOOTAGE_SRC(FOOTAGE_SOURCES[0]),
+    '-f', 'lavfi', '-i', FOOTAGE_SRC(FOOTAGE_SOURCES[1]),
+    '-filter_complex',
+    `[0:v]${FOOTAGE_PREP}[a];[1:v]${FOOTAGE_PREP}[b];`
+    + `[a][b]xfade=transition=${xfade}:duration=${DUR_SEC}:offset=${OFFSET_SEC.toFixed(4)}`,
+    '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'
+  ], { maxBuffer: 1 << 30, encoding: 'buffer', timeout: 120_000 })
+  return res.status === 0 ? res.stdout : null
+}
+
+/**
+ * Which source pixel a layer style puts at displayed pixel (k, j).
+ *
+ * A CSS transform is a sampler read backwards: `translateX(20%)` moves the
+ * layer, so column k shows source column k - 0.2W, and `scaleX(0.75)` about the
+ * centre shows source column (k - W/2)/0.75 + W/2. Those are the only two
+ * families the ramp emits today, and a third one has to be taught here rather
+ * than skipped — an unknown function would otherwise make the content read
+ * grade a moving picture as if it stood still.
+ */
+type Sampler = (k: number, j: number) => Point
+
+function layerSampler(style: TmcutPreviewLayerStyle): Sampler {
+  let sx = 1
+  let sy = 1
+  let tx = 0
+  let ty = 0
+  for (const part of (style.transform || '').split(/\s+/).filter(Boolean)) {
+    const fn = /^([a-zA-Z]+)\((-?[\d.]+)(%?)\)$/.exec(part)
+    assert.ok(fn, `cannot sample "${part}" — this spec does not know that transform, so the content read would ignore real geometry`)
+    const value = Number(fn![2])
+    if (fn![1] === 'scaleX') sx = value
+    else if (fn![1] === 'scaleY') sy = value
+    else if (fn![1] === 'scale') {
+      sx = value
+      sy = value
+    } else if (fn![1] === 'translateX') tx = fn![3] === '%' ? value / 100 * W : value
+    else if (fn![1] === 'translateY') ty = fn![3] === '%' ? value / 100 * H : value
+    else assert.fail(`cannot sample "${part}" — unknown transform function`)
+  }
+  return (k, j) => [(k + 0.5 - W / 2 - tx) / sx + W / 2, (j + 0.5 - H / 2 - ty) / sy + H / 2]
+}
+
+/** Bilinear at the sampler's coordinate, the way swscale samples the file. */
+function sampleClip(buf: Buffer, frame: number, at: Point): [number, number, number] {
+  const u = Math.min(W - 1.000001, Math.max(0, at[0] - 0.5))
+  const v = Math.min(H - 1.000001, Math.max(0, at[1] - 0.5))
+  const x0 = Math.floor(u)
+  const y0 = Math.floor(v)
+  const fx = u - x0
+  const fy = v - y0
+  const base = frame * W * H * 3
+  const read = (x: number, y: number, c: number) => buf[base + (y * W + x) * 3 + c]
+  const out: [number, number, number] = [0, 0, 0]
+  for (let c = 0; c < 3; c++) {
+    const top = read(x0, y0, c) * (1 - fx) + read(x0 + 1, y0, c) * fx
+    const bottom = read(x0, y0 + 1, c) * (1 - fx) + read(x0 + 1, y0 + 1, c) * fx
+    out[c] = top * (1 - fy) + bottom * fy
+  }
+  return out
+}
+
+/**
+ * Grade one transition frame against the picture the model predicts for it.
+ *
+ * Inside the window, output frame `FIRST_RAMP_FRAME + i` still carries outgoing
+ * frame `FIRST_RAMP_FRAME + i` (the first clip runs from 0) and incoming frame
+ * `i` (the second clip starts at the window), so the frame indices are derived,
+ * not guessed. Each layer's own transform then says which source pixel belongs
+ * at this displayed pixel, and the model says which of them is on top — or
+ * neither, for a key that clips the outgoing as well, where the canvas behind
+ * both layers is what the file paints. A pixel is gradable when the prediction
+ * and its rivals differ by `FOOTAGE_SEP`, and it is right when the render sits
+ * closest to the candidate the model chose. One number therefore grades the
+ * region AND the geometry inside it: a solid plate cannot see a squeezed or a
+ * cropped picture, this can.
+ */
+function contentAttribution(
+  ramp: Buffer,
+  outgoing: Buffer,
+  incoming: Buffer,
+  i: number,
+  paintedIn: Region,
+  paintedOut: Region,
+  hasBlack: boolean,
+  outSampler: Sampler,
+  inSampler: Sampler
+): { graded: number, attributed: number, ambiguous: number, offModel: number } {
+  const frameBytes = W * H * 3
+  const outFrame = FIRST_RAMP_FRAME + i
+  const inFrame = i
+  const BLACK: [number, number, number] = [0, 0, 0]
+  const dist = (a: [number, number, number], b: [number, number, number]) =>
+    Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2])
+  let graded = 0
+  let attributed = 0
+  let ambiguous = 0
+  let offModel = 0
+  for (let j = 0; j < H; j++) {
+    for (let k = 0; k < W; k++) {
+      const at = (outFrame * frameBytes) + (j * W + k) * 3
+      const shown: [number, number, number] = [ramp[at], ramp[at + 1], ramp[at + 2]]
+      const pt: Point = [(k + 0.5) / W, (j + 0.5) / H]
+      const here = sampleClip(outgoing, outFrame, outSampler(k, j))
+      const there = sampleClip(incoming, inFrame, inSampler(k, j))
+      // The candidates, best-explained first: the layer the model puts on top,
+      // then what sits under it, then — only for a model that clips the outgoing
+      // as well — the black canvas behind both of them.
+      const onCanvas = hasBlack && !paintedIn(pt) && !paintedOut(pt)
+      const layers = onCanvas
+        ? [BLACK, here, there]
+        : paintedIn(pt) ? [there, here] : [here, there]
+      const rivals = layers.slice(1)
+      const separation = Math.min(...rivals.map(other => dist(layers[0], other)))
+      if (separation < FOOTAGE_SEP) {
+        ambiguous++
+        continue
+      }
+      graded++
+      const predicted = dist(shown, layers[0])
+      const competing = Math.min(...rivals.map(other => dist(shown, other)))
+      if (predicted <= competing) attributed++
+      if (predicted > OFF_MODEL_ERROR) offModel++
+    }
+  }
+  return { graded, attributed, ambiguous, offModel }
+}
+
+/**
  * The two region reads, graded at the plate's own pixel resolution.
  *
  * `previewTransitionRamp` hands the player CSS strings and the browser turns
@@ -381,6 +561,15 @@ if (!BIN) {
   const COVERAGE_CEILING: Record<string, number> = { exact: 0.03, shape: 0.15 }
   const AREA_CEILING: Record<string, number> = { exact: 0.03, shape: 0.08 }
   const REGION_CEILING: Record<string, number> = { exact: 0.03, shape: 0.12 }
+  // Attribution on real content, measured across the 20 `exact` non-crossfade
+  // keys at five progress points each (100 grades): the worst row is 1.7%
+  // (`vuslice`/`vdslice`, the soft tooth edge) and the worst off-model share
+  // 2.2% (`slidedown`, the resampler at the travelling seam). Same 3% tolerance
+  // as the plate region read, earned a second time on pixels that are not two
+  // greys — a front is a front whatever is behind it, but a squeezed or cropped
+  // PICTURE only shows here.
+  const CONTENT_REGION_CEILING = 0.03
+  const OFF_MODEL_CEILING = 0.03
 
   let checked = 0
   let regions = 0
@@ -507,6 +696,65 @@ if (!BIN) {
     'the export still degrades a key the binary renders — the preview and the file would show different cuts')
   assert.equal(mapXfadeTransition('squeezeh'), 'squeezeh')
 
+  // Fourth read: on real picture content, every pixel is graded against the
+  // picture the model predicts for it — which layer is on top AND which source
+  // pixel that layer shows there. A plate can only ever say how much of the box
+  // is covered, so it is blind to a squeezed or slid picture. Graded at five
+  // progress points of the window (frame 12 is fully incoming, so there is no
+  // outgoing pixel left to attribute there).
+  const outgoing = renderSource(BIN, FOOTAGE_SOURCES[0])
+  const incoming = renderSource(BIN, FOOTAGE_SOURCES[1])
+  assert.ok(outgoing, 'the outgoing content source did not render — attribution cannot be graded')
+  assert.ok(incoming, 'the incoming content source did not render — attribution cannot be graded')
+  let contentGrades = 0
+  let contentWorst = 0
+  let offModelWorst = 0
+  for (const key of FOOTAGE_KEYS) {
+    const xfade = xfadeNameFor(key)
+    const rampBuf = renderContentRamp(BIN, xfade)
+    assert.ok(rampBuf, `${key} -> ${xfade} did not render on real content — the fourth read cannot grade it`)
+    assert.equal(rampBuf.length % (W * H * 3), 0,
+      `${key}: the rgb24 ramp is not a whole number of frames, so frame indices would be guessed`)
+    const mid = previewTransitionRamp(key, 0.5)
+    const where = `${key} -> ${xfade} (${mid.shape}/${mid.law}, ${mid.fidelity})`
+    for (const i of [1, 3, 5, 8, 11]) {
+      const p = i / 12
+      const style = previewTransitionRamp(key, p)
+      const painted = modelRegion(style.incoming)
+      if (painted === null) {
+        assert.fail(`${where} @p=${p.toFixed(3)}: this spec cannot paint the CSS the model emits`)
+      }
+      // A layer with no clip-path and no mask is the whole box. Only the crop
+      // family clips the OUTGOING, and there the pixels neither layer keeps show
+      // the canvas behind them — the monitor's own black, which is the field the
+      // file paints in the first half of the window.
+      const clipsOut = !!(style.outgoing.clipPath || style.outgoing.maskImage)
+      const cutOut = clipsOut ? modelRegion(style.outgoing) : null
+      if (clipsOut && cutOut === null) {
+        assert.fail(`${where} @p=${p.toFixed(3)}: this spec cannot paint the OUTGOING CSS the model emits, so the black field would be guessed`)
+      }
+      const { graded, attributed, ambiguous, offModel } = contentAttribution(
+        rampBuf, outgoing, incoming, i, painted, cutOut ?? (() => true), clipsOut,
+        layerSampler(style.outgoing), layerSampler(style.incoming))
+      // Two vacuity guards: a frame where almost nothing is gradable, and a frame
+      // where the two sources are the same picture, both make 100% agreement
+      // meaningless, so both have to be big and small respectively.
+      assert.ok(graded >= 0.5 * W * H,
+        `${where} @p=${p.toFixed(3)}: only ${graded} pixels of ${W * H} differ enough between the two clips to be attributed — the grade is too thin to mean anything`)
+      assert.ok(ambiguous <= 0.5 * W * H,
+        `${where} @p=${p.toFixed(3)}: ${ambiguous} pixels the two clips agree on — the sources are too similar to test attribution`)
+      const gap = 1 - attributed / graded
+      const offShare = offModel / graded
+      contentWorst = Math.max(contentWorst, gap)
+      offModelWorst = Math.max(offModelWorst, offShare)
+      assert.ok(gap <= CONTENT_REGION_CEILING,
+        `${where} @p=${p.toFixed(3)}: the render disagrees with the picture the model predicts for ${(gap * 100).toFixed(1)}% of gradable pixels (limit ${CONTENT_REGION_CEILING * 100}%) — the preview would paint this cut somewhere the file does not`)
+      assert.ok(offShare <= OFF_MODEL_CEILING,
+        `${where} @p=${p.toFixed(3)}: ${(offShare * 100).toFixed(1)}% of gradable pixels sit further from the predicted picture than any resampler explains (limit ${OFF_MODEL_CEILING * 100}%) — the preview shows a picture the file does not contain`)
+      contentGrades++
+    }
+  }
+
   // Same diagonal at three canvases: the model publishes one `coverage` curve
   // and claims it holds whatever the aspect, which is only true because the
   // front is a 45-degree line in proportions, not in pixels.
@@ -523,5 +771,5 @@ if (!BIN) {
   assert.ok(spread < 0.01,
     `the diagonal area curve moved ${(spread * 100).toFixed(1)}% of the frame across canvases — coverage is no longer aspect-free (limit 1%)`)
 
-  console.log(`OK    tmcut_transition_preview — ${checked} keys re-measured against the CSS model, ${regions} region grades on the plate's pixel grid, ${axes} band axes pinned to pixels, squeezev renders on the window the export emits (and still crashes off it), diagbl aspect-stable; ${ungradeable.length} crossfade rows carry timing the plate cannot show (${ungradeable.join(', ')})`)
+  console.log(`OK    tmcut_transition_preview — ${checked} keys re-measured against the CSS model, ${regions} region grades on the plate's pixel grid, ${contentGrades} attribution grades on real content (worst ${(contentWorst * 100).toFixed(1)}% of gradable pixels), ${axes} band axes pinned to pixels, squeezev renders on the window the export emits (and still crashes off it), diagbl aspect-stable; ${ungradeable.length} crossfade rows carry timing the plate cannot show (${ungradeable.join(', ')})`)
 }

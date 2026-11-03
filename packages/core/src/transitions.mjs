@@ -207,6 +207,22 @@ export function clearTransition(timeline, clipId) {
 //  `circleopen` — the disc's own law is exact to 3% of the area, but the ring is
 //  several pixels wide and 10.2% of the box is on it). The ten `crossfade` rows
 //  have no region to grade at all: a uniform layer alpha covers every pixel.
+//
+//  A plate, read a fourth way, is still only a plate: it can say how much of the
+//  box is covered, never WHICH PIXELS of the picture are on screen. Two rows
+//  survived all three plate reads and were still wrong on real footage — the
+//  content read (every rendered pixel compared to the pixel the model predicts,
+//  layer transform included) put 17.2% of `squeezev`'s gradable pixels in the
+//  wrong clip and 20-65% of the two `*crop` rows. The squeeze compresses the
+//  OUTGOING picture about the centre (`scaleX(1 - travel)`, fitted slope
+//  1.088/1.329/1.981/3.963/11.889 against 1/(1-p) at p=1/12..11/12); the crop
+//  family is two-phase over black, shrinking the outgoing window to nothing at
+//  the mid-point and growing the incoming back out of it, at identity (`|2p-1|^3`
+//  of the covering radius for `circlecrop`, `|2p-1|` inset for `rectcrop`, both
+//  mirrored after p=0.5). A solid plate cannot show either: a squeeze moves
+//  pixels inside a uniform field, and the black outgoing plate IS the black
+//  field. Both are now in the model, so `crop` rows carry the outgoing layer's
+//  own clip-path and the player's black monitor is the backdrop the file paints.
 // =============================================================================
 
 /**
@@ -305,7 +321,7 @@ export const XFADE_PREVIEW = {
   'slide-left': { shape: 'slide', from: 'right', law: 'linear', fidelity: 'exact' },
   'zoom-in': { shape: 'crossfade', law: 'late', fidelity: 'approximate', note: 'scale is invisible on a solid plate' },
   'circleclose': { shape: 'hole', law: 'iris', fidelity: 'shape', note: 'soft ring around the disc' },
-  'circlecrop': { shape: 'iris', law: 'lateCube', fidelity: 'exact' },
+  'circlecrop': { shape: 'iris', law: 'lateCube', fidelity: 'exact', crop: true },
   'circleopen': { shape: 'iris', law: 'iris', fidelity: 'shape', note: 'soft ring around the disc' },
   'diagbl': { shape: 'diag', from: 'top right', law: 'inOutQuad', fidelity: 'shape', note: SOFT_EDGE },
   'diagbr': { shape: 'diag', from: 'top left', law: 'inOutQuad', fidelity: 'shape', note: SOFT_EDGE },
@@ -336,7 +352,7 @@ export const XFADE_PREVIEW = {
   // twice per turn, at the corners, where d(area)/d(angle) is 4x the value at
   // the edge midpoints: 1.4% of travel costs 3.0% of the frame.
   'radial': { shape: 'pie', law: 'radialLag', fidelity: 'shape', note: 'corner bursts amplify the law error into the area' },
-  'rectcrop': { shape: 'rect', law: 'late', fidelity: 'exact' },
+  'rectcrop': { shape: 'rect', law: 'late', fidelity: 'exact', crop: true },
   'slidedown': { shape: 'slide', from: 'top', law: 'linear', fidelity: 'exact' },
   'slideright': { shape: 'slide', from: 'left', law: 'linear', fidelity: 'exact' },
   'slideup': { shape: 'slide', from: 'bottom', law: 'linear', fidelity: 'exact' },
@@ -472,12 +488,22 @@ export function previewTransitionRamp(type, p) {
       outgoing.transform = `translate${AXIS_OF[spec.from]}(${(-sign * travel * 100).toFixed(2)}%)`
       break
     }
-    case 'squeeze':
-      // The outgoing shrinks to a band in FFmpeg; over the incoming that is the
-      // same picture as the two edges eating in, which is what the layer order
-      // can actually paint.
+    case 'squeeze': {
+      // The bands are only half the picture. Measured with sources that encode
+      // their own coordinates (red = column, green = row), the incoming stays
+      // unscaled while the OUTGOING is squeezed about the centre: a displayed
+      // column `k` samples source `centre + (k - centre) / (1 - travel)`. The
+      // fitted slope runs 1.088 / 1.329 / 1.981 / 3.963 / 11.889 at p = 1/12,
+      // 3/12, 6/12, 9/12, 11/12 — that is `1 / (1 - p)` to within a pixel, and
+      // `squeezeh` shows the same numbers on the other axis. A solid plate is
+      // uniform, so every region read passed while the content read put 17.2%
+      // of the gradable pixels in the wrong clip: the preview showed the
+      // outgoing picture at full size where the file had compressed it.
+      const rest = Math.max(0, 1 - travel)
+      outgoing.transform = `scale${spec.travel === 'y' ? 'Y' : 'X'}(${rest.toFixed(4)})`
       Object.assign(incoming, maskLayers(edgeBands(spec.travel === 'y' ? 'bottom' : 'right', travel)))
       break
+    }
     case 'diag': {
       // `travel` is the FRONT POSITION and the covered AREA is its square: the
       // front is a 45-degree line in canvas proportions (measured — the p=0.5
@@ -527,20 +553,40 @@ export function previewTransitionRamp(type, p) {
       break
     }
     case 'iris':
-      incoming.clipPath = `circle(${(travel * CIRCLE_COVER_PCT).toFixed(2)}% at 50% 50%)`
+    case 'rect': {
+      // One centred window, sized by `f`: a radius for the disc, an inset for
+      // the rectangle. Both families express it on the incoming layer.
+      const circle = spec.shape === 'iris'
+      const windowAt = f => (circle
+        ? `circle(${(f * CIRCLE_COVER_PCT).toFixed(2)}% at 50% 50%)`
+        : `inset(${(((1 - f) / 2) * 100).toFixed(2)}%)`)
+      incoming.clipPath = windowAt(travel)
+      if (spec.crop) {
+        // The CROP family is two-phase, and a solid plate is blind to the first
+        // half. Measured with sources that encode their own coordinates: the
+        // window shrinks to nothing at the middle of the overlap and the
+        // OUTGOING picture sits inside it at identity (worst deviation 1 of 320
+        // columns), then the incoming grows back out of the same black. Radius
+        // over covering radius runs 0.582/0.300/0.128/0.040/0.004 at p=1/12..5/12
+        // and mirrors after the mid-point — that is `|2p-1|^3`
+        // (0.579/0.296/0.125/0.037/0.005) — and `rectcrop` is the same read with
+        // a linear inset: 0.828/0.659/0.497/0.328/0.159 against `|2p-1|` =
+        // 0.833/0.667/0.500/0.333/0.167. On a black plate phase one IS black, so
+        // all three plate reads passed while the content read put 20-65% of the
+        // pixels in the wrong clip. The black the player shows through is the
+        // monitor's own background, which is what the file paints.
+        outgoing.clipPath = windowAt(XFADE_POSITION_LAWS[spec.law || 'linear'](1 - progress))
+      }
       // The disc is clipped by the box, so its area depends on the canvas
       // aspect; only the families with a fixed relation report a coverage.
-      coverage = null
+      coverage = circle ? null : travel * travel
       break
+    }
     case 'hole':
       Object.assign(incoming, maskLayers(
         `radial-gradient(circle ${((1 - travel) * CIRCLE_COVER_PCT).toFixed(2)}% at 50% 50%, transparent 0 100%, #000 100%)`
       ))
       coverage = null
-      break
-    case 'rect':
-      incoming.clipPath = `inset(${(((1 - travel) / 2) * 100).toFixed(2)}%)`
-      coverage = travel * travel
       break
     case 'pie':
       Object.assign(incoming, maskLayers(

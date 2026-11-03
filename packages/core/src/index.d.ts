@@ -650,6 +650,8 @@ export const XFADE_PREVIEW: Record<string, {
   travel?: string
   mode?: string
   tint?: string
+  /** Two-phase window over the black canvas: the outgoing shrinks, then the incoming grows. */
+  crop?: boolean
 }>
 
 export interface TmcutPreviewLayerStyle {

@@ -692,7 +692,8 @@ const textScale = computed(() =>
 // source-over with two partial alphas would bleed the black background
 // through (0.5·in + 0.25·out). The reveal families paint on the INCOMING
 // layer (it sits on top, so clipping the outgoing would only uncover the
-// canvas behind it); `slide` is the one shape that moves both layers.
+// canvas behind it); `slide` moves both layers, and the `*crop` keys clip the
+// outgoing too because the uncovered canvas IS the black the file paints there.
 // Export parity (xfade/acrossfade) lands with R3 — see the export badge.
 const xfadeRamp = computed(() => {
   const cf = transitionCrossfade.value
@@ -811,17 +812,31 @@ const videoTransformStyle = computed(() => {
 // opacity. The layer usually stays opaque (ramping only the incoming layer —
 // see `xfadeRamp`) so the composite is a clean crossfade; a slide travels it
 // and a fade-through-black dims it, which is what the binary really does.
+// The `*crop` keys clip the OUTGOING as well: the window shrinks to nothing at
+// the middle of the overlap and the monitor's own black shows through, which is
+// what the rendered file paints there.
 const outgoingStyle = computed(() => {
   const cf = transitionCrossfade.value
   const ramp = xfadeRamp.value
   if (!cf || !ramp) return null
   const clip = cf.outgoing
   const base = clipVisual(clip)
-  if (ramp.outgoing.transform) base.transform = `${base.transform} ${ramp.outgoing.transform}`
-  base.opacity = base.opacity * ramp.outgoing.opacity
+  const style: Record<string, string | number> = {
+    transform: `${base.transform}${ramp.outgoing.transform ? ` ${ramp.outgoing.transform}` : ''}`,
+    opacity: base.opacity * ramp.outgoing.opacity
+  }
+  if (ramp.outgoing.clipPath) style.clipPath = ramp.outgoing.clipPath
+  if (ramp.outgoing.maskImage) {
+    style.maskImage = ramp.outgoing.maskImage
+    style.webkitMaskImage = ramp.outgoing.webkitMaskImage || ramp.outgoing.maskImage
+    style.maskSize = ramp.outgoing.maskSize || '100% 100%'
+    style.webkitMaskSize = ramp.outgoing.webkitMaskSize || '100% 100%'
+    style.maskRepeat = ramp.outgoing.maskRepeat || 'no-repeat'
+    style.webkitMaskRepeat = ramp.outgoing.webkitMaskRepeat || 'no-repeat'
+  }
   return {
     ...fitStyle(clip),
-    ...base
+    ...style
   }
 })
 
