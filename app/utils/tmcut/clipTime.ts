@@ -1,5 +1,4 @@
 import type { TmcutTimelineItem } from '~/composables/useTmcutProject'
-import type { TmcutClock } from 'tmcut-core'
 import { ticksToSec, TICKS_PER_SECOND, isRamped, rampTimelineToSource } from 'tmcut-core'
 
 /**
@@ -99,18 +98,4 @@ export function clipMediaTimeSecLinear(
     ? clip.out - localSec * clipSpeed(clip) * TICKS_PER_SECOND
     : clip.in + localSec * clipSpeed(clip) * TICKS_PER_SECOND
   return ticksToSec(mediaTicks)
-}
-
-/**
- * ADR-018: the position a renderer draws from when the playhead is parked at
- * the end of the timeline. Clip windows are half-open — `[start, end)` for the
- * evaluator, the preview and the export's drawtext alike — so the exact end
- * instant belongs to no clip and a canvas asked to render there would show
- * nothing. That is where playback leaves the viewer, so the position steps
- * back to the START of the last frame instead: the final frame keeps its
- * picture and its caption, and no clip bleeds into the window after it.
- */
-export function lastRenderableTicks(clock: TmcutClock, endTicks: number): number {
-  if (!(endTicks > 0)) return 0
-  return clock.frameStartAt(Math.max(0, clock.durationFrames(endTicks) - 1))
 }

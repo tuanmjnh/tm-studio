@@ -1,8 +1,8 @@
 import { ref, computed } from 'vue'
-import { TICKS_PER_SECOND, createClock, createFrameScheduler, evaluateTimeline, isRamped, speedAt, ticksToSec } from 'tmcut-core'
+import { TICKS_PER_SECOND, createFrameScheduler, isRamped, renderAt, speedAt, ticksToSec } from 'tmcut-core'
 import { useTmcutProject } from './useTmcutProject'
 import type { TmcutTimelineItem } from './useTmcutProject'
-import { clipMediaTimeSec, clipStartSec, lastRenderableTicks } from '~/utils/tmcut/clipTime'
+import { clipMediaTimeSec, clipStartSec } from '~/utils/tmcut/clipTime'
 
 // Shared playback state across TMCut editor
 const playhead = ref(0) // Playhead position in seconds
@@ -61,36 +61,33 @@ export function useTmcutPlayback() {
     return clipMediaTimeSec(clip, at)
   }
 
-  // ADR-018: one boundary rule for every timeline consumer — a clip window is
-  // half-open, `[start, end)`, so it never paints on the first frame of the
-  // window after it (an inclusive end made adjacent captions overlap for one
-  // frame in BOTH preview and export). The playhead itself still rests on the
-  // end of the content, which is what the ruler and the timecode show, and
-  // that instant sits just past the last frame. So the position the canvas
-  // renders from is pulled back to the last frame's start — otherwise a
-  // project would go blank the moment it finished.
+  // ADR-018: one boundary rule for every timeline consumer, and since V4
+  // Phase 2 item (1) one CALL that owns it. `renderAt` answers "where does
+  // this timestamp actually render": half-open clip windows `[start, end)`,
+  // the step back to the START of the last frame when the playhead rests at the
+  // end of content (that instant belongs to no clip, and a canvas parked there
+  // would go black exactly where playback leaves the viewer), and the frame the
+  // position falls in. The preview asks in scrub mode — `snapToFrame: false`,
+  // so a drag tracks the pointer — while a frame loop asks in frame mode and
+  // gets the same law. The app used to keep its own copy of that step-back
+  // here and in `clipTime.lastRenderableTicks`; both are gone, so a caption can
+  // no longer be live in one surface and dead in another because two places
+  // disagree about the last frame.
   //
-  // The bound is `contentDuration`, NOT `totalDuration`: the latter carries a
-  // 5 s floor so the ruler never collapses (tmcut_playback_duration), and that
-  // padded tail is not part of the export. Clamping against it would leave the
-  // canvas black for the whole tail and only heal the last ruler pixel.
-  const playheadClock = computed(() => createClock(
-    currentProject.value?.canvas?.fps || { numerator: 30, denominator: 1 }
+  // The bound is the CONTENT extent core measures (`endTicks`), NOT
+  // `totalDuration`: the latter carries a 5 s floor so the ruler never collapses
+  // (tmcut_playback_duration), and that padded tail is not part of the export.
+  const renderPosition = computed(() => renderAt(
+    currentProject.value,
+    Math.round(playhead.value * TICKS_PER_SECOND),
+    { snapToFrame: false }
   ))
-  const renderSeconds = computed(() => {
-    const endTicks = Math.round(contentDuration.value * TICKS_PER_SECOND)
-    const atTicks = Math.round(playhead.value * TICKS_PER_SECOND)
-    if (!(endTicks > 0) || atTicks < endTicks) return playhead.value
-    return ticksToSec(lastRenderableTicks(playheadClock.value, endTicks))
-  })
+  const renderSeconds = computed(() => ticksToSec(renderPosition.value.at))
 
   // One evaluator pass per render position: the transition pair, the active
   // video layer, the active text overlays and their source positions all read
   // this answer, so the preview never re-derives window math of its own.
-  const playheadEvaluation = computed(() => evaluateTimeline(
-    currentProject.value,
-    Math.round(renderSeconds.value * TICKS_PER_SECOND)
-  ))
+  const playheadEvaluation = computed(() => renderPosition.value.evaluation)
 
   // The renderable frame sequence (roadmap V4 Phase 2, item 3): a pure function
   // of the project and its canvas rate. Frame stepping reads it, so "frame 37"

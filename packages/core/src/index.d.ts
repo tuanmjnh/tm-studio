@@ -1733,6 +1733,39 @@ export function createFrameScheduler(
   input: TmcutProject | TmcutTimeline | CoreEvaluatorTimelineLike | { timeline?: CoreEvaluatorTimelineLike } | null | undefined,
   options?: { rate?: FrameRate }
 ): CoreFrameScheduler
+
+// --- Render-at-timestamp contract (V4 Phase 2, item 1) ---
+/** Where one timestamp actually renders, with the frame it falls in. */
+export interface CoreRenderPosition {
+  /** The request as core honoured it: finite, rounded to a tick, never negative. */
+  readonly requestedTicks: number
+  /** The position `evaluation` was taken at. */
+  readonly at: number
+  readonly evaluation: CoreTimelineEvaluation
+  /** Null for an empty project — no frame exists to name. */
+  readonly index: number | null
+  readonly frame: CoreFrame | null
+  /** False when `snapToFrame: false` kept the requested position. */
+  readonly snapped: boolean
+  /** True when the request is at or past the end of the content. */
+  readonly beyond: boolean
+  readonly fps: number
+  readonly ticksPerFrame: number
+  readonly endTicks: number
+  readonly frameCount: number
+}
+
+/**
+ * The public "paint this timestamp" contract. Frame mode (default) collapses
+ * every timestamp inside a frame to that frame's start, so a render is
+ * replayable; `snapToFrame: false` keeps the position for scrubbing and only
+ * pulls it back at the end of the content (ADR-018).
+ */
+export function renderAt(
+  input: TmcutProject | TmcutTimeline | CoreEvaluatorTimelineLike | { timeline?: CoreEvaluatorTimelineLike } | null | undefined,
+  atTicks: number,
+  options?: { rate?: FrameRate, snapToFrame?: boolean }
+): CoreRenderPosition
 export const PLATFORM_NAMES: readonly TmcutRuntimeInfo['name'][]
 export const PLATFORM_CAPABILITIES: readonly (keyof TmcutCapabilities)[]
 export function createPlatformInfo(

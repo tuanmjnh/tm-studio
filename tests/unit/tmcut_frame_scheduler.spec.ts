@@ -16,9 +16,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { TICKS_PER_SECOND, createClock, ticksToSec } from 'tmcut-core'
+import { TICKS_PER_SECOND, renderAt, ticksToSec } from 'tmcut-core'
 import { freshStore, TICKS } from './helpers/tmcut_store_env'
-import { lastRenderableTicks } from '../../app/utils/tmcut/clipTime'
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..')
 const read = (rel: string) => readFileSync(join(root, rel), 'utf8')
@@ -147,7 +146,10 @@ async function main() {
   })
 
   // 5. Parity with the boundary the export already follows (ADR-018): the last
-  // frame of the plan is the last position a renderer may draw from.
+  // frame of the plan is the last position a renderer may draw from. Core owns
+  // that law now (`renderAt` scrub mode), so the plan and the answer to a
+  // position at the span end are read from the same project, not from two
+  // copies of the step-back arithmetic.
   await check('the last frame of the plan is the ADR-018 render position', async () => {
     const s = await freshStore()
     s.addClipToTrack('video', { src: 'a.mp4', in: 0, out: tk(2) + 1, offset: 0 })
@@ -156,7 +158,9 @@ async function main() {
     assert.equal(plan.frameCount, 61, 'a partial frame still counts')
     const last = plan.frameCount - 1
     p.seekToFrame(last)
-    assert.equal(plan.frameAt(last)!.startTicks, lastRenderableTicks(createClock({ numerator: 30, denominator: 1 }), plan.endTicks))
+    const parked = renderAt(s.currentProject.value!, plan.endTicks, { snapToFrame: false })
+    assert.equal(parked.beyond, true, 'a position at the span end is past the last frame, so it steps back')
+    assert.equal(parked.at, plan.frameAt(last)!.startTicks, 'core parks the scrub on the last frame the plan carries')
     p.seekToFrame(plan.frameCount)
     assert.equal(p.playhead.value, ticksToSec(plan.frameAt(last)!.startTicks), 'an index past the sequence has no frame to land on')
   })

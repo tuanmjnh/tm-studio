@@ -23,9 +23,8 @@ import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { TICKS_PER_SECOND, createClock, evaluateTimeline } from 'tmcut-core'
+import { TICKS_PER_SECOND, evaluateTimeline, renderAt } from 'tmcut-core'
 import { compileTimelineToFfmpeg } from '../../app/utils/tmcut/render'
-import { lastRenderableTicks } from '../../app/utils/tmcut/clipTime'
 import type { TmcutProject } from '../../app/composables/useTmcutProject'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
@@ -292,10 +291,12 @@ try {
   // The same rule taken to the end of the timeline: parked at the total
   // duration the playhead sits one instant past the last frame, where a
   // half-open window answers "nothing" — so the preview renders from the start
-  // of that last frame instead (lastRenderableTicks, ADR-018).
+  // of that last frame instead (core renderAt in scrub mode, ADR-018).
   check('the final frame of the timeline still renders its closing caption', () => {
     const endTicks = 2 * TICKS_PER_SECOND
-    const at = lastRenderableTicks(createClock({ numerator: 30, denominator: 1 }), endTicks)
+    const parked = renderAt(windowProject, endTicks, { snapToFrame: false })
+    assert.equal(parked.endTicks, endTicks, 'the content span ends with the caption')
+    const at = parked.at
     assert.equal(at, endTicks - 4000, 'one frame before the end, not past it')
     assert.equal(evaluateTimeline(windowProject, endTicks).layers.find(item => item.clipId === 'text-1'), undefined, 'the raw end belongs to no clip')
     assert.ok(evaluateTimeline(windowProject, at).layers.find(item => item.clipId === 'text-1'), 'the last frame keeps its text')
