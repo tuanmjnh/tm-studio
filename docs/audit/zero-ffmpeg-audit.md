@@ -25,16 +25,18 @@ npx tsx tests/unit/run-all.mts
 | Metric | Giá trị đo được |
 |---|---|
 | Commit baseline | `92a4818` |
-| File khớp `ffmpeg\|ffprobe` (cả repo, tính docs + i18n) | **124** |
+| File khớp `ffmpeg\|ffprobe` (cả repo, tính docs + i18n) | **124** tại baseline; **125** từ khi có chính file audit này |
 | Bỏ docs + i18n, chỉ code và test | **114** |
 | Binary trong `resources/` | **494.514.688 byte** (≈471 MiB), 3 file |
 | Unit suite (non-smoke) | **90/92 specs passed** |
-| Spec FAIL có sẵn | `tmcut_login_remember` (working-tree chủ repo), `tmcut_process` (Node v24) |
-| `error TS` của typecheck ở baseline | chưa chạy lại — xem §8 slice A |
+| Spec FAIL có sẵn | `tmcut_login_remember` (working-tree chủ repo), `tmcut_process` (working-tree chủ repo) |
+| `error TS` của typecheck tại slice A | **0** (`TC_EXIT=0`, `.nuxt/eslint.config.mjs` regenerate 28.535 byte) |
 
 Hai FAIL không do slice nào gây ra và nằm ngoài phạm vi audit:
 `app/pages/login.vue` trong working tree lại ghi `state.password = data.password \|\| ''` (regression chủ repo đã được báo cáo),
-còn `tmcut_process` fail vì `ERR_PACKAGE_IMPORT_NOT_DEFINED "#shared/utils/processStore"` trên Node v24.
+còn `tmcut_process` fail vì `server/utils/processStore.ts:28` ở working tree đổi import sang
+`#shared/utils/processStore` trong khi `package.json` **không** có map `imports` — HEAD vẫn dùng
+`../../shared/utils/processStore` và chạy được. Đây là lỗi working tree, không phải lỗi Node v24.
 
 ---
 
@@ -74,14 +76,52 @@ còn `tmcut_process` fail vì `ERR_PACKAGE_IMPORT_NOT_DEFINED "#shared/utils/pro
   `FfmpegVersions` và **10** method CRUD của `ToolsNamespace` (đo: `grep -cE "^  (list|create|update|delete)Ffmpeg"`).
 - **i18n**: **9 key × 2 locale** (dòng 733, 886, 887, 888, 903, 967, 1007, 1249, 1311 của `en.json`/`vi.json`) —
   toàn bộ là text mô tả tính năng, chỉ sửa được **sau** khi engine thay thế xong, không trước.
-- **Test**: 26 file `tests/unit` + 1 file `tests/e2e` + 3/44 file `packages/core/test` khớp từ khóa.
+- **Test**: 26 file `tests/unit` + 1 file `tests/e2e` khớp từ khóa. Phía `packages/core/test` có **hai phép đo khác nhau**,
+  và con số quyết định là phép đo thứ hai:
+  - Khớp từ khóa `ffmpeg|ffprobe` (kể comment): **11/44** file. Mang từ khóa *ngoài* comment: **6**
+    (`canvas` 24 lần, `effects` 13, `platform` 5, `assets-probe-cache`, `mask`, `stabilize`).
+  - **Assert text do emitter FFmpeg sinh ra** (`buildFfmpegFitFilters`, `maskAlphaExpr`, `rampSetptsExpr`,
+    `keyframeExpr`, `volumeExpr`, `panFilter`, `lut3dChain`, `normalizeProbe`, `buildVidstab*`, `buildProxyArgs`,
+    `stillImageInputFlags`, `FFMPEG_XFADE_NAMES`…): **10/44** file —
+    `assets-probe-cache`, `audio`, `canvas`, `effects`, `evaluate`, `keyframes`, `mask`, `retime`, `stabilize`, `still-image`.
+
+  Hai tập **không trùng nhau**: `audio`, `keyframes`, `retime`, `still-image`, `evaluate` không viết chữ "ffmpeg" ở đâu cả
+  mà vẫn ràng buộc vào cú pháp FFmpeg, vì core đặt tên emitter theo *động từ* của FFmpeg (`setpts`, `geq`, `xfade`, `drawtext`).
+  Hợp của hai tập là **11/44**. Kết luận method cho slice J: đừng đếm witness bằng `grep ffmpeg` — phải đếm bằng tên emitter.
 - **UI**: export modal, inspector (hint "export runs the exact FFmpeg chain"), media panel, timeline, preview player,
   autocut page, MCP bridge ([app/composables/useMcpRendererBridge.ts:173](file:///D:/Applications/tm-studio/app/composables/useMcpRendererBridge.ts#L173)
   phát `command: 'ffmpeg'`), task manager (`ToolKind = 'youtube' \| 'ffmpeg'`).
 
+### 2.4 Đủ bộ từ khóa mà plan §18.1 yêu cầu tìm
+
+`grep -rn -- "<khóa>" app server shared electron packages/core/src packages/core/types tests i18n package.json`:
+
+| Nhóm từ khóa | Số hit | Interpretation |
+|---|---|---|
+| `fluent-ffmpeg`, `ffmpeg-static`, `@ffmpeg/ffmpeg`, `ffmpeg.wasm` | **0 / 0 / 0 / 0** | không có wrapper npm nào — FFmpeg vào repo bằng binary + argv tự viết |
+| `filter_complex` | 52 | đây là chỗ luật filtergraph sống, tất cả ở engine export |
+| `drawtext` | 74 | text render có hai phát ngôn; phần `drawtext` là nhánh phải bỏ (§5.1) |
+| `ffmpeg`, `ffprobe` (không phân biệt hoa thường) | **105 file** với search set ở trên; **125 file** nếu tính cả `docs/` (§1) | phần chênh là docs, không phải code |
+| `subtitles=` | **2** | **phát hiện thêm khi đo từ khóa của plan**: burn-in subtitle **có tồn tại**, và chỉ ở engine |
+| `force_style` | 0 | subtitle burn-in không có tham số style nào để dịch sang text renderer |
+
+Hai site burn-in: [electron/tools/ffmpeg.controller.cjs:422](file:///D:/Applications/tm-studio/electron/tools/ffmpeg.controller.cjs#L422)
+và [dòng 723](file:///D:/Applications/tm-studio/electron/tools/ffmpeg.controller.cjs#L723) (một cho render đơn, một cho batch),
+cùng dùng filter `subtitles='<path>'` của libass; đầu vào là `config.subtitle` khai ở
+[shared/types/electron.ts:224](file:///D:/Applications/tm-studio/shared/types/electron.ts#L224).
+Nó **không** có trong 10 nhóm ở §3 khi audit mới đọc code render — đây chính là lý do phải chạy hết từ khóa §18.1:
+nhóm này không có tương đương WebCodecs (libass là C library), nên nó thành nhóm 11 và một quyết định của chủ repo (§10).
+
+Kết luận còn lại của phép đo package: vì không có wrapper npm nào, "gỡ dependency FFmpeg" không phải gỡ package —
+nó là gỡ binary + argv + IPC, đúng ba khối ở §12.
+
+Phạm vi exit gate Phase 0 của plan ("không còn khu vực FFmpeg/FFprobe chưa phân loại"): 11 nhóm ở §3 + 14 module đã phân mức ở §5.1
++ 6 surface ngoài code ở §2.3 + 10 phép đo ở §6 + bộ từ khóa ở §2.4. Không còn vùng nào chưa gọi tên.
+
 ---
 
 ## 3. Phân loại chức năng (mục 0.2 của plan yêu cầu đúng bảng này)
+
 
 | # | Nhóm | Hiện FFmpeg làm gì | Plan §18.2 nói thay bằng | Đã có thay thế chưa |
 |---|---|---|---|---|
@@ -95,9 +135,11 @@ còn `tmcut_process` fail vì `ERR_PACKAGE_IMPORT_NOT_DEFINED "#shared/utils/pro
 | 8 | Effect grade | 20 preset → chuỗi `colorbalance`/`pixelize`/`lut3d` | §8 "Color effects cơ bản" qua GPU | **Chưa** — cần shader |
 | 9 | Waveform | PCM qua `extractAudio` → JSON cache | Web Audio decode + worker | **Chưa** — repo có 0 dòng Web Audio |
 | 10 | Desktop tools task | namespace `tools:ffmpeg`, 3 bảng DB | §14: Electron không có media engine riêng | **Bỏ được**, là tính năng tm-tools |
+| 11 | Subtitle burn-in | filter libass `subtitles='<path>.srt'`, 2 site trong engine (§2.4) | §18.2 "Subtitle renderer" | **Chưa** — libass là C library, không có đường WebCodecs nào tương đương |
 
-Kết luận §3: 4/10 nhóm (proxy, desktop tools, một phần thumbnail, một phần waveform-cache) bỏ được mà không cần thay thế ngay;
-6/10 nhóm (probe, export, analysis, grade, stabilize, HTML-video) **bắt buộc có thay thế + test trước khi xóa**, đúng rule 11 của plan.
+Kết luận §3: **4/11** nhóm (proxy, desktop tools, một phần thumbnail, một phần waveform-cache) bỏ được mà không cần thay thế ngay;
+**7/11** nhóm (probe, export, analysis, grade, stabilize, HTML-video, subtitle burn-in) **bắt buộc có thay thế + test trước khi xóa**, đúng rule 11 của plan.
+Nhóm 11 tìm ra muộn: nó không hiện lên khi đọc code render, mà hiện lên khi chạy hết từ khóa §18.1 của plan.
 
 ---
 
@@ -111,7 +153,7 @@ Plan §2 vẽ 8 layer. Repo đã có sẵn phần xương sống của 4 layer, 
 | Timeline Core (evaluator) | [packages/core/src/evaluate.mjs](file:///D:/Applications/tm-studio/packages/core/src/evaluate.mjs) | pure function, không DOM/clock/filesystem; ADR-018 half-open — khớp §7 |
 | Export Core (scheduler) | [packages/core/src/scheduler.mjs](file:///D:/Applications/tm-studio/packages/core/src/scheduler.mjs), [renderAt.mjs](file:///D:/Applications/tm-studio/packages/core/src/renderAt.mjs) | timestamp suy từ frame index + rational fps, không `setTimeout` — khớp §12 "Frame scheduler deterministic" |
 | Rendering semantics (stack) | [packages/core/src/paintStack.mjs](file:///D:/Applications/tm-studio/packages/core/src/paintStack.mjs) | `selectPaintRows` trả `{rows, base}` một lần cho mọi host — khớp §9 "composition graph độc lập renderer" |
-| Platform Adapter | [packages/core/types/platform.ts:47](file:///D:/Applications/tm-studio/packages/core/types/platform.ts#L47), [platform.mjs](file:///D:/Applications/tm-studio/packages/core/src/platform.mjs) | `TmcutPlatformAdapter {info, media, capture, encoder}` + capability flags — đúng hình §16 |
+| Platform Adapter | [packages/core/types/platform.ts:84](file:///D:/Applications/tm-studio/packages/core/types/platform.ts#L84), [platform.mjs](file:///D:/Applications/tm-studio/packages/core/src/platform.mjs) | `TmcutPlatformAdapter {info, media, capture, encoder}` + capability flags — đúng hình §16; `media.probe` ở [dòng 47](file:///D:/Applications/tm-studio/packages/core/types/platform.ts#L47) |
 | Project Core | [packages/core/src/project.mjs](file:///D:/Applications/tm-studio/packages/core/src/project.mjs), [v1compat.mjs](file:///D:/Applications/tm-studio/packages/core/src/v1compat.mjs) | `schemaVersion` + migration v1→v3 lossless, fixture test — khớp §6 và rule 12 |
 | Audio maths | [audio.mjs](file:///D:/Applications/tm-studio/packages/core/src/audio.mjs), [waveform.mjs](file:///D:/Applications/tm-studio/packages/core/src/waveform.mjs) | `gainAt`, fade envelope, `int16ToPeaks` — dùng lại được cho Web Audio |
 | Text style law | [textStyle.mjs](file:///D:/Applications/tm-studio/packages/core/src/textStyle.mjs) | một nguồn sự thật cho size/colour/stroke/shadow — §13 subtitle burn-in cần đúng cái này |
@@ -131,24 +173,33 @@ Plan §2.1 cấm Media/Core gọi CLI và §16 bắt core không import runtime;
 Thực tế core không spawn, nhưng **in ra chuỗi FFmpeg** — nghĩa là mọi luật render hiện có hai bản: một bản semantics (dùng cho DOM)
 và một bản văn bản FFmpeg (dùng cho export). Bản thứ hai phải bị xóa, và ở một số nơi nó là **bản duy nhất**.
 
-| Module | Export phát hành văn bản FFmpeg | Hệ quả khi xóa |
+| Module | Dấu vết FFmpeg | Hệ quả khi xóa |
 |---|---|---|
 | [canvas.mjs:286](file:///D:/Applications/tm-studio/packages/core/src/canvas.mjs#L286) | `buildFfmpegFitFilters`, và `buildFfmpegTransform` (373), `stillImageInputFlags` (45), `buildBackgroundSource` (103) | Fit/crop/rotate vẫn còn `computeFitObjectStyle` cho DOM; background/still input không còn nguồn nào khác |
-| [mask.mjs:65](file:///D:/Applications/tm-studio/packages/core/src/mask.mjs#L65) | `maskAlphaExpr` — biểu thức `geq` alpha per-pixel | Luật mask chỉ tồn tại dưới dạng `geq`; phải viết lại thành shader/destination-out |
-| [audio.mjs:68](file:///D:/Applications/tm-studio/packages/core/src/audio.mjs#L68) | Biểu thức fade theo `t` + filter `stereotools` | Còn `gainAt` (số học) để Web Audio dùng; phần filter string bỏ |
-| [keyframes.mjs:143](file:///D:/Applications/tm-studio/packages/core/src/keyframes.mjs#L143) | FFmpeg math expression cho property theo thời gian | Cần bản "evaluate at tick" cho renderer (interpolation đã có) |
-| [retime.mjs:380](file:///D:/Applications/tm-studio/packages/core/src/retime.mjs#L380) | Biểu thức `setpts` cho speed curve phi tuyến | Source-time mapping phải tự tính từ cùng curve — đã có `sourceTicks` trong evaluate |
-| [effects.mjs:83](file:///D:/Applications/tm-studio/packages/core/src/effects.mjs#L83) | Bảng 20 preset → chuỗi grade, `lut3d` chain | §8 "Color effects cơ bản" cần shader tương ứng |
-| [textStyle.mjs:6](file:///D:/Applications/tm-studio/packages/core/src/textStyle.mjs#L6) | Song song CSS và `drawtext` options | Giữ CSS, bỏ `drawtext` |
-| [transitions.mjs:170](file:///D:/Applications/tm-studio/packages/core/src/transitions.mjs#L170) | `FFMPEG_XFADE_NAMES` + hình học đo từ binary | **Semantics giữ được** (window, progress, vùng), spelling bỏ |
+| [mask.mjs:70](file:///D:/Applications/tm-studio/packages/core/src/mask.mjs#L70) | `maskAlphaExpr` — biểu thức `geq` alpha per-pixel | Luật mask chỉ tồn tại dưới dạng `geq`; phải viết lại thành shader/destination-out |
+| [audio.mjs:79](file:///D:/Applications/tm-studio/packages/core/src/audio.mjs#L79) | `volumeExpr` (fade theo `t`), `panFilter` (108) phát filter `stereotools` | Còn `gainAt` (số học) để Web Audio dùng; phần filter string bỏ |
+| [keyframes.mjs:155](file:///D:/Applications/tm-studio/packages/core/src/keyframes.mjs#L155) | `keyframeExpr` — FFmpeg math expression cho property theo thời gian | Cần bản "evaluate at tick" cho renderer (interpolation đã có) |
+| [retime.mjs:401](file:///D:/Applications/tm-studio/packages/core/src/retime.mjs#L401) | `rampSetptsExpr` — `setpts` cho speed curve phi tuyến | Source-time mapping phải tự tính từ cùng curve — đã có `sourceTicks` trong evaluate |
+| [effects.mjs:512](file:///D:/Applications/tm-studio/packages/core/src/effects.mjs#L512) | `buildFfmpegEffectFilters` + `lut3dChain` (782): 20 preset → chuỗi grade | §8 "Color effects cơ bản" cần shader tương ứng |
+| [textStyle.mjs:6](file:///D:/Applications/tm-studio/packages/core/src/textStyle.mjs#L6) | Module chỉ giữ **số dùng chung** (borderw/shadow/boxborderw ↔ CSS); chuỗi `drawtext` thật nằm ở engine | Giữ CSS, bỏ `drawtext` — và thấy luôn rằng text không có emitter nào trong core để xóa |
+| [transitions.mjs:253](file:///D:/Applications/tm-studio/packages/core/src/transitions.mjs#L253) | `XFADE_POSITION_LAWS` / `XFADE_PREVIEW` — hình học đo từ binary. **Tên spelling FFmpeg không ở đây**: nó sống ở [app/utils/tmcut/fxCatalog.ts:5](file:///D:/Applications/tm-studio/app/utils/tmcut/fxCatalog.ts#L5), bên ngoài core | **Semantics giữ được** (window, progress, vùng), spelling bỏ mà không đụng core |
 | [probe.mjs:32](file:///D:/Applications/tm-studio/packages/core/src/probe.mjs#L32) | `normalizeProbe` theo shape JSON của ffprobe | MediaInfo schema §4.1 rộng hơn nhiều → viết contract mới |
-| [stabilize.mjs:76](file:///D:/Applications/tm-studio/packages/core/src/stabilize.mjs#L76) | argv 2-pass vidstab | Không có thay thế → tính năng phải khai tử (xem §10) |
+| [stabilize.mjs:83](file:///D:/Applications/tm-studio/packages/core/src/stabilize.mjs#L83) | `buildVidstabDetectArgs` / `buildVidstabTransformArgs` (108): argv 2-pass | Không có thay thế → tính năng phải khai tử (xem §10) |
 | [cache.mjs:52](file:///D:/Applications/tm-studio/packages/core/src/cache.mjs#L52) | `buildProxyArgs` | Bỏ được, proxy là optional |
-| [analysis.mjs:4](file:///D:/Applications/tm-studio/packages/core/src/analysis.mjs#L4) | Parse stderr FFmpeg | Autocut mất đầu vào; cần decoder-side scene/silence |
+| [analysis.mjs:14](file:///D:/Applications/tm-studio/packages/core/src/analysis.mjs#L14) | `parseSceneOutput` / `parseSilenceOutput` (41): parse stderr FFmpeg | Autocut mất đầu vào; cần decoder-side scene/silence |
 | [platform.mjs:18](file:///D:/Applications/tm-studio/packages/core/src/platform.mjs#L18) | Capability flag `nativeFFmpeg` | Xóa flag khi engine gone; **đây là flag duy nhất cần giữ lại là `webCodecs`** |
 | [crashRecovery.mjs:159](file:///D:/Applications/tm-studio/packages/core/src/crashRecovery.mjs#L159) | Health check `{name:'ffmpeg'}` | Thay bằng check WebCodecs/muxer capability |
 
-Đây là **14 module**. Con số này giải thích vì sao "bỏ FFmpeg" không phải một PR xóa file: nó là một cuộc đổi phát ngôn của core.
+Bảng trên chạm **14 module**, nhưng đo kỹ thì FFmpeg sống trong core ở **bốn mức khác nhau**, và chỉ hai mức đầu là việc của slice J:
+
+| Mức | Module | Ý nghĩa với migration |
+|---|---|---|
+| **Emit văn bản FFmpeg** | `canvas`, `mask`, `audio` (`stereotools` ở [dòng 114](file:///D:/Applications/tm-studio/packages/core/src/audio.mjs#L114)), `keyframes`, `retime`, `effects`, `stabilize`, `cache` — **8 module** | phải viết lại thành instruction cho GPU/canvas/Web Audio. Đây là khối việc thật |
+| **Parse output FFmpeg** | `probe` (JSON ffprobe), `analysis` (stderr) — **2 module** | phải đổi sang schema MediaInfo mới; không có "bản dịch" nào khác |
+| **Mang tên FFmpeg trong metadata** | `platform` (flag `nativeFFmpeg`), `crashRecovery` (health check `'ffmpeg'`) — **2 module** | xóa tên là xong, không đụng semantics |
+| **Chỉ nhắc trong comment** | `textStyle`, `transitions` — **2 module** | **không có gì để gỡ**: `textStyle` chỉ export số dùng chung, còn spelling `xfade=` nằm ở [fxCatalog.ts](file:///D:/Applications/tm-studio/app/utils/tmcut/fxCatalog.ts) phía app. Sửa comment là đủ |
+
+Con số định hình lại slice J: **10** module thật sự phải đổi phát ngôn (8 emit + 2 parse), không phải 14.
 
 ### 5.2 Probe web không dám nói sự thật về FPS
 
@@ -199,7 +250,9 @@ Phải xử lý một trong hai hướng (xem §10 quyết định 4): hoặc s�
 
 ## 6. Dependency: đã xác minh hôm nay, chưa cài
 
-Đo bằng `grep` trên `packages/core` và `app|server|electron`:
+Đo bằng `grep -rn "<pattern>" app server electron shared packages --include=*.ts --include=*.mjs --include=*.vue --include=*.cjs`
+— **có phân biệt hoa thường**, vì `-i` cho hit giả: `ffmpegHelper.ts` biến `videoEncoder` (tên biến giữ chuỗi `-c:v` của FFmpeg)
+khớp với `VideoEncoder` của WebCodecs. Đếm file, không đếm dòng.
 
 | Capability plan cần | Số hit trong repo |
 |---|---|
@@ -207,7 +260,7 @@ Phải xử lý một trong hai hướng (xem §10 quyết định 4): hoặc s�
 | `VideoEncoder` / `VideoDecoder` / `isConfigSupported` | **0** |
 | `OfflineAudioContext` / `AudioContext` / `decodeAudioData` | **0** |
 | `OffscreenCanvas` / OPFS | **0** |
-| `WebGL2` class | **0**; chuỗi `'webgl2'` chỉ xuất hiện 1 lần như capability sniff ở crashRecovery |
+| `WebGL2` class | **0**; chuỗi `'webgl2'` chỉ **1** lần trong source, như capability sniff ở [crashRecovery.mjs:165](file:///D:/Applications/tm-studio/packages/core/src/crashRecovery.mjs#L165) — hit thứ hai khi grep cả `dist/` chỉ là bản compile của đúng dòng đó |
 | `MediaRecorder` | 3 file, tất cả là voiceover/mic realtime (hợp lệ) |
 | `IndexedDB` | 5 file, tất cả là xóa storage hệ thống, không phải media cache |
 
@@ -224,7 +277,7 @@ Metadata đã xác minh ngày 2026-11-03:
   Formats đọc/ghi: MP4, MOV, MKV, WebM, OGG, MP3, WAV, AAC, FLAC, TS, HLS; codec H.264, HEVC, VP8/VP9, AV1, ProRes, AAC, Opus,
   MP3, Vorbis, FLAC, AC-3, EAC-3, DTS, TrueHD, PCM, WebVTT.
 - `mp4-muxer` **5.2.2**, MIT — phương án muxer dự phòng nếu muxer của Mediabunny không phủ tổ hợp codec đã chốt.
-- License MPL-2.0 là **file-level copyleft**, không传染 sang app code, nhưng phải ghi trong NOTICE khi phát hành thương mại (plan §22 yêu cầu kiểm license).
+- License MPL-2.0 là **file-level copyleft**: không lây sang app code, nhưng phải ghi trong NOTICE khi phát hành thương mại (plan §22 yêu cầu kiểm license).
 - Rule 13 của plan có hiệu lực: chữ ký ở trên phải **verify lại bằng file `.d.ts` của version thực cài** trước khi viết code, không viết từ trí nhớ.
 
 ---
@@ -234,12 +287,18 @@ Metadata đã xác minh ngày 2026-11-03:
 Nhóm A — **witness FFmpeg** (assertion là chuỗi filtergraph hoặc pixel do FFmpeg render; phải viết lại thành behavior test, không sửa cho xanh):
 `tmcut_render_graph` (23 checks), `tmcut_render_parity` (14), `tmcut_export_paint_stack`, `tmcut_export_track_parity`,
 `tmcut_export_gap_placement`, `tmcut_footage_row_rule` (chiều export), `tmcut_golden_frame`, `tmcut_text_pixel`,
-`tmcut_svg_still`, `tmcut_fx_catalog`, `tmcut_detect_smoke`, `tmcut_render_smoke` (smoke), `tmcut_platform_adapter` (12),
-`packages/core/test/canvas.test.mjs`, `assets-probe-cache.test.mjs`, `htmlVideo.test.mjs`.
+`tmcut_svg_still`, `tmcut_fx_catalog`, `tmcut_detect_smoke`, `tmcut_render_smoke` (smoke), `tmcut_platform_adapter` (12).
+Phía core, xếp theo phép đo emitter (§2.3) chứ không theo từ khóa: **10** file
+`assets-probe-cache`, `audio`, `canvas`, `effects`, `evaluate`, `keyframes`, `mask`, `retime`, `stabilize`, `still-image`,
+cộng `platform` (assert flag `nativeFFmpeg`) và `htmlVideo` (assert output mà FFmpeg render dù không nhắc FFmpeg).
 
 Nhóm B — **luật thuần, sống sót nguyên vẹn**: `tmcut_paint_stack` (6 checks: equivalence + preview + stack order),
 `tmcut_frame_scheduler`, `tmcut_time_domain` (7), `tmcut_shared_model`, `tmcut_text_style`, `tmcut_transition_preview`,
-`tmcut_preview_boundary`, `tmcut_playback_duration` (9), `tmcut_retime`/`keyframes`/`evaluate` của core.
+`tmcut_preview_boundary`, `tmcut_playback_duration` (9).
+**Sửa lại khi đo bằng emitter (§2.3)**: `retime`, `keyframes`, `evaluate` của core sống sót **một phần** —
+phần số học (source-time mapping, interpolation, geometry) là luật thuần, nhưng mỗi file đều import một emitter
+FFmpeg (`rampSetptsExpr` 9 lần, `keyframeExpr` 11, `maskAlphaExpr` 4) và assert chuỗi nó sinh ra,
+nên slice J phải **tách assertion** chứ không được xóa cả file. Đây chính là dạng việc mà phép đếm từ khóa bỏ sót.
 
 Nhóm C — **phải tồn tại trước khi nhóm A bị xóa** (theo rule 11), tương ứng §21 của plan:
 probe normalization (MP4/MOV/WebM/MKV + file hỏng), round-trip encode→mux→decode, visual regression dung sai cho
@@ -266,8 +325,8 @@ Mỗi slice chạy 5 gate (`tmcut-verify-gate-pipeline`) rồi commit + push, nh
 | F | Scene graph + WebGL2 compositor cho **preview** (nâng cấp #96 thành slice đầu của renderer chung, không phải DOM stacking tạm) | `TmcutPreviewPlayer.vue`, `paintStack.mjs`, `renderAt.mjs` | preview composite đủ `rows`, pixel gate DOM↔GPU | B |
 | G | Web Audio engine: mixer, gain/mute/solo, waveform PCM, volume keyframe | mới trong `app/composables` | gap/overlap/crossfade test; 0 hit `extractAudio` | F |
 | H | Export MVP: capability matrix, frame scheduler → `VideoEncoder` → `Mp4OutputFormat` finalize, backpressure, cancel | `packages/core/src/export/*` mới | output play được, A/V sync, 0 spawn | F, G |
-| I | **Cut FFmpeg**: xóa `app/utils/tmcut/render/`, `ffmpegHelper.ts`, `ffmpeg.controller.cjs`, 3 route media, namespace IPC, 3 bảng DB, binary, updater | 2.2 + 2.3 | DoD §25 pass; witness group A đã chuyển thành behavior test ở H | H |
-| J | Cú pháp FFmpeg trong core (mục 5.1, 14 module) → semantics + shader/canvas instruction | `canvas/mask/audio/keyframes/retime/effects/textStyle/transitions/probe/stabilize/cache/analysis/platform/crashRecovery` | group B vẫn xanh; group A đã thay | I |
+| I | **Cut FFmpeg**: xóa `app/utils/tmcut/render/`, `ffmpegHelper.ts`, `ffmpeg.controller.cjs`, 3 route media, namespace IPC, 3 bảng DB, binary, updater — kèm **hai site subtitle burn-in** (§2.4) | 2.2 + 2.3 | DoD §25 pass; witness group A đã chuyển thành behavior test ở H; quyết định 9 đã chốt | H |
+| J | Cú pháp FFmpeg trong core: **8 emitter + 2 parser** (§5.1) → semantics + shader/canvas instruction | `canvas/mask/audio/keyframes/retime/effects/stabilize/cache` + `probe/analysis`; `textStyle`/`transitions` chỉ sửa comment | group B vẫn xanh; group A đã thay; **11** file core test (§2.3) phải **tách assertion**, không xóa cả file | I |
 | K | Web/Electron parity + packaging không binary; docs consolidation (archive V4 pack, một nguồn sự thật) | `electron/`, `docs/` | cùng project mở ở hai host trong phạm vi capability | I, J |
 
 Slice #96 đang mở (preview composite stack — G18 screen leg) nên **gộp vào F**: làm DOM-stacking tạm rồi viết lại sang GPU là trả nợ hai lần
@@ -286,7 +345,7 @@ Phải đo `VideoEncoder.isConfigSupported` trên máy dev (Chrome/Electron 44) 
 | Stabilization không có tương đương (nhóm 7 §3) | Cao | Phải khai tử có ADR, hoặc để `stabilize` là tính năng desktop-only trong một phase riêng — **quyết định của chủ repo** |
 | 20 grade preset + mask `geq` phải viết lại thành shader | Trung bình | Mỗi luật một slice, pixel gate dung sai; không làm cả bảng preset trong một PR |
 | MPL-2.0 của Mediabunny khi sản phẩm thương mại | Trung bình | NOTICE + review license trước release (plan §22) |
-| Doc guards (line length, table shape, link integrity) chặn việc ghi ADR/slice log | Thấp | Đã đọc luật của 3 guard; mọi dòng prose ≤ 1356, escape `\|`, anchor `#L` đo trước khi ghi |
+| Doc guards (line length, table shape, link integrity, doc citations) chặn việc ghi ADR/slice log | Thấp | Đã đọc luật của **4** guard; mọi dòng prose ≤ 1356, escape `\|`, anchor `#L` đo trước khi ghi |
 | `backup/ffmpeg-engine-2026-11-03/` (76 file, 1.6 MB) chưa được decide | Thấp | Quyết định 6 ở §10 |
 
 ---
@@ -303,6 +362,10 @@ Phải đo `VideoEncoder.isConfigSupported` trên máy dev (Chrome/Electron 44) 
 6. **`backup/ffmpeg-engine-2026-11-03/`**: commit vào repo (1.6 MB, để lịch sử kiểm tra được) hay giữ untracked tới slice I rồi xóa?
 7. **`resources/*.exe` (471 MiB)**: chỉ xóa được ở slice I, và cần quyết định có xóa luôn khỏi máy dev hay giữ lại cho tới khi H xanh.
 8. **ADR-025 (font vendoring)** vẫn chặn golden-frame text leg; nó có còn chặn gì sau khi `drawtext` bị retire không — cần đo lại ở slice J.
+9. **Subtitle burn-in (nhóm 11 §3)**: libass không có tương đương trong WebCodecs/Web Audio. Chọn một —
+   (a) viết subtitle renderer bằng canvas/GPU và render `.srt`/`.ass` phía JS, (b) khai tử burn-in, giữ subtitle là text track
+   thường (đã có sẵn đường đó trong timeline), hay (c) để nó là tính năng desktop-only ngoài phạm vi zero-FFmpeg.
+   Phương án (a) là một phase riêng, không phải một slice trong §8.
 
 ---
 
@@ -330,10 +393,30 @@ Kiến trúc mới **không phủ** những gì Phase 1–2 đã xây; nó phủ
 Time model, evaluator, scheduler, paint stack, platform adapter, schema versioning đều đã đứng về phía plan.
 Việc còn lại tập trung ở ba khối, theo thứ tự ưu tiên đo được:
 
-1. **Xóa quyền phát ngôn của FFmpeg trong core** — 14 module (mục 5.1) đang in văn bản FFmpeg song song với semantics.
+1. **Xóa quyền phát ngôn của FFmpeg trong core** — **8** module in văn bản FFmpeg và **2** module parse output FFmpeg (mục 5.1).
+   Hai module nữa (`textStyle`, `transitions`) chỉ nhắc FFmpeg trong comment, nên không thuộc khối việc này.
 2. **Dựng media stack thật** — probe, decode, encode, mux, audio: repo hiện có **0** dòng cho cả năm thứ.
 3. **Dọn surface ngoài code** — IPC, DB, packaging, updater, i18n: những chỗ mà "gỡ FFmpeg" kiểu search-and-replace sẽ bỏ sót.
 
 Với rule 11 ("không xóa tính năng đang chạy trước khi có thay thế + test"), thứ tự an toàn là §8: probe (B) → thumbnail (D)
 → preview compositor (F) → audio (G) → export (H) → rồi mới cắt (I). Slice I là điểm không quay lại, và nó chỉ được thực hiện
 khi slice H có output hợp lệ đầu tiên.
+
+### 12.1 Audit này đã trả đúng các mục Phase 0 của plan chưa
+
+Plan §Phase 0 liệt kê deliverable và một exit criterion. Đối chiếu từng cái:
+
+| Plan yêu cầu | Nằm ở đâu trong audit | Trạng thái |
+|---|---|---|
+| `docs/audit/zero-ffmpeg-audit.md` | chính file này | **đã tạo** |
+| dependency map | §6 (kèm license + API đã xác minh của Mediabunny) | **đủ** |
+| feature migration matrix | §3 (11 nhóm × đã-có-thay-thế-chưa) + §8 (slice A→K) | **đủ** |
+| risk register | §9 | **đủ** |
+| test plan | §7 (ba nhóm witness / luật / việc-phải-có-trước) | **đủ** |
+| Audit IPC, scripts, docs, CI | §2.3 (IPC + DB + i18n + test), §2.1 (updater/packaging), §5.3 (docs) | **đủ** |
+| Ghi flow import/preview/edit/export | §4 (evaluator, scheduler, paintStack, renderAt) và §8 slices B/D/F/G/H | **một phần** — flow mô tả bằng lời ở §8, chưa có sơ đồ |
+| Lưu sample projects + baseline build/test | §1 (`92a4818`, `90/92 specs passed`, hai FAIL có sẵn) + `backup/ffmpeg-engine-2026-11-03/` | **đủ** |
+| ADR-001 Browser-first / ADR-002 Mediabunny / ADR-003 WebCodecs | **chưa** | **BLOCKED ở slice A2**, vì số 001…003 đã bị hai gia đình ADR khác chiếm (§5.4) — cần quyết định 5 ở §10 |
+| **Exit: không còn khu vực FFmpeg/FFprobe chưa phân loại** | 11 nhóm §3 + 14 module phân mức §5.1 + 6 surface §2.3 + 10 phép đo §6 + từ khóa §2.4 | **đạt** |
+
+Kết luận: Phase 0 đóng được, trừ ADR — và ADR không đóng được bằng cách đánh số tùy ý, mà bằng một quyết định của chủ repo.
