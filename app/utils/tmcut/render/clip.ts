@@ -122,16 +122,22 @@ export function toRenderClip(item: TmcutTimelineItem, track?: TmcutTrack | null)
  * track is `hidden`, so a hidden row must not reach the file either, and every
  * visible caption row is content — not only the first text track.
  *
- * `videoBase` is the ONE footage row the exporter composites today: the graph
- * builds a single concat chain, so parallel visible footage rows cannot be
- * stacked yet. They are returned as `extraVideoTracks` so the compiler can
- * still bound the file by them (content that is not exported must not shorten
- * the render) and the UI can warn honestly about what is missing.
+ * `videoBase` is the BOTTOM of the footage stack — the first visible row with
+ * content, which is what `selectPaintRows` calls `base` (slice #93 put that
+ * rule in core). The rows after it are `extraVideoTracks`: visible footage that
+ * paints ABOVE the base, so `compositePaintRows` builds each one its own chain
+ * and overlays it during its own clip windows. They are the same list the
+ * extent reads (content must not shorten the render) and the same list the
+ * export banner warns about, because the PREVIEW still has one footage element
+ * and shows only the base.
  *
  * Audio is deliberately NOT gated by `hidden`: muting a row is the sound
  * control, hiding it is a picture control, and an audio track has no picture.
  * The evaluator reads the same two flags the same way (`visible` from
- * `hidden`, `audible` from `muted`).
+ * `hidden`, `audible` from `muted`). A stacked footage row contributes no
+ * sound lane either — the preview plays the audio of the row that owns the
+ * canvas, and a file that mixed the rows above it would be louder than the
+ * screen it is supposed to match.
  */
 export interface ExportTrackSelection {
   videoBase: TmcutTrack | null

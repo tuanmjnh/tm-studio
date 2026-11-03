@@ -8,9 +8,10 @@
  * answers is exactly the bug class #87 closed, so these checks drive the real
  * composable and the real compiler over the real store and require one row.
  *
- * They also pin what neither surface can do yet: nothing stacks two footage
- * rows, so a second visible row contributes NO picture anywhere — which the
- * export banner has to say instead of promising a "preview-only" picture.
+ * They also pin the one place the two surfaces still differ: the export stacks
+ * every visible footage row (slice #95), while the preview carries a single
+ * `<video>` element and therefore shows only the row that owns the canvas. The
+ * export banner has to say that, and not promise a picture either way.
  *
  * Run: node node_modules/tsx/dist/cli.mjs --tsconfig tsconfig.test.json \
  *        tests/unit/tmcut_footage_row_rule.spec.ts
@@ -72,8 +73,9 @@ async function main() {
 
   const painted = (p: ReturnType<typeof useTmcutPlayback>) => p.activeVideoClip.value?.clip?.src ?? null
 
-  // 1. One row, two surfaces: the row the compiler decodes is the row the
-  // preview paints, and a second visible row adds no input to either.
+  // 1. One row, two surfaces: the row the preview paints is the BASE of the
+  // stack, and the file decodes the rows above it as well — overlaid, not
+  // concatenated after it.
   await check('the screen and the file take the same footage row', async () => {
     const { s, top } = await twoRows()
     const project = s.currentProject.value!
@@ -81,9 +83,14 @@ async function main() {
     p.seek(1)
     assert.equal(selectExportTracks(project).videoBase?.id, top.id, 'the base row is the top visible row')
     assert.equal(painted(p), 'top.mp4', 'the canvas shows that row')
-    const srcs = decodedSrcs(compileTimelineToFfmpeg(project, 'out.mp4').args)
+    const compiled = compileTimelineToFfmpeg(project, 'out.mp4')
+    const srcs = decodedSrcs(compiled.args)
     assert.ok(srcs.some(src => src.includes('top.mp4')), `the file decodes the base row, got ${srcs}`)
-    assert.ok(!srcs.some(src => src.includes('bottom.mp4')), `a parallel row must not be decoded, got ${srcs}`)
+    assert.ok(srcs.some(src => src.includes('bottom.mp4')),
+      `the row above the base is stacked into the file, got ${srcs}`)
+    const graph = compiled.args[compiled.args.indexOf('-filter_complex') + 1]!
+    assert.match(graph, /overlay=enable='gte\(t,0\)\*lt\(t,4\)'/,
+      'and it is overlaid on its own window, not concatenated after the base')
   })
 
   // 2. Hiding the top row moves BOTH answers down one row — hidden is hidden
@@ -145,18 +152,20 @@ async function main() {
     assert.ok(p.transitionCrossfade.value, 'the preview must agree that this cut crossfades')
   })
 
-  // 6. Nothing stacks two footage rows: one <video> carries the picture and
-  // one concat chain carries the file, so the banner may promise the second
-  // row nothing at all — it must name the row that actually renders.
-  await check('the warning says no picture, not a preview-only picture', async () => {
+  // 6. The two surfaces differ in exactly one way, and the banner must name it:
+  // the file stacks the rows above the base, the screen still carries one
+  // `<video>` and shows the base alone.
+  await check('the warning says the file stacks and the screen does not', async () => {
     for (const locale of ['en', 'vi']) {
       const copy = read(`i18n/locales/${locale}.json`)
       const warning = copy.match(/"parallelTracksWarning":\s*"([^"]*)"/)?.[1] ?? ''
       assert.ok(warning.length > 0, `${locale}: parallelTracksWarning is missing`)
-      assert.doesNotMatch(warning, /preview-only|picture stays|chỉ có ở preview|chỉ có trong preview/i,
-        `${locale}: the second footage row is not in the preview either`)
-      assert.match(warning, /top visible|above it|trên cùng/,
-        `${locale}: the copy must name the row that actually renders`)
+      assert.match(warning, /composites|stacks|theo thứ tự vẽ/,
+        `${locale}: the rows above the base are in the file now`)
+      assert.match(warning, /preview still|preview vẫn chỉ/i,
+        `${locale}: the preview shows one row, and the copy must not hide that`)
+      assert.doesNotMatch(warning, /preview-only|picture stays|only the top visible|chỉ có ở preview|chỉ có trong preview/i,
+        `${locale}: the copy still describes the old renderer`)
     }
   })
 

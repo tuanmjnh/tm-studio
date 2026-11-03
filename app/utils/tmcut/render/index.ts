@@ -9,7 +9,7 @@ import { RenderGraph, ffmpegColor, lutFileFilter } from './graph'
 import { canvasFpsValue } from '../canvas'
 import { applyTextOverlays } from './text'
 import { compileAudioOnly, compileBackgroundAudio } from './audio'
-import { compileVideoPipeline } from './video'
+import { compileVideoPipeline, compositePaintRows } from './video'
 import { buildVideoCodecArgs, buildAudioCodecArgs, buildGifPipeline } from './encoder'
 import { renderVideoClips, renderAudioClips, renderTextClips, renderClipDuration, selectExportTracks } from './clip'
 import { buildBackgroundSource, transitionWindows } from 'tmcut-core'
@@ -53,8 +53,9 @@ export function compileTimelineToFfmpeg(
   // project layers music, voiceover and SFX on separate rows and they all
   // mix into the output bus. `renderAudioClips` takes the whole array.
   const audioClips = renderAudioClips(selection.audioTracks)
-  // Footage rows the preview paints but the graph cannot stack yet: no
-  // inputs, but they still belong to the timeline extent below.
+  // Footage rows above the base: no audio lane of their own (the preview has
+  // one footage element, and it plays the row that owns the canvas), but they
+  // are decoded, stacked over the base, and count toward the extent below.
   const extraVideoClips = selection.extraVideoTracks.flatMap(renderVideoClips)
 
   // Timeline extent in seconds. Every track counts, because the store's
@@ -170,6 +171,40 @@ export function compileTimelineToFfmpeg(
     })
     currentVideoStream = videoPipeline.videoStream
     currentAudioStream = videoPipeline.audioStream
+
+    // G18, the composite leg: the rows `selectExportTracks` reports above the
+    // base are footage the paint rule puts ON TOP of it, not footage to drop.
+    // A row that outlives the base has to extend the bus first, or the overlay
+    // would be cut off where the bottom row ends — the same reason a caption
+    // tail extends it below.
+    const stackedRows = selection.extraVideoTracks.map(track => ({
+      clips: renderVideoClips(track),
+      transitionWindows: transitionWindows(track)
+    }))
+    const stackEnd = extraVideoClips.reduce(
+      (end, clip) => Math.max(end, clip.offsetSec + renderClipDuration(clip)), 0)
+    if (stackEnd > footageEnd + 0.001) {
+      // `settb`/`fps` after the pad, measured reason: `tpad=stop_mode=add`
+      // numbers its own frames a hair BELOW the frame grid (at 30 fps frame 90
+      // came out at 2.999990 s and the drift grew to 4e-5 s by frame 179). An
+      // `overlay` then pairs each bus frame with the newest row frame whose pts
+      // is not later, so the row's own first frame is never chosen and its
+      // window starts one frame late. Re-gridding puts both legs on one grid;
+      // measured after it, a row at [3,5) paints frames 90..149 and nothing else.
+      graph.addFilterChain(
+        `${currentVideoStream}tpad=stop_mode=add:stop_duration=${(stackEnd - footageEnd).toFixed(3)}:color=${bgColor},settb=1/${fps},fps=${fps}[v_stack_tail]`
+      )
+      currentVideoStream = '[v_stack_tail]'
+      footageEnd = stackEnd
+    }
+    currentVideoStream = compositePaintRows(graph, currentVideoStream, stackedRows, {
+      canvasW,
+      canvasH,
+      fps,
+      bgColor,
+      hasAudio: false,
+      transitionWindows: []
+    })
 
     // Color LUT (roadmap E-4): grade the FOOTAGE before drawtext so
     // titles/graphics keep their authored colors (grading graphics is a

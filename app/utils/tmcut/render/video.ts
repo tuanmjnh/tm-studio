@@ -46,6 +46,14 @@ export interface VideoPipelineContext {
    * pair the preview played straight crossfaded in the file.
    */
   transitionWindows: TmcutTransitionWindow[]
+  /**
+   * Prefix for the labels this row's own chain creates (`v_concat`, `v_chain_i`).
+   * Per-clip labels are already unique because they carry the global input index,
+   * but the folded chain labels are not: two rows would both write `[v_concat]`.
+   * The base row keeps the empty prefix, so a single-row export emits exactly the
+   * labels it emitted before stacking existed.
+   */
+  labelPrefix?: string
 }
 
 /**
@@ -100,6 +108,100 @@ function leadingPads(videoClips: RenderClip[], ctx: VideoPipelineContext): numbe
 }
 
 /**
+ * The canvas a stacked row is cut out of: transparent, so everything the row
+ * does not paint is the row BELOW it, not an authored colour.
+ */
+const STACK_BG_COLOR = '0x00000000'
+
+/**
+ * Build one footage row as its own timeline-aligned chain.
+ *
+ * `compileVideoPipeline` already walks a row the way the timeline places it
+ * (slice #94 gave it the pads), so a row's stream starts at t=0 of the project
+ * and its clips sit at their authored seconds — which is what makes a single
+ * `overlay` with per-clip `enable` windows the whole compositing step.
+ *
+ * Two differences from the base row, both deliberate:
+ *  - no audio lane. The preview carries ONE footage element and it plays the
+ *    row that owns the canvas, so a stacked row has no sound on screen either;
+ *    giving it one would make the file louder than the preview.
+ *  - a transparent backing wherever a clip needs one (transform, opacity,
+ *    mask). The base row backs itself with the canvas colour because nothing is
+ *    below it; a stacked row must keep its alpha so the row below shows through
+ *    the margins, and the canvas colour would cut it off.
+ */
+function compilePaintRow(
+  graph: RenderGraph,
+  clips: RenderClip[],
+  windows: TmcutTransitionWindow[],
+  ctx: VideoPipelineContext,
+  label: number
+): string {
+  const { videoStream } = compileVideoPipeline(graph, clips, {
+    canvasW: ctx.canvasW,
+    canvasH: ctx.canvasH,
+    fps: ctx.fps,
+    bgColor: STACK_BG_COLOR,
+    hasAudio: false,
+    bgBase: undefined,
+    transitionWindows: windows,
+    // The builder names its concat/chain labels the same way for every row, so
+    // a second row would re-declare `[v_concat]` and ffmpeg would reject the
+    // graph. The base keeps the empty prefix, so a one-row export is untouched.
+    labelPrefix: `r${label}_`
+  })
+  const rgba = `[v_stack_rgba_${label}]`
+  graph.addFilterChain(`${videoStream}format=rgba${rgba}`)
+  return rgba
+}
+
+/**
+ * Composite the footage rows above the base, in core's paint order.
+ *
+ * `selectPaintRows` answers "which rows paint at this tick" and hands the first
+ * one to the canvas; the rows after it are not dropped content, they are the
+ * stack above it. The base chain is the bottom of that stack, so each row here
+ * is one `overlay` whose windows are exactly its own clips' half-open spans
+ * (ADR-018): where the row above has a gap the row below still shows, and where
+ * two rows both paint the later one wins, as it does in the paint order core
+ * returns.
+ *
+ * One overlay per row, not per clip: a filter output can be consumed once, and
+ * the row is one stream, so its windows are added into one `enable` expression.
+ */
+export function compositePaintRows(
+  graph: RenderGraph,
+  baseStream: string,
+  rows: { clips: RenderClip[], transitionWindows: TmcutTransitionWindow[] }[],
+  ctx: VideoPipelineContext
+): string {
+  if (rows.length === 0) return baseStream
+  let bus = baseStream
+  for (let index = 0; index < rows.length; index++) {
+    const row = rows[index]!
+    if (row.clips.length === 0) continue
+    const top = compilePaintRow(graph, row.clips, row.transitionWindows, ctx, index)
+    const windows = row.clips
+      .map((clip) => {
+        const start = clip.offsetSec
+        const end = ticksToSec(Math.round(Number(clip.raw.offset || 0) + clip.durationTicks))
+        return `gte(t,${start})*lt(t,${end})`
+      })
+      .join('+')
+    const out = `[v_stack_${index}]`
+    // `overlay` has no `format=rgba` (it parses that option as an enum and
+    // rejects the name — measured on the bundled binary). Alpha comes from the
+    // RGBA pixel format the row itself is built in, which the second input
+    // accepts, so the row below shows through wherever this one is transparent.
+    graph.addFilterChain(
+      `${bus}${top}overlay=enable='${windows}':eof_action=pass:repeatlast=0${out}`
+    )
+    bus = out
+  }
+  return bus
+}
+
+/**
  * Compiles normal video clips, fitting, effects, transform/opacity, and
  * concatenates them with transitions. C16-R2: consumes RenderClip —
  * the render canonical view — never app-model v1 fields directly.
@@ -111,6 +213,7 @@ export function compileVideoPipeline(
 ): { videoStream: string, audioStream: string | null } {
   const vStreams: string[] = []
   const aStreams: string[] = []
+  const lp = ctx.labelPrefix ?? ''
   const pads = leadingPads(videoClips, ctx)
   let clipIndex = 0
 
@@ -314,15 +417,15 @@ export function compileVideoPipeline(
   if (!hasTransitions || videoClips.length === 1) {
     if (ctx.hasAudio) {
       const concatInputs = vStreams.map((v, i) => `${v}${aStreams[i]}`).join('')
-      graph.addFilterChain(`${concatInputs}concat=n=${vStreams.length}:v=1:a=1[v_concat][a_concat]`)
-      currentAudioStream = '[a_concat]'
+      graph.addFilterChain(`${concatInputs}concat=n=${vStreams.length}:v=1:a=1[${lp}v_concat][${lp}a_concat]`)
+      currentAudioStream = `[${lp}a_concat]`
     } else {
-      graph.addFilterChain(`${vStreams.join('')}concat=n=${vStreams.length}:v=1:a=0[v_concat]`)
+      graph.addFilterChain(`${vStreams.join('')}concat=n=${vStreams.length}:v=1:a=0[${lp}v_concat]`)
     }
-    currentVideoStream = '[v_concat]'
+    currentVideoStream = `[${lp}v_concat]`
   } else {
-    graph.addFilterChain(`${vStreams[0]}settb=1/${ctx.fps},fps=${ctx.fps}[v_chain_0]`)
-    let currentV = '[v_chain_0]'
+    graph.addFilterChain(`${vStreams[0]}settb=1/${ctx.fps},fps=${ctx.fps}[${lp}v_chain_0]`)
+    let currentV = `[${lp}v_chain_0]`
     let currentA = ctx.hasAudio ? aStreams[0]! : ''
     let runningDuration = renderClipDuration(videoClips[0]!) + (pads[0] ?? 0)
 
@@ -340,20 +443,20 @@ export function compileVideoPipeline(
       // xfade offset and the running length both see it.
       runningDuration += pads[i] ?? 0
 
-      const nextV = `[v_in_${i}]`
+      const nextV = `[${lp}v_in_${i}]`
       graph.addFilterChain(`${vStreams[i]}settb=1/${ctx.fps},fps=${ctx.fps}${nextV}`)
 
       if (isIntact) {
         const transType = mapXfadeTransition(currClip.transitionIn?.type)
         const offset = Math.max(0, runningDuration - transSec)
-        const vOut = `[v_chain_${i}]`
+        const vOut = `[${lp}v_chain_${i}]`
         graph.addFilterChain(
           `${currentV}${nextV}xfade=transition=${transType}:duration=${transSec.toFixed(3)}:offset=${offset.toFixed(3)},settb=1/${ctx.fps},fps=${ctx.fps}${vOut}`
         )
         currentV = vOut
 
         if (ctx.hasAudio) {
-          const aOut = `[a_chain_${i}]`
+          const aOut = `[${lp}a_chain_${i}]`
           graph.addFilterChain(
             `${currentA}${aStreams[i]}acrossfade=d=${transSec.toFixed(3)}:c1=tri:c2=tri${aOut}`
           )
@@ -361,14 +464,14 @@ export function compileVideoPipeline(
         }
         runningDuration = runningDuration + currDur - transSec
       } else {
-        const vOut = `[v_chain_${i}]`
+        const vOut = `[${lp}v_chain_${i}]`
         graph.addFilterChain(
           `${currentV}${nextV}concat=n=2:v=1:a=0,settb=1/${ctx.fps},fps=${ctx.fps}${vOut}`
         )
         currentV = vOut
 
         if (ctx.hasAudio) {
-          const aOut = `[a_chain_${i}]`
+          const aOut = `[${lp}a_chain_${i}]`
           graph.addFilterChain(
             `${currentA}${aStreams[i]}concat=n=2:v=0:a=1${aOut}`
           )

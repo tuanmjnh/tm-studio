@@ -124,14 +124,14 @@ async function main() {
     assert.equal(compiled.duration, 8)
   })
 
-  // 4. The file is as long as the timeline: content on a row the exporter does
-  // not yet composite still bounds the render instead of being cut off.
+  // 4. The file is as long as the timeline: a row above the base bounds the
+  // render on its own terms, whether or not the canvas can show it.
   await check('a parallel footage row still bounds the duration', () => {
     const compiled = compileTimelineToFfmpeg(project([VIDEO, VIDEO2]), 'out.mp4')
     assert.equal(compiled.duration, 8, 'the export must not end with the first row')
     const selection = selectExportTracks(project([VIDEO, VIDEO2]))
-    assert.equal(selection.videoBase?.id, 'v1', 'the bottom row is still the one composited')
-    assert.deepEqual(selection.extraVideoTracks.map(t => t.id), ['v2'], 'the uncomposited row is named')
+    assert.equal(selection.videoBase?.id, 'v1', 'the base row is the bottom of the stack')
+    assert.deepEqual(selection.extraVideoTracks.map(t => t.id), ['v2'], 'the row above it is named, and stacked')
   })
 
   // 5. The selector and the evaluator must not become two rules. Frame by
@@ -215,8 +215,8 @@ async function main() {
       'the drawtext window must be the evaluator window, not a re-derived float')
   })
 
-  // 9. The modal warns about the row the export still cannot composite, reads
-  // the same selector, and no longer claims caption rows are dropped.
+  // 9. The modal warns about the rows the PREVIEW cannot show yet, reads the
+  // same selector, and no longer claims caption rows are dropped.
   await check('the honest warning now names only the footage rows', () => {
     const modal = readFileSync(new URL('../../app/components/tmcut/TmcutExportModal.vue', import.meta.url), 'utf8')
     assert.match(modal, /selectExportTracks/, 'the modal must read the shared selector')

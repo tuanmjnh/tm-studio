@@ -16,10 +16,14 @@
  *  2. the preview carries no second copy of the rule and reads it off core.
  *  3. the SHIPPED composable — which the store harness runs in plain Node —
  *     hands the canvas over exactly where core says it does.
- *  4. the exporter's remaining divergence is PINNED: `videoBase` is still the
- *     first visible row for the whole file, while core answers per tick. When
- *     the compositor consumes `rows`, this check must be updated to expect the
- *     stack — it is not allowed to drift unnoticed.
+ *  4. THE EXPORTER SIDE OF THE LAW — the exporter answers once per file where
+ *     core answers per tick, and the two must be one rule seen two ways:
+ *     `videoBase` is the BOTTOM of the stack and `extraVideoTracks` are the
+ *     rows painted on top of it, in exactly the order core reports in `rows`.
+ *     The compositor (slice #95) turns that stack into the file. What still
+ *     differs — and is pinned, not accepted silently — is that the canvas
+ *     carries only `base`, so where two rows are live at once the preview
+ *     shows the bottom one and the file shows both.
  *
  * Run: node node_modules/tsx/dist/cli.mjs --tsconfig tsconfig.test.json \
  *        tests/unit/tmcut_paint_stack.spec.ts
@@ -30,7 +34,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { TICKS_PER_SECOND, evaluateTimeline, selectPaintRows } from 'tmcut-core'
 import type { CoreEvaluatedLayer } from 'tmcut-core'
-import { TICKS, freshStore } from './helpers/tmcut_store_env'
+import { freshStore } from './helpers/tmcut_store_env'
 import { selectExportTracks } from '../../app/utils/tmcut/render'
 import type { TmcutProject, TmcutTimelineItem, TmcutTrack } from '../../app/composables/useTmcutProject'
 
@@ -145,7 +149,7 @@ const LAYOUTS: TrackSeed[][] = [
   [{ ...ROW_A, hidden: true }, { ...ROW_B_OVERLAP, hidden: true }]
 ]
 
-const TICKS = [-1, 0, 1, tk(1), tk(3), tk(4), tk(5), tk(6), tk(7), tk(10), tk(30)]
+const PROBE_TICKS = [-1, 0, 1, tk(1), tk(3), tk(4), tk(5), tk(6), tk(7), tk(10), tk(30)]
 
 function rowIds(row: PaintedRow): string {
   return row ? row.items.map(item => item.id).join('+') : 'null'
@@ -159,7 +163,7 @@ async function main() {
     for (const layout of LAYOUTS) {
       const sut = project(layout)
       const layoutName = layout.map(t => `${t.id}${t.hidden ? '!' : ''}`).join(',')
-      for (const at of TICKS) {
+      for (const at of PROBE_TICKS) {
         const before = retiredPreviewRow(sut, at)
         const after = currentPreviewRow(sut, at)
         compared++
@@ -171,7 +175,7 @@ async function main() {
         )
       }
     }
-    assert.equal(compared, LAYOUTS.length * TICKS.length, 'every layout and tick compared')
+    assert.equal(compared, LAYOUTS.length * PROBE_TICKS.length, 'every layout and tick compared')
     assert.ok(nonNull >= 40, `the sweep must cover live rows, got ${nonNull}`)
   })
 
@@ -213,18 +217,24 @@ async function main() {
     )
   })
 
-  // 4. Core answers per tick; the exporter still answers once per file. This is
-  //    G18 as it stands today, pinned so the compositor slice changes it on
-  //    purpose and not by accident.
-  await check('the exporter divergence is recorded, not silently accepted', () => {
-    const sut = project([ROW_A, ROW_B_OVERLAP])
+  // 4. The one rule seen two ways: core's per-tick `rows` and the exporter's
+  //    per-file stack must name the same rows in the same order. What is left
+  //    over — the canvas holding only `base` — is the deliberate divergence,
+  //    and `tests/unit/tmcut_export_paint_stack.spec.ts` proves the file side
+  //    of it pixel by pixel.
+  await check('the exporter stacks exactly the rows core names, in core order', () => {
+    const sut = project([ROW_A_LONG, ROW_B_OVERLAP])
     const stack = selectPaintRows(evaluateTimeline(sut, tk(5)))
-    assert.equal(stack.base?.trackId, 'v2', 'the screen paints the row that has a layer here')
-    assert.deepEqual(stack.rows.map(r => r.trackId), ['v2'], 'and only one row owns the canvas')
+    assert.deepEqual(stack.rows.map(r => r.trackId), ['v1', 'v2'], 'both rows are live at 5 s')
+    assert.equal(stack.base?.trackId, 'v1', 'and the canvas is held by the bottom one')
 
     const selection = selectExportTracks(sut)
-    assert.equal(selection.videoBase?.id, 'v1', 'the file is still built from the first row')
-    assert.deepEqual(selection.extraVideoTracks.map(t => t.id), ['v2'])
+    assert.equal(selection.videoBase?.id, 'v1', 'the file builds from that same bottom row')
+    assert.deepEqual(
+      [selection.videoBase?.id, ...selection.extraVideoTracks.map(t => t.id)].filter(id => id),
+      stack.rows.map(r => r.trackId),
+      'file stack == the core paint order'
+    )
   })
 
   // 5. Where the two rules can agree today, they must: hidden rows.
@@ -236,13 +246,14 @@ async function main() {
     assert.equal(selectExportTracks(hidden).videoBase?.id, 'v2')
   })
 
-  // 6. The rows after `base` are the footage the single-row law drops — the
-  //    exporter keeps them for the timeline extent, and must not decode them.
-  await check('dropped rows stay identifiable for the compositor', () => {
+  // 6. The rows after `base` are the footage the preview drops. Core still
+  //    names each one, with its own index, its own layers and its own window,
+  //    so the exporter can composite them — which is what slice #95 does.
+  await check('the rows above the base stay identifiable for the compositor', () => {
     const sut = project([ROW_A, ROW_B_OVERLAP, MUSIC])
     const stack = selectPaintRows(evaluateTimeline(sut, tk(3)))
     assert.deepEqual(stack.rows.map(r => r.trackId), ['v1', 'v2'])
-    assert.equal(stack.rows[1].trackIndex, 1, 'the dropped row keeps its own index')
+    assert.equal(stack.rows[1].trackIndex, 1, 'the stacked row keeps its own index')
     assert.deepEqual(stack.rows[1].layers.map(l => l.clipId), ['b'])
     assert.ok(
       selectExportTracks(sut).audioTracks.some(t => t.id === 'a1'),
