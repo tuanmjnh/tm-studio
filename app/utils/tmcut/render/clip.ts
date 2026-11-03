@@ -116,8 +116,51 @@ export function toRenderClip(item: TmcutTimelineItem, track?: TmcutTrack | null)
   }
 }
 
+/**
+ * Which rows the export may paint, decided by the SAME rule the preview uses:
+ * `evaluateTimeline` walks every track and marks a layer invisible when its
+ * track is `hidden`, so a hidden row must not reach the file either, and every
+ * visible caption row is content — not only the first text track.
+ *
+ * `videoBase` is the ONE footage row the exporter composites today: the graph
+ * builds a single concat chain, so parallel visible footage rows cannot be
+ * stacked yet. They are returned as `extraVideoTracks` so the compiler can
+ * still bound the file by them (content that is not exported must not shorten
+ * the render) and the UI can warn honestly about what is missing.
+ *
+ * Audio is deliberately NOT gated by `hidden`: muting a row is the sound
+ * control, hiding it is a picture control, and an audio track has no picture.
+ * The evaluator reads the same two flags the same way (`visible` from
+ * `hidden`, `audible` from `muted`).
+ */
+export interface ExportTrackSelection {
+  videoBase: TmcutTrack | null
+  extraVideoTracks: TmcutTrack[]
+  textTracks: TmcutTrack[]
+  audioTracks: TmcutTrack[]
+}
+
+function paints(track: TmcutTrack, needed: 'src' | 'text'): boolean {
+  if (track.hidden === true) return false
+  return (track.items || []).some(item => (needed === 'src' ? !!item.src : !!item.text))
+}
+
+/** Read-only view of the project's rows, in track order. Pure. */
+export function selectExportTracks(
+  project: { timeline?: { tracks?: TmcutTrack[] } } | null | undefined
+): ExportTrackSelection {
+  const tracks = project?.timeline?.tracks || []
+  const videoRows = tracks.filter(t => t.type === 'video' && paints(t, 'src'))
+  return {
+    videoBase: videoRows[0] ?? null,
+    extraVideoTracks: videoRows.slice(1),
+    textTracks: tracks.filter(t => t.type === 'text' && paints(t, 'text')),
+    audioTracks: tracks.filter(t => t.type === 'audio')
+  }
+}
+
 /** Video-track items that carry media input, sorted by timeline position. */
-export function renderVideoClips(track: TmcutTrack | undefined): RenderClip[] {
+export function renderVideoClips(track: TmcutTrack | null | undefined): RenderClip[] {
   return (track?.items || [])
     .filter(c => !!c.src)
     .sort((a, b) => (a.offset || 0) - (b.offset || 0))
@@ -142,9 +185,21 @@ export function renderAudioClips(tracks: TmcutTrack[] | undefined): RenderClip[]
   return out
 }
 
-/** Text-track items that carry a text body, in track order. */
-export function renderTextClips(track: TmcutTrack | undefined): RenderClip[] {
-  return (track?.items || []).filter(c => !!c.text).map(c => toRenderClip(c, track))
+/**
+ * Text items that carry a text body, in track order then timeline order.
+ * R124 A1 did this for audio; captions got the same rule in V4 Phase 2 (5),
+ * because a second text row is content the preview already shows.
+ */
+export function renderTextClips(tracks: TmcutTrack | TmcutTrack[] | undefined): RenderClip[] {
+  const rows = tracks ? (Array.isArray(tracks) ? tracks : [tracks]) : []
+  const out: RenderClip[] = []
+  for (const track of rows) {
+    for (const item of track.items || []) {
+      if (!item.text) continue
+      out.push(toRenderClip(item, track))
+    }
+  }
+  return out
 }
 
 /** Timeline span of one clip, seconds (decoded from the exact tick span). */

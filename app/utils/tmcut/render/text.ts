@@ -3,6 +3,7 @@ import type { RenderGraph } from './graph'
 import { filterPathArg, opacityAlpha } from './graph'
 import { textBoxPadding, textStrokeWidth, textShadowOffset } from '../textStyle'
 import { keyframeExpr, maskAlphaExpr } from 'tmcut-core'
+import { renderClipDuration } from './clip'
 import type { RenderClip } from './clip'
 
 /**
@@ -17,6 +18,17 @@ export function escapeDrawText(text: string): string {
 }
 
 /**
+ * The caption's timeline span in seconds. Prefer the tick-exact value the
+ * canonical view decoded (`durationSec`); the inline `(out - in) / speed`
+ * re-derivation is only the fallback for hand-built overlays, because its
+ * rounding differs from core's whole-tick span whenever the speed does not
+ * divide the span evenly.
+ */
+function overlayDurationSec(clip: TextOverlayClip): number {
+  return clip.durationSec ?? (clip.out - clip.in) / (clip.speed || 1)
+}
+
+/**
  * Generates drawtext filter for ONE text clip (roadmap C-1, C-2, C-5, R2).
  */
 export function textOverlayFilter(clip: TextOverlayClip): string {
@@ -26,7 +38,7 @@ export function textOverlayFilter(clip: TextOverlayClip): string {
   const xOffset = clip.x || 0
   const yOffset = clip.y || 0
   const tStart = clip.offset || 0
-  const duration = (clip.out - clip.in) / (clip.speed || 1)
+  const duration = overlayDurationSec(clip)
   const tEnd = tStart + duration
 
   const fontFileArg = clip.fontFile ? `fontfile='${filterPathArg(clip.fontFile)}':` : ''
@@ -146,7 +158,7 @@ export function textOverlayChains(
   // video clips where the fitted frame fills the canvas.
   const maskExpr = maskAlphaExpr(clip.mask)
   const tStart = clip.offset || 0
-  const tEnd = tStart + (clip.out - clip.in) / (clip.speed || 1)
+  const tEnd = tStart + overlayDurationSec(clip)
   if (!rotation) {
     if (!maskExpr) return { chains: [`${bus}${textOverlayFilter(clip)}${out}`], out }
     const layer = `[v_txtl_${index}]`
@@ -211,7 +223,8 @@ export function applyTextOverlays(
       ...textClip.raw,
       offset: textClip.offsetSec,
       in: textClip.inSec,
-      out: textClip.outSec
+      out: textClip.outSec,
+      durationSec: renderClipDuration(textClip)
     }
     const overlaid = textOverlayChains(current, overlay, i, ctx)
     for (const chain of overlaid.chains) {

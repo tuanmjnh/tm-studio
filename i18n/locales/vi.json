@@ -1042,7 +1042,7 @@
       "audioMp3Spec": "MP3 · {kbps} kbps · 48 kHz",
       "audioWavSpec": "WAV · PCM 16-bit · 48 kHz",
       "gifNote": "15 fps · tối đa 1280 px · bảng màu tối ưu",
-      "parallelTracksWarning": "Project này có nhiều track video/text song song. Hiện bộ xuất mới render track đầu tiên mỗi loại — các lớp phía trên chỉ xem được ở preview, sẽ không có trong file.",
+      "parallelTracksWarning": "Project này có nhiều track video song song. Bản xuất chỉ ghép track video đang hiện đầu tiên; các track còn lại vẫn quyết định độ dài file nhưng hình ảnh chỉ có ở preview. Track text và audio xuất đầy đủ.",
       "etaLabel": "Còn lại",
       "labelSize": "Dung lượng",
       "formatLabel": "Định dạng & Bộ giải mã (Codec)",

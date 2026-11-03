@@ -5,7 +5,7 @@ import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
 import { useToolTaskManager } from '~/composables/useToolTaskManager'
 import { useFileSystem } from '~/composables/useFileSystem'
-import { compileTimelineToFfmpeg } from '~/utils/tmcut/compiler'
+import { compileTimelineToFfmpeg, selectExportTracks } from '~/utils/tmcut/compiler'
 import type { TmcutCompileMode } from '~/utils/tmcut/compiler'
 import { canvasFpsValue } from '~/utils/tmcut/canvas'
 import { tmcutHostBridge, tmcutHostIpc } from '~/utils/tmcut/hostBridge'
@@ -392,27 +392,16 @@ const posterUrl = computed(() => {
   return asset?.thumbPath ? mediaUrl(asset.thumbPath) : ''
 })
 
-// Honest warning for the parallel-track gap (R122): the preview scans
-// every video/text track, but compileTimelineToFfmpeg still takes only
-// the FIRST of each. Whenever a SECOND track of a rendered type carries
-// clips, the exported file will not match the preview — warn instead of
-// surprising the user with missing layers.
+// Honest warning for the parallel-track gap (R122, narrowed in V4 Phase 2 (5)):
+// the compiler reads its rows through `selectExportTracks`, the same rule the
+// preview's evaluator uses — every visible caption row is painted and hidden
+// rows are not. The one thing it still cannot do is STACK two footage rows:
+// the graph builds a single concat chain, so only the base row reaches the
+// file. Read that fact from the selector instead of hand-rolling a second
+// answer here, or the warning and the export drift apart again.
 const parallelTracksWarning = computed(() => {
-  const tracks = currentProject.value?.timeline?.tracks
-  if (!tracks) return false
-  let seenVideo = false
-  let seenText = false
-  for (const track of tracks) {
-    if ((track.items || []).length === 0) continue
-    if (track.type === 'video') {
-      if (seenVideo) return true
-      seenVideo = true
-    } else if (track.type === 'text') {
-      if (seenText) return true
-      seenText = true
-    }
-  }
-  return false
+  if (!currentProject.value) return false
+  return selectExportTracks(currentProject.value).extraVideoTracks.length > 0
 })
 
 const formatOptions = computed(() => [
@@ -1422,10 +1411,11 @@ function previewResultDirectly() {
           </div>
         </div>
 
-        <!-- Multi-track honesty banner (R122): the ffmpeg compiler
-             consumes the FIRST video/text track only, so parallel tracks
-             preview but are not exported yet. Say so instead of shipping
-             a silent surprise file. -->
+        <!-- Multi-track honesty banner (R122, narrowed by V4 Phase 2 (5)):
+             the compiler paints every visible text row and skips hidden
+             ones, so only PARALLEL FOOTAGE rows are still preview-only —
+             one concat chain per file. Say so instead of shipping a
+             silent surprise. -->
         <div
           v-if="parallelTracksWarning"
           class="mx-5 mb-2 px-3 py-2 rounded-lg bg-warning-500/10 border border-warning-500/30 flex items-start gap-2 shrink-0"

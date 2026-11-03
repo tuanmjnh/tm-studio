@@ -11,7 +11,7 @@ import { applyTextOverlays } from './text'
 import { compileAudioOnly, compileBackgroundAudio } from './audio'
 import { compileVideoPipeline } from './video'
 import { buildVideoCodecArgs, buildAudioCodecArgs, buildGifPipeline } from './encoder'
-import { renderVideoClips, renderAudioClips, renderTextClips, renderClipDuration } from './clip'
+import { renderVideoClips, renderAudioClips, renderTextClips, renderClipDuration, selectExportTracks } from './clip'
 import { buildBackgroundSource, transitionWindows } from 'tmcut-core'
 
 // Re-export all sub-modules for clean consuming
@@ -38,17 +38,24 @@ export function compileTimelineToFfmpeg(
   const fps = canvasFpsValue(project.canvas)
   const mode: TmcutCompileMode = options.mode || 'video'
 
-  const videoTrack = project.timeline.tracks.find(t => t.type === 'video')
-  const textTrack = project.timeline.tracks.find(t => t.type === 'text')
-  // R124 A1: EVERY audio track (not just the first one) — a CapCut-style
-  // project layers music, voiceover and SFX on separate rows and they all
-  // mix into the output bus. `renderAudioClips` now takes the whole array.
-  const audioTracks = project.timeline.tracks.filter(t => t.type === 'audio')
+  // V4 Phase 2 (5): one selection rule for preview and export. The preview
+  // asks `evaluateTimeline`, which reads every track and drops a hidden one;
+  // the export used to `.find()` the first video track and the first text
+  // track and never consult `hidden`, so the file could not match the screen
+  // in either direction.
+  const selection = selectExportTracks(project)
+  const videoTrack = selection.videoBase
 
   // C16-R2: single mapping boundary app-model → render canonical view (@see clip.ts).
   const videoClips = renderVideoClips(videoTrack)
-  const textClips = renderTextClips(textTrack)
-  const audioClips = renderAudioClips(audioTracks)
+  const textClips = renderTextClips(selection.textTracks)
+  // R124 A1: EVERY audio track (not just the first one) — a CapCut-style
+  // project layers music, voiceover and SFX on separate rows and they all
+  // mix into the output bus. `renderAudioClips` takes the whole array.
+  const audioClips = renderAudioClips(selection.audioTracks)
+  // Footage rows the preview paints but the graph cannot stack yet: no
+  // inputs, but they still belong to the timeline extent below.
+  const extraVideoClips = selection.extraVideoTracks.flatMap(renderVideoClips)
 
   // Timeline extent in seconds. Every track counts, because the store's
   // contentDuration (useTmcutProject.ts) does: a caption that starts after the
@@ -60,6 +67,9 @@ export function compileTimelineToFfmpeg(
   let footageEnd = 0
   for (const clip of videoClips) {
     footageEnd = Math.max(footageEnd, clip.offsetSec + renderClipDuration(clip))
+    totalDuration = Math.max(totalDuration, clip.offsetSec + renderClipDuration(clip))
+  }
+  for (const clip of extraVideoClips) {
     totalDuration = Math.max(totalDuration, clip.offsetSec + renderClipDuration(clip))
   }
   for (const clip of textClips) {

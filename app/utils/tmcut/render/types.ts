@@ -77,4 +77,14 @@ export type TextOverlayClip = Pick<
   | 'animInDuration'
   | 'animOut'
   | 'animOutDuration'
->
+> & {
+  /**
+   * Timeline span in SECONDS, decoded from the clip's whole-tick span
+   * (`RenderClip.durationTicks`). The drawtext window and the plate length
+   * are derived from this number instead of `(out - in) / speed`, so the
+   * export cannot end a caption on a different instant than the evaluator
+   * does when the span does not divide evenly by the speed. Absent only for
+   * hand-built overlays (specs, legacy callers), which keep the old maths.
+   */
+  durationSec?: number
+}

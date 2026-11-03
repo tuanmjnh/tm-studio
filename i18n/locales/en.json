@@ -1042,7 +1042,7 @@
       "audioMp3Spec": "MP3 · {kbps} kbps · 48 kHz",
       "audioWavSpec": "WAV · PCM 16-bit · 48 kHz",
       "gifNote": "15 fps · up to 1280 px wide · optimized palette",
-      "parallelTracksWarning": "This project uses parallel video/text tracks. The exporter currently renders only the first track of each type — upper layers are preview-only and will be missing from the file.",
+      "parallelTracksWarning": "This project has parallel video tracks. The export composites only the first visible footage row; the others still set the file's length but their picture stays preview-only. Text and audio rows export in full.",
       "etaLabel": "ETA",
       "labelSize": "Size",
       "formatLabel": "Format & Codec",
