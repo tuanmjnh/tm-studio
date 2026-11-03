@@ -49,6 +49,57 @@ export interface VideoPipelineContext {
 }
 
 /**
+ * How long this pair overlaps, in seconds, exactly as core reported it — and
+ * zero when it is not an intact window. ONE place asks the question, so the
+ * fold below and the pad walk in `leadingPads` cannot disagree about where the
+ * chain actually is.
+ *
+ * A trim can leave a stored duration longer than either clip. The model still
+ * opens the window (it only tests adjacency), and xfade with an over-long
+ * duration is not well-defined, so the pair is treated as no overlap at all and
+ * concatenates.
+ */
+function overlapSec(prev: RenderClip, curr: RenderClip, windows: TmcutTransitionWindow[]): number {
+  const window = windows.find(w => w.fromId === prev.id && w.toId === curr.id) ?? null
+  const transSec = window ? ticksToSec(window.endTicks - window.startTicks) : 0
+  return transSec > 0 && transSec <= Math.min(prev.durationTicks, curr.durationTicks) ? transSec : 0
+}
+
+/**
+ * Seconds of canvas to paint BEFORE each clip (V4 Phase 2, slice #94).
+ *
+ * A timeline row is POSITIONED, a concat chain is SEQUENCE. `offsetSec` is
+ * absolute, but the chain butts every clip against the previous one, so a gap
+ * moved the rest of the footage earlier than the preview shows it — while the
+ * audio bus (`adelay`, audio.ts) and the drawtext windows stayed at the
+ * authored time. A gapped row therefore exported a file that was shorter than
+ * the timeline it claims to render, with its picture early, its sound in the
+ * right place, and its captions over the wrong footage.
+ *
+ * The walk runs the same cursor the fold does, and asks it the same question
+ * through `overlapSec`: a clip that crossfades overlaps by definition, so it
+ * never pads. A gap shorter than one output frame cannot be painted at all, and
+ * padding it would rewrite the graph of every contiguous project for nothing —
+ * so those exports stay byte-identical.
+ */
+function leadingPads(videoClips: RenderClip[], ctx: VideoPipelineContext): number[] {
+  const frameSec = 1 / ctx.fps
+  const pads: number[] = []
+  let cursor = 0
+  for (let index = 0; index < videoClips.length; index++) {
+    const clip = videoClips[index]!
+    const prev = index > 0 ? videoClips[index - 1]! : null
+    const transSec = prev ? overlapSec(prev, clip, ctx.transitionWindows) : 0
+    const chainStart = cursor - transSec
+    const gap = Math.max(0, clip.offsetSec - chainStart)
+    const pad = gap >= frameSec ? gap : 0
+    pads.push(pad)
+    cursor = chainStart + pad + renderClipDuration(clip)
+  }
+  return pads
+}
+
+/**
  * Compiles normal video clips, fitting, effects, transform/opacity, and
  * concatenates them with transitions. C16-R2: consumes RenderClip —
  * the render canonical view — never app-model v1 fields directly.
@@ -60,8 +111,26 @@ export function compileVideoPipeline(
 ): { videoStream: string, audioStream: string | null } {
   const vStreams: string[] = []
   const aStreams: string[] = []
+  const pads = leadingPads(videoClips, ctx)
+  let clipIndex = 0
 
   for (const clip of videoClips) {
+    const leadPad = pads[clipIndex] ?? 0
+    clipIndex++
+    // The pad is one filter at the END of the clip's own chain, after the fit
+    // and the sar lock, so the canvas frames it inserts are already the canvas
+    // size the concat expects — and the alpha/blend branches, which overlay the
+    // clip onto a background sized to the CLIP, are not shortened by it.
+    const padFilter = leadPad > 0
+      ? `tpad=start_mode=add:start_duration=${leadPad.toFixed(3)}:color=${ctx.bgColor}`
+      : ''
+    // The audio lane of the same segment has to carry the same silence, or the
+    // `concat=…:a=1` pairing drifts: a video-only pad would leave the next
+    // clip's sound a whole gap early.
+    const padAudio = leadPad > 0
+      ? `,adelay=${Math.round(leadPad * 1000)}|${Math.round(leadPad * 1000)}`
+      : ''
+
     // Stills decode to a single frame and carry no audio lane: the core still
     // law loops them and bounds the loop to the clip span plus transform
     // headroom (both emitted BEFORE -i), and gives a vector still the canvas
@@ -195,7 +264,12 @@ export function compileVideoPipeline(
     } else {
       graph.addFilterChain(`${clipChain}${vOut}`)
     }
-    vStreams.push(vOut)
+    let streamOut = vOut
+    if (padFilter) {
+      streamOut = `[v_pad_${currentInputIdx}]`
+      graph.addFilterChain(`${vOut}${padFilter}${streamOut}`)
+    }
+    vStreams.push(streamOut)
 
     if (ctx.hasAudio) {
       const aTrimmed = `[a_trim_${currentInputIdx}]`
@@ -205,7 +279,7 @@ export function compileVideoPipeline(
         // emitted `[i:a]` specifier matched nothing and ffmpeg rejected the
         // whole graph — an image clip made any export fail).
         graph.addFilterChain(
-          `anullsrc=r=44100:cl=stereo,atrim=end=${clipDuration.toFixed(3)},asetpts=PTS-STARTPTS${aTrimmed}`
+          `anullsrc=r=44100:cl=stereo,atrim=end=${clipDuration.toFixed(3)},asetpts=PTS-STARTPTS${padAudio}${aTrimmed}`
         )
         aStreams.push(aTrimmed)
       } else {
@@ -222,7 +296,7 @@ export function compileVideoPipeline(
         const aSetpts = speed !== 1 ? `asetpts=(PTS-STARTPTS)/${speed}` : 'asetpts=PTS-STARTPTS'
         const aReverse = clip.raw.reverse ? 'areverse,' : ''
         graph.addFilterChain(
-          `[${currentInputIdx}:a]atrim=start=${clip.inSec}:end=${clip.outSec},${aReverse}${aSetpts},${volFilter}${fadeFilter(clip)}${aTrimmed}`
+          `[${currentInputIdx}:a]atrim=start=${clip.inSec}:end=${clip.outSec},${aReverse}${aSetpts},${volFilter}${fadeFilter(clip)}${padAudio}${aTrimmed}`
         )
         aStreams.push(aTrimmed)
       }
@@ -250,28 +324,21 @@ export function compileVideoPipeline(
     graph.addFilterChain(`${vStreams[0]}settb=1/${ctx.fps},fps=${ctx.fps}[v_chain_0]`)
     let currentV = '[v_chain_0]'
     let currentA = ctx.hasAudio ? aStreams[0]! : ''
-    let runningDuration = renderClipDuration(videoClips[0]!)
+    let runningDuration = renderClipDuration(videoClips[0]!) + (pads[0] ?? 0)
 
     for (let i = 1; i < videoClips.length; i++) {
       const prevClip = videoClips[i - 1]!
       const currClip = videoClips[i]!
       const currDur = renderClipDuration(currClip)
-      // One question, one answer: is this cut an overlap the model reports?
-      // `fromId` must be the clip the export actually plays before this one,
-      // so a pair separated by an unrendered item falls through to concat
-      // exactly as it did when the compiler checked adjacency itself.
-      const window = ctx.transitionWindows.find(
-        w => w.fromId === prevClip.id && w.toId === currClip.id
-      ) ?? null
-      // Window spans are whole ticks; the old decode of `transitionIn.duration`
-      // was the same number, so valid pairs keep emitting identical arguments.
-      const transTicks = window ? window.endTicks - window.startTicks : 0
-      const transSec = ticksToSec(transTicks)
-      // A trim can leave a stored duration longer than either clip. The model
-      // still opens the window (it only tests adjacency), and xfade with an
-      // over-long duration is not well-defined, so the pair still concatenates.
-      const isIntact = transTicks > 0
-        && transTicks <= Math.min(prevClip.durationTicks, currClip.durationTicks)
+      // One question, asked through the SAME helper the pad walk uses, so the
+      // cursor below and the pads above describe one chain. Window spans are
+      // whole ticks; the old decode of `transitionIn.duration` was the same
+      // number, so valid pairs keep emitting identical arguments.
+      const transSec = overlapSec(prevClip, currClip, ctx.transitionWindows)
+      const isIntact = transSec > 0
+      // A padded segment is that much chain before this clip starts, so the
+      // xfade offset and the running length both see it.
+      runningDuration += pads[i] ?? 0
 
       const nextV = `[v_in_${i}]`
       graph.addFilterChain(`${vStreams[i]}settb=1/${ctx.fps},fps=${ctx.fps}${nextV}`)
