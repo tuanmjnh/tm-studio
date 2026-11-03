@@ -168,10 +168,14 @@ export function clearTransition(timeline, clipId) {
 //  Every row is measured, not designed. Method: solid black plate -> solid white
 //  plate through `xfade=transition=<name>:duration=0.4:offset=0.8` at 320x180
 //  with `resources/ffmpeg.exe` (N-126482-g903325e279-20260909), the 12 transition
-//  frames decoded as gray, then read twice — mean luminance is the fill fraction
-//  (0 and 255 make it exact) and the 50%-luminance crossing is the boundary
-//  position. `tests/unit/tmcut_transition_preview.spec.ts` re-runs the crossing
-//  read and fails if the laws below stop matching the binary.
+//  frames decoded as gray, then read three ways — mean luminance is the fill
+//  fraction (0 and 255 make it exact), the 50%-luminance crossing is the boundary
+//  position, and which pixels are over 128 IS the shape. The third read is the
+//  one that separates a family from its mirror: a wipe, a squeeze and a closing
+//  band all cover exactly `travel` of the box, so no area number can tell them
+//  apart, and the four `*slice` keys kept their stripes until the region read said
+//  otherwise. `tests/unit/tmcut_transition_preview.spec.ts` re-runs the crossing,
+//  the area and the region reads and fails if the laws below stop matching.
 //
 //  The offset is not a free parameter: xfade's window must END where the first
 //  input ends (`offset = firstInputLength - duration`), which for these 1.2 s
@@ -184,22 +188,51 @@ export function clearTransition(timeline, clipId) {
 //  `squeezev` is the row whose verdict moved, and no key is unrenderable, so the
 //  `unavailable` shape and the export's name-degradation it drove are gone.
 //
-//  `fidelity` is part of the data, not a disclaimer: 'exact' = the law matched
-//  the measurement at >= 3 frames; 'shape' = the shape, direction and endpoints
-//  are measured but the travel curve is fitted to 1-2 frames (a wide soft band
-//  makes the fill fraction unreadable); 'approximate' = the binary does something
-//  a two-layer CSS composite cannot show (a dither, a blur, a pass through white),
-//  so only the reveal timing is carried over.
+//  `fidelity` is part of the data, not a disclaimer, and the spec's tolerance is
+//  the definition: 'exact' = the area AND the region agree with the frame to
+//  within 3% of the box; 'shape' = the shape, direction and endpoints are
+//  measured but the agreement is looser; 'approximate' = the binary does
+//  something a two-layer CSS composite cannot show (a dither, a blur, a pass
+//  through white), so only the reveal timing is carried over.
+//
+//  The region read is graded at the plate's own pixel resolution, because a
+//  coarser sample grid invents error: at 80x45 the comb rows reported 6.7% and
+//  at 320x180 the same geometry reports 1.7%. Graded that way, every hard-edged
+//  row lands at or under 1.7% (comb 0.9-1.7, squeeze 0.3-0.6, wipe 0.3-0.6,
+//  corner 0.4-0.6, slide 0.3-0.6, rect 0.3, circlecrop 0.0) and the 3% ceiling
+//  has room. What does not land is the soft-fronted set, and the numbers are the
+//  reason they are called 'shape': a hard edge painted at the measured timing
+//  differs from a wide gradient ramp by 4.7-5.0% (`smooth*`, `band`), from a
+//  diagonal ramp by 10.5% (`diag*`) and from a soft ring by 10.2% (`circleclose`,
+//  `circleopen` — the disc's own law is exact to 3% of the area, but the ring is
+//  several pixels wide and 10.2% of the box is on it). The ten `crossfade` rows
+//  have no region to grade at all: a uniform layer alpha covers every pixel.
 // =============================================================================
 
 /**
  * Travel laws: how far the shape has moved at progress p. The constants are the
  * measured curves, not a style choice — `smoother` is the soft front (RMSE 0.008
- * over 12 frames), `inOutQuad` the slice family (0.020) and, once squared into
- * the area a triangular front covers, the diagonal family as well (RMSE 0.023,
- * worst frame 5.1%), `late` the crop/zoom family (nothing before p=0.5), `iris`
- * the disc (0.0 at p=0.25, 0.5 at 0.5, 1.0 at 0.75 — measured, the iris really
- * does open in the middle half).
+ * over 12 frames), `inOutQuad` the diagonal family (once squared into the area a
+ * triangular front covers, RMSE 0.023, worst frame 5.1%), `linear` the slice
+ * family (its front position is literally `progress` in FFmpeg's band argument),
+ * `late` the crop/zoom family (nothing before p=0.5), `iris` the disc (0.0 at
+ * p=0.25, 0.5 at 0.5, 1.0 at 0.75 — measured, the iris really does open in the
+ * middle half).
+ *
+ * For the comb, `travel` is the band position, not the covered area: the area is
+ * the mean of the ten tooth fills and lags `travel` wherever the band is straddling
+ * a tooth boundary. `previewTransitionRamp` reports that mean as `coverage`.
+ *
+ * `lateCube` and `radialLag` are fits, not borrowed shapes. `circlecrop` is the
+ * crop family taken to the third power: the radius needed to reach the measured
+ * area is 0.000/0.011/0.039/0.122/0.297/0.578/0.985 at p=0.5..0.917, which
+ * `(2p-1)^3` reproduces to 0.5% RMSE — the law it replaces (nothing before
+ * p=0.7, then linear) was off by 6.2% RMSE and 19.8% of the frame. `radialLag`
+ * is the sweep's angle fraction, which the binary holds below `p` for the first
+ * third of the window (0.0 at p=1/12, 0.117 at p=0.25 against a linear 0.25) and
+ * only catches up at the end; an onset-and-power grid over the 12 frames bottoms
+ * out at (0.18, 0.9) with 1.4% RMSE, where every law already in the table sits
+ * at 7-8% and `linear` at 8.4%.
  */
 export const XFADE_POSITION_LAWS = {
   linear: p => p,
@@ -208,14 +241,10 @@ export const XFADE_POSITION_LAWS = {
   smooth: p => 3 * p * p - 2 * p * p * p,
   sqrt: p => Math.sqrt(p),
   late: p => Math.max(0, 2 * p - 1),
+  lateCube: p => Math.max(0, 2 * p - 1) ** 3,
   iris: p => Math.min(1, Math.max(0, 2 * p - 0.5)),
-  irisLate: p => Math.min(1, Math.max(0, (p - 0.7) / 0.3))
+  radialLag: p => Math.min(1, Math.max(0, (p - 0.18) / 0.82)) ** 0.9
 }
-
-/**
- * Strips per axis for the slice family: the hlslice frame repeats every 16%.
- */
-export const XFADE_COMB_PERIOD = 1 / 6
 
 /**
  * `circle()` percentages resolve against sqrt(w^2 + h^2) / sqrt(2), while the
@@ -223,6 +252,35 @@ export const XFADE_COMB_PERIOD = 1 / 6
  * covering radius is always 100/sqrt(2) % of the box, at any canvas aspect.
  */
 const CIRCLE_COVER_PCT = 100 / Math.SQRT2
+
+/**
+ * Tooth period for the slice family, as a fraction of the axis: 1/10, counted
+ * out of `fract(10.f * x / w)` in FFmpeg's `HLSLICE_TRANSITION` and confirmed by
+ * the run-length read (ten bands along x for `hlslice`/`hrslice`, along y for
+ * `vdslice`/`vuslice`). The preview used 1/6.
+ */
+export const XFADE_COMB_PERIOD = 1 / 10
+
+/** The softstep band's half-width and its rate of travel, as FFmpeg writes them. */
+const COMB_BAND = 0.5
+const COMB_RATE = 1.5
+const COMB_TEETH = Math.round(1 / XFADE_COMB_PERIOD)
+const smooth01 = t => t * t * (3 - 2 * t)
+
+/**
+ * Fill fraction of tooth `k` at front position `travel`. The band's low edge
+ * starts at `1 - 1.5 * travel` and each tooth's own length pushes it: the pixel
+ * partway into tooth k sits at `x/w = (k + f) / N`, so the crossing is the fixed
+ * point of `f = smooth01(clamp(((k + f) / N - s0) / band))`. Four iterations
+ * converge well inside a pixel at N=10.
+ */
+function combTooth(k, travel) {
+  const s0 = 1 - COMB_RATE * travel
+  const g = t => smooth01(Math.min(1, Math.max(0, (t - s0) / COMB_BAND)))
+  let f = g(k / COMB_TEETH)
+  for (let i = 0; i < 4; i++) f = g((k + f) / COMB_TEETH)
+  return f
+}
 
 /**
  * The soft fronts are measured but not painted: a gradient mask whose ramp is
@@ -247,8 +305,8 @@ export const XFADE_PREVIEW = {
   'slide-left': { shape: 'slide', from: 'right', law: 'linear', fidelity: 'exact' },
   'zoom-in': { shape: 'crossfade', law: 'late', fidelity: 'approximate', note: 'scale is invisible on a solid plate' },
   'circleclose': { shape: 'hole', law: 'iris', fidelity: 'shape', note: 'soft ring around the disc' },
-  'circlecrop': { shape: 'iris', law: 'irisLate', fidelity: 'shape' },
-  'circleopen': { shape: 'iris', law: 'iris', fidelity: 'exact' },
+  'circlecrop': { shape: 'iris', law: 'lateCube', fidelity: 'exact' },
+  'circleopen': { shape: 'iris', law: 'iris', fidelity: 'shape', note: 'soft ring around the disc' },
   'diagbl': { shape: 'diag', from: 'top right', law: 'inOutQuad', fidelity: 'shape', note: SOFT_EDGE },
   'diagbr': { shape: 'diag', from: 'top left', law: 'inOutQuad', fidelity: 'shape', note: SOFT_EDGE },
   'diagtl': { shape: 'diag', from: 'bottom right', law: 'inOutQuad', fidelity: 'shape', note: SOFT_EDGE },
@@ -258,12 +316,26 @@ export const XFADE_PREVIEW = {
   'fadegrays': { shape: 'crossfade', law: 'linear', fidelity: 'approximate', note: 'desaturated blend' },
   'fadewhite': { shape: 'crossfade', law: 'sqrt', tint: 'white', fidelity: 'approximate' },
   'hblur': { shape: 'crossfade', law: 'linear', fidelity: 'approximate', note: 'blur ramp' },
-  'hlslice': { shape: 'comb', from: 'right', law: 'inOutQuad', fidelity: 'shape' },
-  'hrslice': { shape: 'comb', from: 'left', law: 'inOutQuad', fidelity: 'shape' },
+  // There is a comb family, and it is not the one this table first carried. Read
+  // as runs of incoming pixels along the axis, `hlslice` at p=0.5 fills
+  // 0.000/0.000/0.000/0.006/0.31/0.72/0.97/1/1/1 of ten equal bands — 10 teeth
+  // (period 1/10 of the axis), each filled from its own low end, with the fill
+  // fraction increasing toward the edge the key names (`hlslice` from the right,
+  // `hrslice` the left, `vdslice` the top, `vuslice` the bottom). The old row
+  // had 6 teeth of a uniform width, so the preview painted a different comb than
+  // the export: same area, wrong cut. Guards: `tmcut_transition_preview` grades
+  // the tooth positions against the frame.
+  'hlslice': { shape: 'comb', from: 'right', law: 'linear', fidelity: 'exact' },
+  'hrslice': { shape: 'comb', from: 'left', law: 'linear', fidelity: 'exact' },
   'horzclose': { shape: 'band', travel: 'y', mode: 'close', law: 'smoother', fidelity: 'shape', note: SOFT_EDGE },
   'horzopen': { shape: 'band', travel: 'y', mode: 'open', law: 'smoother', fidelity: 'shape', note: SOFT_EDGE },
   'pixelize': { shape: 'crossfade', law: 'linear', fidelity: 'approximate', note: 'block ramp' },
-  'radial': { shape: 'pie', law: 'linear', fidelity: 'shape', note: 'area lags the angle near the corners' },
+  // The sweep's origin and direction are the model's (measured against the
+  // frame: the wedge grows from 12 o'clock clockwise), only its timing lags —
+  // see `radialLag`. The fidelity stays `shape` because the conic area bursts
+  // twice per turn, at the corners, where d(area)/d(angle) is 4x the value at
+  // the edge midpoints: 1.4% of travel costs 3.0% of the frame.
+  'radial': { shape: 'pie', law: 'radialLag', fidelity: 'shape', note: 'corner bursts amplify the law error into the area' },
   'rectcrop': { shape: 'rect', law: 'late', fidelity: 'exact' },
   'slidedown': { shape: 'slide', from: 'top', law: 'linear', fidelity: 'exact' },
   'slideright': { shape: 'slide', from: 'left', law: 'linear', fidelity: 'exact' },
@@ -291,8 +363,8 @@ export const XFADE_PREVIEW = {
   'squeezev': { shape: 'squeeze', travel: 'x', law: 'linear', fidelity: 'exact' },
   'vertclose': { shape: 'band', travel: 'x', mode: 'close', law: 'smoother', fidelity: 'shape', note: SOFT_EDGE },
   'vertopen': { shape: 'band', travel: 'x', mode: 'open', law: 'smoother', fidelity: 'shape', note: SOFT_EDGE },
-  'vdslice': { shape: 'comb', from: 'top', law: 'inOutQuad', fidelity: 'shape' },
-  'vuslice': { shape: 'comb', from: 'bottom', law: 'inOutQuad', fidelity: 'shape' },
+  'vdslice': { shape: 'comb', from: 'top', law: 'linear', fidelity: 'exact' },
+  'vuslice': { shape: 'comb', from: 'bottom', law: 'linear', fidelity: 'exact' },
   'wipebl': { shape: 'corner', from: 'bl', law: 'linear', fidelity: 'exact' },
   'wipebr': { shape: 'corner', from: 'br', law: 'linear', fidelity: 'exact' },
   'wipedown': { shape: 'wipe', from: 'top', law: 'linear', fidelity: 'exact' },
@@ -356,16 +428,15 @@ function edgeBands(dir, travel) {
   return `linear-gradient(to ${dir}, #000 0 ${in1}, transparent ${in1} ${in2}, #000 ${in2})`
 }
 
-/** One mask layer needs the gradient stretched over the box, never tiled. */
+/** One mask layer covers the box once; a tiled mask would repeat the front. */
 function maskLayers(image) {
-  const repeat = image.startsWith('repeating') ? 'repeat' : 'no-repeat'
   return {
     maskImage: image,
     webkitMaskImage: image,
     maskSize: '100% 100%',
     webkitMaskSize: '100% 100%',
-    maskRepeat: repeat,
-    webkitMaskRepeat: repeat
+    maskRepeat: 'no-repeat',
+    webkitMaskRepeat: 'no-repeat'
   }
 }
 
@@ -432,10 +503,21 @@ export function previewTransitionRamp(type, p) {
       break
     }
     case 'comb': {
-      const solid = pct(travel * XFADE_COMB_PERIOD)
-      Object.assign(incoming, maskLayers(
-        `repeating-linear-gradient(to ${TRAVEL_DIR[spec.from]}, #000 0 ${solid}, transparent ${solid} ${pct(XFADE_COMB_PERIOD)})`
-      ))
+      // One gradient, `COMB_TEETH` teeth, each filled from its own low end by the
+      // crossing computed above. No tile, no repeat: the stop list covers the box
+      // exactly once, so the tooth positions are box fractions at any aspect.
+      const stops = []
+      let sum = 0
+      for (let k = 0; k < COMB_TEETH; k++) {
+        const f = combTooth(k, travel)
+        sum += f
+        const start = pct(k / COMB_TEETH)
+        const end = pct((k + f) / COMB_TEETH)
+        const next = pct((k + 1) / COMB_TEETH)
+        stops.push(`#000 ${start} ${end}`, `transparent ${end} ${next}`)
+      }
+      Object.assign(incoming, maskLayers(`linear-gradient(to ${spec.from}, ${stops.join(', ')})`))
+      coverage = sum / COMB_TEETH
       break
     }
     case 'corner': {

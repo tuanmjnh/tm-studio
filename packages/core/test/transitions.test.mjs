@@ -9,11 +9,35 @@ import {
   transitionWindows,
   XFADE_PREVIEW,
   XFADE_POSITION_LAWS,
+  XFADE_COMB_PERIOD,
   previewTransitionRamp
 } from '../src/transitions.mjs'
 import { addClip } from '../src/timeline.mjs'
 import { defaultTimeline } from '../src/project.mjs'
 import { secToTicks, TICKS_PER_SECOND } from '../src/time.mjs'
+
+/**
+ * Read a comb back out of the CSS the model emits: one tooth per inked/gap stop
+ * pair, `start` the tooth's low edge as a fraction of the axis and `fill` its
+ * fill fraction (0..1), both ordered along the direction the gradient runs.
+ */
+function combTeeth(css) {
+  const body = String(css).replace(/^linear-gradient\(([a-z -]+), /, '$1|').split('|')[1]
+    .replace(/\)$/, '')
+  const stops = body.split(', ').map((stop) => {
+    const [colour, from, to] = stop.trim().split(/\s+/)
+    return { colour, from: Number.parseFloat(from) / 100, to: Number.parseFloat(to) / 100 }
+  })
+  const teeth = []
+  for (let i = 0; i < stops.length; i += 2) {
+    const ink = stops[i]
+    const gap = stops[i + 1]
+    assert.equal(ink.colour, '#000', 'a comb tooth must open on the inked stop')
+    assert.equal(gap.colour, 'transparent', 'a comb tooth must close on the gap')
+    teeth.push({ start: ink.from, fill: (ink.to - ink.from) / XFADE_COMB_PERIOD })
+  }
+  return teeth.sort((a, b) => a.start - b.start)
+}
 
 const SHAPES = ['crossfade', 'wipe', 'softwipe', 'slide', 'squeeze', 'diag', 'band', 'comb',
   'corner', 'iris', 'hole', 'rect', 'pie']
@@ -409,6 +433,70 @@ describe('xfade preview geometry (V4 G16)', () => {
     // horzopen cuts a horizontal band (front along y), vertopen a vertical one.
     assert.equal(XFADE_PREVIEW.horzopen.travel, 'y')
     assert.equal(XFADE_PREVIEW.vertopen.travel, 'x')
+  })
+
+  it('the slice family is ten teeth on a travelling band, not one front', () => {
+    // FFmpeg's `HLSLICE_TRANSITION` compares `fract(10 * x / w)` against a
+    // smoothstep band whose position is `x / w - 1.5 * progress`: ten teeth, a
+    // band half the axis wide, and a front that moves LINEARLY with progress.
+    // Each tooth fills on the side still outgoing, so the teeth nearest the entry
+    // edge are the last to fill.
+    const FROM = { hlslice: 'right', hrslice: 'left', vdslice: 'top', vuslice: 'bottom' }
+    for (const [key, from] of Object.entries(FROM)) {
+      assert.equal(XFADE_PREVIEW[key].shape, 'comb', `${key} is not a comb`)
+      assert.equal(XFADE_PREVIEW[key].from, from, `${key} reveals from the wrong edge`)
+      assert.equal(XFADE_PREVIEW[key].law, 'linear', `${key} lost the slice timing`)
+      const teeth = combTeeth(previewTransitionRamp(key, 0.5).incoming.maskImage)
+      assert.equal(teeth.length, Math.round(1 / XFADE_COMB_PERIOD), `${key}: wrong tooth count`)
+      assert.ok(teeth[teeth.length - 1].fill > 0.94, `${key}: the entry-edge tooth is not whole at p=0.5`)
+      for (let k = 1; k < teeth.length; k++) {
+        assert.ok(teeth[k].fill >= teeth[k - 1].fill - 0.06, `${key}: fills must grow toward ${from}`)
+        assert.ok(Math.abs(teeth[k].start - k * XFADE_COMB_PERIOD) < 1e-6, `${key}: tooth ${k} is off-grid`)
+      }
+    }
+    // The tooth fills of `hlslice` at p=0.5, read band by band off the rendered
+    // frame. A single hard front cannot produce this row.
+    const MEASURED = [0, 0, 0, 0.06, 0.31, 0.72, 0.97, 1, 1, 1]
+    combTeeth(previewTransitionRamp('hlslice', 0.5).incoming.maskImage).forEach((tooth, k) => {
+      assert.ok(Math.abs(tooth.fill - MEASURED[k]) <= 0.08,
+        `hlslice tooth ${k}: model ${tooth.fill.toFixed(2)} against measured ${MEASURED[k].toFixed(2)}`)
+    })
+    // Coverage is the mean of the teeth, and it rises over the window even though
+    // the individual fills jump.
+    let previous = -1
+    for (const p of FRAMES) {
+      const ramp = previewTransitionRamp('hlslice', p)
+      const sum = combTeeth(ramp.incoming.maskImage).reduce((acc, tooth) => acc + tooth.fill, 0)
+      assert.ok(Math.abs(ramp.coverage - sum / 10) < 0.006, `hlslice @${p}: coverage is not the mean tooth fill`)
+      assert.ok(ramp.coverage >= previous - 1e-9, `hlslice @${p}: coverage went backwards`)
+      previous = ramp.coverage
+    }
+    assert.equal(previewTransitionRamp('hlslice', 0).coverage, 0)
+    assert.equal(previewTransitionRamp('hlslice', 1).coverage, 1)
+    for (const key of KNOWN_TRANSITIONS) {
+      for (const p of [0.25, 0.5, 0.75]) {
+        const ramp = previewTransitionRamp(key, p)
+        for (const layer of [ramp.incoming, ramp.outgoing]) {
+          assert.ok(!String(layer.maskImage || '').startsWith('repeating'),
+            `${key} @${p}: a tiled mask is back — no rendered key stripes`)
+        }
+      }
+    }
+  })
+
+  it('the crop and the sweep start late, as the 12 frames measured', () => {
+    // `circlecrop` shows no incoming at all through the first half of the window
+    // (radius 0 at p=0.5, 0.125 of the covering radius at 0.75) and `radial`
+    // holds its angle below the linear ramp until p passes 0.18. Both are fits,
+    // and a fit only means something while these numbers hold.
+    assert.equal(XFADE_POSITION_LAWS.lateCube(0.5), 0)
+    assert.equal(XFADE_POSITION_LAWS.lateCube(0.75), 0.125)
+    assert.equal(XFADE_POSITION_LAWS.lateCube(1), 1)
+    assert.equal(previewTransitionRamp('circlecrop', 0.5).incoming.clipPath, 'circle(0.00% at 50% 50%)')
+    assert.equal(XFADE_POSITION_LAWS.radialLag(0.18), 0)
+    assert.ok(XFADE_POSITION_LAWS.radialLag(0.5) < 0.5, 'the sweep must lag the linear ramp mid-window')
+    assert.ok(XFADE_POSITION_LAWS.radialLag(0.5) > 0.35,
+      `the sweep only lagged ${(XFADE_POSITION_LAWS.radialLag(0.5) * 100).toFixed(1)}% of the box`)
   })
 
   it('the disc radius that covers the box is aspect-independent', () => {

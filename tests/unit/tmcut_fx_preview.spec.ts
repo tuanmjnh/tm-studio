@@ -22,7 +22,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { EFFECT_REGISTRY, KNOWN_TRANSITIONS, XFADE_PREVIEW, fxCapabilities, lut3dChain } from 'tmcut-core'
+import { EFFECT_REGISTRY, KNOWN_TRANSITIONS, XFADE_COMB_PERIOD, XFADE_PREVIEW, fxCapabilities, lut3dChain } from 'tmcut-core'
 import {
   resolveFxPreview,
   effectAdapterKeys,
@@ -118,9 +118,9 @@ check('the squeeze and band cards animate on the axis core measured', () => {
   // private, so this pin reads the axis off the CSS the resolver really emits:
   // a card that animates scaleX while core says the front travels y is the
   // axis-swap bug that survived every recorded area measurement.
-  // `slice` and `smooth` are deliberately outside this guard: their `axis`
-  // names the stripe / gradient orientation, which core expresses through
-  // `from`, not `travel`.
+  // `slice` has its own guard below (a comb has teeth to count, a band does
+  // not) and `smooth` is outside both: its `axis` names the gradient
+  // orientation, which core expresses through `from`, not `travel`.
   const geometric = Object.entries(XFADE_PREVIEW)
     .filter(([, row]) => row.shape === 'squeeze' || row.shape === 'band')
     .map(([key, row]) => [key, row] as const)
@@ -163,6 +163,40 @@ check('the squeeze and band cards animate on the axis core measured', () => {
     return null
   }
   assert.notEqual(axisFor('squeezeh'), axisFor('squeezev'), 'both squeezes paint the same front')
+})
+
+check('the slice cards cut the comb core measured, ten teeth on its axis', () => {
+  // The four `*slice` rows are not wipes: measured tooth by tooth they are ten
+  // stripes whose fills are set by one travelling band, and the axis the teeth
+  // vary along is the axis core's `from` edge lies on. The card table carried
+  // them transposed (vertical teeth on 'y') with six stripes of its own width,
+  // so the picker drew a comb the export never cuts. `smooth` rows stay out of
+  // this guard: their `axis` names a gradient orientation, and core expresses
+  // that through `from` too, but a soft front has no tooth to count.
+  const combRows = Object.entries(XFADE_PREVIEW).filter(([, row]) => row.shape === 'comb')
+  assert.deepEqual(combRows.map(([key]) => key).sort(), ['hlslice', 'hrslice', 'vdslice', 'vuslice'],
+    'core rows on the comb family')
+  const AXIS_OF_EDGE: Record<string, 'x' | 'y'> = { left: 'x', right: 'x', top: 'y', bottom: 'y' }
+  for (const [key, row] of combRows) {
+    const layers = anim(key, true, {}, 'transition').layers
+    const striped = layers.map(l => String(l.maskImage || '')).find(v => v.startsWith('repeating-linear-gradient('))
+    assert.ok(striped, `${key}: a comb row paints no striped mask`)
+    const animated = layers.find(l => String(l.animation || '').startsWith('tmfxt-slice-'))
+    assert.ok(animated, `${key}: no slice reveal animation`)
+    const axis = /tmfxt-slice-([xy])/.exec(String(animated.animation).split(' ')[0])?.[1]
+    assert.equal(axis, AXIS_OF_EDGE[String(row.from)],
+      `${key} cuts teeth along ${axis}, but core reveals from ${row.from} — the card paints the other comb`)
+    // One repeat of the gradient is a tooth plus a gap, and the mask is painted
+    // at `maskSize` of the card, so the card shows 100 / (repeat * scale) teeth.
+    const repeat = parseFloat(/transparent [\d.]+% ([\d.]+)%\)/.exec(striped)?.[1] || '0')
+    // The mask is stretched to 200% along the axis the teeth vary on, so that
+    // is the dimension the gradient's own percentage resolves against.
+    const [w, h = w] = String(animated.maskSize || '0 0').split(/\s+/).map(v => parseFloat(v) || 0)
+    const scale = (axis === 'y' ? h : w) / 100
+    const teeth = Math.round(100 / (repeat * scale))
+    assert.equal(teeth, Math.round(1 / XFADE_COMB_PERIOD),
+      `${key}: the card shows ${teeth} teeth, the binary cuts ${Math.round(1 / XFADE_COMB_PERIOD)} (period ${XFADE_COMB_PERIOD})`)
+  }
 })
 
 // 3. PARAMS ------------------------------------------------------------------

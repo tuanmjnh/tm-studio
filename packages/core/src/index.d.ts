@@ -628,7 +628,9 @@ export function transitionWindows(
 // --- Transitions: preview geometry (V4 G16) ---
 // The numbers below are MEASURED against the bundled FFmpeg (solid-plate
 // renders of every xfade key), not chosen. The preview player applies the CSS
-// this section returns and makes no geometry decision of its own.
+// this section returns and makes no geometry decision of its own. `comb` is the
+// striped family: the four `*slice` keys cut the plate into ten teeth whose fills
+// are set by one travelling band, so their rows are not wipes.
 export type TmcutXfadeShape
   = 'crossfade' | 'wipe' | 'softwipe' | 'slide' | 'squeeze' | 'diag' | 'band' | 'comb'
     | 'corner' | 'iris' | 'hole' | 'rect' | 'pie'
@@ -636,6 +638,8 @@ export type TmcutXfadeFidelity = 'exact' | 'shape' | 'approximate'
 
 /** How far a shape has travelled at progress p (0 = outgoing whole, 1 = incoming). */
 export const XFADE_POSITION_LAWS: Record<string, (p: number) => number>
+/** Tooth period of the slice family, as a fraction of the axis (ten teeth). */
+export const XFADE_COMB_PERIOD: number
 /** Shape + law + fidelity per xfade key; every `KNOWN_TRANSITIONS` member has one. */
 export const XFADE_PREVIEW: Record<string, {
   shape: TmcutXfadeShape
@@ -647,8 +651,6 @@ export const XFADE_PREVIEW: Record<string, {
   mode?: string
   tint?: string
 }>
-/** Strip period for the slice family, as a fraction of the axis. */
-export const XFADE_COMB_PERIOD: number
 
 export interface TmcutPreviewLayerStyle {
   opacity: number

@@ -500,15 +500,19 @@ const TRANSITION_PREVIEW: Record<string, FxTransitionPreview> = {
   'smoothright': { primitive: 'smooth', axis: 'x', reverse: true },
   'smoothup': { primitive: 'smooth', axis: 'y' },
   'smoothdown': { primitive: 'smooth', axis: 'y', reverse: true },
-  'hlslice': { primitive: 'slice', axis: 'y' },
-  'hrslice': { primitive: 'slice', axis: 'y', reverse: true },
-  'vdslice': { primitive: 'slice', axis: 'x' },
-  'vuslice': { primitive: 'slice', axis: 'x', reverse: true },
+  'hlslice': { primitive: 'slice', axis: 'x' },
+  'hrslice': { primitive: 'slice', axis: 'x', reverse: true },
+  'vdslice': { primitive: 'slice', axis: 'y' },
+  'vuslice': { primitive: 'slice', axis: 'y', reverse: true },
   // `axis` is the axis the FRONT travels along, the same variable core calls
   // `travel`, and both come from the band geometry the bundled FFmpeg renders —
   // never from the key name. `squeezeh` opens at the top and bottom edges and
   // `horzopen`/`horzclose` cut a horizontal band, so all three are 'y' here even
-  // though their names say otherwise. Guard: `tmcut_fx_preview` pins this table
+  // though their names say otherwise. The `*slice` keys are combs: the teeth vary
+  // along the axis the front travels, so `hlslice`/`hrslice` cut vertical teeth on
+  // 'x' and `vdslice`/`vuslice` horizontal teeth on 'y' — core's `from` names the
+  // edge the fill reaches first, and `tmcut_fx_preview` pins the two against pixels.
+  // Guard: `tmcut_fx_preview` pins this table
   // against `XFADE_PREVIEW.travel`, and `tmcut_transition_preview` pins `travel`
   // against pixels.
   'squeezeh': { primitive: 'squeeze', axis: 'y' },
@@ -528,10 +532,12 @@ const mirrorY = (style: CSSProperties): CSSProperties => ({ ...style, transform:
 function reveal(spec: FxTransitionPreview): CSSProperties {
   const anim = (name: string): CSSProperties => ({ animation: `${name} var(--tmfx-dur) ease-in-out infinite` })
   const withMask = (direction: 'x' | 'y', travel: string, bands = false): CSSProperties => {
+    // The striped mask is twice the card wide, so one tooth is 5% of the gradient
+    // line: ten teeth across the card, which is the period FFmpeg measures.
     const image = bands
       ? (direction === 'x'
-          ? 'repeating-linear-gradient(to right, #000 0 12%, transparent 12% 24%)'
-          : 'repeating-linear-gradient(to bottom, #000 0 12%, transparent 12% 24%)')
+          ? 'repeating-linear-gradient(to right, #000 0 2.5%, transparent 2.5% 5%)'
+          : 'repeating-linear-gradient(to bottom, #000 0 2.5%, transparent 2.5% 5%)')
       : (direction === 'x'
           ? 'linear-gradient(to right, #000 0 40%, transparent 60%)'
           : 'linear-gradient(to bottom, #000 0 40%, transparent 60%)')
