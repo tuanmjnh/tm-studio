@@ -1737,6 +1737,33 @@ export function evaluateTimeline(
   atTicks: number
 ): CoreTimelineEvaluation
 
+// --- Paint stack: which footage row owns the canvas (V4 Phase 2, G18) ---
+/** One footage row eligible to paint. */
+export interface CorePaintRow {
+  trackId: string | null
+  /** Index into `CoreTimelineEvaluation.tracks`, aligned with the input tracks. */
+  trackIndex: number
+  layers: CoreEvaluatedLayer[]
+}
+
+export interface CorePaintStack {
+  at: number
+  /** Paint order, track order: `rows[0]` owns the canvas, the rest are dropped. */
+  rows: CorePaintRow[]
+  base: CorePaintRow | null
+}
+
+/** Selection over one `evaluateTimeline` result — no second evaluation. */
+export function selectPaintRows(
+  evaluation: CoreTimelineEvaluation | null | undefined
+): CorePaintStack
+
+/** `evaluateTimeline` + `selectPaintRows` for callers without the evaluation. */
+export function paintStackAt(
+  input: TmcutProject | TmcutTimeline | CoreEvaluatorTimelineLike | { timeline?: CoreEvaluatorTimelineLike } | null | undefined,
+  atTicks: number
+): CorePaintStack
+
 // --- Clock + host capability contract (V4 Phase 1 / M1) ---
 export function createClock(rate: FrameRate): TmcutClock
 

@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import { TICKS_PER_SECOND, createFrameScheduler, isRamped, renderAt, speedAt, ticksToSec } from 'tmcut-core'
+import { TICKS_PER_SECOND, createFrameScheduler, isRamped, renderAt, selectPaintRows, speedAt, ticksToSec } from 'tmcut-core'
 import { useTmcutProject } from './useTmcutProject'
 import type { TmcutTimelineItem } from './useTmcutProject'
 import { clipMediaTimeSec, clipStartSec } from '~/utils/tmcut/clipTime'
@@ -98,31 +98,24 @@ export function useTmcutPlayback() {
     Math.round(playhead.value * TICKS_PER_SECOND)
   ))
 
-  // The ONE footage row the canvas paints (gap G18). Nothing composites two
-  // rows: a single <video> carries the picture, exactly as the exporter builds
-  // a single concat chain, so the preview asks the same question the compiler
-  // asks — the first VISIBLE footage row — and takes its live layers from the
-  // evaluator. Hidden rows are excluded here, which is also what stops a
-  // hidden row's transition from reaching the canvas.
+  // The ONE footage row the canvas paints (gap G18), now answered by core:
+  // `selectPaintRows` picks the first visible footage row that holds a layer at
+  // this tick, so a gap hands the canvas to the next row and a hidden row's
+  // transition never reaches the screen. Nothing composites two rows yet: a
+  // single <video> carries the picture, exactly as the exporter builds a single
+  // concat chain, so both hosts follow one rule instead of two — and the rows
+  // after `base` are the footage a compositor still has to stack.
   //
-  // Both the store rows and their evaluations come out of the same array in
-  // the same order (`evaluateTimeline` pushes one entry per track), so the
-  // two filtered lists pair by index.
+  // `trackIndex` is the row's position in the evaluation's track list, which
+  // `evaluateTimeline` builds one entry per input track in order, so joining
+  // back to the authored track is a single index lookup.
   const footageRow = computed(() => {
-    const tracks = currentProject.value?.timeline?.tracks
-    if (!tracks) return null
-    const videoTracks = tracks.filter(track => track.type === 'video')
-    const videoEvaluations = playheadEvaluation.value.tracks.filter(track => track.type === 'video')
-    for (let index = 0; index < videoTracks.length; index++) {
-      const track = videoTracks[index]
-      const evaluation = videoEvaluations[index]
-      if (!track?.items?.length || !evaluation || evaluation.hidden) continue
-      // A row only owns the canvas while it actually has a layer here; a gap
-      // hands it to the next visible row, same as before this rule existed.
-      if (!evaluation.layers.length) continue
-      return { items: track.items, layers: evaluation.layers }
+    const base = selectPaintRows(playheadEvaluation.value).base
+    if (!base) return null
+    return {
+      items: currentProject.value?.timeline?.tracks?.[base.trackIndex]?.items ?? [],
+      layers: base.layers
     }
-    return null
   })
 
   // Transition crossfade state (roadmap B3 / core C5): while the playhead
