@@ -601,6 +601,25 @@ export function maskAlphaExpr(mask: (Partial<TmcutMask> & { shape?: string | nul
  */
 export function maskCssMaskImage(mask: (Partial<TmcutMask> & { shape?: string | null }) | null | undefined, wPx?: number, hPx?: number): string | null
 
+// --- Text style law (V4 Phase 2, closes the last app-side copy) ---
+// One set of pixel numbers feeds two syntaxes: the preview's CSS overlay and
+// the export's drawtext options. Hosts must not re-derive them.
+
+/** Font size used when a text clip carries none. */
+export const DEFAULT_TEXT_FONT_SIZE: number
+
+/** Glyph colour used when a text clip carries none. */
+export const DEFAULT_TEXT_COLOR: string
+
+/** Stroke width in px — drawtext `borderw` and the CSS text stroke. */
+export function textStrokeWidth(fontSize: number): number
+
+/** Shadow offset in px — drawtext `shadowx`/`shadowy` and CSS text-shadow. */
+export function textShadowOffset(fontSize: number): number
+
+/** Plate padding in px — drawtext `boxborderw` and the CSS plate padding. */
+export function textBoxPadding(fontSize: number): number
+
 // --- Sticker catalog (R124 A6, CapCut §3.4) ---
 // Curated emoji groups rendered as text-track graphic layers.
 export interface TmcutStickerGroup { id: string, emojis: string[] }

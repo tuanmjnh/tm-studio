@@ -8,6 +8,7 @@
 
 import { TICKS_PER_SECOND } from './time.mjs'
 import { isRamped, splitRamp, trimRamp } from './retime.mjs'
+import { DEFAULT_TEXT_COLOR, DEFAULT_TEXT_FONT_SIZE } from './textStyle.mjs'
 
 let clipCounter = 0
 let trackCounter = 0
@@ -203,8 +204,8 @@ export function addClip(timeline, trackType, partial = {}) {
     speedPoints: partial.speedPoints,
     volume: partial.volume ?? 100,
     text: partial.text,
-    color: partial.color ?? '#ffffff',
-    fontSize: partial.fontSize ?? 36,
+    color: partial.color ?? DEFAULT_TEXT_COLOR,
+    fontSize: partial.fontSize ?? DEFAULT_TEXT_FONT_SIZE,
     effects: Array.isArray(partial.effects) ? partial.effects : [],
     keyframes: Array.isArray(partial.keyframes) ? partial.keyframes : [],
     transitionIn: partial.transitionIn,

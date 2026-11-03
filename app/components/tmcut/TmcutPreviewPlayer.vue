@@ -5,9 +5,8 @@ import { useTmcutProject } from '~/composables/useTmcutProject'
 import type { TmcutTrack, TmcutTimelineItem } from '~/composables/useTmcutProject'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { computeFitObjectStyle, CROP_RATIO_PRESETS, clampCropRect, applyCropRatio, canvasFpsValue } from '~/utils/tmcut/canvas'
-import { textBoxPadding, textStrokeWidth, textShadowOffset } from '~/utils/tmcut/textStyle'
 import { effectCssParts } from '~/utils/tmcut/fxPreview'
-import { previewScale, evalKeyframe, gainAt, evaluateClip, textAnimationAt, safeAreaRects, SAFE_AREA_PRESETS, TICKS_PER_SECOND, secToTicks, maskCssMaskImage, resolveClipLayout, previewTransitionRamp, classifyAssetKind } from 'tmcut-core'
+import { previewScale, evalKeyframe, gainAt, evaluateClip, textAnimationAt, safeAreaRects, SAFE_AREA_PRESETS, TICKS_PER_SECOND, secToTicks, maskCssMaskImage, resolveClipLayout, previewTransitionRamp, classifyAssetKind, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_FONT_SIZE, textBoxPadding, textShadowOffset, textStrokeWidth } from 'tmcut-core'
 import type { TmcutKeyframe, TmcutTextAnimationType } from 'tmcut-core'
 import { clipDurationTicks, clipStartSec, clipEndSec, clipMediaTimeSec } from '~/utils/tmcut/clipTime'
 import { useTmcutFrames } from '~/composables/useTmcutFrames'
@@ -897,7 +896,7 @@ function textOverlayStyle(textClip: {
   const ty = evalKeyframe(textClip, 'y', at) ?? textClip.y ?? 0
   const ts = evalKeyframe(textClip, 'scale', at) ?? textClip.scale ?? 100
   const to = evalKeyframe(textClip, 'opacity', at) ?? textClip.opacity ?? 100
-  const fontSize = textClip.fontSize || 36
+  const fontSize = textClip.fontSize || DEFAULT_TEXT_FONT_SIZE
 
   // Text in/out animations (Roadmap C-5): core owns the alpha/slide/zoom
   // math (same numbers as the export's drawtext expressions); this file
@@ -925,8 +924,8 @@ function textOverlayStyle(textClip: {
     // ("Segoe UI") stay one valid family token.
     ...(textClip.fontFamily ? { fontFamily: `${JSON.stringify(textClip.fontFamily)}, sans-serif` } : {}),
     // Style flags (roadmap C-2): the CSS twin of the export's face
-    // file + drawtext shadow/border options — shared metrics keep the
-    // pixel numbers in step (utils/tmcut/textStyle.ts).
+    // file + drawtext shadow/border options — the pixel numbers come from
+    // tmcut-core (textStyle.mjs), the same source the export compiler reads.
     ...(textClip.bold ? { fontWeight: '700' } : {}),
     ...(textClip.italic ? { fontStyle: 'italic' } : {}),
     // Colours come from the optional effect fields; the legacy black/85%
@@ -947,7 +946,7 @@ function textOverlayStyle(textClip: {
           borderRadius: `${Math.max(2, Math.round(fontSize * 0.08)) * scale}px`
         }
       : {}),
-    color: textClip.color || '#ffffff',
+    color: textClip.color || DEFAULT_TEXT_COLOR,
     fontSize: `${fontSize * scale}px`,
     left: align === 'left' ? '0' : align === 'right' ? '100%' : '50%',
     top: '50%',

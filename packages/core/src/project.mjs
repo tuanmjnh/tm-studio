@@ -7,6 +7,7 @@
 // =============================================================================
 
 import { fpsToRational, secToTicks } from './time.mjs'
+import { DEFAULT_TEXT_COLOR, DEFAULT_TEXT_FONT_SIZE } from './textStyle.mjs'
 
 let projectCounter = 0
 let assetCounter = 0
@@ -94,8 +95,8 @@ function migrateClip(item, trackType) {
     cropRect: item.cropRect,
     volume: item.volume ?? 100,
     text: item.text,
-    color: item.color ?? '#ffffff',
-    fontSize: item.fontSize ?? 36,
+    color: item.color ?? DEFAULT_TEXT_COLOR,
+    fontSize: item.fontSize ?? DEFAULT_TEXT_FONT_SIZE,
     effects: Array.isArray(item.effects) ? item.effects : [],
     keyframes: Array.isArray(item.keyframes) ? item.keyframes : [],
     transitionIn: item.transitionIn

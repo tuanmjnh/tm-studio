@@ -1,8 +1,14 @@
 import type { TextOverlayClip } from './types'
 import type { RenderGraph } from './graph'
 import { filterPathArg, opacityAlpha } from './graph'
-import { textBoxPadding, textStrokeWidth, textShadowOffset } from '../textStyle'
-import { keyframeExpr, maskAlphaExpr } from 'tmcut-core'
+import {
+  DEFAULT_TEXT_FONT_SIZE,
+  keyframeExpr,
+  maskAlphaExpr,
+  textBoxPadding,
+  textShadowOffset,
+  textStrokeWidth
+} from 'tmcut-core'
 import { renderClipDuration } from './clip'
 import type { RenderClip } from './clip'
 
@@ -33,7 +39,7 @@ function overlayDurationSec(clip: TextOverlayClip): number {
  */
 export function textOverlayFilter(clip: TextOverlayClip): string {
   const escaped = escapeDrawText(clip.text || '')
-  const fontSize = clip.fontSize || 36
+  const fontSize = clip.fontSize || DEFAULT_TEXT_FONT_SIZE
   const fontColor = clip.color || 'white'
   const xOffset = clip.x || 0
   const yOffset = clip.y || 0

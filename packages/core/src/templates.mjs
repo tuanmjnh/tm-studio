@@ -6,6 +6,7 @@
 // =============================================================================
 
 import { TICKS_PER_SECOND } from './time.mjs'
+import { DEFAULT_TEXT_COLOR } from './textStyle.mjs'
 
 // Template schema contract (roadmap v3 §6.2 / PART K Phase 3). Every new
 // template records the schema version it was written against; imports run
@@ -98,7 +99,7 @@ function packTextClip(id, def, durationTicks) {
     type: 'text',
     name: def.name,
     text: def.text,
-    color: def.color || '#ffffff',
+    color: def.color || DEFAULT_TEXT_COLOR,
     fontSize: Math.round(def.fontSize),
     fontFamily: 'Inter',
     bold: def.bold !== false,
