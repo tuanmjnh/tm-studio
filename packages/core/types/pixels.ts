@@ -8,6 +8,14 @@ export interface TmcutFrameCompareOptions {
   diffRatioTolerance?: number
   /** Per-channel delta a pixel may drift before it counts as changed. */
   channelTolerance?: number
+  /**
+   * One byte per pixel, same pixel count as the frames. A zero marks a pixel
+   * that is NOT asserted: it leaves the mean, the diff count and the ratio.
+   * Used where a golden must survive a lossy step (the encoder's chroma
+   * subsample blurs a real band around every region edge) without loosening
+   * the tolerance for the pixels that ARE asserted.
+   */
+  mask?: Uint8Array | Uint8ClampedArray
 }
 
 export interface TmcutFrameCompareResult {
@@ -16,5 +24,9 @@ export interface TmcutFrameCompareResult {
   maxChannelDelta: number
   differingPixels: number
   totalPixels: number
+  /** Pixels the mask left in the comparison; `diffRatio` and `meanAbsError` are over these. */
+  assertedPixels: number
+  /** Pixels the mask took out of the comparison. */
+  skippedPixels: number
   diffRatio: number
 }

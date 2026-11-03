@@ -1797,7 +1797,7 @@ export type {
   TmcutFrameCompareOptions,
   TmcutFrameCompareResult
 } from '../types/pixels.js'
-export const DEFAULT_FRAME_COMPARE: Readonly<Required<TmcutFrameCompareOptions>>
+export const DEFAULT_FRAME_COMPARE: Readonly<Required<Omit<TmcutFrameCompareOptions, 'mask'>>>
 export function compareFrames(
   expected: Uint8Array | Uint8ClampedArray,
   actual: Uint8Array | Uint8ClampedArray,

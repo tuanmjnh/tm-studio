@@ -73,4 +73,49 @@ describe('compareFrames', () => {
       TypeError
     )
   })
+
+  // The mask exists for golden frames of patterned media: a lossy encode
+  // blurs a real band around every region edge, and that band must be
+  // excluded rather than the whole frame being tolerated.
+  it('leaves masked pixels out of the mean, the count and the ratio', () => {
+    const a = [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]
+    const b = [[0, 0, 0, 0], [200, 200, 200, 255], [0, 0, 0, 0]]
+    const masked = compareFrames(frame(a), frame(b), { mask: Uint8Array.from([1, 0, 1]) })
+    assert.equal(masked.skippedPixels, 1)
+    assert.equal(masked.assertedPixels, 2)
+    assert.equal(masked.totalPixels, 3)
+    assert.equal(masked.meanAbsError, 0, 'the wild pixel contributes nothing to the mean')
+    assert.equal(masked.differingPixels, 0, 'the wild pixel is not a failure either')
+    assert.equal(masked.diffRatio, 0)
+    assert.equal(masked.maxChannelDelta, 0, 'the worst delta comes from asserted pixels only')
+    assert.equal(masked.ok, true)
+    const unmasked = compareFrames(frame(a), frame(b))
+    assert.ok(unmasked.meanAbsError > 16 && unmasked.differingPixels === 1,
+      'without the mask the same frame pair is a drift')
+  })
+
+  it('still fails on a pixel the mask did not excuse', () => {
+    const a = [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]
+    const b = [[0, 0, 0, 0], [40, 40, 40, 255], [200, 200, 200, 255]]
+    const result = compareFrames(frame(a), frame(b), {
+      mask: Uint8Array.from([1, 1, 0]),
+      channelTolerance: 1,
+      diffRatioTolerance: 0.4
+    })
+    assert.equal(result.skippedPixels, 1)
+    assert.equal(result.differingPixels, 1)
+    assert.equal(result.diffRatio, 0.5, 'the ratio is over the two asserted pixels')
+    assert.equal(result.ok, false, 'one bad pixel in two asserted is a failure, not a rounding band')
+  })
+
+  it('treats a full mask as no mask and rejects a broken one', () => {
+    const a = frame([[0, 0, 0, 0], [0, 0, 0, 0]])
+    const b = frame([[1, 1, 1, 1], [1, 1, 1, 1]])
+    const unmasked = compareFrames(a, b)
+    const allOn = compareFrames(a, b, { mask: Uint8Array.from([1, 1]) })
+    assert.deepEqual(allOn, unmasked, 'a mask that excuses nothing changes nothing')
+    assert.throws(() => compareFrames(a, b, { mask: Uint8Array.from([1]) }), TypeError)
+    assert.throws(() => compareFrames(a, b, { mask: [1, 1] }), TypeError)
+    assert.throws(() => compareFrames(a, b, { mask: Uint8Array.from([0, 0]) }), TypeError)
+  })
 })
