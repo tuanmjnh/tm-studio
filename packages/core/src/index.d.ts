@@ -19,6 +19,19 @@ import type {
   MediaTime
 } from '../types/dsl.js'
 import type { TmcutAssetKind, TmcutMediaMetadata } from '../types/media.js'
+import type {
+  TmcutAudioTrackInfo,
+  TmcutDurationSource,
+  TmcutFrameRateInfo,
+  TmcutImportStatus,
+  TmcutMediaCapabilities,
+  TmcutMediaCompatibility,
+  TmcutMediaInfo,
+  TmcutProbeDescriptor,
+  TmcutProbeVideoTrack,
+  TmcutStillInfo,
+  TmcutVideoTrackInfo
+} from '../types/mediaInfo.js'
 import type { TmcutEdl, TmcutEdlSegment } from '../types/edl.js'
 import type { TranscriptCue } from '../types/caption.js'
 import type { TmcutCapabilities, TmcutRuntimeInfo } from '../types/runtime.js'
@@ -45,6 +58,27 @@ export type {
   MediaTime
 } from '../types/dsl.js'
 export type { TmcutAssetKind, TmcutMediaMetadata } from '../types/media.js'
+export type {
+  TmcutAudioTrackInfo,
+  TmcutDurationSource,
+  TmcutFrameRateInfo,
+  TmcutImportStatus,
+  TmcutMediaCapabilities,
+  TmcutMediaCompatibility,
+  TmcutMediaInfo,
+  TmcutMediaProbeService,
+  TmcutMediaWarning,
+  TmcutProbeAudioTrack,
+  TmcutProbeDescriptor,
+  TmcutProbeHints,
+  TmcutProbeOptions,
+  TmcutProbeSource,
+  TmcutProbeSubtitleTrack,
+  TmcutProbeVideoTrack,
+  TmcutStillInfo,
+  TmcutSubtitleTrackInfo,
+  TmcutVideoTrackInfo
+} from '../types/mediaInfo.js'
 export type { TmcutEdl, TmcutEdlSegment } from '../types/edl.js'
 
 export type CoreTrackType = 'video' | 'text' | 'audio'
@@ -338,6 +372,26 @@ export function listAssets(registry: CoreAssetRecord[], kind?: CoreAssetKind): C
 
 export function parseFrameRate(raw: unknown): number
 export function normalizeProbe(payload: unknown): TmcutMediaMetadata | null
+
+export const MEDIA_WARNING_SEVERITY: Record<string, 'info' | 'warning' | 'error'>
+
+export function pickDuration(
+  descriptor: TmcutProbeDescriptor,
+  trackDurations: number[]
+): { duration?: number, durationSource: TmcutDurationSource, mismatchSec: number }
+export function buildFrameRate(track?: TmcutProbeVideoTrack | null): TmcutFrameRateInfo | undefined
+export function buildCompatibility(input: {
+  kind: TmcutMediaInfo['kind']
+  demuxable: boolean
+  videoTracks: TmcutVideoTrackInfo[]
+  audioTracks: TmcutAudioTrackInfo[]
+  seekable?: boolean
+  still?: TmcutStillInfo
+}): TmcutMediaCompatibility
+export function buildMediaInfo(descriptor: TmcutProbeDescriptor): TmcutMediaInfo
+export function classifyImportStatus(info?: TmcutMediaInfo | null): TmcutImportStatus
+export function mediaInfoToMetadata(info?: TmcutMediaInfo | null): TmcutMediaMetadata | null
+export function buildMediaCapabilities(raw?: Partial<TmcutMediaCapabilities> | null): TmcutMediaCapabilities
 
 export function v1ClipToV3(item: CoreV1TrackItem, trackType: CoreTrackType): TmcutTimelineClip
 export function v1TracksToV3(tracks: CoreV1Track[]): TmcutTimeline

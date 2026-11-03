@@ -45,6 +45,7 @@
     "electron-updater": "^6.8.9",
     "firebase": "^12.17.0",
     "jose": "^6.2.4",
+    "mediabunny": "1.65.1",
     "nuxt": "^4.6.2",
     "pinia": "^4.1.0",
     "sortablejs": "^1.15.2",

@@ -25,12 +25,15 @@
  * The adapter is safe to hold in a component: the desktop/web split cannot
  * change after load, because it is the presence of the preload bridge.
  */
-import { createPlatformInfo, HTML_VIDEO_LIMITS, normalizeProbe, rationalToFloat } from 'tmcut-core'
+import { createPlatformInfo, HTML_VIDEO_LIMITS, classifyAssetKind, mediaFileName, normalizeProbe, rationalToFloat } from 'tmcut-core'
 import type {
   FrameRate,
+  TmcutMediaInfo,
   TmcutMediaMetadata,
   TmcutPlatformAdapter,
   TmcutPlatformInfo,
+  TmcutProbeHints,
+  TmcutProbeSource,
   TmcutRenderEngine,
   TmcutRenderJob
 } from 'tmcut-core'
@@ -66,8 +69,16 @@ export interface TmcutPlatformDeps {
   isDesktop?: { value: boolean }
   /** Stored locator -> playable URL, injected for tests. */
   resolveSrc?: (src?: string | null) => string
+  /**
+   * Stored locator -> the URL of the **stored file**, proxy ignored, injected
+   * for tests. MediaInfo describes what a clip is, so it must not read the
+   * playback preview of it.
+   */
+  resolveSource?: (src: string) => string
   /** Browser metadata-element probe, injected for tests (ADR-020). */
   probeWeb?: (url: string) => Promise<TmcutMediaMetadata | null>
+  /** The demuxing probe service, injected for tests; lazy by default. */
+  probeInfo?: (source: TmcutProbeSource) => Promise<TmcutMediaInfo>
   /** Transport for the server-side encoder, injected for tests. */
   request?: PlatformRequest
 }
@@ -270,15 +281,37 @@ export function useTmcutPlatform(deps: TmcutPlatformDeps = {}): TmcutHostPlatfor
     const askWeb = deps.probeWeb ?? probeWebMetadata
     return askWeb(resolveSrc(src))
   }
-  const request = deps.request ?? ($fetch as unknown as PlatformRequest)
+  /**
+   * The §4.1 answer, from one service on both hosts (zero-FFmpeg plan §4).
+   *
+   * Two rules shape it. It probes the **stored file**, never the playback
+   * proxy: `resolveSrc` may hand back a 960px copy when proxy preview is on, and
+   * reporting that as the clip's codec and size would tell the export it can
+   * losslessly mux a 4K HEVC source. And the demuxer is imported on first use,
+   * so a component that only asks about capabilities or durations never pays for
+   * Mediabunny in its chunk.
+   */
+  const probeInfo = async (src: string, hints: TmcutProbeHints = {}): Promise<TmcutMediaInfo> => {
+    const askInfo = deps.probeInfo ?? (await import('~/utils/tmcut/mediaProbe')).probeMedia
+    const askSource = deps.resolveSource ?? ((path: string) => mediaOf().mediaUrl(path))
+    return askInfo({
+      name: mediaFileName(src),
+      url: askSource(src),
+      size: hints.size,
+      mimeType: hints.mimeType,
+      kind: hints.kind ?? classifyAssetKind(src) ?? undefined
+    })
+  }
 
   // Built on first use: a component that only asks about media or capabilities
   // must not pay for the export queue, which registers task-manager listeners
-  // and a deep watcher over the persisted queue when it is created.
+  // and a deep watcher over the persisted queue when it is created. The server
+  // transport is read here for the same reason: `$fetch` is a Nuxt global, and a
+  // media-only caller on a host without it must still get a working adapter.
   let engine: HostRenderEngine | null = null
   const renderEngine = () => engine ?? (engine = desktop
     ? createQueueEncoder()
-    : createServerRenderEncoder(request))
+    : createServerRenderEncoder(deps.request ?? ($fetch as unknown as PlatformRequest)))
 
   const encoder: TmcutRenderEngine = {
     render: plan => renderEngine().render(plan),
@@ -289,7 +322,7 @@ export function useTmcutPlatform(deps: TmcutPlatformDeps = {}): TmcutHostPlatfor
 
   return {
     info,
-    media: { resolveSrc, probe },
+    media: { resolveSrc, probe, probeInfo },
     capture: {
       supportsFps: rate => rateInRange(rate, HTML_VIDEO_LIMITS.minFps, HTML_VIDEO_LIMITS.maxFps),
       open: async () => {

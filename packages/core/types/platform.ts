@@ -7,6 +7,7 @@
 // frame math so every host agrees on frame boundaries.
 import type { FrameRate } from './dsl.js'
 import type { TmcutMediaMetadata } from './media.js'
+import type { TmcutMediaInfo, TmcutProbeHints } from './mediaInfo.js'
 import type { TmcutRenderEngine, TmcutRuntimeInfo } from './runtime.js'
 
 export type TmcutPlatformName = TmcutRuntimeInfo['name']
@@ -27,7 +28,7 @@ export interface TmcutClock {
 }
 
 /**
- * Stored locator -> playable URL, plus the read-only metadata question.
+ * Stored locator -> playable URL, plus the read-only metadata questions.
  *
  * ADR-020: `probe` is required because both shipping hosts can answer it —
  * Electron through ffprobe, a browser tab through a metadata element. It asks
@@ -42,11 +43,26 @@ export interface TmcutClock {
  *
  * Field trust differs per host: ffprobe reports every field, while a browser
  * reports duration and intrinsic size only, so a web probe leaves `fps` at 0
- * and infers `hasAudio` from the absence of a video track.
+ * and infers `hasAudio` from the absence of a video track. That asymmetry is
+ * exactly why `probeInfo` exists: one demuxing service answers both hosts, so
+ * `probe` is the legacy shape the FFmpeg engine still feeds, and new callers
+ * should ask `probeInfo` and read `durationSource` instead of a guessed zero.
  */
 export interface TmcutPlatformMedia {
   resolveSrc(src?: string | null): string
   probe(src: string): Promise<TmcutMediaMetadata | null>
+  /**
+   * The §4.1 answer for a stored locator: tracks, durations with their source,
+   * warnings, the compatibility report and the import status. Where `probe`
+   * answers "how long and how big", this answers "can this runtime really work
+   * with this file", and it is the reason the app needs no second probe.
+   *
+   * `hints` carries facts the caller already holds (an asset record's byte size,
+   * a MIME type from a picker) so the probe never asks for them again. A host
+   * with no demuxing pipeline throws; a file the demuxer refuses comes back as
+   * a verdict with warnings, never as a zero-filled `TmcutMediaInfo`.
+   */
+  probeInfo(src: string, hints?: TmcutProbeHints): Promise<TmcutMediaInfo>
 }
 
 /** One HTML/CSS composition document, loaded once and seeked per frame. */

@@ -256,7 +256,7 @@ khớp với `VideoEncoder` của WebCodecs. Đếm file, không đếm dòng.
 
 | Capability plan cần | Số hit trong repo |
 |---|---|
-| `mediabunny` | **0** |
+| `mediabunny` | **0** ở thời điểm đo; slice B đã cài 1.65.1 và dùng trong `app/utils/tmcut/mediaProbe.ts` (xem §13) |
 | `VideoEncoder` / `VideoDecoder` / `isConfigSupported` | **0** |
 | `OfflineAudioContext` / `AudioContext` / `decodeAudioData` | **0** |
 | `OffscreenCanvas` / OPFS | **0** |
@@ -395,7 +395,7 @@ Việc còn lại tập trung ở ba khối, theo thứ tự ưu tiên đo đư�
 
 1. **Xóa quyền phát ngôn của FFmpeg trong core** — **8** module in văn bản FFmpeg và **2** module parse output FFmpeg (mục 5.1).
    Hai module nữa (`textStyle`, `transitions`) chỉ nhắc FFmpeg trong comment, nên không thuộc khối việc này.
-2. **Dựng media stack thật** — probe, decode, encode, mux, audio: repo hiện có **0** dòng cho cả năm thứ.
+2. **Dựng media stack thật** — probe, decode, encode, mux, audio: tại thời điểm audit, repo có **0** dòng cho cả năm thứ; probe đã đóng ở §13, bốn thứ còn lại thuộc D/G/H.
 3. **Dọn surface ngoài code** — IPC, DB, packaging, updater, i18n: những chỗ mà "gỡ FFmpeg" kiểu search-and-replace sẽ bỏ sót.
 
 Với rule 11 ("không xóa tính năng đang chạy trước khi có thay thế + test"), thứ tự an toàn là §8: probe (B) → thumbnail (D)
@@ -420,3 +420,68 @@ Plan §Phase 0 liệt kê deliverable và một exit criterion. Đối chiếu t
 | **Exit: không còn khu vực FFmpeg/FFprobe chưa phân loại** | 11 nhóm §3 + 14 module phân mức §5.1 + 6 surface §2.3 + 10 phép đo §6 + từ khóa §2.4 | **đạt** |
 
 Kết luận: Phase 0 đóng được, trừ ADR — và ADR không đóng được bằng cách đánh số tùy ý, mà bằng một quyết định của chủ repo.
+
+---
+
+## 13. Slice B — `MediaProbeService` trên cả hai host (đo ngày 2026-11-03)
+
+Slice B trong §8 đã đóng. Không có gì của FFmpeg bị xóa ở đây — theo rule 9, thứ thay thế phải có test trước, và slice này
+chính là thứ thay thế cho probe; FFprobe vẫn còn nguyên tới slice I.
+
+### 13.1 Cái đã dựng
+
+| Lớp | File | Vai |
+|---|---|---|
+| Schema | `packages/core/types/mediaInfo.ts` (mới) | đúng hình dạng §4.1 của plan: duration kèm nguồn, track info, compatibility, warnings, import status |
+| Luật | `packages/core/src/mediaInfo.mjs` (mới) | normalize thuần: thứ tự duration, không bao giờ giả 30 fps, mọi claim decode/encode phải có bằng chứng |
+| Thu thập | `app/utils/tmcut/mediaProbe.ts` (mới) | file **duy nhất** trong `app/` được phép import demuxer (rule 12); Mediabunny 1.65.1 |
+| Contract | `packages/core/types/platform.ts`, `app/composables/useTmcutPlatform.ts` | thêm `media.probeInfo(src, hints)`; `probe` giữ nguyên cho engine FFmpeg cũ đang đọc nó |
+| Test | `packages/core/test/media-info.test.mjs`, `tests/unit/tmcut_media_probe.spec.ts` | 598 check core (cả repo) và 12 check probe |
+
+Ba quyết định đáng ghi lại, vì chúng giải thích shape của code hơn là comment trong file:
+
+1. **Một service cho cả hai host, không phải hai bản.** `media://local?file=` trả `Accept-Ranges: bytes` và 206 thật
+   ([media-protocol.cjs:114-165](file:///D:/Applications/tm-studio/electron/media-protocol.cjs#L114)), nên `UrlSource` của
+   Mediabunny đọc được file đĩa y như đọc HTTP. Electron không cần bản probe riêng — và ffprobe chỉ còn là đường cũ.
+2. **Probe phải mô tả file đã lưu, không mô tả bản preview.** `resolveSrc` có thể trả URL proxy 960px khi bật proxy preview
+   ([useTmcutMedia.ts:864-873](file:///D:/Applications/tm-studio/app/composables/useTmcutMedia.ts#L864)), trong khi export cần
+   codec và kích thước thật của file gốc. Vì thế adapter có `resolveSource` tách riêng, mặc định là `mediaUrl(path)`.
+3. **Không có bằng chứng thì để trống, không đổ 0.** `canEncode` là `undefined` khi danh sách codec của runtime không phủ;
+   `buildCompatibility` khi đó trả `canExportSourceCodec: false` kèm limitation `source-audio-encode`/`source-codec-encode`,
+   chứ không claim lossless. Tương tự, một file không demux được trả `duration: undefined` chứ không phải `0`.
+
+### 13.2 Bằng chứng đã đo
+
+| Gate | Lệnh | Kết quả | Số đo |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | exit 0, 0 dòng `error TS`; `.nuxt/eslint.config.mjs` 28535 bytes, chạy lại sau khi sửa |
+| 2 Lint | `npx eslint` trên 7 file đã chạm | PASS | exit 0, 0 problems. `pnpm lint:core` exit 1 với **87** lỗi **có sẵn** ở 12 file core không thuộc slice (`aiPlan`, `crashRecovery`, `telemetry`…); `mediaInfo.mjs` không có lỗi nào |
+| 3 Unit | `npx tsx tests/unit/run-all.mts` | FAIL 91/93 | hai FAIL là WIP của chủ repo, xem 13.4. `tmcut_media_probe` 12/12, `tmcut_platform_adapter` 12/12 |
+| 3b Core | `pnpm test:core` / `check:core` / `typecheck:core` | PASS | 598 tests, 598 pass, 0 fail; boundaries PASS; exit 0 và 0 `error TS` |
+| 4 Live web | `/_nuxt/@fs/...mediaProbe.ts` trong trang Chromium thật | PASS | `hasWebCodecs: true`, 5 codec video decode được, 4 video encode được, 16 audio; probe WAV thật: `container WAVE`, `duration 0.5`, `durationSource container`, `importStatus ready`, 0 warning |
+| 4b Live desktop | `Runtime.evaluate` qua CDP vào renderer Electron đang mở (không điều hướng, không đụng state) | PASS | `media://local?file=` trả **206** `bytes 0-1023/352844`; probe cùng file: `container WAVE`, `duration 2`, `canDecode true`, `canExportSourceCodec false` vì `pcm-s16` không có trong 16 codec encodable — tổng 734 ms |
+| 5 Dọn | fixture + script scratch đã xóa | PASS | fixture đặt trong `.data/` (gitignored), không còn file nào trong repo |
+
+`canExportSourceCodec: false` trên WAV **là kết quả đúng**, không phải hỏng: máy này có 16 audio codec encode được nhưng
+PCM-S16 không nằm trong danh sách, nên claim "mux lại không mất dữ liệu" sẽ là nói dối. Slice H phải đo lại con số này cho tổ hợp codec
+thực sự chọn preset.
+
+### 13.3 Hai FAIL không thuộc slice này, và vì sao không được "sửa cho xanh"
+
+| Spec | Nguyên nhân đo được | Thuộc ai |
+|---|---|---|
+| `tmcut_login_remember.spec.ts` (3/4 fail) | `app/pages/login.vue` bản working tree lưu lại `password` vào `localStorage` trong `saveCredentials` và khôi phục nó trong `loadSaved`. Đây chính là regression credential đã báo cáo | WIP của chủ repo — file nằm trong danh sách không được đụng |
+| `tmcut_process.spec.ts` | `server/utils/processStore.ts:28` trong working tree đổi import tương đối thành `#shared/utils/processStore`, nhưng `package.json` **không có** trường `imports` ở cả HEAD lẫn bản đang chạy, nên tsx không resolve được | WIP của chủ repo |
+
+Không file nào trong hai dòng trên thuộc slice B; sửa chúng nghĩa là sửa code đang dirty của chủ repo, nên chúng được báo
+cáo nguyên trạng thay vì làm cho suite xanh.
+
+### 13.4 Chưa chứng minh
+
+- Probe một **video** container thật (MP4/MOV/WebM/MKV) trên desktop: mới chỉ có WAV. Route này phụ fixture; plan §25 gộp
+  nó vào slice D, nơi thumbnail cần frame thực sự.
+- `measureFrameRate` và VFR sampling trên file VFR thật (mới chỉ pin luật "không giả 30 fps" bằng unit test).
+- `probeInfo` chưa có consumer UI nào — slice C là nơi trạng thái import (`queued\|probing\|ready\|partial\|unsupported\|error`)
+  xuất hiện trên màn hình.
+- Con số codec encode được ở §13.2 là của **máy dev này, phiên bản Chromium/Electron này**, không phải của mọi máy; slice H
+  phải nghiệm thu `isConfigSupported` theo từng máy như §8 đã ghi.

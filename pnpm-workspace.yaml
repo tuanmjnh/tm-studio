@@ -11,3 +11,6 @@ allowBuilds:
   protobufjs: true
   unrs-resolver: true
   vue-demi: true
+
+minimumReleaseAgeExclude:
+  - mediabunny@1.65.1
