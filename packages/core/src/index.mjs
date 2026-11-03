@@ -1,6 +1,7 @@
 // tmcut-core — public barrel (pure ESM, zero dependencies).
 export * from './time.mjs'
 export * from './clock.mjs'
+export * from './scheduler.mjs'
 export * from './platform.mjs'
 export * from './timeline.mjs'
 export * from './evaluate.mjs'

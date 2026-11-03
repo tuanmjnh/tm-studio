@@ -1137,9 +1137,9 @@ Của #85: core **506/506**, electron tools **59/59**, typecheck **exit 0 / 0 `e
 
 ### Phase 2 – Deterministic Rendering MVP
 
-- Xây `renderAt(timestamp)`.
+- Xây `renderAt(timestamp)`. *(đo ở #86: **một phần** — "render tại một vị trí" đã tồn tại dưới dạng [evaluate.mjs](file:///D:/Applications/tm-studio/packages/core/src/evaluate.mjs) `evaluateTimeline(input, ticks)` và được preview dùng qua `playheadEvaluation`; cái chưa có là một API công khai **tên** `renderAt`, và nhất là một lời gọi mà **export** dùng thay vì tự suy lại cửa sổ clip — đó là item (5) bên dưới, chưa làm)*
 - Xây DOM renderer.
-- Xây frame scheduler.
+- Xây frame scheduler. *(**xong — slice #86, 2026-11-03**: [scheduler.mjs](file:///D:/Applications/tm-studio/packages/core/src/scheduler.mjs) `createFrameScheduler(input, { rate })` → `frameCount` / `frameAt(index)` / `indexOf(ticks)` / `frames(from, to)`; xem block "Trạng thái #86" ngay dưới acceptance criteria của phase này)*
 - Render text, image, SVG, shape.
 - Preview và export gọi cùng timeline evaluator.
 - Tạo golden-frame tests.
@@ -1150,6 +1150,20 @@ Của #85: core **506/506**, electron tools **59/59**, typecheck **exit 0 / 0 `e
 - Kết quả không phụ thuộc wall-clock.
 - Seek đến timestamp bất kỳ trong composition.
 - Không dùng `sleep()` làm cơ chế frame timing.
+
+**Trạng thái #86 — frame scheduler đã xong, và tiêu chí "không phụ thuộc wall-clock" giờ có chỗ đo được (2026-11-03):**
+
+- [scheduler.mjs](file:///D:/Applications/tm-studio/packages/core/src/scheduler.mjs) lật câu hỏi của một loop đếm thời gian: một **index** là một **vị trí** (`clock.frameStartAt(i)`), và nội dung ở vị trí đó là `evaluateTimeline(input, startTicks)`. `createFrameScheduler(input, { rate })` trả `{ clock, fps, ticksPerFrame, endTicks, frameCount, indexOf, frameAt, frames }`, tất cả `Object.freeze`; đếm, thứ tự và nội dung chỉ đến từ project + framerate, không từ đồng hồ hệ thống.
+- Module này dùng được cả hai hình clip đang tồn tại (`timeline` DSL v3 và model phẳng `offset` + `in`/`out`/`speed` của store app), nên editor và project core-native schedule **giống nhau từng byte** — có một test riêng chứng minh điều đó, và đó cũng là lý do scheduler tự tính span thay gọi `totalDurationTicks` (hàm đó chỉ hiểu hình v3).
+- Ba bất biến acceptance, mỗi cái một test: `frames` là **nửa mở** và **clamped** nên không index nào outside; `frameAt(last).startTicks` trùng `lastRenderableTicks` của ADR-018 (frame cuối đậu đúng chỗ render, không phải một răng sau đó); `indexOf` của một vị trí giữa hai frame luôn trả frame chứa nó. Project rỗng → `frameCount = 0` → mọi index là `null`, tức transport không dịch playhead.
+- App nối dây ở [useTmcutPlayback.ts](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts): `seekToFrame(index)` lấy frame **từ plan** rồi `seek(ticksToSec(frame.startTicks))`, `stepFrame(delta)` là số học index. Alt+← / Alt+→ ở [TmcutPreviewPlayer.vue](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue) là đường frame; mũi tên thường vẫn lùi/tiến theo giây (giữ nguyên hành vi cũ, không đổi nút nào).
+- [tmcut_frame_scheduler.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_frame_scheduler.spec.ts) là **10** check trên store + composable **thật** (không phải đọc chuỗi nguồn thuần): 60 frame cho 2 s rồi 90 frame sau khi nối clip; index 37 đậu đúng `frameAt(37)`; cùng một index trả **giống hệt** khi replay sau các seek khác; `stepFrame` làm tròn lại một playhead đang giữa frame (+0.001 s bị bỏ); 29.97 step trên đúng **4004** ticks/frame; và một check rằng thân `seekToFrame` **không** tham chiếu `timestamp`/`delta`/`lastTimestamp`/`Date.now`.
+- Đỏ-test: **2** mutation trên `scheduler.mjs` (jitter mỗi lần gọi `frameAt`, và offset của evaluation) — cái thứ nhất giết đúng hai assert determinism của core (`not ok 3`, `not ok 5`), cái thứ hai giết đúng assert parity của app spec; file restore **byte-identical** (md5 `141d6e4b7295a127cafa63d7ad11a8f5`).
+- Số gate của slice: core **523/523** (`fail 0`), `check-boundaries` **PASS**, core `tsc` **exit 0**, unit **83/85** exit 1 với **đúng hai** fail WIP owner (`tmcut_docs_link_integrity` vì `docs/user-guide.md` bị xoá trong working tree, `tmcut_login_remember` vì `app/pages/login.vue` bản working tree lại ghi plaintext password — slice này không đụng hai file đó), `nuxt typecheck` **exit 0 / 0 `error TS`**, ESLint **0** problem trên **8** file chạm, chạy **sau** khi `.nuxt/eslint.config.mjs` sinh lại (mtime `09:41:07`, không regenerate sau đó).
+- Live trên dev server `:4003` (bằng chứng bundle, không phải DOM): module scheduler đang serve, sau khi strip comment, chứa **0** token wall-clock (`Date.now`/`performance.now`/`setTimeout`/`setInterval`/`requestAnimationFrame`/`new Date`) — hai token mà grep thô thấy chỉ là chữ trong khối comment đầu file; composable đang serve gọi thật `frameScheduler.value.frameAt(index)` và khai báo `function stepFrame`; player đang serve có `altKey) stepFrame(-1)` **kèm** `else stepBackward(e.shiftKey ? 5 : 1)`; modal đang serve chứa `frameStep` **3** lần; `i18n/locales/vi.json` đang serve chứa "Lùi / Tiến 1 khung hình".
+- **Chưa chứng minh:** một cú bấm Alt+Arrow trong browser thật và thời gian trên HUD nhảy đúng **1/30 s**. `/tmcut/editor` nằm sau [auth.global.ts](file:///D:/Applications/tm-studio/app/middleware/auth.global.ts) (chỉ `/login`, `/register` là public): trình duyệt MCP không có phiên nên redirect `/login?redirect=/tmcut/editor`, và cửa sổ Electron của user đang ở Home — không điều hướng cửa sổ user đang dùng, không mở cửa sổ editor thứ hai (hai instance `useTmcutProject` cùng ghi một key localStorage), và không đụng credentials của họ.
+- **Rút lại một câu của #84:** cổng CDP **không** gắn với app. Đo hôm nay: `:9222` = "Home - TMCut Studio" ở `:4003`, `:9223` = dashboard tm-tools ở `:4002` — ngược với câu "CDP của chính app tm-studio là `:9223`". Hai cổng chia nhau theo **thứ tự khởi động** `dev:electron`, nên muốn đọc renderer của app nào phải đọc `/json/list` của **cả hai** cổng rồi so URL, đừng đoán từ số cổng.
+- Item (1) và (5) của phase này vẫn mở: `evaluateTimeline` đã là "render tại một vị trí" nhưng **export** vẫn tự suy lại cửa sổ clip ở [render/index.ts](file:///D:/Applications/tm-studio/app/utils/tmcut/render/index.ts) và [render/text.ts](file:///D:/Applications/tm-studio/app/utils/tmcut/render/text.ts) thay vì hỏi cùng một evaluator.
 
 ### Phase 3 – GPU Compositor và Transform Engine
 

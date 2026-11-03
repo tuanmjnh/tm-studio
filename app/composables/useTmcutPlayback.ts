@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import { TICKS_PER_SECOND, createClock, evaluateTimeline, isRamped, speedAt, ticksToSec } from 'tmcut-core'
+import { TICKS_PER_SECOND, createClock, createFrameScheduler, evaluateTimeline, isRamped, speedAt, ticksToSec } from 'tmcut-core'
 import { useTmcutProject } from './useTmcutProject'
 import type { TmcutTimelineItem } from './useTmcutProject'
 import { clipMediaTimeSec, clipStartSec, lastRenderableTicks } from '~/utils/tmcut/clipTime'
@@ -90,6 +90,15 @@ export function useTmcutPlayback() {
   const playheadEvaluation = computed(() => evaluateTimeline(
     currentProject.value,
     Math.round(renderSeconds.value * TICKS_PER_SECOND)
+  ))
+
+  // The renderable frame sequence (roadmap V4 Phase 2, item 3): a pure function
+  // of the project and its canvas rate. Frame stepping reads it, so "frame 37"
+  // is the same picture on the tenth press and the first — no wall clock, and
+  // no second copy of the frame grid in the app.
+  const frameScheduler = computed(() => createFrameScheduler(currentProject.value))
+  const currentFrameIndex = computed(() => frameScheduler.value.indexOf(
+    Math.round(playhead.value * TICKS_PER_SECOND)
   ))
 
   // Transition crossfade state (roadmap B3 / core C5): while the playhead
@@ -187,6 +196,21 @@ export function useTmcutPlayback() {
       }
     }
     syncOutgoingVideo()
+  }
+
+  // Frame-accurate seek (roadmap V4 Phase 2, item 3): the playhead lands on the
+  // frame's START tick, which is exactly the position core evaluates the frame
+  // for. An index outside the sequence moves nothing — there is no frame there
+  // to land on, and the last frame is where the timeline already parks.
+  function seekToFrame(index: number) {
+    const frame = frameScheduler.value.frameAt(index)
+    if (!frame) return
+    seek(ticksToSec(frame.startTicks))
+  }
+
+  function stepFrame(delta: number) {
+    if (!Number.isFinite(delta) || delta === 0) return
+    seekToFrame(currentFrameIndex.value + delta)
   }
 
   // Keep the OUTGOING crossfade layer in sync (roadmap B3). Mirrors the
@@ -498,6 +522,8 @@ export function useTmcutPlayback() {
   return {
     playhead,
     renderSeconds,
+    frameScheduler,
+    currentFrameIndex,
     isPlaying,
     zoom,
     videoRef,
@@ -507,6 +533,8 @@ export function useTmcutPlayback() {
     activeTextClips,
     formatTimecode,
     seek,
+    seekToFrame,
+    stepFrame,
     play,
     pause,
     togglePlayPause,

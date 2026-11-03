@@ -119,6 +119,11 @@ const items = computed<ShortcutItem[]>(() => [
     keywords: 'step arrow left right second shift'
   },
   {
+    id: 'frameStep', category: 'playback', label: t('tmcut.hotkeys.frameStep'),
+    desc: t('tmcut.hotkeys.desc.frameStep'), keys: ['Alt + ←', 'Alt + →'], keySep: true,
+    keywords: 'frame step by frame frame accurate alt arrow left right khung hình'
+  },
+  {
     id: 'jumpStartEnd', category: 'playback', label: t('tmcut.hotkeys.jumpStartEnd'),
     desc: t('tmcut.hotkeys.desc.jumpStartEnd'), keys: ['Home', 'End'], keySep: true,
     keywords: 'home end jump start beginning cuối đầu nhảy về đầu cuối'

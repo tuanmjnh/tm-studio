@@ -37,6 +37,7 @@ const {
   togglePlayPause,
   stepForward,
   stepBackward,
+  stepFrame,
   shuttleForward,
   shuttleBackward,
   shuttleStop,
@@ -1348,8 +1349,8 @@ function onCanvasClick(e: MouseEvent) {
   togglePlayPause()
 }
 
-// Playback shortcuts: Space play/pause, arrow step, J-K-L shuttle
-// (no-op when the timeline is empty)
+// Playback shortcuts: Space play/pause, arrow step (Alt = one frame),
+// J-K-L shuttle (no-op when the timeline is empty)
 function handleKeydown(e: KeyboardEvent) {
   if (e.code === 'Escape' && isCropActive.value) {
     e.preventDefault()
@@ -1366,10 +1367,12 @@ function handleKeydown(e: KeyboardEvent) {
     togglePlayPause()
   } else if (e.code === 'ArrowLeft') {
     e.preventDefault()
-    stepBackward(e.shiftKey ? 5 : 1)
+    if (e.altKey) stepFrame(-1)
+    else stepBackward(e.shiftKey ? 5 : 1)
   } else if (e.code === 'ArrowRight') {
     e.preventDefault()
-    stepForward(e.shiftKey ? 5 : 1)
+    if (e.altKey) stepFrame(1)
+    else stepForward(e.shiftKey ? 5 : 1)
   } else if (e.code === 'KeyJ' && !e.altKey && !e.ctrlKey && !e.metaKey) {
     e.preventDefault()
     shuttleBackward()

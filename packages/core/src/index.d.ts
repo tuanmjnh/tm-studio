@@ -1702,6 +1702,37 @@ export function evaluateTimeline(
 
 // --- Clock + host capability contract (V4 Phase 1 / M1) ---
 export function createClock(rate: FrameRate): TmcutClock
+
+// --- Frame-index scheduler (V4 Phase 2, item 3) ---
+/** One renderable frame: its ordinal, its tick position, its content. */
+export interface CoreFrame {
+  readonly index: number
+  readonly startTicks: number
+  /** The frame's own width — the LAST frame can overrun the content span. */
+  readonly endTicks: number
+  readonly evaluation: CoreTimelineEvaluation
+}
+
+/** A render plan keyed by frame index; every answer is a pure function of it. */
+export interface CoreFrameScheduler {
+  readonly clock: TmcutClock
+  readonly fps: number
+  readonly ticksPerFrame: number
+  /** End of the content span in ticks (0 for an empty project). */
+  readonly endTicks: number
+  readonly frameCount: number
+  /** The frame containing an absolute tick, clamped into the sequence. */
+  indexOf(ticks: number): number
+  /** Null when the index is outside the sequence. */
+  frameAt(index: number): CoreFrame | null
+  /** Half-open [fromIndex, toIndex); the whole sequence when both are omitted. */
+  frames(fromIndex?: number, toIndex?: number): CoreFrame[]
+}
+
+export function createFrameScheduler(
+  input: TmcutProject | TmcutTimeline | CoreEvaluatorTimelineLike | { timeline?: CoreEvaluatorTimelineLike } | null | undefined,
+  options?: { rate?: FrameRate }
+): CoreFrameScheduler
 export const PLATFORM_NAMES: readonly TmcutRuntimeInfo['name'][]
 export const PLATFORM_CAPABILITIES: readonly (keyof TmcutCapabilities)[]
 export function createPlatformInfo(
