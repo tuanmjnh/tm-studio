@@ -101,6 +101,33 @@ export function useTmcutPlayback() {
     Math.round(playhead.value * TICKS_PER_SECOND)
   ))
 
+  // The ONE footage row the canvas paints (gap G18). Nothing composites two
+  // rows: a single <video> carries the picture, exactly as the exporter builds
+  // a single concat chain, so the preview asks the same question the compiler
+  // asks — the first VISIBLE footage row — and takes its live layers from the
+  // evaluator. Hidden rows are excluded here, which is also what stops a
+  // hidden row's transition from reaching the canvas.
+  //
+  // Both the store rows and their evaluations come out of the same array in
+  // the same order (`evaluateTimeline` pushes one entry per track), so the
+  // two filtered lists pair by index.
+  const footageRow = computed(() => {
+    const tracks = currentProject.value?.timeline?.tracks
+    if (!tracks) return null
+    const videoTracks = tracks.filter(track => track.type === 'video')
+    const videoEvaluations = playheadEvaluation.value.tracks.filter(track => track.type === 'video')
+    for (let index = 0; index < videoTracks.length; index++) {
+      const track = videoTracks[index]
+      const evaluation = videoEvaluations[index]
+      if (!track?.items?.length || !evaluation || evaluation.hidden) continue
+      // A row only owns the canvas while it actually has a layer here; a gap
+      // hands it to the next visible row, same as before this rule existed.
+      if (!evaluation.layers.length) continue
+      return { items: track.items, layers: evaluation.layers }
+    }
+    return null
+  })
+
   // Transition crossfade state (roadmap B3 / core C5): while the playhead
   // sits inside a transition window BOTH clips are live — the INCOMING
   // clip carries `transitionIn`, the OUTGOING clip is the neighbor whose
@@ -109,17 +136,20 @@ export function useTmcutPlayback() {
   // (DSL v3 and the app's flat offset/in/out); a broken pair (neighbor
   // moved/trimmed since) yields no window and renders as a plain cut,
   // matching what the export badge warns about until R3.
+  //
+  // The window is read from `footageRow`, not from row 0: the crossfade
+  // element is a real <video>, so a window belonging to a hidden row would
+  // otherwise show through while the row that paints could not crossfade.
   const transitionCrossfade = computed(() => {
-    const items = currentProject.value?.timeline?.tracks?.find(t => t.type === 'video')?.items
-    if (!items?.length) return null
-    const layers = playheadEvaluation.value.tracks.find(track => track.type === 'video')?.layers ?? []
-    const incomingLayer = layers.find(layer => layer.transition?.role === 'incoming')
+    const row = footageRow.value
+    if (!row) return null
+    const incomingLayer = row.layers.find(layer => layer.transition?.role === 'incoming')
     if (!incomingLayer?.transition?.type) return null
-    const outgoingLayer = layers.find(layer =>
+    const outgoingLayer = row.layers.find(layer =>
       layer.clipId !== incomingLayer.clipId && layer.transition?.role === 'outgoing')
     if (!outgoingLayer || outgoingLayer.sourceTicks === null) return null
-    const incoming = items.find(item => item.id === incomingLayer.clipId)
-    const outgoing = items.find(item => item.id === outgoingLayer.clipId)
+    const incoming = row.items.find(item => item.id === incomingLayer.clipId)
+    const outgoing = row.items.find(item => item.id === outgoingLayer.clipId)
     if (!incoming || !outgoing) return null
     return {
       incoming,
@@ -130,36 +160,27 @@ export function useTmcutPlayback() {
     }
   })
 
-  // Active video clip at current playhead. With parallel video tracks
-  // (CapCut-style layering) the TOP track wins: the header/track rows
-  // render the store array in order, so index 0 IS the top row and also
-  // the topmost rendered layer. Within a track the latest-starting live
-  // layer is on top (that is also the incoming clip of a transition).
+  // Active video clip at the render position — the TOP layer of `footageRow`.
+  // Within that row the latest-starting live layer is on top, and inside a
+  // transition window that is the incoming clip (the outgoing clip owns the
+  // second <video> element instead), so the main element never shows a
+  // half-blended frame.
   const activeVideoClip = computed(() => {
-    const tracks = currentProject.value?.timeline?.tracks
-    if (!tracks) return null
+    const row = footageRow.value
+    if (!row) return null
     const crossfade = transitionCrossfade.value
-    const videoTracks = tracks.filter(track => track.type === 'video')
-    const videoEvaluations = playheadEvaluation.value.tracks.filter(track => track.type === 'video')
-    for (let index = 0; index < videoEvaluations.length; index++) {
-      const evaluation = videoEvaluations[index]
-      if (!evaluation || evaluation.hidden) continue
-      // Inside a transition window the OUTGOING clip owns the second
-      // layer — the main element always renders the INCOMING clip.
-      const live = evaluation.layers.filter(layer =>
-        !(crossfade && layer.clipId === crossfade.outgoing.id))
-      const top = live[live.length - 1]
-      if (!top) continue
-      const clip = videoTracks[index]?.items.find(item => item.id === top.clipId)
-      if (!clip) continue
-      return {
-        clip,
-        mediaCurrentTime: top.sourceTicks === null
-          ? mediaTimeAt(clip, playhead.value)
-          : ticksToSec(top.sourceTicks)
-      }
+    const live = row.layers.filter(layer =>
+      !(crossfade && layer.clipId === crossfade.outgoing.id))
+    const top = live[live.length - 1]
+    if (!top) return null
+    const clip = row.items.find(item => item.id === top.clipId)
+    if (!clip) return null
+    return {
+      clip,
+      mediaCurrentTime: top.sourceTicks === null
+        ? mediaTimeAt(clip, playhead.value)
+        : ticksToSec(top.sourceTicks)
     }
-    return null
   })
 
   // Active text overlays at the render position — across EVERY text track, so
