@@ -6,6 +6,8 @@
 > Phiên bản tài liệu: 1.0  
 > Nền tảng hiện tại: Nuxt 4 + Vue 3 + Nuxt UI + Electron  
 > Mục tiêu: Xây dựng TMCut thành nền tảng biên tập và xử lý video đa nền tảng, dùng chung Project Core, Timeline Core và Rendering Core.
+>
+> **Cập nhật 2026-11-03:** tài liệu này vẫn là blueprint kiến trúc, nhưng mọi chỗ nó cho phép FFmpeg ở lại đã bị [ADR-028](file:///D:/Applications/tm-studio/docs/adr/zero-ffmpeg-decisions.md) supersede; nguồn sự thật của media pipeline là plan browser-first và [docs/audit/zero-ffmpeg-audit.md](file:///D:/Applications/tm-studio/docs/audit/zero-ffmpeg-audit.md). Bản thân roadmap sẽ được archive ở slice K của kế hoạch đó.
 
 ---
 
@@ -19,7 +21,7 @@ sang mô hình:
 
 **Shared Project/Timeline Core → Unified HTML/GPU Rendering Engine → Frame Pipeline → WebCodecs/Muxer**
 
-FFmpeg không còn là thành phần bắt buộc của đường render chính. Nó trở thành **Native Media Backend tùy chọn**, dùng khi cần xử lý codec, remux, media operation chuyên biệt, fallback hoặc các tác vụ mà browser stack chưa đáp ứng tốt.
+FFmpeg **không còn là một phần của kiến trúc** (ADR-028, ghi ngày 2026-11-03): không backend tùy chọn, không fallback, không media operation chuyên biệt dành riêng cho nó. Năng lực media thuộc runtime — WebCodecs cho decode/encode, Mediabunny cho demux/mux, Web Audio cho audio, GPU compositor cho composition — và được khai bằng capability check của host, không bằng tên nền tảng.
 
 ### 1.1 Các nguyên tắc cốt lõi
 
@@ -30,7 +32,7 @@ FFmpeg không còn là thành phần bắt buộc của đường render chính.
 5. **Runtime adapters:** Native APIs, filesystem, process, downloader, storage và remote jobs được trừu tượng hóa qua adapter.
 6. **Progressive enhancement:** WebGPU/WebCodecs được sử dụng khi hỗ trợ; có fallback phù hợp như WebGL2, Canvas2D hoặc native backend.
 7. **Local-first, cloud-capable:** Người dùng có thể xử lý media tại máy; cloud worker là lựa chọn bổ sung, không bắt buộc.
-8. **FFmpeg optional:** Không thiết kế renderer phụ thuộc FFmpeg filter graph; chỉ gọi FFmpeg qua adapter/backend khi thực sự cần.
+8. **Zero FFmpeg (ADR-028):** renderer không phụ thuộc FFmpeg filter graph, và cũng không còn một adapter FFmpeg để gọi "khi thực sự cần"; runtime thiếu capability nào thì báo thiếu capability đó.
 
 ### 1.2 Phạm vi mục tiêu
 
@@ -67,7 +69,7 @@ flowchart TB
     EXPORT --> LOCAL["Local Export"]
     EXPORT --> WORKER["Remote Worker"]
     PLATFORM --> AGENT["TMCut Local Agent"]
-    AGENT --> NATIVE["yt-dlp · Optional FFmpeg · Native tools"]
+    AGENT --> NATIVE["yt-dlp · local file access · media cache"]
     WORKER --> STORAGE["Object Storage"]
 ```
 
@@ -548,7 +550,7 @@ Smart Export là giai đoạn nâng cao; không nên hứa hẹn giữ nguyên b
 
 ---
 
-## 9. Export pipeline không bắt buộc FFmpeg
+## 9. Export pipeline: WebCodecs + muxer, không có FFmpeg
 
 ### 9.1 Pipeline đề xuất
 
@@ -586,7 +588,7 @@ flowchart TD
 | Audio encoding | WebCodecs AudioEncoder khi hỗ trợ |
 | MP4/WebM muxing | Mediabunny hoặc muxer tương thích |
 | Metadata/probe | Browser APIs và/hoặc native helper |
-| Native fallback | Optional FFmpeg backend |
+| Native fallback | Không có — một engine duy nhất, giới hạn khai bằng capability (ADR-028) |
 
 ### 9.3 Các giới hạn phải kiểm thử
 
@@ -825,7 +827,7 @@ Phải giới hạn concurrency, dung lượng, thời gian chạy, URL được
 
 ### 12.1 Có thể về kỹ thuật
 
-Google Colab notebook có thể cài và chạy yt-dlp/FFmpeg trên Linux runtime, sau đó lưu output vào Google Drive hoặc tải xuống.
+Về mặt kỹ thuật, một Google Colab notebook cài được yt-dlp và chạy encode trên Linux runtime, rồi lưu output vào Drive hoặc tải xuống — nhưng đó **không** phải đường TMCut chọn: media pipeline là WebCodecs + muxer chạy trong runtime của app (ADR-028, ADR-030), Colab chỉ là prototype (ADR-010).
 
 Tuy nhiên, Colab Free không phải môi trường production worker:
 
@@ -864,7 +866,7 @@ Colab chỉ nên dùng để thử nghiệm, benchmark, prototype hoặc tác v�
 ### VPS/Worker phù hợp
 
 - yt-dlp.
-- Native FFmpeg khi cần.
+- Không FFmpeg trên worker: worker chạy đúng stack WebCodecs + muxer của browser (ADR-028), khác biệt chỉ là headless runtime.
 - Long-running render.
 - Batch processing.
 - Thumbnail/waveform generation.
@@ -932,9 +934,9 @@ Ví dụ lựa chọn:
 1. Browser có WebGPU + WebCodecs phù hợp → GPU renderer + WebCodecs.
 2. Browser chỉ có WebGL2 + WebCodecs → WebGL2 renderer + WebCodecs.
 3. Browser thiếu codec cần thiết → thông báo rõ và đề xuất backend khác.
-4. Desktop có Agent/native backend → có thể dùng native media operation.
+4. Desktop dùng cùng engine với browser; phần riêng của nó là quyền đọc file hệ thống và cache đĩa, không phải một media engine (ADR-032).
 5. Cloud job → gửi VPS worker.
-6. Optional FFmpeg chỉ được gọi khi job yêu cầu hoặc backend chính không đáp ứng.
+6. Không có backend dự phòng: thiếu codec là báo thiếu và dừng ở đó, không âm thầm đổi engine (ADR-028, ADR-030).
 
 Không tự động chuyển file riêng tư lên cloud mà không có sự đồng ý của người dùng.
 
@@ -1348,10 +1350,10 @@ Của #85: core **506/506**, electron tools **59/59**, typecheck **exit 0 / 0 `e
 
 - Electron adapter.
 - IPC contract.
-- Native process manager.
+- Native process manager: **rút khỏi phạm vi** — Electron không spawn media process (ADR-032).
 - TMCut Agent.
 - yt-dlp integration.
-- Optional FFmpeg adapter.
+- FFmpeg adapter: **rút khỏi phạm vi** — ADR-028 supersede ADR-006, và ADR-032 cấm Electron có media engine riêng.
 - Local download manager.
 - Security hardening.
 
@@ -1483,7 +1485,7 @@ Không đặt benchmark target trước khi đo trên phần cứng mục tiêu.
 9. **Không dùng Colab Free làm production worker.**
 10. **Không mở Local Agent thiếu xác thực.**
 11. **Không tự ý upload media riêng tư lên cloud.**
-12. **Không biến FFmpeg filter graph thành abstraction trung tâm mới.** Effects nên có model độc lập; backend chỉ là implementation.
+12. **Không biến cú pháp của một binary media thành abstraction.** Effect phải có model độc lập; từ ADR-028 không còn "backend implementation" FFmpeg để chọn giữa hai đường.
 13. **Không cam kết pixel-perfect tuyệt đối trên mọi GPU/browser.** Dùng visual regression và tolerance.
 14. **Không coi stream copy là luôn khả thi.** Keyframe, codec và timestamp có thể yêu cầu re-encode.
 
@@ -1498,7 +1500,7 @@ Không đặt benchmark target trước khi đo trên phần cứng mục tiêu.
 | ADR-003 | WebGL2 baseline, WebGPU progressive | Cân bằng tương thích và hiệu năng |
 | ADR-004 | Deterministic timestamp renderer | Preview/export cùng logic |
 | ADR-005 | WebCodecs + muxer cho browser export | Không bắt buộc FFmpeg |
-| ADR-006 | FFmpeg optional backend | Giữ khả năng tương thích native khi cần |
+| ADR-006 | FFmpeg optional backend — **SUPERSEDED 2026-11-03 by [ADR-028](file:///D:/Applications/tm-studio/docs/adr/zero-ffmpeg-decisions.md)** | Rule 1 và 3 của plan browser-first không cho tồn tại backend tùy chọn |
 | ADR-007 | Electron + Browser + Node adapters | Đa nền tảng |
 | ADR-008 | TMCut Local Agent | Cho Web truy cập native capabilities có kiểm soát |
 | ADR-009 | Vercel orchestration, VPS worker | Tách API khỏi tác vụ dài |
@@ -1527,7 +1529,7 @@ Kiến trúc đích:
 - VPS worker cho cloud processing.
 - Vercel cho frontend, API và job orchestration.
 - yt-dlp chạy trên Electron, Local Agent hoặc VPS worker.
-- FFmpeg là backend tùy chọn, không phải nền tảng bắt buộc của rendering architecture.
+- FFmpeg **không** là backend tùy chọn: ADR-028 (2026-11-03) loại nó khỏi repo, build và docs — hàng này từng viết "backend tùy chọn".
 
 ### Lộ trình ưu tiên
 

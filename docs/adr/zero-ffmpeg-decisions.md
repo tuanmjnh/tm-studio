@@ -1,0 +1,213 @@
+# ADR-028…ADR-033: kiến trúc zero-FFmpeg, browser-first
+
+Register này chốt sáu quyết định mà plan [docs/tmcut-zero-ffmpeg-zero-ffprobe-browser-first-roadmap.md](file:///D:/Applications/tm-studio/docs/tmcut-zero-ffmpeg-zero-ffprobe-browser-first-roadmap.md) §26 yêu cầu tạo,
+và ghi lệnh supersede cho hai ADR đang giữ FFmpeg trong code. Nó là **nguồn quyết định**, không phải nhật ký công việc:
+số liệu đo được nằm ở [docs/audit/zero-ffmpeg-audit.md](file:///D:/Applications/tm-studio/docs/audit/zero-ffmpeg-audit.md). Lịch thi hành nằm ở ba nơi, và phân công đã đổi từ khi file này bắt đầu:
+slice zero-FFmpeg ghi ở §13–§14 của audit, slice V4 #82…#95 ghi ở dòng trạng thái của roadmap V4, còn
+[docs/extraction-plan.md](file:///D:/Applications/tm-studio/docs/extraction-plan.md) là nhật ký V4 và **dừng ở entry #81 ngày 2026-11-02** (đo: 920 dòng CRLF, entry cuối mang nhãn "V4 G2").
+
+Người duyệt: chủ repo, trong cùng phiên ra chỉ thị "xoá hết và build theo đúng hướng dự án" (2026-11-03).
+Quyết định kỹ thuật (thư viện, đường đi của pipeline) agent tự chủ động; quyết định **phá sản phẩm** (khai tử tính năng, xoá binary)
+ghi ở §8 kèm điều kiện phải hỏi trước khi thi hành.
+
+---
+
+## 0. Vì sao nhãn là 028…033, không phải 001…006
+
+Đo **trước khi ghi register này** (2026-11-03) bằng `grep -rho` trên pattern `ADR-` theo sau là một hoặc nhiều chữ số, chạy với `docs/*.md`:
+tầng một ra **27** nhãn, ADR-001…ADR-027; chạy trên cả `docs/` (kèm thư mục con) ra **28**, vì audit zero-FFmpeg đã đặt một placeholder `ADR-028` ở §5.3.
+
+Đo **lại sau slice A2** bằng script đếm cùng pattern trên mọi file `.md` dưới `docs/`: tầng một **30** nhãn (ADR-028/030/032 giờ hiện ra vì chính
+lệnh supersede trỏ vào chúng), đệ quy **33**, liền mạch 001…033, không nhãn nào trống. Hai con số đầu vẫn là căn cứ của quyết định vì chúng đo
+trên cây **chưa** có register; hai con số sau xác nhận dãy 028…033 đã cắm xuống mà không tạo va chạm.
+
+Repo đang dùng **hai gia đình số cho cùng một khoảng**:
+
+| Gia đình | Định nghĩa ở | Ví dụ nội dung |
+|---|---|---|
+| ADR-001…ADR-012 | `docs/tmcut-v4-universal-rendering-multiplatform-roadmap.md` §18 | ADR-001 = "Shared Project/Timeline Core"; ADR-006 = "FFmpeg optional backend" |
+| ADR-013…ADR-027 | [docs/v4-phase-0-audit.md §7](file:///D:/Applications/tm-studio/docs/v4-phase-0-audit.md#L229) | ADR-017 = tên package/alias core; ADR-027 = trim phải re-phase `speedPoints` |
+
+Plan §26 đánh số sáu quyết định của nó là ADR-001…006. Giữ nguyên số đó sẽ tạo **hai** ADR-001 cùng tồn tại —
+"Zero FFmpeg" và "Shared Project/Timeline Core" — và nhãn sau đang được source code trích dẫn, nên va chạm không chỉ là lỗi văn phong.
+Vì vậy register này dùng số tiếp theo của dãy đang chạy (028…033) và giữ nguyên ánh xạ xuống dưới để ai đọc plan vẫn tra được.
+
+| Plan §26 | Nhãn repo | Tên tắt |
+|---|---|---|
+| ADR-001 | **ADR-028** | Zero FFmpeg / Zero FFprobe |
+| ADR-002 | **ADR-029** | Mediabunny là toolkit demux/mux |
+| ADR-003 | **ADR-030** | WebCodecs ưu tiên, capability check bắt buộc |
+| ADR-004 | **ADR-031** | Preview và export dùng chung semantics |
+| ADR-005 | **ADR-032** | Browser-first, Electron không media engine riêng |
+| ADR-006 | **ADR-033** | Local-first privacy |
+
+---
+
+## 1. Bảng trạng thái (đo ngày 2026-11-03)
+
+| ADR | Quyết định | Trạng thái code | Bị chặn bởi |
+|---|---|---|---|
+| ADR-028 | FFmpeg/FFprobe bị loại khỏi repo, build và dependency tree | **CHỜ** — engine vẫn là đường render duy nhất | slice I, và slice I chờ H có output đầu tiên |
+| ADR-029 | Mediabunny đảm nhận demux + mux, không phải "FFprobe clone" | **MỘT PHẦN** — leg probe đã code ở slice B, commit `1b57ca1` | leg mux thuộc slice H |
+| ADR-030 | decode/encode qua WebCodecs, hỏi capability trước khi dùng | **MỘT PHẦN** — probe đã đọc `isConfigSupported`/codec table; chưa có encoder nào | slice H |
+| ADR-031 | một timeline evaluator + một composition model cho hai host | **ĐÃ ÁP DỤNG** — `evaluateTimeline`, `renderAt`, `createFrameScheduler`, `paintStack` | slice J phải trả nốt phần core đang in văn bản FFmpeg |
+| ADR-032 | Electron là shell, không sở hữu media engine thứ hai | **MỘT PHẦN** — engine HTML-video thứ hai đã xoá (ADR-023); engine FFmpeg desktop còn tới slice I | slice I |
+| ADR-033 | media đi trong máy mặc định; rời máy là một lựa chọn hiển thị | **CHỜ** — web host vẫn stream file đã chọn lên server (`server/api/v1/media/upload.post.ts`) | slice C/H quyết đường đi của bytes |
+
+---
+
+## 2. ADR-028 — Zero FFmpeg, Zero FFprobe
+
+**Bối cảnh.** Kiến trúc V4 cho phép FFmpeg ở lại với tư cách backend tùy chọn (ADR-006 trong roadmap, ADR-015 trong
+[v4-phase-0-audit.md:235](file:///D:/Applications/tm-studio/docs/v4-phase-0-audit.md#L235)). Plan browser-first cấm tuyệt đối (rule 1, 2, 3, 11).
+Audit đo footprint thật: 471 MiB binary được đóng gói, code engine, 10 kênh IPC, 3 bảng SQLite, và các surface ngoài code mà
+search-and-replace sẽ bỏ sót (§2 của audit). Hai thứ này không thể cùng đúng, nên phải có một lệnh supersede viết ra.
+
+**Quyết định.** FFmpeg và FFprobe **không còn tồn tại** trong repo, trong dependency tree, trong build, trong IPC surface và trong docs hướng dẫn.
+Không có "optional backend", không có fallback, không có WASM distribution của FFmpeg (plan §0.1 và rule 2).
+Quyền lựa chọn chức năng chuyển hết sang capability của runtime: WebCodecs để decode/encode, Mediabunny để demux/mux,
+Web Audio để xử lý audio, canvas/WebGL2 để compositor.
+
+**Supersede.** ADR-006 (roadmap §18) và ADR-015 (v4-phase-0-audit §7) **không còn hiệu lực** từ ngày 2026-11-03.
+Cả hai hàng đều được ghi chú tại chỗ, không xoá: lịch sử quyết định phải đọc được rằng code từng tuân theo một ADR đã bị thay, nếu không
+người sau kết luận sai rằng code hiện tại đang trái quyết định.
+
+**Hệ quả với code đang chạy.** Không có đường export nào không cần FFmpeg trong repo hôm nay (đo ở audit §6: 0 dòng cho encoder, muxer, audio engine,
+OffscreenCanvas/OPFS, WebGL2). Vì vậy thứ tự thi hành là **build-then-cut**: slice B → D → F → G → H rồi mới I.
+Rule 11 của plan ("không xoá tính năng đang chạy trước khi cái thay thế có test xanh") thắng mọi mong muốn gỡ nhanh.
+
+**Điều kiện mở lại.** Chỉ một: nếu một tính năng bắt buộc của sản phẩm không tồn tại được trong browser stack, nó **khai tử có ADR mới**
+hoặc tách thành một phase riêng — không quay lại FFmpeg.
+
+---
+
+## 3. ADR-029 — Mediabunny là toolkit demux/mux, không phải FFprobe thứ hai
+
+**Bối cảnh.** Plan §3.1 chọn Mediabunny và cảnh báo rõ: nó nằm trong phạm vi API/format nó hỗ trợ, không phải một bản FFprobe đầy đủ.
+Probe cũ của web trả `fps: 0` khi không đo được ([app/utils/tmcut/webProbe.ts:48](file:///D:/Applications/tm-studio/app/utils/tmcut/webProbe.ts#L48)) —
+audit §5.2 chỉ ra rằng dùng `0` làm sentinel là đúng cái plan §4.3 cấm: một con số có vẻ hợp lệ thay cho "không biết".
+
+**Quyết định.** Cài `mediabunny@1.65.1` (license MPL-2.0, hai runtime dependency đều là type-only — đã xác minh ngày 2026-11-03, audit §6)
+và dùng nó cho **demux** (container, track, codec, duration, frame rate, HDR, PAR) và **mux** (mp4/webm output). Ba ràng buộc đi kèm:
+
+1. Nó là thư viện **duy nhất** trong `app/` được chạm demuxer; mọi UI đọc qua `MediaProbeService` (rule 12). Guard
+   `tmcut_media_probe.spec.ts` đếm số file import mediabunny trong `app/**` và chốt bằng 1.
+2. Kết quả demux không bao giờ tự nó thành `MediaInfo`. Nó đi qua `normalizeMediaInfo` trong core, và core là nơi giữ luật:
+   một trường không đọc được là **thiếu**, không phải `0`; FPS chỉ có khi có số đo; duration tự nhận nguồn
+   `container | track | estimated | unknown`; mỗi khoảng trống thành một warning có tên và một `importStatus`.
+3. Không coi một format Mediabunny không nhận là "file hỏng". Đó là `canDemux: false` kèm lý do, và UI phải nói được khác hai case đó.
+
+**Trạng thái.** Leg demux đã code và đã chứng minh trên cả hai host ở slice B (audit §13). Leg mux thuộc slice H.
+
+**Điều kiện mở lại.** Nếu một container cần dùng thật sự nằm ngoài danh sách Mediabunny đọc được, phương án là thêm một toolkit đọc
+**đúng capability đó** rồi đưa về cùng `normalizeMediaInfo` — không phải quay lại binary ngoài.
+
+---
+
+## 4. ADR-030 — WebCodecs cho decode/encode, capability check là bắt buộc
+
+**Bối cảnh.** Plan §0.1 buộc "use WebCodecs when available" và §14 cấm Electron có media engine riêng.
+Điện thoại và máy tính không bảo đảm tồn tại một codec cụ thể; vì thế "encode được gì" là sự thật của runtime, không phải của preset.
+
+**Quyết định.** Mọi đường decode/encode đi qua WebCodecs (`VideoDecoder`, `VideoEncoder`, `AudioDecoder`, `AudioEncoder`) sau khi
+**hỏi** runtime bằng `isConfigSupported`, và kết quả hỏi được lưu thành capability của host chứ không suy ra từ tên máy.
+Ba luật dẫn xuất:
+
+1. Không có preset mặc định. Export nhận một danh sách yêu cầu, cắt nó theo capability matrix của host, và báo phần nó không làm được.
+2. Capability được đọc một lần cho mỗi host (`buildMediaCapabilities` trong core), không rải `typeof VideoEncoder` khắp UI.
+3. Một codec nguồn **không encode được** không làm export im lặng đổi codec: nó chặn `canExportSourceCodec` và in limitation
+   (`source-codec-encode`, `source-audio-encode`) mà người dùng thấy trước khi bấm Export.
+
+**Trạng thái.** Phần "hỏi" đã có trong slice B: probe trả `compatibility` và bảng codec decode/encode của host. Phần "encode" chưa có dòng code nào — slice H.
+Điều kiện tiền đề của H mà audit §8 ghi là chưa trả lời được: tổ hợp codec nào runtime thật trên máy dev encode được, phải đo bằng `isConfigSupported` thật.
+
+**Điều kiện mở lại.** `MediaRecorder` không được tuyển làm exporter offline; nó vẫn chỉ là đường ghi realtime (mic/voiceover), đúng như DoD §25 của plan.
+
+---
+
+## 5. ADR-031 — Preview và export dùng chung một semantics
+
+**Bối cảnh.** Đây là quyết định **đã áp dụng** trước khi có plan browser-first: Phase 1–2 của V4 dựng `evaluateTimeline`,
+`renderAt(timestamp)`, `createFrameScheduler`, `paintStack`, ADR-018 (cửa sổ clip nửa mở `[start, end)`) và ADR-027 (trim re-phase curve).
+Cái còn nợ là một lớp: **core vẫn phát hành cú pháp FFmpeg như API công khai** — 8 module in văn bản filtergraph, 2 module parse output FFmpeg (audit §5.1).
+
+**Quyết định.** Semantics là thứ thuộc core và **mô tả ý định**, không mô tả cú pháp của một binary cụ thể.
+`paintStack` quyết định lớp nào sơn; `renderAt` quyết định state tại một timestamp; `createFrameScheduler` quyết định frame nào tồn tại.
+Bộ sinh cú pháp FFmpeg — `setpts`, `xfade`, `geq`, `drawtext` — bị thay bằng instruction mà compositor và exporter cùng đọc được (slice J).
+Hai module chỉ nhắc FFmpeg trong comment (`textStyle`, `transitions`) không thuộc khối việc này.
+
+**Ràng buộc với ADR-028.** Slice J chạy **sau** I, nhưng phạm vi của nó phải được đo trước: **11** file core test tách assertion, **1** file (`platform`) mất assertion cùng lúc flag `nativeFFmpeg` chết, và **13** spec unit phía app đang
+witness chuỗi FFmpeg (audit §7, nhóm A; ba con số cũ 10 / 11 / 12 cho cùng một khối việc đã được đo lại ở §2.3 và §14.4 của audit).
+Nhóm B — luật thuần — phải giữ xanh trong suốt, và mỗi file witness chuyển thành behavior test chứ không xóa cả file.
+
+**Điều kiện mở lại.** Không có: hai host diverge semantics là lỗi, không phải phương án.
+
+---
+
+## 6. ADR-032 — Browser-first; Electron chỉ là shell
+
+**Bối cảnh.** Plan §0.1: "Electron must not have its own media engine". Tiền lệ đã có: ADR-023 (2026-11-02) xoá transport HTML-video thứ hai
+của desktop vì nuôi hai engine là phải chứng kiến chúng ngang nhau từng frame mãi mãi. Audit §3 cho thấy desktop còn đúng một engine riêng: FFmpeg qua IPC.
+
+**Quyết định.** Renderer của cả hai host chạy cùng một stack: cùng probe, cùng compositor, cùng encoder, cùng muxer.
+Electron được phép giữ ba thứ **không phải media engine**: quyền đọc file hệ thống (desharing qua `media://local`), window/packaging/updater,
+và một persistent cache. Electron **không** được phép có một pipeline decode/encode riêng.
+`TmcutPlatformMedia` là seam duy nhất: `probe` và `probeInfo` đọc từ cùng một schema, và khác biệt giữa hai host nằm ở **nguồn bytes**, không ở luật.
+
+**Hệ quả đo được.** Trên desktop, `media://local?file=…` trả `Accept-Ranges: bytes` và 206 (đo ở slice B qua renderer thật),
+nên demuxer chạy bằng HTTP ranged trên đúng file người dùng chọn — không cần một đường IPC "probe file" riêng.
+
+**Điều kiện mở lại.** Nếu một khả năng chỉ tồn tại ở desktop (truy cập thư mục lớn, cache đĩa), nó phải được mô tả như **capability của host**
+trong adapter, không như một engine. Stabilization (vidstab) là case thật đang chờ §8 mục 1.
+
+---
+
+## 7. ADR-033 — Local-first: bytes không rời máy mặc định
+
+**Bối cảnh.** Plan §0.1 yêu cầu media xử lý local mặc định, cloud chỉ khi có consent. Audit §2 và code hiện tại cho thấy web host **đang** đưa bytes
+lên server: file người dùng chọn được stream tới `POST /api/v1/media/upload` và ghi vào `config.uploads.dir`, vì `blob:` URL chết khi reload
+(R152). Desktop thì đi thẳng ra đĩa.
+
+**Quyết định.** Mặc định, bytes media đi trong máy: probe/thumbnail/analysis/export chạy trong runtime của trình duyệt hoặc renderer,
+không gửi nguyên liệu lên server. Cache vật lý của web host dùng storage phía client (IndexedDB/OPFS — slice C), không dùng đĩa server.
+Server chỉ được nhận bytes khi **người dùng chọn một tính năng rõ ràng là cloud** (render cloud, stock download, cộng tác), và tính năng đó phải
+tự khai là cloud ở UI. Route `/api/v1/media/upload` tồn tại tới slice C và bị coi là **một deviation đang đóng lại**, không phải kiến trúc đích.
+
+**Hệ quả.** Slice C phải thay chỗ upload đó bằng fingerprint + cache phía client, và `importStatus` phải phân biệt được
+"đang xử lý trong máy" với "đang gửi lên server". Đây là lý do C đứng ngay sau B.
+
+**Điều kiện mở lại.** Cloud render (plan §Phase 10) là tính năng tùy chọn, bật per-job, có consent, và không được âm thầm thay đường local.
+
+---
+
+## 8. Chín quyết định để ngỏ của audit §10 — chốt tới đâu
+
+Audit mở §10 bằng **chín** câu "agent không được tự quyết" (đo: §10 đánh số 1…9). Chỉ thị 2026-11-03 ủy quyền cho phần kỹ thuật; phần phá sản phẩm vẫn cần chủ repo xác nhận,
+nên bảng dưới ghi rõ cái nào đã chốt, cái nào là **đề xuất có điều kiện**.
+
+| # | Câu | Chốt | Thuộc ADR |
+|---|---|---|---|
+| 1 | Stabilization (vidstab) | **Khai tử**, ghi là tính năng mất khi cắt. Lý do: không có tương đương trong WebCodecs/Web Audio, và giữ nghĩa là giữ engine desktop riêng — trái ADR-032. Chủ repo xác nhận trước khi slice I xoá. | 028, 032 |
+| 2 | Autocut scene/silence | **Làm lại trên sample đã decode** (slice E). Không tắt tính năng vì đầu vào (frame, PCM) vẫn lấy được từ decoder. | 030, 031 |
+| 3 | HTML-video export | **Không phải đường export của timeline.** HTML-video ở lại như một loại composition có UI riêng; export timeline dùng WebCodecs + muxer (slice H). Điều này cũng khớp ADR-023: một function, một engine. | 030, 031 |
+| 4 | V4 roadmap | **Sửa prose ngay, archive cả bộ ở slice K.** Lý do: DoD §25 của plan có mục "không docs hướng dẫn cài FFmpeg" — dán nhãn supersede mà để nguyên **14** dòng prose còn cho phép fallback (đo ở audit §5.3) thì mục đó vẫn fail khi grep. | 028 |
+| 5 | Số ADR | **028…033**, ánh xạ ở §0. | — |
+| 6 | `backup/ffmpeg-engine-2026-11-03/` | **Giữ untracked tới slice I**, rồi xoá. Nó là bản soi chiếu để kiểm tra lại, không phải lịch sử; lịch sử đã có git (source commit `92a4818`). | — |
+| 7 | `resources/*.exe` (471 MiB) | **Xoá ở slice I**, và chỉ sau khi chủ repo duyệt; đây là thao tác khó đảo và là điểm không quay lại. | 028 |
+| 8 | ADR-025 (font vendoring) | **Vẫn mở.** Sau khi `drawtext` về hưu, nó có thể tự đóng vì chữ sẽ do renderer của app sơn bằng WOFF2 đang có; phải đo ở slice J rồi mới khai. | 031 |
+| 9 | Subtitle burn-in | **Đi qua text/paint renderer đã có**, không qua libass: subtitle đã là text track trong timeline, nên "burn-in" chỉ là một lớp sơn trong stack chứ không phải một pipeline. Không viết parser `.ass` đầy đủ. Chủ repo xác nhận nếu sản phẩm thật sự cần `.ass` styling ngoài phạm vi đó. | 031 |
+
+Ba câu (1, 7, 9) có hiệu lực **phá tính năng hoặc dữ liệu**, nên chúng là điều kiện tiên quyết của slice I chứ không phải của slice này:
+slice A2 chỉ ghi quyết định, chưa xoá gì.
+
+---
+
+## 9. Register này không quyết
+
+- **Không** đổi hành vi code nào. Không một dòng `app/`, `server/`, `electron/` hay `packages/core/src/` bị chạm ở slice này;
+  số liệu trạng thái lấy từ phép đo đã ghi ở audit §6, §13 và commit `1b57ca1`.
+- **Không** xoá FFmpeg. Nó thuộc slice I, và slice I chỉ mở khi slice H tạo ra output hợp lệ đầu tiên.
+- **Không** thay schema project. Plan §4.1/§7 mô tả `TMCUTProject { schemaVersion, tracks, sequences }` trong khi repo lưu `version: 3` với
+  `timeline.tracks` flat; đó là một **migration**, cần ADR riêng (audit §5.4), không phải một field đổi tên.
+- **Không** cam kết ngày. Thứ tự slice và exit gate nằm ở audit §8; mỗi slice vẫn chạy đủ 5 gate của
+  `tmcut-verify-gate-pipeline` rồi commit + push.
