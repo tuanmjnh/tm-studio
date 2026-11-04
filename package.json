@@ -6,6 +6,9 @@
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",
+  "imports": {
+    "#shared/*": "./shared/*"
+  },
   "scripts": {
     "build": "nuxt build",
     "dev": "nuxt dev --port 4003",
