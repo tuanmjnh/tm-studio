@@ -31,7 +31,7 @@
  *        tests/unit/tmcut_scene_scan.spec.ts
  */
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -192,15 +192,8 @@ async function main() {
       'the seam delivers pixels; what they mean is decided in core and the scan')
   })
 
-  await check('the demuxer still belongs to exactly two modules', () => {
-    const dir = join(root, 'app/utils/tmcut')
-    const holders = readdirSync(dir)
-      .filter(name => name.endsWith('.ts'))
-      .filter(name => /from 'mediabunny'/.test(readFileSync(join(dir, name), 'utf8')))
-      .sort()
-    assert.deepEqual(holders, ['frameDecode.ts', 'mediaProbe.ts'],
-      'E2 must not open a third place that holds a decoder')
-  })
+  // The demuxer-holder count moved to `tmcut_silence_scan.spec.ts` in slice E3,
+  // the slice that added a third holder on purpose. One guard, one home.
 
   console.log(`\n=== [TMCut scene scan] ${passed} passed ===`)
 }

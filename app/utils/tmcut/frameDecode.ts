@@ -51,7 +51,7 @@ function toPngBlob(canvas: HTMLCanvasElement | OffscreenCanvas): Promise<Blob | 
 }
 
 /** Where a read should get its bytes: the client copy first, a location second. */
-interface TmcutMediaRead {
+export interface TmcutMediaRead {
   bytes: Blob | null
   src: string | null
   signal: AbortSignal
@@ -62,8 +62,11 @@ interface TmcutMediaRead {
  * `Input`, and a `close` that lets it go. A cancelled read releases the input
  * immediately — Mediabunny keeps fetching ranges until disposed, and a scrub or a
  * scan that walked past this instant must not keep the network busy.
+ *
+ * The audio seam borrows this rather than opening a second demuxer: two owners of
+ * the same byte-to-`Input` rule is two chances for a host to drift.
  */
-function openMedia(read: TmcutMediaRead): { input: Input, close: () => void } | null {
+export function openMedia(read: TmcutMediaRead): { input: Input, close: () => void } | null {
   const source = read.bytes
     ? new BlobSource(read.bytes)
     : read.src ? new UrlSource(read.src) : null

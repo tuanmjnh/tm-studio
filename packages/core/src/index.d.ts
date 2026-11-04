@@ -435,10 +435,18 @@ export function cutsToShots(
 export function dbfsOf(rms: number): number
 /** One dBFS level per window of PCM, the short tail included. */
 export function levelSeries(samples: ArrayLike<number>, sampleRate: number, windowSec?: number): number[]
-/** Quiet runs from a level series. */
+/** One dBFS level per window, taken from the loudest channel of PCM. */
+export function loudestLevelSeries(
+  channels: ArrayLike<ArrayLike<number> | null | undefined> | null | undefined,
+  sampleRate: number,
+  windowSec?: number
+): number[]
+/** Leading samples of a decoded PCM run that fall before the asked start; 0 when unusable. */
+export function pcmHeadTrim(askedSec: number, deliveredSec: number, sampleRate: number): number
+/** Quiet runs from a level series, reported in source seconds from `offsetSec`. */
 export function silenceSpans(
   levels: ArrayLike<number>,
-  options?: { windowSec?: number, noiseDb?: number, minDurationSec?: number, durationSec?: number }
+  options?: { windowSec?: number, noiseDb?: number, minDurationSec?: number, durationSec?: number, offsetSec?: number }
 ): CoreSilenceRange[]
 
 export function createSelection(ids?: Array<string | unknown>): string[]

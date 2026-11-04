@@ -419,8 +419,12 @@ async function main() {
     assert.deepEqual(withSink, ['app/utils/tmcut/frameDecode.ts'],
       'the pixels come from one place, so both hosts cannot diverge about them')
     const withDecodeImport = files.filter(file => /from '.\/frameDecode|utils\/tmcut\/frameDecode/.test(read(file)))
-    assert.deepEqual(withDecodeImport, ['app/utils/tmcut/frameStore.ts'],
-      'the service is the only caller of the decoder')
+    assert.deepEqual(withDecodeImport, ['app/utils/tmcut/audioDecode.ts', 'app/utils/tmcut/frameStore.ts'],
+      'the frame service is the only caller; slice E3 lets the audio seam borrow the container opener')
+    const audio = read('app/utils/tmcut/audioDecode.ts')
+    assert.match(audio, /openMedia\(/, 'it borrows the opener and nothing else')
+    assert.ok(!/decodeFrame\(|decodeLumaSeries\(/.test(audio),
+      'the audio seam must not ask the pixel seam for frames')
   })
 
   await check('the service asks core for every frame decision', () => {

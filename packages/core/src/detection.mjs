@@ -248,15 +248,65 @@ export function levelSeries(samples, sampleRate, windowSec = TMCUT_SILENCE_MIN_D
 }
 
 /**
+ * One dBFS level per window for PCM carrying several channels: the LOUDEST
+ * channel wins each window, so a window counts as quiet only when nothing in
+ * it is audible. A channel that was not delivered, or is empty, is skipped
+ * rather than scored as silence — the same rule `levelSeries` applies to a
+ * non-numeric sample.
+ */
+export function loudestLevelSeries(channels, sampleRate, windowSec = TMCUT_SILENCE_MIN_DURATION_SEC) {
+  const list = Array.isArray(channels) ? channels : Array.from(channels ?? [])
+  const series = []
+  for (const channel of list) {
+    const levels = levelSeries(channel, sampleRate, windowSec)
+    if (levels.length > 0) series.push(levels)
+  }
+  if (series.length === 0) return []
+  const width = series.reduce((longest, levels) => Math.max(longest, levels.length), 0)
+  const levels = []
+  for (let index = 0; index < width; index++) {
+    let loudest = Number.NEGATIVE_INFINITY
+    for (const channel of series) {
+      const level = channel[index]
+      if (level === undefined) continue
+      if (level > loudest) loudest = level
+    }
+    levels.push(loudest)
+  }
+  return levels
+}
+
+/**
+ * How many leading samples of a decoded PCM run fall before the asked start, so
+ * the seam can drop them before any level is measured. A decoder hands over whole
+ * packets: asked for 0.5 s of a 44.1 kHz AAC file Chromium returned the packet
+ * that begins at 0.48762 s. A window overlapping audible content by those 546
+ * samples reads -27 dB — loud — and a quiet span arrives a whole window late.
+ * Unusable inputs answer zero: better an untrimmed run than an invented trim.
+ */
+export function pcmHeadTrim(askedSec, deliveredSec, sampleRate) {
+  const asked = Number(askedSec)
+  const delivered = Number(deliveredSec)
+  const rate = Number(sampleRate)
+  if (!Number.isFinite(asked) || !Number.isFinite(delivered)) return 0
+  if (!Number.isFinite(rate) || rate <= 0) return 0
+  return Math.max(0, Math.round((asked - delivered) * rate))
+}
+
+/**
  * Quiet runs from a level series: consecutive windows at or below `noiseDb`,
  * kept only when they last `minDurationSec` or longer, closed at `durationSec`.
  * The same shape the stderr reader produced, so nothing downstream has to
  * learn a new one.
+ *
+ * `offsetSec` is where the series' first window sits in the source: a scan of a
+ * trimmed clip reports source seconds, so no caller has to add them afterwards.
  */
 export function silenceSpans(levels, options = {}) {
   const windowSec = optionNumber(options.windowSec, TMCUT_SILENCE_MIN_DURATION_SEC)
   const noiseDb = optionNumber(options.noiseDb, TMCUT_SILENCE_NOISE_DB)
   const minDuration = optionNumber(options.minDurationSec, TMCUT_SILENCE_MIN_DURATION_SEC)
+  const offsetSec = Math.max(0, optionNumber(options.offsetSec, 0))
   const durationSec = Number(options.durationSec)
   const list = Array.isArray(levels) ? levels : Array.from(levels ?? [])
   if (windowSec <= 0 || minDuration <= 0 || list.length === 0) return []
@@ -268,8 +318,8 @@ export function silenceSpans(levels, options = {}) {
     const quiet = Number.isFinite(level) && level <= noiseDb
     if (quiet && open < 0) open = index
     if (!quiet && open >= 0) {
-      const start = open * windowSec
-      const stop = Math.min(index * windowSec, limit)
+      const start = offsetSec + open * windowSec
+      const stop = offsetSec + Math.min(index * windowSec, limit)
       if (stop - start >= minDuration) spans.push({ start: round3(start), end: round3(stop) })
       open = -1
     }
