@@ -209,6 +209,8 @@ slice A2 chỉ ghi quyết định, chưa xoá gì.
 - **Không** xoá FFmpeg. Nó thuộc slice I, và slice I chỉ mở khi slice H tạo ra output hợp lệ đầu tiên.
 - **Không** thay schema project. Plan §4.1/§7 mô tả `TMCUTProject { schemaVersion, tracks, sequences }` trong khi repo lưu `version: 3` với
   `timeline.tracks` flat; đó là một **migration**, cần ADR riêng (audit §5.4), không phải một field đổi tên.
+  **Cập nhật 2026-11-04, hàng 5 của §10 đã thi hành:** chủ repo khoá nguyên dạng v3 thật nên ADR migration nói ở bullet này **không cần viết nữa**;
+  hình dạng đã đóng băng bằng `tests/unit/tmcut_project_schema_v3.spec.ts` (bảy assertion, đo ở audit §15).
 - **Không** cam kết ngày. Thứ tự slice và exit gate nằm ở audit §8; mỗi slice vẫn chạy đủ 5 gate của
   `tmcut-verify-gate-pipeline` rồi commit + push.
 
@@ -226,7 +228,7 @@ bảng dưới ghi lại đủ bộ, kèm việc mỗi câu mở ra ở slice n�
 | 2 | Subtitle burn-in | **Sơn bằng text track** qua `paintStack` đã có; không parser ASS, không libass. | Feature ASS không hỗ trợ phải khai rõ ràng. Slice H cho export, slice J cho emitter `subtitles`. Xác nhận hàng 9 của §8. |
 | 3 | Binary FFmpeg trong package | **Gỡ khỏi package ở slice I**, nhưng giữ file trên máy dev cho tới khi slice H xong và parity đã đo thật. | Không xoá binary hay bản backup nào trước mốc đó. |
 | 4 | FFmpeg phía server | **Server chỉ là storage.** Bỏ render, analyze, proxy phía server; render = WebCodecs + TMCut Core, analyze = MediaProbeService + Mediabunny + Web API, proxy và thumbnail = pipeline local trong browser. | `upload.post.ts` **không mất** khả năng Web upload: nó là Storage Upload API thuần, không FFmpeg, không binary xử lý media. Media ở local mặc định, chỉ upload khi user yêu cầu rõ (Cloud Library, Stock Library). Không cloud render ở bản này. Luật này đã có guard: `tests/unit/tmcut_server_media_boundary.spec.ts`. |
-| 5 | Project schema | **Khoá schema v3 thật**: `version: 3` với `timeline.tracks`; sửa roadmap và interface mẫu cho khớp repo. | Không migrate sang `tracks` và `sequences` khi chưa có yêu cầu chức năng thật; migration cũ phải tiếp tục chạy. |
+| 5 | Project schema | **Khoá schema v3 thật**: `version: 3` với `timeline.tracks`; sửa roadmap và interface mẫu cho khớp repo. | Không migrate sang `tracks` và `sequences` khi chưa có yêu cầu chức năng thật; migration cũ phải tiếp tục chạy. **Đã khoá 2026-11-04** bằng `tests/unit/tmcut_project_schema_v3.spec.ts`: shape app file (12 key top-level, `timeline` 4 key, `schemaVersion: 3`, `timeline.version: 1` chỉ là nhãn), shape core (`version: 3`, `timeline.version: 3`, `validateTimeline` nhận), `sequences` **0** hit trong toàn bộ code shipped, và `timeline.version` đúng **một** chỗ đọc. Hai chỗ đã khớp sẵn: `docs/v4-phase-0-audit.md` §4.1 mô tả đúng cả hai model. Sample `sequences` chỉ tồn tại ở `docs/tmcut-zero-ffmpeg-zero-ffprobe-browser-first-roadmap.md:339-347` — file plan **untracked của chủ repo**, không commit, không tự sửa; bản đó đang sai và chủ repo quyết định xoá hay ghi chú. |
 | 6 | Đường dẫn media chết | **Media Offline / Missing Media kèm nút Relink.** | Không tự mở dialog, không xoá asset reference khỏi project khi đường dẫn hỏng. Slice C. |
 | 7 | Font | **Chỉ font đi cùng app** tới slice J; không quảng bá import font khi chưa làm. | Đánh giá FontFace + OPFS ở slice J, rồi mới nói tới ADR-025. |
 | 8 | `backup/ffmpeg-engine-2026-11-03/` | **Giữ untracked tới hết slice I**, không vào build, không xoá bằng `git clean`. | Chỉ xoá sau khi parity xác nhận không cần tới nó nữa. Xác nhận hàng 6 của §8. |
@@ -235,7 +237,9 @@ bảng dưới ghi lại đủ bộ, kèm việc mỗi câu mở ra ở slice n�
 Thứ tự thực hiện chủ repo chọn: **Q9 trước**, rồi biên giới server (Q4), rồi khoá schema (Q5), rồi phạm vi Q1/Q2/Q6/Q7,
 cuối cùng Q3/Q8 (binary và backup) ở slice I sau khi đã đo và xác nhận parity.
 
-Tính đến lần sửa này, code đã chạm vì các quyết định trên chỉ là phần Q9 (commit `44f70c6`) và phần ghi biên giới Q4 thành luật:
-sáu file `server/**` spawn hoặc phục vụ job FFmpeg mang marker `ZERO-FFMPEG-LEGACY` khai rõ slice nào giết chúng,
-guard `tmcut_server_media_boundary.spec.ts` đóng băng danh sách đó, và **không** route nào bị xoá.
+Tính đến lần sửa này, code đã chạm vì các quyết định trên gồm ba phần, đúng thứ tự chủ repo chọn: Q9 (commit `44f70c6`),
+biên giới server Q4 (commit `521d050`) và khoá schema Q5. Sáu file `server/**` spawn hoặc phục vụ job FFmpeg mang marker
+`ZERO-FFMPEG-LEGACY` khai rõ slice nào giết chúng, guard `tmcut_server_media_boundary.spec.ts` đóng băng danh sách đó,
+và guard `tmcut_project_schema_v3.spec.ts` đóng băng hình dạng project. **Không** route nào bị xoá, **không** field nào bị đổi tên.
 Xoá route, xoá binary và đổi UI là chuyện của slice I, chưa xảy ra.
+Bằng chứng đo từng phần nằm ở [docs/audit/zero-ffmpeg-audit.md §15](file:///D:/Applications/tm-studio/docs/audit/zero-ffmpeg-audit.md#L619).

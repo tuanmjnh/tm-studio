@@ -266,6 +266,9 @@ Hướng đã chọn: **sửa prose ngay, archive cả bộ ở slice K** (mục
   `version: 3` và `timeline.tracks` flat ([useTmcutProject.ts:313](file:///D:/Applications/tm-studio/app/composables/useTmcutProject.ts#L313)
   đặt `schemaVersion: TMCUT_PROJECT_SCHEMA_VERSION`, `project.mjs:43` đặt `version: 3`).
   Hai hình dạng này **không** tương thích một-một; cần một ADR migration riêng, không phải một field đổi tên.
+  **Trạng thái 2026-11-04 (Q5):** chủ repo khoá nguyên dạng v3 thật và **không** migrate sang `tracks` + `sequences`;
+  cả hai hình dạng đã đo và đóng băng bằng guard ở §15.3, nên ADR migration mà bullet này đòi **không cần viết nữa** —
+  nó chỉ quay lại nếu một tính năng thật buộc đổi shape, và lúc đó guard sẽ đỏ có chủ ý.
 
 ---
 
@@ -534,7 +537,7 @@ trước khi cái thay thế có test.
 
 | Sản phẩm | Ở đâu | Số đo |
 |---|---|---|
-| Register ADR-028…033, kèm ánh xạ từ dãy ADR-001…006 của plan §26 | `docs/adr/zero-ffmpeg-decisions.md` (file mới) | **214** dòng, đo bằng `split('\n').length` trên bản cuối cùng qua gate; §10 ghi thêm bộ quyết định Q1…Q9 ngày 2026-11-04, bản hiện tại **242** dòng và anchor `#L183` không đổi vì §10 nối ở cuối file |
+| Register ADR-028…033, kèm ánh xạ từ dãy ADR-001…006 của plan §26 | `docs/adr/zero-ffmpeg-decisions.md` (file mới) | **214** dòng, đo bằng `split('\n').length` trên bản cuối cùng qua gate; §10 ghi thêm bộ quyết định Q1…Q9 ngày 2026-11-04, bản hiện tại **246** dòng và anchor `#L183` không đổi vì phần thêm nằm **dưới** dòng đó |
 | Lệnh supersede **tại chỗ** cho ADR-006 | `docs/tmcut-v4-universal-rendering-multiplatform-roadmap.md` | hàng ADR nằm ở dòng **1503** sau slice (trước: 1501, lệch vì chèn banner) |
 | Lệnh supersede **tại chỗ** cho ADR-015 | `docs/v4-phase-0-audit.md:235` | sửa trong một dòng, nên `#L229`/`#L233`/`#L235` mà audit này cite vẫn đúng |
 | Prose cho phép FFmpeg tồn tại | V4 roadmap | **14** dòng rewritten + 1 banner chèn sau dòng 8; `git diff --numstat` = **16/14**, `git diff -U0` = 14 hunk một-dòng |
@@ -610,3 +613,77 @@ Ba con số đó trả lời câu hỏi thật, vì slice J xử lý ba tập kh
 Vì `= 11` là số của §8 và `10`/`12` là số của các bản cũ, §2.3 và §7 đã viết lại theo bảng này; hàng J ở §8 giữ nguyên số và
 được chú thích thêm nguồn danh sách. Bài học method, ghi lại vì nó sẽ lặp lại ở slice I: **đếm theo tên emitter, không đếm theo từ khóa**
 — `analysis` (55 dòng `assert`, chạm `parseSceneOutput` + `parseSilenceOutput`), `audio` (34 dòng, chạm `volumeExpr` + `panFilter`) và `keyframes` (67 dòng, chạm `keyframeExpr`) không có chữ nào trong tên file là "ffmpeg", nhưng mỗi file giữ một phần assertions buộc vào văn bản do emitter FFmpeg sinh ra; số assertion còn lại là số học thuần và slice J phải giữ nguyên chúng.
+
+---
+
+## 15. Q9, Q4, Q5 — ba slice đầu tiên thi hành quyết định của chủ repo (đo ngày 2026-11-04)
+
+Chủ repo trả lời chín câu một lần và chọn thứ tự thực hiện; toàn bộ bộ quyết định nằm ở
+[docs/adr/zero-ffmpeg-decisions.md §10](file:///D:/Applications/tm-studio/docs/adr/zero-ffmpeg-decisions.md#L219).
+**Ba** câu làm ngay được mà không phá tính năng nào: Q9 (hai lỗi làm đỏ suite), Q4 (biên giới server), Q5 (khoá schema).
+Sáu câu còn lại là phạm vi tính năng hoặc dữ liệu (Q1, Q2, Q3, Q6, Q7, Q8) nên chúng thuộc slice C…I, và rule 9 của plan
+cấm xoá tính năng đang chạy trước khi cái thay thế có test. Trong ba slice này: **không** route nào bị xoá, **không** tính năng nào bị gỡ,
+**không** binary nào bị đụng, **không** field schema nào bị đổi tên.
+
+### 15.1 Q9 — map `#shared/*` cho Node thô, và password rời khỏi localStorage
+
+| Việc | Bằng chứng đo |
+|---|---|
+| Nguyên nhân đỏ | `tmcut_process.spec.ts` chết ở `ERR_PACKAGE_IMPORT_NOT_DEFINED: "#shared/utils/processStore"`. Nuxt có alias `#shared/*` riêng nên app và Nitro không cần gì thêm; `package.json` **không** có field `imports` nào, và `git log -S` cho thấy nó chưa từng được commit. |
+| Hình dạng map đã chốt | `"imports": { "#shared/*": "./shared/*" }` — **một chuỗi, không phải mảng candidate**. Đo trên Node **v24.22.2**: mảng candidate kiểu `["./shared/*.ts", "./shared/*.cjs"]` **không** rơi qua phần tử thiếu; phần tử đầu tiên thay ra một đích không tồn tại là `ERR_MODULE_NOT_FOUND` ngay, nên `#shared/utils/detection-args.cjs` bị tra thành `detection-args.cjs.ts` và chết. Với một đích duy nhất, file `.cjs` resolve đúng như tên ghi, còn module TypeScript không đuôi do loader (tsx) tự đoán đuôi. |
+| Guard | `tests/unit/tmcut_shared_imports.spec.ts` — **5 test**: đích là chuỗi `./shared/*`; mọi specifier `#shared/...` trong repo resolve (**9** specifier, đếm thật: `docs/content`, `types/auth`, `types/docs`, `types/electron`, `types/rbac`, `types/webauthn`, `utils/detection-args.cjs`, `utils/processStore`, `utils/stockGuards`); không specifier nào có `..`; import **thật** một module TS không đuôi và một module `.cjs` có đuôi. |
+| `app/pages/login.vue` | `git diff HEAD` bắt đầu ở **dòng 125**: từ dòng đó trở xuống là WIP template của chủ repo (96 thêm / 116 xoá), còn toàn bộ phần script **đã khớp HEAD** — và HEAD (`f979005`) chỉ lưu `{ username }`, đồng thời phát hiện payload cũ có `password` thì ghi lại không kèm secret. Bản working copy từng mang dòng ghi password; đã khôi phục hình dạng an toàn và **không commit**, vì commit file đó sẽ mang theo WIP của chủ repo. |
+
+### 15.2 Q4 — server chỉ là storage
+
+Đo: `grep -rl "ZERO-FFMPEG-LEGACY" server` → **6** file (`media/analyze.post.ts`, `media/proxy.post.ts`, `media/render.post.ts`,
+`media/render/[jobId].get.ts`, `utils/htmlVideoRender.ts`, `utils/renderJobs.ts`). Bốn file đầu spawn tiến trình; hai file sau chỉ
+poll và registry của chính job đó. Marker ở 20 dòng đầu mỗi file, khai tên slice I — file nào spawn thì phải nói ai giết nó.
+
+Guard `tests/unit/tmcut_server_media_boundary.spec.ts` — **5 test**: tập file import `node:child_process` **đúng bằng** danh sách đóng băng
+(danh sách được phép co lại khi slice C…H xong, không được phình ra); mỗi file mang marker; ba file storage (`media/upload.post.ts`,
+`routes/uploads/[...path].get.ts`, `utils/uploads.ts`) không được đụng `node:child_process`, `spawn(`, hay `tools.ffmpegPath`;
+upload vẫn pipe thẳng ra đĩa và trả `/uploads/<stored>`; serve route vẫn `createReadStream(target, { start, end })` và trả 206.
+Đó là phần Q4 của chủ repo được ghi thành luật: Web upload **không** mất, vì nó chưa từng là xử lý media.
+
+### 15.3 Q5 — khoá hình dạng project đang ship
+
+Phép đo chạy từ repo root, chỉ đọc, trên cây code hiện tại. Hai hình dạng cùng tồn tại và **cả hai đều thật**:
+
+| Đối tượng | Hình dạng đo được |
+|---|---|
+| App file (`localStorage` `tmcut_project_<id>`, và cùng object đó ghi ra JSON file qua IPC) | **12** key top-level: `canvas, cover, created_at, durationMs, id, name, revision, schemaVersion, settings, source, timeline, updated_at`. `timeline` có **4** key `durationMs, markers, tracks, version`; `schemaVersion: 3`; `timeline.version: 1`; ba track mặc định `t-text-1, t-video-1, t-audio-1`; `markers` luôn là array |
+| Core project (`createProject()` trong `packages/core/src/project.mjs`) | **4** key `canvas, project, timeline, version`; `version: 3`; `timeline` có **3** key `markers, tracks, version`; `timeline.version: 3`; `validateTimeline(project.timeline)` trả `[]`, còn `{ version: 1, tracks: [], markers: [] }` trả `["unsupported timeline version: 1"]` |
+| `sequences` | **0** hit trên **420** file shipped — `app` 261, `server` 35, `shared` 16, `electron` 41, `packages/core/src` 56, `packages/core/types` 11 — tổng **104 719** dòng, regex `\bsequences\b` có word boundary nên `choices_consequences` trong prompt chữ không bị tính |
+| Nơi duy nhất đọc `timeline.version` | [packages/core/src/timeline.mjs:344](file:///D:/Applications/tm-studio/packages/core/src/timeline.mjs#L344) — luật của DSL core. Không một dòng `app/` nào đọc nhãn `1` của file app, khớp nguyên văn câu "chỉ là nhãn cũ; **không** phải DSL version" ở [docs/v4-phase-0-audit.md:114](file:///D:/Applications/tm-studio/docs/v4-phase-0-audit.md#L114) |
+
+Guard mới `tests/unit/tmcut_project_schema_v3.spec.ts` — **7 test / 3 suite** — khoá cả hai bảng, cộng luật "stamp là oracle duy nhất"
+(`const isLegacy = (project.schemaVersion ?? 1) < TMCUT_PROJECT_SCHEMA_VERSION`) và fail nếu `sequences` xuất hiện ở bất kỳ file shipped nào.
+
+Guard **không** làm hai việc, ghi rõ để slice sau khỏi hiểu sai:
+- Không assert hành vi migration (file seconds scale **một** lần, mở lại không scale lần hai, restamp về 3). Việc đó thuộc
+  `tests/unit/tmcut_store_behaviour.spec.ts` (ca "legacy seconds file migrates once at open") và vẫn xanh — đó chính là lý do Q5
+  không cần ADR migration: không có migration nào được mở.
+- Không sửa file plan. Sample `TMCutProject { schemaVersion, appVersion, id, name, settings, assets, tracks, sequences, … }` nằm ở
+  `docs/tmcut-zero-ffmpeg-zero-ffprobe-browser-first-roadmap.md:339-347`, là tài liệu **untracked thuộc chủ repo** nên agent không commit và không tự xoá;
+  bản đó sai so với code và đã được khai ở §5.4 cùng hàng 5 của register §10.
+
+### 15.4 Bằng chứng gate
+
+| Gate | Lệnh | Kết quả | Bằng chứng |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | **PASS** | `TC_EXIT=0`, `grep -c "error TS"` = **0**; `.nuxt/eslint.config.mjs` sinh lại **28535** byte lúc 09:28 |
+| 2 Lint | `npx eslint tests/unit/tmcut_project_schema_v3.spec.ts` (sau gate 1) | **PASS** | `LINT_EXIT=0`, 0 problem trên đúng 1 file mới |
+| 3 Tests | `npx tsx tests/unit/run-all.mts` | **PASS** | **96/96** specs, `TEST_EXIT=0`, **0** hàng FAIL. `tmcut_project_schema_v3.spec.ts` (mới) xanh; `tmcut_login_remember.spec.ts` và `tmcut_process.spec.ts` — hai hàng đỏ baseline mà §14.2 ghi lại — đã xanh từ slice Q9 và vẫn xanh ở đây. Smoke vẫn là opt-in, dòng chót của runner ghi rõ "smoke skipped". |
+| 4 Live | — | **N/A** | slice chỉ thêm `tests/unit/*.spec.ts` và docs; không dòng `app/**`, `i18n/**`, `app/assets/css/**` nào bị chạm nên không đường render nào đổi |
+| 5 Docs | năm guard `tmcut_doc_table_shape`, `tmcut_docs_link_integrity`, `tmcut_doc_line_length`, `tmcut_doc_citations`, `docs_markdown` + scratch | **PASS** | chạy riêng từng cái trên đúng cây tài liệu cuối cùng (sau mọi lần sửa prose, kể cả lần sửa bảng gate này): `tmcut_doc_table_shape` **3/3 exit 0**; `tmcut_docs_link_integrity` **4/4 exit 0**; `tmcut_doc_line_length` **4/4 exit 0**; `tmcut_doc_citations` **5/5 exit 0**; `docs_markdown` **12 checks, exit 0**. Toàn bộ scratch script đã xoá ở cuối slice. |
+
+### 15.5 Chưa chứng minh
+
+- Q5 khoá **hình dạng đang ship**, không chứng minh hai shape là một. Bridge `ticksTracksToV3` / `applyV3Edit` vẫn nối app tracks với DSL v3 ở tầng tracks;
+  guard chỉ chắc một điều: chưa ai nhân danh "schema mới" mà phá shape cũ.
+- `timeline.version: 1` của file app vẫn được ghi ra đĩa dù không ai đọc. Xoá nó **cũng là một migration**, nên Q5 để nguyên.
+- Phép đo 15.3 chạy trên mirror `localStorage` của harness Node. Project desktop ghi qua `tmcut:writeProject` dùng cùng một object,
+  nhưng **chưa** mở lại một file `.json` thật do app Electron sinh ra để đối chiếu key-by-key.
+- Slice I vẫn là chỗ duy nhất xoá route và binary; ba slice ở đây không xoá gì.
+
