@@ -304,8 +304,9 @@ check('the preview resolves fit, focus and crop from the same core call', () => 
   assert.ok(!/focusX \?\? 0\.5/.test(player), 'no local copy of the focus default may remain')
   assert.ok(!/computeFitObjectStyle\(clip\.fit \|\| 'fit'/.test(player), 'no local copy of the fit default may remain')
   const fitStyle = player.match(/function fitStyle[\s\S]*?\n}/)
-  assert.ok(fitStyle, 'the preview must have one fit-style helper both layers use')
-  assert.equal((player.match(/fitStyle\(clip\)/g) ?? []).length, 2, 'the main element and the outgoing crossfade layer must share it')
+  assert.ok(fitStyle, 'the preview must have one fit-style helper every footage layer uses')
+  assert.equal((player.match(/fitStyle\(/g) ?? []).length, 2,
+    'one definition and one call site — the shared surface helper — so no element can pick its own fit')
 })
 
 console.log(`\n=== All ${checks} shared-model checks passed ===`)

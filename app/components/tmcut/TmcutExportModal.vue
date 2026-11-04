@@ -395,15 +395,12 @@ const posterUrl = computed(() => {
   return asset?.thumbPath ? mediaUrl(asset.thumbPath) : ''
 })
 
-// Honest warning for the parallel-track gap (R122, narrowed in V4 Phase 2 (5),
-// wording corrected in #88): the compiler reads its rows through
-// `selectExportTracks`, the same rule the preview's evaluator uses — every
-// visible caption row is painted and hidden rows are not. What NEITHER
-// surface can do is STACK two footage rows: the graph builds a single concat
-// chain and the preview renders a single <video>, so the extra rows contribute
-// NO picture anywhere (they only bound the file's length). Actual layering is
-// the Phase 3 compositor. Read that fact from the selector instead of
-// hand-rolling a second answer here, or the warning and the export drift apart.
+// Honest warning for parallel tracks (#88, V4 Phase 2 (5), slice F2b): both
+// surfaces composite every visible footage row in paint order, and captions
+// follow the same selector. The gap that remains is per-layer effect plates —
+// the monitor's vignette is frame-wide where the file bakes it into its own
+// layer. Read the row set from the selector rather than hand-rolling a second
+// answer here, or the warning and the export drift apart.
 const parallelTracksWarning = computed(() => {
   if (!currentProject.value) return false
   return selectExportTracks(currentProject.value).extraVideoTracks.length > 0

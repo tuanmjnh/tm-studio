@@ -1046,7 +1046,7 @@
       "audioMp3Spec": "MP3 · {kbps} kbps · 48 kHz",
       "audioWavSpec": "WAV · PCM 16-bit · 48 kHz",
       "gifNote": "15 fps · up to 1280 px wide · optimized palette",
-      "parallelTracksWarning": "This project has parallel video tracks. The export composites every visible footage row in paint order, so the rows above the first one put their picture in the file. The preview still shows a single footage row, which is the bottom of that stack. Text and audio rows export in full.",
+      "parallelTracksWarning": "This project has parallel video tracks. The export composites every visible footage row in paint order, and the preview now stacks those same rows on one canvas, so what you scrub is what the file writes. Text and audio rows export in full.",
       "etaLabel": "ETA",
       "labelSize": "Size",
       "formatLabel": "Format & Codec",

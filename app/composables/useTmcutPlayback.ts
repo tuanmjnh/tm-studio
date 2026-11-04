@@ -6,7 +6,7 @@ import type { TmcutTimelineItem } from './useTmcutProject'
 import { clipMediaTimeSec, clipStartSec } from '~/utils/tmcut/clipTime'
 
 // One surface the canvas paints at this tick, straight from core's plan.
-type PaintSurface = {
+export type PaintSurface = {
   key: string
   role: 'paint' | 'outgoing'
   trackId: string | null
@@ -15,6 +15,8 @@ type PaintSurface = {
   layer: CoreEvaluatedLayer
   mediaTimeSec: number
   ownsAudio: boolean
+  /** True when this surface's crossfade partner is on screen with it. */
+  crossfades: boolean
 }
 
 // Shared playback state across TMCut editor
@@ -150,8 +152,23 @@ export function useTmcutPlayback() {
         mediaTimeSec: slot.layer.sourceTicks === null
           ? mediaTimeAt(clip, playhead.value)
           : ticksToSec(slot.layer.sourceTicks),
-        ownsAudio
+        ownsAudio,
+        crossfades: false
       })
+    }
+    // A crossfade only exists when BOTH of its layers are on screen. The plan
+    // hands the outgoing slot directly under its picture, so that adjacency IS
+    // the pair; a layer whose partner was trimmed away keeps painting as the
+    // plain cut `compositePlan` decided, with no ramp on it.
+    for (let index = 1; index < surfaces.length; index++) {
+      const below = surfaces[index - 1]
+      const above = surfaces[index]
+      if (!below || !above) continue
+      if (below.role === 'outgoing' && above.role === 'paint'
+        && below.trackIndex === above.trackIndex) {
+        below.crossfades = true
+        above.crossfades = true
+      }
     }
     return surfaces
   })
@@ -186,14 +203,45 @@ export function useTmcutPlayback() {
     }
   })
 
+  // The surface the crossfade element carries: the partner sitting directly
+  // under the main picture while a transition window is open. Exposed as a
+  // surface so the DOM styles it with the same helper every other footage
+  // layer uses, instead of a second ramp law keyed off the pair object.
+  const crossfadeSurface = computed<PaintSurface | null>(() => {
+    if (!transitionCrossfade.value) return null
+    const owner = paintSurfaces.value.findIndex(surface => surface.ownsAudio)
+    if (owner < 1) return null
+    return paintSurfaces.value[owner - 1] ?? null
+  })
+
+  // The surface the main element carries — the bottom of the stack, the one
+  // that owns the audio. Exposed as a surface (not just `{ clip, time }`) so
+  // the DOM can style it with the same helper the stacked rows use.
+  const mainSurface = computed<PaintSurface | null>(() =>
+    paintSurfaces.value.find(item => item.ownsAudio) ?? null)
+
   // Active video clip at the render position — the surface that owns the audio,
   // i.e. the bottom of the stack. Inside a transition window that is the
   // incoming clip (its partner owns the second <video> element instead), so the
   // main element never shows a half-blended frame.
   const activeVideoClip = computed(() => {
-    const surface = paintSurfaces.value.find(item => item.ownsAudio)
+    const surface = mainSurface.value
     if (!surface) return null
     return { clip: surface.clip, mediaCurrentTime: surface.mediaTimeSec }
+  })
+
+  // Every footage surface the DOM has no dedicated element for (Zero-FFmpeg
+  // slice F2b). The main element already paints `mainSurface` and the crossfade
+  // element paints its partner directly beneath it, so the v-for over the stack
+  // is the plan MINUS those two: rendering the whole plan would double-paint the
+  // bottom row, and rendering "everything after the owner" would drop a row
+  // whose pair sits above the canvas.
+  const stackedSurfaces = computed<PaintSurface[]>(() => {
+    const surfaces = paintSurfaces.value
+    const owner = surfaces.findIndex(surface => surface.ownsAudio)
+    if (owner < 0) return []
+    const carried = transitionCrossfade.value ? owner - 1 : -1
+    return surfaces.filter((_, index) => index !== owner && index !== carried)
   })
 
   // Active text overlays at the render position — across EVERY visible text
@@ -225,6 +273,7 @@ export function useTmcutPlayback() {
       }
     }
     syncOutgoingVideo()
+    syncStackedVideos()
   }
 
   // Frame-accurate seek (roadmap V4 Phase 2, item 3): the playhead lands on the
@@ -242,20 +291,13 @@ export function useTmcutPlayback() {
     seekToFrame(currentFrameIndex.value + delta)
   }
 
-  // Keep the OUTGOING crossfade layer in sync (roadmap B3). Mirrors the
-  // main element: seek-driven for reverse clips or a reverse (J) shuttle,
-  // playing forward with drift correction otherwise; paused whenever no
-  // transition window is active.
-  function syncOutgoingVideo() {
-    const el = outgoingVideoRef.value
-    if (!el) return
-    const pair = transitionCrossfade.value
-    if (!pair) {
-      if (!el.paused) el.pause()
-      return
-    }
-    const target = pair.outgoingMediaTime
-    if (shuttleRate.value < 0 || pair.outgoing.reverse) {
+  // One media-clock law for the footage elements that are NOT the main one —
+  // the crossfade partner and every stacked surface. Seek-driven for a reverse
+  // clip or a reverse (J) shuttle, native forward play with drift correction
+  // otherwise, paused whenever nothing is playing. Keeping this in one place is
+  // what stops a second row from running a different clock than the first.
+  function syncSecondaryVideo(el: HTMLVideoElement, target: number, reverse?: boolean) {
+    if (shuttleRate.value < 0 || reverse) {
       if (!el.paused) el.pause()
       if (Math.abs(el.currentTime - target) > 0.25) {
         try {
@@ -278,6 +320,42 @@ export function useTmcutPlayback() {
       if (el.paused) el.play().catch(() => {})
     } else if (!el.paused) {
       el.pause()
+    }
+  }
+
+  // Keep the OUTGOING crossfade layer in sync (roadmap B3).
+  function syncOutgoingVideo() {
+    const el = outgoingVideoRef.value
+    if (!el) return
+    const pair = transitionCrossfade.value
+    if (!pair) {
+      if (!el.paused) el.pause()
+      return
+    }
+    syncSecondaryVideo(el, pair.outgoingMediaTime, pair.outgoing.reverse)
+  }
+
+  // The stacked surfaces' media elements, keyed by the surface each one paints
+  // (Zero-FFmpeg slice F2b). A plain ref array cannot say which element belongs
+  // to which row once the plan changes under it, so the player registers every
+  // element it mounts against its surface key.
+  const stackedVideoEls = new Map<string, HTMLVideoElement>()
+
+  function setStackedVideoEl(key: string, el: unknown) {
+    const node = el instanceof HTMLVideoElement ? el : null
+    const previous = stackedVideoEls.get(key)
+    if (previous && previous !== node) {
+      if (!previous.paused) previous.pause()
+      stackedVideoEls.delete(key)
+    }
+    if (node) stackedVideoEls.set(key, node)
+  }
+
+  function syncStackedVideos() {
+    for (const surface of stackedSurfaces.value) {
+      const el = stackedVideoEls.get(surface.key)
+      if (!el) continue
+      syncSecondaryVideo(el, surface.mediaTimeSec, surface.clip.reverse)
     }
   }
 
@@ -343,6 +421,7 @@ export function useTmcutPlayback() {
         }
       }
       syncOutgoingVideo()
+      syncStackedVideos()
       animId = requestAnimationFrame(step)
       return
     }
@@ -413,6 +492,7 @@ export function useTmcutPlayback() {
       }
     }
     syncOutgoingVideo()
+    syncStackedVideos()
 
     animId = requestAnimationFrame(step)
   }
@@ -435,6 +515,7 @@ export function useTmcutPlayback() {
       videoRef.value.play().catch(() => {})
     }
     syncOutgoingVideo()
+    syncStackedVideos()
     animId = requestAnimationFrame(step)
   }
 
@@ -451,6 +532,7 @@ export function useTmcutPlayback() {
       videoRef.value.playbackRate = 1
     }
     syncOutgoingVideo()
+    syncStackedVideos()
   }
 
   function togglePlayPause() {
@@ -558,6 +640,10 @@ export function useTmcutPlayback() {
     videoRef,
     outgoingVideoRef,
     paintSurfaces,
+    stackedSurfaces,
+    mainSurface,
+    crossfadeSurface,
+    setStackedVideoEl,
     activeVideoClip,
     transitionCrossfade,
     activeTextClips,

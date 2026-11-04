@@ -152,20 +152,18 @@ async function main() {
     assert.ok(p.transitionCrossfade.value, 'the preview must agree that this cut crossfades')
   })
 
-  // 6. The two surfaces differ in exactly one way, and the banner must name it:
-  // the file stacks the rows above the base, the screen still carries one
-  // `<video>` and shows the base alone.
-  await check('the warning says the file stacks and the screen does not', async () => {
+  // 6. The banner names what the file does, and it may no longer promise a
+  // single-row screen: since slice F2b the monitor paints the same stack, and
+  // `tmcut_preview_stack_dom` owns the wording of that half.
+  await check('the warning says the file stacks and never claims the screen does not', async () => {
     for (const locale of ['en', 'vi']) {
       const copy = read(`i18n/locales/${locale}.json`)
       const warning = copy.match(/"parallelTracksWarning":\s*"([^"]*)"/)?.[1] ?? ''
       assert.ok(warning.length > 0, `${locale}: parallelTracksWarning is missing`)
       assert.match(warning, /composites|stacks|theo thứ tự vẽ/,
         `${locale}: the rows above the base are in the file now`)
-      assert.match(warning, /preview still|preview vẫn chỉ/i,
-        `${locale}: the preview shows one row, and the copy must not hide that`)
-      assert.doesNotMatch(warning, /preview-only|picture stays|only the top visible|chỉ có ở preview|chỉ có trong preview/i,
-        `${locale}: the copy still describes the old renderer`)
+      assert.doesNotMatch(warning, /preview still|preview vẫn chỉ|preview-only|picture stays|only the top visible|chỉ có ở preview|chỉ có trong preview/i,
+        `${locale}: the copy still describes the single-row renderer`)
     }
   })
 

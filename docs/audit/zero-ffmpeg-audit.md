@@ -2263,3 +2263,157 @@ repo), **không** `TmcutPreviewPlayer.vue` (để F2b). `git status --short` đo
 thuộc lượt này; sau commit phải còn **56** — đúng số WIP của chủ repo mà §27.7 đã đo, vì F2a không thêm file nào khác.
 RED probe (`app/composables/tmpF2aRedProbe.ts`, `tests/unit/tmcut_f2a_redprobe.spec.ts`) là file **của lượt này**,
 đã xóa và không bao giờ staged.
+
+## 29. Slice F2b — cây DOM vẽ **đủ** số phần tử core gọi tên (đo ngày 2026-11-04)
+
+§28 đưa plan ra khỏi composable nhưng để nguyên màn hình. F2b là lượt DOM đổi: từ tick này
+[TmcutPreviewPlayer.vue](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue) không còn
+quyết "mấy phần tử, phần tử nào bật tiếng, phần tử nào mang ramp" — nó render **một phần tử cho mỗi surface** mà
+`compositePlan` trả về, theo đúng thứ tự plan. File lớn lên **26** dòng (2234 → **2260**); composable lớn lên **86**
+dòng (587 → **673**), vì toàn bộ luật mới nằm ở composable, DOM chỉ tiêu thụ.
+
+### 29.1 Ba computed mới, và một witness duy nhất
+
+| Tên | Trả lời câu hỏi | Nguồn |
+| --- | --- | --- |
+| `mainSurface` ([:220](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L220)) | surface nào là `<video>`/`<img>` chính | surface **mang audio**, tức đáy stack — cùng luật với `activeVideoClip` của §28 |
+| `crossfadeSurface` ([:210](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L210)) | partner `outgoing` có phần tử riêng chưa | ngay **dưới** `mainSurface`, khi cửa crossfade đang sống |
+| `stackedSurfaces` ([:239](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L239)) | những surface nào cần element mới | plan **trừ** `mainSurface` và **trừ** partner đã có element — không thừa, không thiếu |
+
+Witness "cặp này đang cùng lên hình" là cờ **`crossfades`** trên surface
+([:19](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L19), đặt ở
+[:169](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L169)): một vòng quét adjacency của plan,
+`outgoing` nằm sát **trên** `paint` **cùng** `trackIndex` thì cả hai bật cờ. Lý do không đọc thẳng
+`layer.transition`: một layer vẫn mang `transition` khi partner đã bị trim, và `compositePlan` đã quyết nó là cut
+thường — ramp chỉ được áp khi **cả hai** surface đang ở trên hình. Đây là điều §28.6 ghi nợ ("cửa transition của hàng
+không ở đáy stack vẫn vô hình với DOM"): F2b nới bằng cách cho **mỗi** surface một element, chứ không nới luật pairing
+của `transitionCrossfade`.
+
+### 29.2 Vì sao thứ tự cây **là** thứ tự vẽ, và vì sao không có `z-index`
+
+Khối stacked nằm sau element chính và sau `<img>` chính, trước `<audio v-for>` và plate vignette
+([:1702](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L1702)). Hai quyết định có chủ đích:
+
+- **Một `v-for` duy nhất, `v-if`/`v-else` bên trong.** Bản nháp tách hai danh sách (video trước, ảnh sau) — nhìn gọn
+  hơn nhưng **sai**: plan của core xen kẽ still và video theo `selectPaintRows`, nên hai `v-for` sẽ đổi thứ tự vẽ của
+  một stack trộn. Spec `tmcut_preview_stack_dom` check 4
+  ([:108](file:///D:/Applications/tm-studio/tests/unit/tmcut_preview_stack_dom.spec.ts#L108)) khoá đúng trường hợp đó.
+- **Không `z-index` dương.** Phần tử positioned với `z-index: auto` vẽ theo thứ tự cây, tức đúng thứ tự plan. Đặt số
+  dương cho hàng stacked sẽ **chôn** overlay chữ (cũng `z-auto`) — caption biến mất ngay khi project có hai hàng.
+  Giá phải trả, ghi thẳng ở 29.6: plate vignette nguyên khung (`z-10`) giờ nằm **trên** các hàng stacked, trong khi
+  file export bake vignette **từng layer** (`packages/core/src/effects.mjs:535-539`). Đó là nợ F4, không phải bug F2b.
+
+Stacked element luôn `:muted="true"` — không phải vì nó là phụ, mà vì plan đặt hàng **mang audio** ở đáy, và đáy đã có
+element chính rồi.
+
+### 29.3 Một luật đồng hồ, một luật style, và những bản sao bị xóa
+
+- `syncSecondaryVideo(el, target, reverse)` ([:299](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L299))
+  là **một** hàm clock cho **mọi** phần tử phụ; `syncOutgoingVideo` gọi nó, `syncStackedVideos`
+  ([:354](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L354)) cũng gọi nó, và nó được gắn vào
+  **5** điểm từng gọi `syncOutgoingVideo`: seek ([:276](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L276)),
+  shuttle ngược, tới, play, pause. Register qua `setStackedVideoEl`
+  ([:344](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L344)): element bị unmount thì **dừng**
+  và **xóa** khỏi map, không để lại clock ma.
+- `surfaceStyle(surface)` ([:804](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L804))
+  là **một** hàm style cho **mọi** footage layer; cả element chính ([:1664](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L1664),
+  [:1682](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L1682)) lẫn outgoing
+  ([:1648](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L1648)) và stacked đều bind vào nó.
+  Xóa hẳn: `videoObjectStyle`, `xfadeRamp`, `videoTransformStyle`, `outgoingStyle` — đo `grep -nE` trên file hiện tại:
+  **0** lần xuất hiện. `fitStyle(` còn đúng **2** lần (một định nghĩa, một call site trong `fitForSurface`
+  [:704](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L704)), và con số **2** đó là pin
+  của [tmcut_shared_model.spec.ts:309](file:///D:/Applications/tm-studio/tests/unit/tmcut_shared_model.spec.ts#L309).
+- `playableSrc(clip)` ([:317](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L317)) và
+  `isImageClip(clip)` ([:362](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L362)) thay
+  cho hai bản sao inline (proxy-aware resolve và phân loại still), nên element stacked không tự nghĩ ra câu trả lời thứ ba.
+
+### 29.4 TDD: RED đo trên HEAD, không suy ra từ lời kể
+
+Spec viết trước: [tmcut_preview_stack_dom.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_preview_stack_dom.spec.ts)
+**166** dòng, **6** check, chạy trên composable thật. RED **đo** bằng snapshot HEAD (`git show HEAD:...` vào
+`app/composables/tmpF2bRedProbe.ts`, chạy chính assertion của check 1 trên bản đó, rồi xóa):
+
+```
+RED composable: HEAD must expose stackedSurfaces
+RED player: 0 stacked v-for, 0 surfaceStyle, per-element style helpers still present
+```
+
+Bốn điều suýt làm sai, cả bốn đều thuộc loại gặp lại ở F3/F4:
+
+1. **Hai `v-for` riêng cho video và ảnh** — phá thứ tự plan của stack trộn; xem 29.2.
+2. **`z-index` dương cho hàng stacked** — chôn caption; đã phân tích ở 29.2, chọn thứ tự cây.
+3. **Typecheck FAIL, exit 2, 2 lần `TS2345`** tại [:335](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L335)
+   và [:358](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L358): `clip.reverse` là
+   `boolean | undefined` còn tham số khai báo `boolean`. Sửa **chữ type** (`reverse?: boolean`), không thêm `!!` ở call site.
+4. **Lint FAIL, 6 lần `@typescript-eslint/no-explicit-any`** trong spec mới — sửa bằng cách **typen** spec
+   (`ReturnType<typeof useTmcutPlayback>`, `Surface`), không tắt rule; cùng bài học gate 2 của §28.
+
+### 29.5 Pin bị lật, và copy phải nói đúng sự thật
+
+- [tmcut_footage_row_rule.spec.ts:158](file:///D:/Applications/tm-studio/tests/unit/tmcut_footage_row_rule.spec.ts#L158)
+  đổi tên check 6 từ "preview vẫn chỉ một hàng" thành **"the warning says the file stacks and never claims the screen
+  does not"**. Assertion cũ **đúng** cho tới hôm qua và **sai** từ hôm nay; nó được chuyển thành `doesNotMatch` bắt mọi
+  cách nói "màn hình chưa xếp chồng", còn phần "screen" do `tmcut_preview_stack_dom` check 6
+  ([:146](file:///D:/Applications/tm-studio/tests/unit/tmcut_preview_stack_dom.spec.ts#L146)) giữ.
+- Copy `parallelTracksWarning` sửa ở **cả hai** locale: [en.json:1050](file:///D:/Applications/tm-studio/i18n/locales/en.json#L1050)
+  và [vi.json:1050](file:///D:/Applications/tm-studio/i18n/locales/vi.json#L1050). Check 6 khoá **cả** khẳng định mới
+  ("composites / stacks / theo thứ tự vẽ") **và** cấm khẳng định cũ ("preview still / màn hình vẫn chỉ").
+- Comment trong [TmcutExportModal.vue:404](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutExportModal.vue#L404)
+  viết lại: nó từng nói preview "renders a single `<video>`", giờ là **một** đường composite cho cả hai surface, và nợ
+  còn lại là plate effect theo layer. Guard `posterUrl ... selectExportTracks` vẫn xanh vì token nằm nguyên trong cửa sổ.
+
+### 29.6 Bằng chứng live: Chromium mount đúng số phần tử, và ảnh đè video
+
+Seeding qua dev hook `window.tmcutQaStore` (chỉ bật khi `import.meta.dev`), trên dev server **:4003**, project
+`default` (0 clip), rồi **khôi phục** nguyên trạng:
+
+| Trạng thái seed | DOM trong `.tmcut-monitor` | Kết luận |
+| --- | --- | --- |
+| 1 hàng video, 0 clip | **1** `<video>` (`src` rỗng), **1** `<img>` | plan rỗng thì không thừa element nào |
+| 2 hàng video, src là **đường dẫn file** | 3 element: main `<video>` (relative, **không** muted) + 2 stacked (`absolute`, `z-index: auto`), cả hai `media://local` và **cùng** lỗi decode | element stacked tồn tại và nhận **cùng** URL resolver; overlay "Media offline" là việc của hàng chính, không phải của stack |
+| 3 hàng video (seed bị trùng một hàng) | main `<video>` unmuted + **2** stacked muted, `position: absolute`, `z-index: auto` | N hàng cho ra N element, đúng một element mang audio |
+| 2 hàng **trộn**: đáy = mp4 (http), trên = png | main `<video>` `readyState 4`, `videoWidth 64`; `<img>` chính `display: none`; stacked `<img>` `naturalWidth 1024`, `position: absolute` | still và video nằm **chung một** `v-for` theo thứ tự plan; screenshot cho thấy logo png **phủ** khung hình, tức hàng trên vẽ sau |
+
+Sau khi khôi phục: **3** track, **1** `<video>` + **1** `<img>`, và `localStorage` không còn key nào chứa `qa-upper`
+(đo bằng cách quét mọi key `tmcut*`: chỉ `tmcut_byte_index_v1`). File tạm `public/tmcut-qa-f2b.mp4` đã xóa, xác nhận
+`ls public` còn **0** mục "qa".
+
+### 29.7 Gates (chạy theo thứ tự; số liệu lấy từ chính lần chạy đó)
+
+| Gate | Lệnh | Kết quả | Bằng chứng |
+| --- | --- | --- | --- |
+| 1 Types | `npx nuxt typecheck` | PASS | exit **0**, `grep -c "error TS"` = **0**; `.nuxt/eslint.config.mjs` sinh lại lúc **22:14** (28567 byte). Lần đầu **FAIL exit 2** với 2 lần `TS2345` (29.4 mục 3) |
+| 2 Lint | `npx eslint` trên **6** file code/spec chạm tới, chạy **sau** gate 1 | PASS | exit **0**, output **0** byte. Lần đầu **FAIL 6 error** `no-explicit-any` trên spec mới (29.4 mục 4) |
+| 3 App specs | `npx tsx tests/unit/run-all.mts` | PASS | **108/108** specs, exit **0** (tăng **107 → 108** vì spec mới). Riêng spec F2b: **6/6** "All 6 preview stack-DOM checks passed" |
+| 3b Core | `node --test` + `tools/check-boundaries.mjs` + `tsc -p tsconfig.check.json` (trong `packages/core`) | PASS | **669/669**, boundaries "core imports nothing platform-specific", tsc exit **0** output **0** byte — F2b không sửa core, nên số liệu trùng §28 |
+| 4 Live | **8** route TMCut trên **:4003**, chrome-devtools, `list_console_messages` sau mỗi route | PASS có ghi nợ | **0** lỗi thuộc F2b. Sạch (chỉ `[info] <Suspense>`): `/tmcut`, `/tmcut/autocut`, `/tmcut/templates`, `/tmcut/html-video`. Noise **có trước**: `401 (error.unauthorized)` trên `GET /api/v1/ai/relay/catalog` (×4 editor, ×1 factory — đo lại bằng `list_network_requests`, tab này chưa đăng nhập), `[issue]` a11y "form field should have id/name" ×2 ở `/tmcut/process`, `502 (error.tts.unreachable)` ×2 ở `/tmcut/voice` |
+| 5 Docs | năm guard markdown, chạy lại sau **lần sửa markdown cuối** | PASS | **28** checks (**12/5/4/3/4**), exit **0** cả năm. Baseline chạy **trước** khi viết §29 cũng **28/28**, để chắc rằng con số sau không phải do corpus nhỏ đi |
+
+### 29.8 Chưa chứng minh
+
+- **Không có phép đo pixel screen-vs-file.** Bảng 29.6 chứng minh **số element, thứ tự, muted, style**; nó không chứng
+  minh hai hàng cho ra hai khung hình **đúng như** export. Hàng đáy chỉ đo được `videoWidth` **64** px (chiều cao chưa
+  đo), asset library trống nên nó bị overlay "Media offline" che. Số đo thật thuộc F6 (visual-regression fixtures) và
+  cần project có asset thật.
+- **Vignette và letterbox vẫn là plate nguyên khung**, export bake **từng layer** — F2b cố ý không đụng; F4 owns.
+- **Ramp `speedAt` vẫn chỉ áp cho element chính.** `syncSecondaryVideo` chỉnh `playbackRate` theo `shuttleRate`, nhưng
+  luật "clip này chạy nhanh/chậm bao nhiêu" (`speedAt`) chưa nhân vào media time của hàng stacked. Chưa có spec nào
+  bắt, nên chưa sửa — ghi nợ F4, không phải hoàn thành.
+- **Electron host không chạy** lượt này. Cùng composable, cùng SFC, nhưng desktop chưa có số đo stacked DOM.
+- **`ownsAudio` chưa đo với file export thật** khi hai hàng footage cùng sống (nợ cũ từ §28.6, F2b không đóng).
+
+### 29.9 Bảo vệ working tree
+
+Lượt này staged **8** đường dẫn: [useTmcutPlayback.ts](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts),
+[TmcutPreviewPlayer.vue](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue),
+[TmcutExportModal.vue](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutExportModal.vue),
+[tmcut_preview_stack_dom.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_preview_stack_dom.spec.ts) (mới),
+[tmcut_footage_row_rule.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_footage_row_rule.spec.ts),
+[tmcut_shared_model.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_shared_model.spec.ts),
+cộng **một hunk duy nhất** của [en.json](file:///D:/Applications/tm-studio/i18n/locales/en.json) và
+[vi.json](file:///D:/Applications/tm-studio/i18n/locales/vi.json), kèm chính file này. Hai locale có **6** hunk mỗi
+file; **5** trong số đó là WIP của chủ repo (`@@ -13`, `-127`, `-2288`, `-2336`, `-2482`), chỉ hunk `@@ -1049 +1050 @@`
+là của F2b, nên stage bằng patch **một hunk**, không `git add` cả file. `git status --short` đo **63** mục trước commit,
+trong đó **9** thuộc lượt này; sau commit phải còn **54**. Probe RED
+(`app/composables/tmpF2bRedProbe.ts`, `tests/unit/tmcut_f2b_redprobe.spec.ts`) và fixture tạm
+`public/tmcut-qa-f2b.mp4` là file **của lượt này**, đã xóa và không bao giờ staged.

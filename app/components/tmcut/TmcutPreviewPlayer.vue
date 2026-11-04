@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import type { TmcutTrack, TmcutTimelineItem } from '~/composables/useTmcutProject'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
+import type { PaintSurface } from '~/composables/useTmcutPlayback'
 import { computeFitObjectStyle, CROP_RATIO_PRESETS, clampCropRect, applyCropRatio, canvasFpsValue } from '~/utils/tmcut/canvas'
 import { effectCssParts } from '~/utils/tmcut/fxPreview'
 import { previewScale, evalKeyframe, gainAt, evaluateClip, textAnimationAt, safeAreaRects, SAFE_AREA_PRESETS, TICKS_PER_SECOND, secToTicks, maskCssMaskImage, resolveClipLayout, previewTransitionRamp, classifyAssetKind, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_FONT_SIZE, textBoxPadding, textShadowOffset, textStrokeWidth } from 'tmcut-core'
@@ -30,6 +31,10 @@ const {
   isPlaying,
   videoRef,
   outgoingVideoRef,
+  mainSurface,
+  crossfadeSurface,
+  stackedSurfaces,
+  setStackedVideoEl,
   activeVideoClip,
   transitionCrossfade,
   activeTextClips,
@@ -300,12 +305,16 @@ const monitorBoxStyle = computed(() => {
 
 // Current media URL for active video clip (with proxy preview and video stabilizer support, roadmap F-4/E-5).
 // When proxy preview is enabled and an asset proxy exists, resolveMediaSrc
-// serves the lightweight 540p proxy. When video stabilization is enabled, the stabilized
+// serves the lightweight 540p proxy. When video stabilization is enabled, the
 // footage is loaded seamlessly. (Engine seam: resolveSrc is proxy-aware on
 // the electron engine; the web engine has neither pipeline, so those clip
 // fields never exist there — roadmap Phase 5, R90.)
-const currentMediaSrc = computed(() => {
-  const clip = activeVideoClip.value?.clip
+//
+// Slice F2b put the URL question in one function of a CLIP, because the
+// monitor now points as many elements at as many clips as core stacks: three
+// copies of the stabilize/proxy ladder (main, crossfade, stacked) was a drift
+// waiting to happen.
+function playableSrc(clip: TmcutTimelineItem | null | undefined): string {
   if (!clip) return ''
   if (clip.stabilize && clip.stabilizedPath) {
     return previewEngine.resolveSrc(clip.stabilizedPath)
@@ -313,19 +322,12 @@ const currentMediaSrc = computed(() => {
   const src = clip.src
   if (!src) return ''
   return previewEngine.resolveSrc(src)
-})
+}
 
-// Media URL for the OUTGOING crossfade layer (roadmap B3, with proxy & stabilizer support).
-const outgoingMediaSrc = computed(() => {
-  const outgoing = transitionCrossfade.value?.outgoing
-  if (!outgoing) return ''
-  if (outgoing.stabilize && outgoing.stabilizedPath) {
-    return previewEngine.resolveSrc(outgoing.stabilizedPath)
-  }
-  const src = outgoing.src
-  if (!src) return ''
-  return previewEngine.resolveSrc(src)
-})
+const currentMediaSrc = computed(() => playableSrc(activeVideoClip.value?.clip))
+
+// Media URL for the OUTGOING crossfade layer (roadmap B3).
+const outgoingMediaSrc = computed(() => playableSrc(crossfadeSurface.value?.clip))
 
 // Whether the active clip currently renders via proxy
 const isCurrentClipProxy = computed(() => {
@@ -353,13 +355,17 @@ const isCurrentClipStabilized = computed(() => {
 // `jfif`, `svg`); a clip named by one of those was painted here while the
 // compiler treated it as ordinary footage, and unlooped footage decodes to
 // one frame.
-const isCurrentClipImage = computed(() => {
-  const src = activeVideoClip.value?.clip?.src
+const isCurrentClipImage = computed(() => isImageClip(activeVideoClip.value?.clip))
+
+// The same question for any surface, so a stacked row picks its element on the
+// law the export uses, not on a rule the main element happens to have.
+function isImageClip(clip: TmcutTimelineItem | null | undefined): boolean {
+  const src = clip?.src
   if (!src) return false
   const asset = findAssetBySrc(src)
   if (asset) return asset.kind === 'image'
   return classifyAssetKind(src) === 'image'
-})
+}
 
 // Seek the outgoing layer to its frame once its metadata lands (the rAF
 // loop self-corrects afterwards, but the first paint should be right).
@@ -691,14 +697,16 @@ function fitStyle(clip: { fit?: string, focusX?: number, focusY?: number, cropRe
   return computeFitObjectStyle(layout.fit, layout.focusX, layout.focusY, layout.cropRect) as Record<string, string>
 }
 
-const videoObjectStyle = computed<Record<string, string>>(() => {
-  const clip = activeVideoClip.value?.clip
-  if (!clip) return {}
-  if (isCropActive.value) {
+// The fit a surface is painted with. The crop editor is the one exception, and
+// it belongs to the element the user is actually dragging on — the main
+// picture — because the crop rect it draws is measured in that letterboxed
+// box. A stacked row keeps its real fit even while the crop tool is open.
+function fitForSurface(surface: PaintSurface): Record<string, string> {
+  if (isCropActive.value && surface.clip.id === activeVideoClip.value?.clip?.id) {
     return { objectFit: 'contain', objectPosition: '50% 50%' }
   }
-  return fitStyle(clip)
-})
+  return fitStyle(surface.clip)
+}
 
 // Text overlays scale with the rendered canvas size (docs §65.2):
 // overlay units are canvas pixels, so multiply by the preview scale instead
@@ -713,26 +721,8 @@ const textScale = computed(() =>
   previewScale(containerWidth.value, currentProject.value?.canvas?.width || 0)
 )
 
-// Crossfade ramp (roadmap B3, geometry owned by core since V4 G16): the
-// shape, travel law and CSS for every xfade key are measured against the
-// bundled FFmpeg in `tmcut-core/transitions.mjs`, so the monitor and the
-// export describe the same cut. Fade and dissolve stay a complementary
-// opacity ramp over the outgoing layer — only ONE layer ramps, because
-// source-over with two partial alphas would bleed the black background
-// through (0.5·in + 0.25·out). The reveal families paint on the INCOMING
-// layer (it sits on top, so clipping the outgoing would only uncover the
-// canvas behind it); `slide` moves both layers, and the `*crop` keys clip the
-// outgoing too because the uncovered canvas IS the black the file paints there.
-// Export parity (xfade/acrossfade) lands with R3 — see the export badge.
-const xfadeRamp = computed(() => {
-  const cf = transitionCrossfade.value
-  if (!cf) return null
-  return previewTransitionRamp(cf.type, cf.progress)
-})
-
 // Per-clip visual (transform + opacity from keyframes/static fields);
-// shared by the main element and the outgoing crossfade layer. The numbers
-// come from core evaluateClip, the same evaluator the export compiler will
+// shared by every footage layer. The numbers come from core evaluateClip, the same evaluator the export will
 // read (V4 M2) — this file only turns them into CSS and preview-scale px.
 function clipVisual(clip: { offset?: number, scale?: number, x?: number, y?: number, rotation?: number, opacity?: number, keyframes?: TmcutKeyframe[] }) {
   const visual = evaluateClip(clip, localTicks(clip))
@@ -789,18 +779,37 @@ const activeVignetteStyle = computed(() => {
   }
 })
 
-// Active video transform styles (scale, position, rotation, opacity).
-// x/y are CANVAS pixels like text overlays: multiplied by the preview
-// scale so the offset stays resolution-independent (they were raw
-// screen px before, which shifted with the window size).
-const videoTransformStyle = computed(() => {
-  const clip = activeVideoClip.value?.clip
-  if (!clip) return {}
-
-  // Keyframes (roadmap B1) evaluate at the playhead; the static clip
-  // fields are the fallback for props without keyframes.
+// ONE visual law for every footage layer (Zero-FFmpeg slice F2b). The main
+// picture, the crossfade partner and each stacked row are styled by this one
+// function of a surface, so a row painted above another cannot arrive with a
+// cheaper look than the row it covers — the asymmetry the exporter had already
+// resolved in the file and the monitor had kept for itself.
+//
+// The numbers are core's: `clipVisual` from evaluateClip (keyframes at the
+// playhead, static fields as the fallback), the mask and effects from the
+// registry, and the crossfade ramp from `previewTransitionRamp`, whose shape,
+// travel law and CSS are measured against the bundled FFmpeg in
+// `tmcut-core/transitions.mjs` (V4 G16) — so the monitor and the export
+// describe the same cut. Fade and dissolve stay a complementary opacity ramp
+// over the outgoing layer — only ONE layer ramps, because source-over with two
+// partial alphas would bleed the black background through (0.5·in + 0.25·out).
+// The reveal families paint on the INCOMING layer (it sits on top, so clipping
+// the outgoing would only uncover the canvas behind it); `slide` moves both
+// layers, and the `*crop` keys clip the outgoing too because the uncovered
+// canvas IS the black the file paints there.
+//
+// The ramp applies to a surface whose partner is on screen: `crossfades` is
+// core's plan adjacency, so a layer carrying a transition whose partner was
+// trimmed away paints as the plain cut `compositePlan` decided.
+function surfaceStyle(surface: PaintSurface | null | undefined): Record<string, string | number> {
+  const clip = surface?.clip
+  if (!clip || !surface) return {}
   const base = clipVisual(clip)
-  const style: { transform: string, opacity: number, clipPath?: string, filter?: string, mixBlendMode?: string, maskImage?: string, webkitMaskImage?: string, maskSize?: string, webkitMaskSize?: string, maskRepeat?: string, webkitMaskRepeat?: string } = { ...base, ...maskPreviewStyle(clip.mask) }
+  const style: Record<string, string | number> = {
+    ...fitForSurface(surface),
+    ...base,
+    ...maskPreviewStyle(clip.mask)
+  }
   const effectStyle = effectsCss(clip.effects || [])
   if (effectStyle.filter) {
     style.filter = effectStyle.filter
@@ -809,65 +818,44 @@ const videoTransformStyle = computed(() => {
     style.transform = `${style.transform} ${effectStyle.transform}`
   }
   // Blend mode (R116): CSS mix-blend-mode is the preview counterpart of
-  // the FFmpeg `blend` filter the export uses — same mode names.
+  // the FFmpeg `blend` filter the export uses — same mode names. In the DOM it
+  // blends against the layer below, which is exactly the row order core gives.
   const blend = (clip as { blend?: string }).blend
   if (blend && blend !== 'normal') {
-    style.mixBlendMode = blend as 'normal' | 'screen' | 'overlay' | 'multiply'
+    style.mixBlendMode = blend
   }
-
-  // Transition crossfade (roadmap B3): the main element is the INCOMING
-  // clip — core hands back the CSS that reveals it over the outgoing layer.
-  const cf = transitionCrossfade.value
-  const ramp = xfadeRamp.value
-  if (cf && ramp && cf.incoming.id === clip.id) {
-    style.opacity = base.opacity * ramp.incoming.opacity
-    if (ramp.incoming.clipPath) style.clipPath = ramp.incoming.clipPath
+  const spec = surface.layer.transition
+  if (surface.crossfades && spec?.type) {
+    const ramp = previewTransitionRamp(spec.type, spec.progress)
+    const side = spec.role === 'outgoing' ? ramp.outgoing : ramp.incoming
+    style.opacity = base.opacity * side.opacity
+    if (side.clipPath) style.clipPath = side.clipPath
     // A transition that reveals with a gradient wins over the clip's own
     // mask for the length of the overlap; both cannot share one mask-image.
-    if (ramp.incoming.maskImage) {
-      style.maskImage = ramp.incoming.maskImage
-      style.webkitMaskImage = ramp.incoming.webkitMaskImage || ramp.incoming.maskImage
-      style.maskSize = ramp.incoming.maskSize || '100% 100%'
-      style.webkitMaskSize = ramp.incoming.webkitMaskSize || '100% 100%'
-      style.maskRepeat = ramp.incoming.maskRepeat || 'no-repeat'
-      style.webkitMaskRepeat = ramp.incoming.webkitMaskRepeat || 'no-repeat'
+    if (side.maskImage) {
+      style.maskImage = side.maskImage
+      style.webkitMaskImage = side.webkitMaskImage || side.maskImage
+      style.maskSize = side.maskSize || '100% 100%'
+      style.webkitMaskSize = side.webkitMaskSize || '100% 100%'
+      style.maskRepeat = side.maskRepeat || 'no-repeat'
+      style.webkitMaskRepeat = side.webkitMaskRepeat || 'no-repeat'
     }
-    if (ramp.incoming.transform) style.transform = `${style.transform} ${ramp.incoming.transform}`
+    if (side.transform) style.transform = `${style.transform} ${side.transform}`
   }
   return style
-})
+}
 
-// OUTGOING crossfade layer style: the neighbor's own fit, transform and
-// opacity. The layer usually stays opaque (ramping only the incoming layer —
-// see `xfadeRamp`) so the composite is a clean crossfade; a slide travels it
-// and a fade-through-black dims it, which is what the binary really does.
-// The `*crop` keys clip the OUTGOING as well: the window shrinks to nothing at
-// the middle of the overlap and the monitor's own black shows through, which is
-// what the rendered file paints there.
-const outgoingStyle = computed(() => {
-  const cf = transitionCrossfade.value
-  const ramp = xfadeRamp.value
-  if (!cf || !ramp) return null
-  const clip = cf.outgoing
-  const base = clipVisual(clip)
-  const style: Record<string, string | number> = {
-    transform: `${base.transform}${ramp.outgoing.transform ? ` ${ramp.outgoing.transform}` : ''}`,
-    opacity: base.opacity * ramp.outgoing.opacity
+// First paint of a stacked element should already be the right frame; the rAF
+// loop drift-corrects after it.
+function onStackedLoadedMetadata(surface: PaintSurface, event: Event) {
+  const el = event.target as HTMLVideoElement | null
+  if (!el) return
+  try {
+    el.currentTime = surface.mediaTimeSec
+  } catch {
+    // ignore seeks on unloaded metadata
   }
-  if (ramp.outgoing.clipPath) style.clipPath = ramp.outgoing.clipPath
-  if (ramp.outgoing.maskImage) {
-    style.maskImage = ramp.outgoing.maskImage
-    style.webkitMaskImage = ramp.outgoing.webkitMaskImage || ramp.outgoing.maskImage
-    style.maskSize = ramp.outgoing.maskSize || '100% 100%'
-    style.webkitMaskSize = ramp.outgoing.webkitMaskSize || '100% 100%'
-    style.maskRepeat = ramp.outgoing.maskRepeat || 'no-repeat'
-    style.webkitMaskRepeat = ramp.outgoing.webkitMaskRepeat || 'no-repeat'
-  }
-  return {
-    ...fitStyle(clip),
-    ...style
-  }
-})
+}
 
 // Element fullscreen for the monitor frame (browser F11 stays available
 // too — this only expands the canvas itself)
@@ -1657,7 +1645,7 @@ onUnmounted(() => {
           ref="internalOutgoingRef"
           :src="outgoingMediaSrc"
           class="absolute inset-0 w-full h-full pointer-events-none"
-          :style="outgoingStyle || undefined"
+          :style="surfaceStyle(crossfadeSurface)"
           :muted="true"
           preload="auto"
           playsinline
@@ -1673,7 +1661,7 @@ onUnmounted(() => {
           ref="internalVideoRef"
           :src="isCurrentClipImage ? undefined : currentMediaSrc"
           class="relative w-full h-full pointer-events-none transition-transform duration-75"
-          :style="{ ...videoObjectStyle, ...videoTransformStyle }"
+          :style="surfaceStyle(mainSurface)"
           :muted="isVideoMuted || previewMuted"
           :volume="videoVolume * previewVolume"
           preload="auto"
@@ -1691,12 +1679,50 @@ onUnmounted(() => {
           v-show="isCurrentClipImage && currentMediaSrc && !isTrackHidden"
           :src="isCurrentClipImage ? currentMediaSrc : undefined"
           class="relative w-full h-full pointer-events-none object-contain select-none"
-          :style="{ ...videoObjectStyle, ...videoTransformStyle }"
+          :style="surfaceStyle(mainSurface)"
           alt=""
           draggable="false"
           decoding="async"
           @error="onMediaError('image')"
         >
+
+        <!-- Stacked footage rows (Zero-FFmpeg slice F2b): every surface core
+             paints ABOVE the main picture gets its own element, in plan order,
+             so the monitor shows the same stack the file writes. Muted — the
+             preview's audio is the bottom row's, the same simplification the
+             export makes with its one audio concat, and the plan already put
+             that row under this one.
+             Tree order IS the paint order here: these sit after the main layer,
+             so a row the plan stacked on top covers it. The still branch exists
+             for the same reason the main one does — a still cannot decode in a
+             <video>. Known gap, unchanged by this slice: the effect plates
+             below (vignette) are monitor-wide, so they still tint the whole
+             stack while the file applies them to their own layer. -->
+        <template
+          v-for="surface in stackedSurfaces"
+          :key="surface.key"
+        >
+          <video
+            v-if="!isImageClip(surface.clip)"
+            :ref="(el) => setStackedVideoEl(surface.key, el)"
+            :src="playableSrc(surface.clip)"
+            class="absolute inset-0 w-full h-full pointer-events-none"
+            :style="surfaceStyle(surface)"
+            :muted="true"
+            preload="auto"
+            playsinline
+            @loadedmetadata="onStackedLoadedMetadata(surface, $event)"
+          />
+          <img
+            v-else
+            :src="playableSrc(surface.clip)"
+            class="absolute inset-0 w-full h-full pointer-events-none select-none"
+            :style="surfaceStyle(surface)"
+            alt=""
+            draggable="false"
+            decoding="async"
+          >
+        </template>
 
         <!-- Audio-track playback layer (roadmap R124): one hidden <audio>
              per clip under the playhead, keyed by clip id so the element
