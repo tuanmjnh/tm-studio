@@ -16,9 +16,20 @@
 import { filmstripTimes } from './frames.mjs'
 import { ticksToSec } from './time.mjs'
 
-/** AutoCut's cut score, unchanged from the FFmpeg pass this replaces. */
+/**
+ * The cut score AutoCut used with FFmpeg — a number on a DIFFERENT scale.
+ * Measured on one hard cut (testsrc2 -> smptebars at 1.000 s): this grid score
+ * tops out at 0.2626 while FFmpeg's `scene` reports 0.694299, and inside a shot
+ * the two floors differ the same way (0.0261..0.0288 here, 0.0004..0.0112
+ * there). Keeping the value keeps the name; it does not keep the behaviour, so
+ * slice E4 calibrates it before this scan goes anywhere near a timeline.
+ */
 export const TMCUT_SCENE_THRESHOLD = 0.4
-/** Looks per second a shot can be found at. A cut is missed between samples. */
+/**
+ * Looks per second a shot can be found at. A cut is missed between samples, and
+ * the error is half a period: on the same clip the 1.000 s cut was found at
+ * 1.096 s at 5 Hz and 1.048 s at 10 Hz.
+ */
 export const TMCUT_SCENE_SAMPLE_HZ = 5
 /** Quiet, in dBFS — the same number `silencedetect=noise=` was fed. */
 export const TMCUT_SILENCE_NOISE_DB = -30
@@ -26,11 +37,15 @@ export const TMCUT_SILENCE_NOISE_DB = -30
 export const TMCUT_SILENCE_MIN_DURATION_SEC = 0.5
 /** Digital silence has no logarithm; it gets this instead of -Infinity. */
 export const TMCUT_SILENCE_FLOOR_DBFS = -120
+/** Cells per side of the grid a shot score is computed on: 64 numbers per frame. */
+export const TMCUT_SCENE_GRID_CELLS = 8
 
 /** Two cuts closer than this are one cut (decode jitter, not a new shot). */
 const SHOT_MIN_GAP_SEC = 0.04
 /** A shot shorter than this is dropped rather than offered as a flash. */
 const SHOT_MIN_LENGTH_SEC = 0.2
+/** BT.601 luma, in channel order — the weights `lumaOf` is defined by. */
+const LUMA_WEIGHTS = [0.299, 0.587, 0.114]
 
 function isFiniteNumber(value) {
   return typeof value === 'number' && Number.isFinite(value)
@@ -68,6 +83,61 @@ export function sceneSampleTimes(startTicks, durationTicks, sampleHz = TMCUT_SCE
 }
 
 /**
+ * One pixel to one number. BT.601 weights, because that is the luma a shot
+ * detector has always read (the FFmpeg `scene` filter works off Y too), and an
+ * integer, because a grid of floats would make two hosts disagree in the last
+ * decimal. A channel outside the byte range is clamped; a channel that is not a
+ * number stays one, so a hole cannot quietly become a dark pixel.
+ */
+export function lumaOf(red, green, blue) {
+  const channels = [red, green, blue]
+  let total = 0
+  for (let index = 0; index < 3; index++) {
+    const raw = Number(channels[index])
+    if (!Number.isFinite(raw)) return Number.NaN
+    total += (raw < 0 ? 0 : raw > 255 ? 255 : raw) * LUMA_WEIGHTS[index]
+  }
+  return Math.round(total)
+}
+
+/**
+ * The grid `sceneScore` compares: RGBA bytes of one frame, block-averaged to
+ * `cells` per side, reading order, `cells * cells` long. The alpha channel is
+ * not part of the question — a decoded video frame is what it is.
+ *
+ * Bad input answers `[]`, and so does a single non-numeric sample: a truncated
+ * buffer or a hole is missing information, which the caller must drop rather
+ * than read as a partial grid (that would be a cut score made up of zeros).
+ */
+export function lumaCells(rgba, width, height, cells = TMCUT_SCENE_GRID_CELLS) {
+  const side = Number(cells)
+  const columns = Number(width)
+  const rows = Number(height)
+  if (!Number.isInteger(side) || side <= 0) return []
+  if (!Number.isInteger(columns) || columns <= 0) return []
+  if (!Number.isInteger(rows) || rows <= 0) return []
+  const length = rgba?.length ?? 0
+  if (length < columns * rows * 4) return []
+
+  const total = new Float64Array(side * side)
+  const counted = new Float64Array(side * side)
+  for (let y = 0; y < rows; y++) {
+    const cellY = Math.floor((y * side) / rows)
+    for (let x = 0; x < columns; x++) {
+      const offset = (y * columns + x) * 4
+      const luma = lumaOf(rgba[offset], rgba[offset + 1], rgba[offset + 2])
+      if (!Number.isFinite(luma)) return []
+      const slot = cellY * side + Math.floor((x * side) / columns)
+      total[slot] += luma
+      counted[slot] += 1
+    }
+  }
+  const out = []
+  for (let slot = 0; slot < total.length; slot++) out.push(round2(total[slot] / counted[slot]))
+  return out
+}
+
+/**
  * How much two frames of the same span differ, as a 0..1 score: the mean
  * absolute change over the luma cells. Comparable grids only — a different
  * cell count or a hole in either answer is not a small change, it is no
@@ -87,6 +157,31 @@ export function sceneScore(previous, next) {
     total += Math.abs(left - right)
   }
   return round4(total / length / 255)
+}
+
+/**
+ * The pairs of a scan that are a cut, as the instants they happened at.
+ *
+ * Adjacent samples only. A sample the decoder lost breaks the chain rather than
+ * bridging to the next usable one: bridging would report the change at the later
+ * instant when it really happened somewhere in between, which is a cut placed on
+ * a guess. Strictly greater than the threshold, because that is the comparison
+ * the filter this replaces used (`select='gt(scene,X)'`).
+ */
+export function sceneCuts(times, grids, options = {}) {
+  const threshold = optionNumber(options.threshold, TMCUT_SCENE_THRESHOLD)
+  const instants = Array.isArray(times) ? times : []
+  const series = Array.isArray(grids) ? grids : []
+  if (instants.length < 2 || series.length < 2) return []
+  const cuts = []
+  for (let index = 1; index < instants.length; index++) {
+    const at = Number(instants[index])
+    if (!Number.isFinite(at)) continue
+    const score = sceneScore(series[index - 1], series[index])
+    if (score === null) continue
+    if (score > threshold) cuts.push(round3(at))
+  }
+  return cuts
 }
 
 /**

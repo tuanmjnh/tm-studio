@@ -1257,11 +1257,11 @@ một lưới luma và một cửa sổ PCM, không tự quyết gì — đúng 
 
 | File | Vai | Bằng chứng |
 |---|---|---|
-| [packages/core/src/detection.mjs:20](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L20)→[:28](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L28) | **Năm** hằng số duy nhất: ngưỡng cắt **0.4**, tốc độ lấy mẫu **5 Hz**, ngưỡng ồn **−30 dBFS**, cửa sổ/im tối thiểu **0.5 s**, sàn **−120 dBFS**. Không chỗ nào khác trong repo được phép có bản sao của những số này khi E2/E3 chạy | check "the defaults are one number for both producers" ([packages/core/test/scene-silence-detection.test.mjs:144](file:///D:/Applications/tm-studio/packages/core/test/scene-silence-detection.test.mjs#L144)) đối chiếu **trực tiếp** `detection-args.cjs`: `sceneThreshold(undefined) === 0.4`, `silenceNoise(undefined) === -30`, `silenceDuration(undefined) === 0.5`. Check này là **tạm thời**: nó chết cùng slice I khi argv builder bị xoá |
-| [packages/core/src/detection.mjs:63](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L63) | `sceneSampleTimes` **không** tự chế phép chia dải: nó gọi `filmstripTimes` của C14 với `count = floor(durationSec × sampleHz)`. Một dải scan và một dải thumbnail trên cùng clip vì thế không bao giờ đứng ở hai khoảnh khắc khác nhau | check [:27](file:///D:/Applications/tm-studio/packages/core/test/scene-silence-detection.test.mjs#L27): 10 s @5 Hz cho ra **đúng** `core.filmstripTimes(start, duration, 50)` (so từng phần tử), bước đều nhau, và `[]` cho dải dưới 1 mẫu / duration 0 / hz 0 |
-| [packages/core/src/detection.mjs:77](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L77) | `sceneScore` = mean abs delta trên lưới luma, chia 255, scale 0..1 — **cùng thang** mà AutoCut đã biết qua `select='gt(scene,X)'` ([:42](file:///D:/Applications/tm-studio/shared/utils/detection-args.cjs#L42)). Lưới **không so sánh được** thì trả `null`, không trả `0` | check [:47](file:///D:/Applications/tm-studio/packages/core/test/scene-silence-detection.test.mjs#L47) đo `0` / `1` / `0.5` (nửa số ô đổi hết dải) và tính **đối xứng** `sceneScore(b,a) === sceneScore(a,b)`; check [:61](file:///D:/Applications/tm-studio/packages/core/test/scene-silence-detection.test.mjs#L61) buộc `null` khi độ dài khác nhau, lưới rỗng, hoặc một ô là `NaN` |
-| [packages/core/src/detection.mjs:98](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L98) | `cutsToShots`: sắp xếp, bỏ cut ≤ 0 và ≥ duration, chống rung `minGapSec` **0.04**, bỏ shot dưới `minShotSec` **0.2**, đóng đuôi bằng duration — hoặc bằng cut cuối khi **không biết** duration, vì đó là câu trả lời trung thực chứ không phải một con số đoán | **6** assert của check [:68](file:///D:/Applications/tm-studio/packages/core/test/scene-silence-detection.test.mjs#L68): shot liền mạch, input lộn thứ tự == input đã sắp xếp, shot 0.1 s bị bỏ, `3.00` và `3.02` gộp thành **một** cut, `cutsToShots([4], 0) === [{0,4}]`, `cutsToShots([], 8) === [{0,8}]`, `cutsToShots([], 0) === []` |
-| [packages/core/src/detection.mjs:122](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L122) + [:132](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L132) + [:161](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L161) | Thang im lặng: `dbfsOf` (RMS → dBFS, sàn −120 thay cho −Infinity), `levelSeries` (một mức cho mỗi cửa sổ, **cả cửa sổ đuôi cụt**, mẫu không phải số thì bỏ qua chứ không tính là im), `silenceSpans` (chuỗi cửa sổ ≤ ngưỡng, giữ khi đủ dài, đóng ở duration). Hình dạng output **giống hệt** reader stderr để không module phía dưới nào phải học shape mới | checks [:93](file:///D:/Applications/tm-studio/packages/core/test/scene-silence-detection.test.mjs#L93) (`dbfsOf(1) === 0`, `dbfsOf(0.5) === -6.02`, sàn cho 0/âm/NaN), [:103](file:///D:/Applications/tm-studio/packages/core/test/scene-silence-detection.test.mjs#L103) (225 mẫu @100 Hz → **5** cửa sổ `[0,0,sàn,sàn,sàn]`, `[]` khi mẫu rỗng hoặc rate 0), [:117](file:///D:/Applications/tm-studio/packages/core/test/scene-silence-detection.test.mjs#L117) (giữ/bỏ theo độ dài, ngưỡng **bao gồm** `<=`, `NaN` **không** im), [:155](file:///D:/Applications/tm-studio/packages/core/test/scene-silence-detection.test.mjs#L155) (vòng round-trip ticks↔seconds mà app dùng) |
+| [packages/core/src/detection.mjs:27](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L27)→[:39](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L39) | **Năm** hằng số duy nhất: ngưỡng cắt **0.4**, tốc độ lấy mẫu **5 Hz**, ngưỡng ồn **−30 dBFS**, cửa sổ/im tối thiểu **0.5 s**, sàn **−120 dBFS**. Không chỗ nào khác trong repo được phép có bản sao của những số này khi E2/E3 chạy | check "the defaults are one number for both producers" ([packages/core/test/scene-silence-detection.test.mjs:144](file:///D:/Applications/tm-studio/packages/core/test/scene-silence-detection.test.mjs#L144)) đối chiếu **trực tiếp** `detection-args.cjs`: `sceneThreshold(undefined) === 0.4`, `silenceNoise(undefined) === -30`, `silenceDuration(undefined) === 0.5`. Check này là **tạm thời**: nó chết cùng slice I khi argv builder bị xoá |
+| [packages/core/src/detection.mjs:78](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L78) | `sceneSampleTimes` **không** tự chế phép chia dải: nó gọi `filmstripTimes` của C14 với `count = floor(durationSec × sampleHz)`. Một dải scan và một dải thumbnail trên cùng clip vì thế không bao giờ đứng ở hai khoảnh khắc khác nhau | check [:27](file:///D:/Applications/tm-studio/packages/core/test/scene-silence-detection.test.mjs#L27): 10 s @5 Hz cho ra **đúng** `core.filmstripTimes(start, duration, 50)` (so từng phần tử), bước đều nhau, và `[]` cho dải dưới 1 mẫu / duration 0 / hz 0 |
+| [packages/core/src/detection.mjs:147](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L147) | `sceneScore` = mean abs delta trên lưới luma, chia 255, scale 0..1. Con số **0.4** lấy từ `select='gt(scene,X)'` ([:42](file:///D:/Applications/tm-studio/shared/utils/detection-args.cjs#L42)) nhưng **thang thì không chung** — §23 đo trên clip thật: một cut hard cho core **0.2626** còn FFmpeg cho **0.694299**, nên 0.4 hiện **bỏ sót** chính cut mà nó được kế thừa sang. Lưới **không so sánh được** thì trả `null`, không trả `0` | check [:47](file:///D:/Applications/tm-studio/packages/core/test/scene-silence-detection.test.mjs#L47) đo `0` / `1` / `0.5` (nửa số ô đổi hết dải) và tính **đối xứng** `sceneScore(b,a) === sceneScore(a,b)`; check [:61](file:///D:/Applications/tm-studio/packages/core/test/scene-silence-detection.test.mjs#L61) buộc `null` khi độ dài khác nhau, lưới rỗng, hoặc một ô là `NaN` |
+| [packages/core/src/detection.mjs:193](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L193) | `cutsToShots`: sắp xếp, bỏ cut ≤ 0 và ≥ duration, chống rung `minGapSec` **0.04**, bỏ shot dưới `minShotSec` **0.2**, đóng đuôi bằng duration — hoặc bằng cut cuối khi **không biết** duration, vì đó là câu trả lời trung thực chứ không phải một con số đoán | **6** assert của check [:68](file:///D:/Applications/tm-studio/packages/core/test/scene-silence-detection.test.mjs#L68): shot liền mạch, input lộn thứ tự == input đã sắp xếp, shot 0.1 s bị bỏ, `3.00` và `3.02` gộp thành **một** cut, `cutsToShots([4], 0) === [{0,4}]`, `cutsToShots([], 8) === [{0,8}]`, `cutsToShots([], 0) === []` |
+| [packages/core/src/detection.mjs:217](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L217) + [:227](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L227) + [:256](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L256) | Thang im lặng: `dbfsOf` (RMS → dBFS, sàn −120 thay cho −Infinity), `levelSeries` (một mức cho mỗi cửa sổ, **cả cửa sổ đuôi cụt**, mẫu không phải số thì bỏ qua chứ không tính là im), `silenceSpans` (chuỗi cửa sổ ≤ ngưỡng, giữ khi đủ dài, đóng ở duration). Hình dạng output **giống hệt** reader stderr để không module phía dưới nào phải học shape mới | checks [:93](file:///D:/Applications/tm-studio/packages/core/test/scene-silence-detection.test.mjs#L93) (`dbfsOf(1) === 0`, `dbfsOf(0.5) === -6.02`, sàn cho 0/âm/NaN), [:103](file:///D:/Applications/tm-studio/packages/core/test/scene-silence-detection.test.mjs#L103) (225 mẫu @100 Hz → **5** cửa sổ `[0,0,sàn,sàn,sàn]`, `[]` khi mẫu rỗng hoặc rate 0), [:117](file:///D:/Applications/tm-studio/packages/core/test/scene-silence-detection.test.mjs#L117) (giữ/bỏ theo độ dài, ngưỡng **bao gồm** `<=`, `NaN` **không** im), [:155](file:///D:/Applications/tm-studio/packages/core/test/scene-silence-detection.test.mjs#L155) (vòng round-trip ticks↔seconds mà app dùng) |
 | [packages/core/src/analysis.mjs:29](file:///D:/Applications/tm-studio/packages/core/src/analysis.mjs#L29) | `parseSceneOutput` vẫn đọc `pts_time:` nhưng **không còn tự dựng shot list**: nó giao phần đó cho `cutsToShots`. Từ lượt này một cut chỉ có **một** cách biến thành shot, dù nó sinh ra từ stderr hay từ hai khung hình | [packages/core/test/scene-shot-law.test.mjs:16](file:///D:/Applications/tm-studio/packages/core/test/scene-shot-law.test.mjs#L16): cùng những khoảnh khắc, reader stderr và scan-frame trả về **cùng một** shot list |
 | [packages/core/src/index.mjs:38](file:///D:/Applications/tm-studio/packages/core/src/index.mjs#L38) + [packages/core/src/index.d.ts:392](file:///D:/Applications/tm-studio/packages/core/src/index.d.ts#L392) | Barrel export + khai báo tay cho **năm** hàm và **năm** hằng số, dùng lại `CoreSceneSegment` ([:169](file:///D:/Applications/tm-studio/packages/core/src/index.d.ts#L169)) và `CoreSilenceRange` ([:174](file:///D:/Applications/tm-studio/packages/core/src/index.d.ts#L174)) thay vì chế type trùng — `parseSceneOutput` và `cutsToShots` trả đúng một shape | `tsc --noEmit -p packages/core/tsconfig.check.json` (strict + `noUnusedLocals`) exit **0**, 0 `error TS`; file declaration tăng **81706 → 83727** byte |
 
@@ -1308,13 +1308,16 @@ fixture.
 
 ### 22.5 Chưa chứng minh
 
-- **`app/`, `shared/`, `server/`, `electron/`, `tests/` có 0 importer.** `grep -r` năm tên hàm
+- **`app/`, `shared/`, `server/`, `electron/`, `tests/` có 0 importer** *(nguyên trạng lúc đóng E1; E2 đã
+  thay thế một nửa — xem §23)*. `grep -r` năm tên hàm
   (`sceneSampleTimes`, `sceneScore`, `cutsToShots`, `levelSeries`, `silenceSpans`) và `dbfsOf` trả về
   **0** file ngoài `packages/core` — chưa một mẫu pixel hay PCM thật nào được đưa vào các luật này.
-- **Chưa có parity với FFmpeg.** ADR đặt parity (hoặc khai tử có ADR) là **chuẩnaccept** của slice E;
+  PCM thì vẫn đúng; pixel thì **không còn đúng** từ §23.
+- **Chưa có parity với FFmpeg.** ADR đặt parity (hoặc khai tử có ADR) là **chuẩn nghiệm thu** của slice E;
   nó nằm ở E4, chạy trên fixture `tmcut_detect_smoke` (testsrc2→smptebars cắt ở 1 s, tone rồi im).
   Nhị phân FFmpeg vẫn còn trên máy dev theo Q3b/Q8a — chính vì thế phép đo **đang làm được**, và nó là
-  lý do slice I chưa được phép cắt.
+  lý do slice I chưa được phép cắt. *(E2 đã chạy phép đo một phần và nó mở ra một defect thật về thang
+  điểm — xem §23.)*
 - **Các con số luma/PCM là tổng hợp.** `sceneScore` đo trên lưới tự viết, `levelSeries` trên mẫu sine
   tự sinh. Chúng chứng minh **luật** đúng, không chứng minh **pipeline** vẽ ra được những lưới đó —
   đó là việc của E2 (seam luma) và E3 (seam PCM).
@@ -1341,4 +1344,137 @@ Không file nào khác của chủ
 repo bị đụng tới: `git status --porcelain` sau khi stage phải ra **đúng 7** dòng —
 `packages/core/src/detection.mjs`, `packages/core/src/analysis.mjs`, `packages/core/src/index.mjs`,
 `packages/core/src/index.d.ts`, hai file test mới, và chính file này.
+
+## 23. Slice E2 — lưới luma vào core, scene scan chạy thật trong Chromium (đo ngày 2026-11-04)
+
+§22 chốt bằng một câu rất cụ thể: luật đã có nhưng **0 importer**. E2 dựng hai nửa còn lại của đường
+scene — core học cách đổi một frame thành **64 số**, `app/` có thêm chỗ đọc pixel, và một module glue
+nối hai thứ thành danh sách shot — rồi đưa cả đường đó lên **media thật, trong trình duyệt thật**.
+Phép đo ở §23.2 là lý do lượt này tồn tại: chính nó tìm ra một defect mà **không** check nào chạy
+trong Node bắt được, vì Node không có decoder.
+
+### 23.1 Đã dựng gì
+
+| Chỗ | Nội dung | Chứng minh bằng |
+|---|---|---|
+| [packages/core/src/detection.mjs:41](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L41) + [:48](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L48) + [:92](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L92) | `TMCUT_SCENE_GRID_CELLS` **8** (64 số cho một frame), `LUMA_WEIGHTS` BT.601 `[0.299, 0.587, 0.114]`, và `lumaOf` — channel ngoài 0..255 bị **kẹp** chứ không làm hỏng phép tính, channel không phải số thì trả **NaN** để ô đó tố cáo thay vì âm thầm thành 0 | check [:30](file:///D:/Applications/tm-studio/packages/core/test/scene-luma-grid.test.mjs#L30) neo ba màu primaries (đỏ **76**, xanh lục **150**, xanh lam **29**) và xám **128 → 128**; check [:39](file:///D:/Applications/tm-studio/packages/core/test/scene-luma-grid.test.mjs#L39) buộc `lumaOf(-40, 900, 300) === lumaOf(0, 255, 255)` và NaN lan ra |
+| [packages/core/src/detection.mjs:112](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L112) | `lumaCells` block-average RGBA → `cells × cells` theo **thứ tự đọc row-major**; frame không vuông dùng được; input cụt / width 0 / height âm trả `[]`; **một** pixel NaN làm rớt **cả** lưới | checks [:49](file:///D:/Applications/tm-studio/packages/core/test/scene-luma-grid.test.mjs#L49) (độ dài và thứ tự), [:55](file:///D:/Applications/tm-studio/packages/core/test/scene-luma-grid.test.mjs#L55) (8×8 sáng/tối → 4×4, lưới **thô hơn** frame chứ không phải một bức ảnh khác), [:66](file:///D:/Applications/tm-studio/packages/core/test/scene-luma-grid.test.mjs#L66), [:72](file:///D:/Applications/tm-studio/packages/core/test/scene-luma-grid.test.mjs#L72), [:81](file:///D:/Applications/tm-studio/packages/core/test/scene-luma-grid.test.mjs#L81) |
+| [packages/core/src/detection.mjs:171](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L171) | `sceneCuts` chỉ so **hai mẫu kề**, so **nghiêm ngặt lớn hơn** (`select='gt(scene,X)'` là dấu so nó thay), và **đứt chuỗi tại một lỗ** thay vì bắc cầu: bắc cầu là đặt một cut lên một **đoán** | checks [:23](file:///D:/Applications/tm-studio/packages/core/test/scene-cut-pairs.test.mjs#L23), [:29](file:///D:/Applications/tm-studio/packages/core/test/scene-cut-pairs.test.mjs#L29), [:36](file:///D:/Applications/tm-studio/packages/core/test/scene-cut-pairs.test.mjs#L36) (`[lưới 0, lỗ, lưới 255]` → `[]`), [:45](file:///D:/Applications/tm-studio/packages/core/test/scene-cut-pairs.test.mjs#L45) (cặp **đúng bằng** 0.4 — `flat(0)` vs `flat(102)`, vì `102/255 === 0.4` — **không** là cut), [:54](file:///D:/Applications/tm-studio/packages/core/test/scene-cut-pairs.test.mjs#L54), [:62](file:///D:/Applications/tm-studio/packages/core/test/scene-cut-pairs.test.mjs#L62), [:70](file:///D:/Applications/tm-studio/packages/core/test/scene-cut-pairs.test.mjs#L70), [:76](file:///D:/Applications/tm-studio/packages/core/test/scene-cut-pairs.test.mjs#L76) |
+| [packages/core/src/index.d.ts:410](file:///D:/Applications/tm-studio/packages/core/src/index.d.ts#L410)→[:423](file:///D:/Applications/tm-studio/packages/core/src/index.d.ts#L423) | **Bốn** khai báo mới (`TMCUT_SCENE_GRID_CELLS`, `lumaOf`, `lumaCells`, `sceneCuts`) — `npx tsc --noEmit -p packages/core/tsconfig.check.json` là chỗ duy nhất hợp đồng này được kiểm, vì core là `.mjs` | exit **0**, **0** `error TS` (§23.4 gate 3b) |
+| [app/utils/tmcut/frameDecode.ts:144](file:///D:/Applications/tm-studio/app/utils/tmcut/frameDecode.ts#L144) + [:160](file:///D:/Applications/tm-studio/app/utils/tmcut/frameDecode.ts#L160) + [:19](file:///D:/Applications/tm-studio/app/utils/tmcut/frameDecode.ts#L19) | `decodeLumaSeries`: **một** hàm, **một** `Input`, **một** `CanvasSink` cho cả dải; `canvasesAtTimestamps` là lý do nó tồn tại — mỗi packet giải mã **tối đa một lần** cho cả danh sách mốc, điều một vòng `getCanvas` không có; lưới thiếu vẫn được **chèn `null` cho đủ chỗ** ([:166](file:///D:/Applications/tm-studio/app/utils/tmcut/frameDecode.ts#L166)) nên slot không dịch; canvas đọc ở **64 px** ([`TMCUT_SCENE_PIXEL_WIDTH`](file:///D:/Applications/tm-studio/app/utils/tmcut/frameDecode.ts#L19)) vì điểm cắt chỉ so 64 số | check [:186](file:///D:/Applications/tm-studio/tests/unit/tmcut_scene_scan.spec.ts#L186) buộc seam có `lumaCells(` và `canvasesAtTimestamps`, và **không** có `sceneScore`/`sceneCuts`/`cutsToShots` — seam giao pixel, ý nghĩa quyết định ở core |
+| [app/utils/tmcut/frameDecode.ts:66](file:///D:/Applications/tm-studio/app/utils/tmcut/frameDecode.ts#L66) + [:116](file:///D:/Applications/tm-studio/app/utils/tmcut/frameDecode.ts#L116) | `openMedia` + `rgbaOf` là **private**: `decodeFrame` (D2) và `decodeLumaSeries` (E2) dùng chung một chỗ mở `Input`, một chỗ gỡ (`close` bỏ listener abort rồi dispose) — không có bản sao thứ hai của đường đọc byte | check [:56](file:///D:/Applications/tm-studio/tests/unit/tmcut_scene_scan.spec.ts#L56) buộc scan **không** chứa `CanvasSink`/`getImageData`, tức glue không thể âm thầm thành một decoder thứ hai |
+| [app/utils/tmcut/sceneScan.ts:59](file:///D:/Applications/tm-studio/app/utils/tmcut/sceneScan.ts#L59) | `createSceneScan(readGrids)` nhận người đọc lưới qua tham số nên **toàn bộ** đường plan→read→score→shots chạy được trong Node, không decoder. Dải không thật (NaN, `to <= from`, `times.length === 0`) và signal đã huỷ trả rỗng **trước khi** hỏi decoder ([63](file:///D:/Applications/tm-studio/app/utils/tmcut/sceneScan.ts#L63), [65](file:///D:/Applications/tm-studio/app/utils/tmcut/sceneScan.ts#L65), [68](file:///D:/Applications/tm-studio/app/utils/tmcut/sceneScan.ts#L68)); **< 2 lưới dùng được** cũng trả rỗng ([79](file:///D:/Applications/tm-studio/app/utils/tmcut/sceneScan.ts#L79)) vì `cutsToShots([], duration)` sẽ tuyên bố cả file là **một** shot | **6** trong **11** check của [tests/unit/tmcut_scene_scan.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_scene_scan.spec.ts): dòng 65 (mốc hỏi **bằng đúng** `sceneSampleTimes` của dải đã trim, và **một** lần hỏi cho cả dải), 80, 96, 111, 120 (**4** dải ảo → decoder hỏi **0** lần), 169 |
+| [app/utils/tmcut/sceneScan.ts:81](file:///D:/Applications/tm-studio/app/utils/tmcut/sceneScan.ts#L81) + [:85](file:///D:/Applications/tm-studio/app/utils/tmcut/sceneScan.ts#L85) | `threshold` và `sampleHz` người gọi đưa **được chuyển xuống core**, không có bản sao số nào trong `app/`; shot đóng ở `durationSec` khi biết, ngược lại ở mép scan | checks [:140](file:///D:/Applications/tm-studio/tests/unit/tmcut_scene_scan.spec.ts#L140) và [:157](file:///D:/Applications/tm-studio/tests/unit/tmcut_scene_scan.spec.ts#L157) |
+| [packages/core/src/detection.mjs:21](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L21)→[:27](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L27) và [packages/core/test/scene-silence-detection.test.mjs:47](file:///D:/Applications/tm-studio/packages/core/test/scene-silence-detection.test.mjs#L47) | **Hai chỗ nói sai đã bị sửa, không bị giữ lại.** Comment cũ tuyên bố 0.4 là "unchanged from the FFmpeg pass"; tên check cũ nói "on the same 0..1 scale AutoCut already knows". §23.2 đo được cả hai **sai về thang**, nên comment nay chép thẳng số đo và tên check nay chỉ còn assertion thật sự chạy | §23.3 quyết định 2 — **sửa claim, giữ nguyên assertion** |
+
+### 23.2 Phép đo thật: đường scene chạy trên clip thật, trong Chromium
+
+Bốn module được `import()` đúng qua URL mà **dev-server đang phát** (`/_nuxt/@fs/D:/Applications/tm-studio/…`),
+tức là bản Nuxt compile đang chạy chứ không phải một bản build riêng — cùng kỹ thuật §21.2 đã dùng.
+Media phục từ một server scratch trong `node_modules/.cache/tmcut-gates/` (`e2-serve.mjs`), vì phép đo
+cần `Accept-Ranges` thật: `Range: bytes=0-99` → **206** `Content-Range: bytes 0-99/55931`, GET đầy đủ →
+**200**, **55 931** byte. Clip là fixture của `tmcut_detect_smoke` (`testsrc2` → `smptebars`, cắt ở
+**1.000 s**, 128×128, 30 fps, 2 s) — nhị phân FFmpeg trên máy dev chỉ dùng để **sinh fixture**, theo
+Q3b/Q8a, không phải một chân chạy runtime.
+
+| Cái đo | Số | Ý nghĩa |
+|---|---|---|
+| `VideoDecoder` trong trang | **có** | seam chạy WebCodecs thật, không phải đường `null` |
+| Hằng số module trả về | `TMCUT_SCENE_PIXEL_WIDTH` **64**, `TMCUT_SCENE_GRID_CELLS` **8**, `TMCUT_SCENE_THRESHOLD` **0.4**, `TMCUT_SCENE_SAMPLE_HZ` **5** | `app/` và core **đọc cùng một số**, không bản sao |
+| Mốc core lên kế hoạch, 0→2 s @5 Hz | **0.136, 0.328, 0.52, 0.712, 0.904, 1.096, 1.288, 1.48, 1.672, 1.864** | **10** mốc, cách đều **0.192 s**, nằm trong dải đã trim — seam hỏi đúng cái core định |
+| `scan(0 → 2)` | `sampled` **10**, `missing` **0**, **10/10** lưới dài **64** | decoder giao đủ mẫu thật, không lỗ |
+| 9 điểm `sceneScore` của 9 cặp kề | **0.0261, 0.0285, 0.0288, 0.0276, 0.2626, 0.0009, 0, 0, 0.0001** | cặp thứ **5** (0.904→1.096) là cut; đáy ồn trong shot **≤ 0.0288** |
+| `scan` với ngưỡng **0.4** đang kế thừa | `cuts` **`[]`**, `shots` **`[{0, 2}]`** | **DEFECT: bỏ sót chính cut 1.000 s** |
+| FFmpeg `select='gt(scene,0)'` trên **cùng file** | **39** dòng metadata; frame cut `pts_time 1` = **0.694299**; **38** frame còn lại trong **0.000020 → 0.025815** | FFmpeg thấy cut vì thang của nó **đẩy cut lên ~0.69**; thang của core đẩy cùng cut đó lên **0.2626** |
+| `scan` với `threshold: 0.1` | `cuts` **`[1.096]`**, `shots` **`[{0, 1.096}, {1.096, 2}]`** | cả đường **plan→decode→grid→score→shot** đúng; chỉ **một con số** sai |
+| `scan` với `sampleHz: 10` | `sampled` **20**, `cuts` **`[1.048]`** | sai số định vị **0.096 s** (≈2.9 frame) @5 Hz → **0.048 s** (≈1.4 frame) @10 Hz — cái giá thật của tốc độ lấy mẫu |
+| `scan(1.2 → 2)` (trim sau cut) | `sampled` **4**, `cuts` **`[]`** | scan **đúng** dải đã trim: cut ở 1.0 s nằm ngoài tầm hỏi nên **không** được báo |
+| `scan` với signal đã huỷ | `sampled` **0**, `missing` **0**, `cuts` **`[]`**, `shots` **`[]`** | seam không mở decoder cho một ask không còn ai nhận |
+| Thời gian | **100 ms** lần đầu, **66 ms** lần hai, cho 10 mẫu trên 2 s | một lần hỏi `readGrids` cho cả dải (`asks` **1**) |
+| Ô của lưới shot hai | `191, 171, 143, 116, 95, 100, 80, 51` lặp lại trên mỗi dòng | **tám** vạch SMPTE theo đúng thứ tự — bằng chứng lưới đọc **row-major** và không dịch cột |
+
+Khoảng phân biệt đo được là **(0.0288, 0.2626]**: mọi ngưỡng trong khoảng đó bắt được cut này mà vẫn
+đứng trên đáy ồn. **0.4 nằm trên đỉnh khoảng**, nên nó **không phải** một ngưỡng "chưa kịp chỉnh" —
+nó bảo đảm bỏ sót.
+
+### 23.3 Bốn quyết định
+
+1. **Không chỉnh 0.4 thành một số mới ngay lượt này.** Một clip là một **data point**, không phải một
+   phép hiệu chuẩn: E4 phải so trên nhiều nội dung thật (footage nói chuyện có chuyển động nhanh, nơi
+   đáy ồn của lưới chắc chắn cao hơn 0.0288) rồi mới chọn. Cái E2 làm là **ghi con số vào chỗ mà
+   người đọc hợp đồng nhìn thấy** — comment của `TMCUT_SCENE_THRESHOLD` nay chép cả hai phía của phép
+   đo, và [packages/core/src/index.d.ts:397](file:///D:/Applications/tm-studio/packages/core/src/index.d.ts#L397)
+   nói thẳng "NOT its scale". Giữ nguyên giá trị **để parity của E4 đo trên cùng một mốc**, không phải
+   vì tin nó đúng.
+2. **Sửa claim, giữ nguyên assertion.** Assertion của check cũ (`0` / `1` / `0.5`, tính đối xứng) vẫn
+   **đúng** — nó định nghĩa thang 0..1 của core. Chỉ **phần tên** đòi "same scale AutoCut already
+   knows" là sai, và claim "cùng thang" ở dòng `sceneScore` của §22 cũng sai theo. Cả hai đều đã được
+   sửa.
+   Đây là đúng nguyên tắc của lượt này: khi test nói sai luật, **sửa test**, không nắn code cho khớp
+   một câu quảng cáo.
+3. **Seam pixel ở lại `frameDecode.ts`, không mở module thứ ba.** [tests/unit/tmcut_scene_scan.spec.ts:195](file:///D:/Applications/tm-studio/tests/unit/tmcut_scene_scan.spec.ts#L195)
+   liệt kê thư mục và buộc các file chứa `from 'mediabunny'` là **đúng** `['frameDecode.ts', 'mediaProbe.ts']`.
+   E3 (PCM) **sẽ** phải đổi guard này thành ba — đó là chủ đích, và nó bắt người thêm seam phải giải
+   thích thay vì âm thầm.
+4. **Phải reload tab trước khi đo — nếu không, con số mô tả code cũ.** Lần chạy **đầu tiên** của phép
+   đo trên import `packages/core/src/index.mjs` trả về **373** export và **không** có `sceneSampleTimes`
+   / `TMCUT_SCENE_THRESHOLD` / `dbfsOf` — tức bản core **trước slice E**, dù `curl` cùng URL trả về bản
+   hiện tại và `detection.mjs` đã được export. Module **mới** (`sceneScan.ts`) thì import đúng, vì nó
+   chưa từng nằm trong bộ nhớ trang. Sau `navigate_page` reload: **388** export, đủ các hàm E1/E2.
+   Kết luận thao tác: mọi phép đo live trên code vừa sửa đều phải **reload trước**, và một kết quả
+   "undefined" không có nghĩa code hỏng.
+
+### 23.4 Gates (chạy theo thứ tự, sau **mọi** lần sửa)
+
+| Gate | Lệnh | Kết quả | Chứng cứ |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | exit **0**, **0** `error TS`; `.nuxt/eslint.config.mjs` **28 552** byte, mtime **15:38** (cấu hình sinh **trước** gate 2) |
+| 2 Lint | `npx eslint` trên **8** file chạm tới, chạy **sau** gate 1 | PASS | exit **0**, **0** problem |
+| 3 Tests | `npx tsx tests/unit/run-all.mts` | PASS | exit **0**, **104/104** specs; `PASS tmcut_scene_scan.spec.ts (507ms) === [TMCut scene scan] 11 passed ===` |
+| 3b Core | `node --test "test/*.test.mjs"` + `check-boundaries.mjs` + `tsc -p packages/core/tsconfig.check.json` | PASS | **626/626** pass, **0** fail, **919.99 ms**; boundaries "PASS — core imports nothing platform-specific"; tsc exit **0**, **0** `error TS`. Riêng bốn file scene: **28/28** pass, **0** fail, **273.65 ms** |
+| 4 Live | `/_nuxt/@fs/…` trong trang Chromium thật + server media 206 | PASS | **toàn bộ bảng §23.2** — số đo thật, không phải cấu trúc |
+| 5 Docs | năm guard `docs_markdown` / `tmcut_doc_citations` / `tmcut_doc_line_length` / `tmcut_doc_table_shape` / `tmcut_docs_link_integrity`, chạy lại **sau** lần sửa cuối của §23 | PASS | **28** checks (**12/5/4/3/4**), exit **0** cả năm; gate 3 chạy **lại sau** lần sửa markdown cuối: **104/104**, exit **0** |
+
+### 23.5 Chưa chứng minh
+
+- **Ngưỡng mới chưa được chọn.** Phép đo chỉ có **một** clip, và clip đó là synthetic plates
+  (`testsrc2`, `smptebars`) — chuyển động đều, không có nội dung thật. Khoảng phân biệt
+  **(0.0288, 0.2626]** là **số của riêng nó**, không phải một ngưỡng suy ra được cho footage.
+- **Chưa có shot nào đi vào một timeline.** `sceneScan.ts` và `decodeLumaSeries` có **0** consumer
+  phía UI: `app/composables/useTmcutAutocut.ts:79` vẫn gọi hai IPC `analyzeScenes`/`analyzeSilence`.
+  Nối đường đó — và **chạy cả hai** để so — là E4.
+- **`decodeLumaSeries` mới chạy trên 128×128, 2 s, một file.** Chưa đo trên 4 K, chưa đo trên file dài
+  (số packet phải decode tăng theo dải scan), chưa đo khi byte đến từ client cache (nhánh `bytes`)
+  thay vì `UrlSource`, và chưa đo trên **Electron** — hai host dùng chung module nhưng host desktop
+  chưa được chạy lượt này.
+- **`missing > 0` chưa từng xảy ra thật.** `missing` **0** trên cả hai lần chạy, nên con đường "một mẫu
+  rớt" mới được chứng minh bằng **lưới giả trong Node** (checks [:96](file:///D:/Applications/tm-studio/tests/unit/tmcut_scene_scan.spec.ts#L96),
+  [:111](file:///D:/Applications/tm-studio/tests/unit/tmcut_scene_scan.spec.ts#L111)), không bằng một
+  decoder thật đánh rơi một khung.
+- **Shot list của một dải trim mô tả **cả source**, không phải phần đã nhìn.** `scan(1.2 → 2)` trả
+  `shots: [{0, 2}]` vì `cutsToShots` đóng danh sách bằng `durationSec` trong khi các mốc hỏi nằm trong
+  dải trim. E4 phải quyết: Autocut luôn scan **nguồn đầy đủ** (khi đó vô hại), hay kết quả phải kèm
+  "đã phủ ở đâu". Chưa đổi hành vi vì một mình nó chưa làm hỏng phép đo nào.
+- **Im lặng chưa có gì mới.** `levelSeries`/`silenceSpans` vẫn **0** importer và chưa chạy trên PCM
+  thật — chân đó là E3, không phải lượt này.
+- **Không khoá i18n nào mới.** Lượt này không thêm chữ nào ra UI.
+
+### 23.6 Vệ sinh
+
+§23 thêm **133** dòng, đưa cả file lên **1480** dòng; **46** anchor `file:///…#L<n>` trong §23 được in **nội
+dung dòng đích** bằng một script scratch (`e2-anchors.mjs`) và đối chiếu từng cái — script đó cũng chạy
+lại **30** anchor của §22, vì các dòng của `detection.mjs` đã dịch khi E2 thêm luật (§22 nay trỏ
+`:27`→`:39`, `:78`, `:147`, `:193`, `:217`, `:227`, `:256` thay vì `:20`, `:63`, `:77`, `:98`, `:122`,
+`:132`, `:161`).
+
+Scratch của lượt này (`e2-g1.txt`, `e2-g2.txt`, `e2-g2b.txt`, `e2-fix.txt`, `e2-corets.txt`,
+`e2-g3.txt`, `e2f-g1.txt`, `e2f-g2.txt`, `e2f-g3.txt`, `e2f-core.txt`, `e2f-bound.txt`, `e2f-tsc.txt`,
+`e2f-e2core.txt`, `e2-ffscene.txt`, `e2-serve.mjs`, `e2-serve.log`, `e2-anchors.mjs`, `e2-gfx.txt`,
+thư mục `e2live/`) nằm trong `node_modules/.cache/tmcut-gates/` (đã ignore) và **đã xoá sạch** sau lần
+chạy guard cuối; server scratch 4119 cũng đã dừng. Không file nào của chủ repo bị đụng để "dọn" sau
+test. `git status --porcelain` sau khi stage phải ra **đúng 9** dòng:
+`packages/core/src/detection.mjs`, `packages/core/src/index.d.ts`,
+`packages/core/test/scene-luma-grid.test.mjs`, `packages/core/test/scene-cut-pairs.test.mjs`,
+`packages/core/test/scene-silence-detection.test.mjs`, `app/utils/tmcut/frameDecode.ts`,
+`app/utils/tmcut/sceneScan.ts`, `tests/unit/tmcut_scene_scan.spec.ts`, và chính file này.
 

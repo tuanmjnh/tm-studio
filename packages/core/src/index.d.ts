@@ -394,7 +394,7 @@ export function planFrameCacheEviction(entries: TmcutFrameCacheEntry[], maxEntri
 // quiet — used to be answered only by FFmpeg's stderr. The laws below own the
 // numbers, so a frame scan and a PCM scan cannot decide separately what a cut or
 // silence is. Times are SECONDS, like the EDL; ticks are the app's boundary.
-/** Cut score AutoCut has always used, from the pass this replaces. */
+/** The number FFmpeg's `scene` threshold used, NOT its scale — see detection.mjs. */
 export const TMCUT_SCENE_THRESHOLD: number
 /** Looks per second a shot can be found at. */
 export const TMCUT_SCENE_SAMPLE_HZ: number
@@ -406,8 +406,25 @@ export const TMCUT_SILENCE_MIN_DURATION_SEC: number
 export const TMCUT_SILENCE_FLOOR_DBFS: number
 /** The instants a scene scan looks at, planned by the C14 strip law. */
 export function sceneSampleTimes(startTicks: number, durationTicks: number, sampleHz?: number): number[]
+/** Cells per side of the luma grid a shot score compares. */
+export const TMCUT_SCENE_GRID_CELLS: number
+/** One pixel to BT.601 luma, 0..255, or NaN when a channel is not a number. */
+export function lumaOf(red: number, green: number, blue: number): number
+/** RGBA bytes of one frame, block-averaged to `cells` per side; [] when they are not all there. */
+export function lumaCells(
+  rgba: ArrayLike<number> | null | undefined,
+  width: number,
+  height: number,
+  cells?: number
+): number[]
 /** Mean luma change of two grids, 0..1; null when they are not comparable. */
 export function sceneScore(previous: ArrayLike<number> | null | undefined, next: ArrayLike<number> | null | undefined): number | null
+/** The instants of the adjacent pairs a scan scores as a cut; [] when a sample is missing. */
+export function sceneCuts(
+  times: ArrayLike<number> | null | undefined,
+  grids: Array<ArrayLike<number> | null | undefined> | null | undefined,
+  options?: { threshold?: number }
+): number[]
 /** Cut instants to shots, ending at `durationSec` (or the last cut if unknown). */
 export function cutsToShots(
   cutSeconds: ArrayLike<number>,

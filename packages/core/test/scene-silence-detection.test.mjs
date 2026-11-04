@@ -44,7 +44,7 @@ describe('detection (slice E)', () => {
     assert.deepEqual(sceneSampleTimes(0, secToTicks(10), 0), [])
   })
 
-  it('sceneScore is the mean luma change of two grids, on the same 0..1 scale AutoCut already knows', () => {
+  it('sceneScore is the mean luma change of two grids, normalised to 0..1 (not FFmpeg scene scale)', () => {
     const flat = new Uint8Array(64).fill(128)
     assert.equal(sceneScore(flat, flat), 0)
     const black = new Uint8Array(64).fill(0)
