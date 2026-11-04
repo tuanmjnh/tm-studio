@@ -350,7 +350,7 @@ Mỗi slice chạy 5 gate (`tmcut-verify-gate-pipeline`) rồi commit + push, nh
 | A | Chốt kiến trúc: ADR-028…033, sửa prose FFmpeg của V4 roadmap, lưu baseline — **xong ở slice A2 (§14); con số "6 dòng" ở dòng này là thiếu, đo lại là 14** | `docs/`, ADR mới | typecheck exit 0 và 0 `error TS`; suite ≥90/93 như baseline; bốn doc guards **và** `docs_markdown` xanh (5/5 exit 0) | — |
 | B | `MediaProbeService` + Mediabunny cho **cả hai host**, trả schema §4.1 (undefined + warnings, không sentinel 0) — **đã code `1b57ca1`, nhưng exit gate mới đạt một phần: WAV + file hỏng + ảnh tĩnh trên hai host, fixture video MP4/MOV/WebM/MKV chưa (§13.4)** | `packages/core/src/mediaInfo.mjs` mới, `webProbe.ts`, `useTmcutPlatform.ts` | probe test trên fixture MP4/MOV/WebM/MKV + file hỏng; ffprobe **vẫn còn** cho tới khi D | A |
 | C | Asset cache fingerprint (IndexedDB/OPFS), trạng thái `queued\|probing\|ready\|partial\|unsupported\|error` — **tách ba phần: C1 (audit §16) dựng tầng dữ liệu — sáu trạng thái vào record, fingerprint đúng bằng `cacheKeyForPath`, relink reset mọi thứ probe cũ học và giữ nguyên reference theo Q6; C2 (audit §17) dựng tầng chữ — bảng nhìn state → chữ/icon/tone, predicate `isMediaOffline`, plate Media Offline trên library + timeline + preview, một dòng relink dùng chung cho ba bề mặt; C2b (audit §18) dựng một nửa — store + write (import/relink) + reconcile-on-open + panel row, luật pure ở `byteCache.mjs`; đường đọc (playback/probe/thumb/waveform/export lấy bytes từ cache) chưa có nên ADR-033 vẫn **CHỜ**** | `useTmcutMedia.ts`, `assetImport.ts`, `useTmcutRelink.ts`, `byteStore.ts` mới, `packages/core/src/byteCache.mjs` mới | relink test; không serialize File object — **C1: 16 check ở `tmcut_asset_import.spec.ts`; C2: 13 check ở `tmcut_media_offline.spec.ts` (bảng nhìn + locale hai chiều + truth table offline + hành vi huỷ/relink); C2b: 26 check ở `tmcut_byte_cache.spec.ts` (9 core law, 10 store/backends, 1 boundary, 6 integration)** | B |
-| D | Thumbnail + filmstrip bằng `VideoDecoder`/Canvas; bỏ `-ss` IPC | `useTmcutFrames.ts`, `frames.mjs` | thumb test theo timestamp; cancel stale request | B |
+| D | Thumbnail + filmstrip bằng `VideoDecoder`/Canvas; bỏ `-ss` IPC — **tách ba phần: D1 (audit §19) dựng danh tính và luật đua trong core (`frameRequestKey`/`frameTimeWithinMedia`/`createFrameSlotLedger`/`planFrameCacheEviction`), pin cả parity với template key của desktop bằng cách đọc file controller; D2 dựng service giải frame một cho hai host (Mediabunny `CanvasSink`) và là chỗ **đường đọc đầu tiên** của byte cache xuất hiện; D3 nối `useTmcutFrames.ts` + ba consumer và trả nợ fixture video §13.4. IPC `-ss` vẫn còn cho tới slice I (build-then-cut, rule 11)** | `useTmcutFrames.ts`, `frames.mjs` | thumb test theo timestamp; cancel stale request — **D1: 11 check ở `tmcut_frame_cache.spec.ts` (danh tính theo ms, clamp, ledger thắng-thua, cache bound). Chưa đạt phần "cancel" ở mặt hành vi: chưa có `AbortController`/`dispose` nào, tức chưa hủy một decode thật nào — việc của D2** | B |
 | E | Autocut analysis (scene + silence) phía decoder; retire `analysis.mjs` stderr parse | `analysis.mjs`, `useTmcutAutocut.ts` | parity với kết quả cũ trên fixture, hoặc khai tử tính năng có ADR | D |
 | F | Scene graph + WebGL2 compositor cho **preview** (nâng cấp #96 thành slice đầu của renderer chung, không phải DOM stacking tạm) | `TmcutPreviewPlayer.vue`, `paintStack.mjs`, `renderAt.mjs` | preview composite đủ `rows`, pixel gate DOM↔GPU | B |
 | G | Web Audio engine: mixer, gain/mute/solo, waveform PCM, volume keyframe | mới trong `app/composables` | gap/overlap/crossfade test; 0 hit `extractAudio` | F |
@@ -956,3 +956,85 @@ chưa phải đã xong; nói cách khác C2b chứng minh phần **ghi** của A
 - **Desktop cố ý không cache, chưa có test cho điều đó.** Hàng panel gắn `!isDesktop` và chỉ nhánh
   `importWebFiles` gọi `cacheAssetBytes`; đó là quyết định đúng (desktop đọc file thẳng từ đĩa) nhưng
   chưa một check nào assert một phiên desktop **không** tạo row nào trong index.
+
+---
+
+## 19. Slice D1 — một frame request là một khoảnh khắc, và ai thắng cuộc đua thì được vẽ (đo ngày 2026-11-04)
+
+Slice C dựng **tên** của một revision, C2b dựng **chỗ giữ** bytes của tên đó. Slice D là chỗ đầu tiên
+một bề mặt thật đi **hỏi** bytes ấy. Nhưng frame không có "revision" để hỏi: cùng một file, cùng một
+thứ tự byte, mà khác một phần tư giây là khác một ảnh. Nên trước khi dựng máy giải mã, D1 dựng
+**danh tính** của một request và **luật đua** giữa các request — hai thứ mà desktop và web sắp phải
+dùng chung, và nếu mỗi bên tự đặt tên thì đúng là bệnh ADR-032 đã ghi.
+
+Điểm khác mọi luật trước ở đây: check "two hosts asking the same frame build the same key" không chỉ
+so hai lời gọi hàm, nó **đọc file desktop đang chạy** (`electron/tools/tmcut.controller.cjs`) và
+assert chuỗi key nó tự tay dựng ngày hôm nay. Parity vì thế là một test, không phải một claim trong
+docs — và nó sẽ đòi được sửa **cùng lúc** slice I xoá file đó.
+
+### 19.1 Cái đã dựng
+
+| File | Vai | Bằng chứng |
+|---|---|---|
+| [packages/core/src/frames.mjs:127](file:///D:/Applications/tm-studio/packages/core/src/frames.mjs#L127) | `frameRequestMillis`: instant của một request là **số nguyên millisecond**, làm tròn chứ không cắt; âm/NaN/Infinity/chuỗi là một **lời từ chối** (`null`), không phải frame 0 | check "a frame request is the instant it asks for, to the millisecond" đo `1.2345 → 1235` (round, không floor), `1.2344 → 1234`, `0 → 0`, và bốn dạng vô nghiệm đều `null` — kể cả `'1'`, vì một chuỗi không phải timestamp |
+| [packages/core/src/frames.mjs:133](file:///D:/Applications/tm-studio/packages/core/src/frames.mjs#L133) | `frameRequestWidth`: trần **1280**, sàn **16**, mặc định **320**, làm tròn pixel | check "the width a frame asks for is clamped the same on both hosts" đo `6400 → 1280` (một yêu cầu 4K không mua được một lần giải 4K), `5 → 16`, `320.6 → 321`, `NaN → mặc định` |
+| [packages/core/src/frames.mjs:143](file:///D:/Applications/tm-studio/packages/core/src/frames.mjs#L143) | `isFrameCacheKey`: một frame chỉ do đúng một request đặt tên — `/^[0-9a-f]{8}-f\d+-w\d+$/`, lấy **hộ chiếu** của C2b (`isByteCacheKey`) làm nửa đầu | check "a frame key never carries a path or a bad fingerprint" liệt kê bảy dạng rác bị từ chối (`deadbeef`, `deadbeef-f3000`, `DEADBEEF-f1-w2`, `deadbeef-f-1-w320`, `…-w320.png`, `/uploads/a.mp4`, chuỗi rỗng, `null`) — một ảnh đang được hiển thị không do một request hợp lệ đặt tên thì không được phép tồn tại |
+| [packages/core/src/frames.mjs:155](file:///D:/Applications/tm-studio/packages/core/src/frames.mjs#L155) | `frameRequestKey(fingerprint, atSec, width)` → `deadbeef-f3000-w320`: đúng chuỗi desktop vẫn dùng để đặt tên PNG của nó | check "two hosts asking the same frame build the same key": `3.000 s` và `2.9996 s` là **một** key, `2.999 s` là key khác, width khác/fingerprint khác là key khác; rồi `assert.match` vào đúng template `` `${cacheKeyFor(filePath, stat)}-f${Math.round(wanted * 1000)}-w${px}` `` trong controller |
+| [packages/core/src/frames.mjs:168](file:///D:/Applications/tm-studio/packages/core/src/frames.mjs#L168) + [:104](file:///D:/Applications/tm-studio/packages/core/src/frames.mjs#L104) | `frameTimeWithinMedia` + `TMCUT_FRAME_MAX_TIME_SEC` = 24 h: seek quá cuối file thì hỏi **frame cuối thật** (guard 50 ms), duration chưa biết thì mũ **một ngày**, seek âm là bug của caller nên trả `null` | checks "the decoder is asked inside the media" (100 s trong file 10 s → `9.95`, `0.02` trong file 0.01 s → `0`) và "an unknown duration caps instead of pretending" (`7` với duration 0/null vẫn là `7`, `1e9` → `86400`, `-3`/NaN → `null`) — số học lấy từ nhánh desktop đang chạy, không phải từ một suy đoán |
+| [packages/core/src/frames.mjs:186](file:///D:/Applications/tm-studio/packages/core/src/frames.mjs#L186) | `createFrameSlotLedger()`: `begin(slot, key)` trả `{token, superseded}`, `isCurrent(slot, token)` trả lời câu "kết quả này còn được vẽ không", `forget(slot)` khi chủ slot biến mất, `size()` để đo rỉ | check "only the newest request for a slot may paint": request thứ hai trên slot `hud` báo `superseded` đúng bằng token thứ nhất, và `isCurrent` với token đó là `false` — chín frame thua cuộc đua của một cú scrub không được phép đè frame thứ mười. Check "a token does not travel between slots or across a forget": token của clip này **không** hủy clip khác, `forget` hai lần không phải lỗi, và slot đã quên **không** tái sử dụng token |
+| [packages/core/src/frames.mjs:230](file:///D:/Applications/tm-studio/packages/core/src/frames.mjs#L230) + [:111](file:///D:/Applications/tm-studio/packages/core/src/frames.mjs#L111) | `planFrameCacheEviction(entries, maxEntries)` và trần **512** frame: đếm theo **số frame** chứ không theo byte (thumbnail vài chục KB, 512 cái là vài chục MB — một cache, không phải bản sao thứ hai của thư viện), `drop` báo rác trước rồi LRU, `keep` trả về xếp **cũ trước** để lượt sau lấy từ đầu | check "the frame cache is bounded and drops the least recently used" đo thứ tự drop, `kept`, rằng dưới trần thì không drop gì, rằng trần `0`/`-1`/`NaN` **giữ không gì cả** (một ngân sách không phải ngân sách không được đọc thành "vô hạn" — cùng bệnh C2b đã chữa), rằng row trùng key gom lại và giữ **lần chạm muộn hơn** nên một mảng lộn xộn vẫn cho **một** kế hoạch, và rằng key rác bị **khai** chứ không bị obey |
+| [packages/core/src/index.d.ts:339](file:///D:/Applications/tm-studio/packages/core/src/index.d.ts#L339) | khối khai kiểu viết tay cho chín tên mới + hai shape có tên (`TmcutFrameCachePlan`, `TmcutFrameSlotLedger`) — app type-check lấy `index.d.ts`, không lấy runtime | check "core declares the frame-request law to the app" đọc thẳng file `.d.ts`; nó RED trước khi khối được viết (check 1 cũng RED vì `frameRequestMillis` còn `undefined`), nên "export rồi mới khai" không lọt được tới gate 1 |
+| [tests/unit/tmcut_frame_cache.spec.ts:53](file:///D:/Applications/tm-studio/tests/unit/tmcut_frame_cache.spec.ts#L53)→[:200](file:///D:/Applications/tm-studio/tests/unit/tmcut_frame_cache.spec.ts#L200) | **11** checks, chạy trong **441 ms**, không cần fixture và không cần trình duyệt: toàn bộ là số học và một lần đọc file | suite **100/100** specs (99 → 100), `TEST_EXIT=0`, `PASS tmcut_frame_cache.spec.ts (441ms) === All 11 frame request checks passed ===` |
+
+### 19.2 Ba quyết định ghi lại
+
+1. **Danh tính của một frame sống trong core, không sống ở host nào.** Trước D1, desktop tự đặt tên
+   PNG của nó bằng một template trong `tmcut.controller.cjs` còn web thì không có thumbnail nào để
+   đặt tên. Từ D2, một dịch vụ duy nhất sẽ xin frame cho **cả hai** host, nên "request này là frame
+   nào" phải có một câu trả lời — và nó là số học (fingerprint + ms + px), tức thứ chạy được trong
+   plain node, tức thuộc core. Vì sao phải ghim: nếu app tự ghép một key khác dạng, cache của browser
+   và cache đĩa sẽ âm thầm ngừng trùng nhau, và đúng bug đó là thứ không ai nhìn thấy trên màn hình.
+2. **Parity với desktop được pin bằng cách đọc file desktop.** Check 4 không hard-code "desktop đặt
+   tên kiểu này"; nó `assert.match` vào template thật trong `electron/tools/tmcut.controller.cjs`.
+   Đổi một trong hai bên mà quên bên kia là test đỏ. Đây là cách đã dùng ở C2b ("only one module in
+   the app opens a browser byte store" quét cây `app/` thay vì tin comment). Điều phải nhớ: khi slice
+   I xoá controller, nửa desktop của check này phải đi theo file — nó là **ràng buộc tạm thời**, không
+   phải hằng bất biến.
+3. **Ledger có state nhưng vẫn là luật, nên vẫn ở core.** Core đã có một factory stateful
+   (`createFrameScheduler`, ADR-031), và `createFrameSlotLedger` không đụng API nào của trình duyệt:
+   nó chỉ nhớ token mới nhất của từng slot. Phần thật sự thuộc app là `AbortController` và
+   `input.dispose()` — D2 gọi, D1 chỉ trả lời "cái này đã cũ chưa". Ghi rõ ở đây vì cám dỗ ngược lại
+   (viết thẳng `if (token !== lastToken)` trong composable) chính là cách ADR-032 bị xói.
+
+### 19.3 Bằng chứng đã đo
+
+| Gate | Lệnh | Kết quả | Số đo |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | `TC_EXIT=0`, `grep -c "error TS"` = **0**; `.nuxt/eslint.config.mjs` sinh lại **28552** byte lúc **12:36**, gate 2 chạy sau đó |
+| 2 Lint | `npx eslint` trên đúng 3 file đã chạm (`frames.mjs`, `index.d.ts`, spec mới) | PASS | `LINT_EXIT=0`, **0** problems; không `--fix`, không lint repo-wide |
+| 3 Unit | `npx tsx tests/unit/run-all.mts` | PASS | `TEST_EXIT=0`, **100/100** specs, 0 hàng FAIL (dòng duy nhất chứa "FAILED" là `24 auth refresh checks passed; 0 FAILED`); spec mới **11/11** trong **441 ms**, `tmcut_byte_cache.spec.ts` vẫn **26/26** |
+| 3b Core | `node --test test/frames.test.mjs` + `node tools/check-boundaries.mjs` trong `packages/core` | PASS | **4/4** tests exit 0 (luật cũ của `frames.mjs` không đổi hành vi), boundaries **PASS — core imports nothing platform-specific** (`frames.mjs` import thêm `byteCache.mjs`, vẫn thuần node) |
+| 4 Live | — | N/A | thay đổi **chỉ ở core**, chưa có call-site nào trong `app/`: `grep` trên `app/ server/ electron/` cho bảy tên mới trả **0** kết quả, nên không một bề mặt render nào đổi |
+| 5 Docs | bốn guard tài liệu + `docs_markdown`, chạy trên cây docs **sau khi** viết §19 và ghi hàng D của §8 | PASS | `tmcut_doc_table_shape` **3/3** exit 0 (cả cây audit có **279** dòng bảng, 0 hàng sai số cột); `tmcut_docs_link_integrity` **4/4** exit 0 (§19 thêm **13** link `file:///` trên **3** đích — `frames.mjs`, `index.d.ts`, spec — mọi anchor `#L` đối chiếu số dòng thật: `frames.mjs` **254**, `index.d.ts` **2022**, spec **221**); `tmcut_doc_line_length` **4/4** exit 0 (hàng D mới **896** char, tài liệu vẫn dài nhất **1155** ở hàng C của §8, ceiling 1356); `tmcut_doc_citations` **5/5** exit 0; `docs_markdown` **12** checks exit 0 — cả năm chạy **sau** khi viết §19, không trước |
+
+### 19.4 Chưa chứng minh
+
+- **Không một bề mặt nào gọi luật này.** `frameRequestKey`, `createFrameSlotLedger`,
+  `planFrameCacheEviction` và bốn tên kia có **0** call-site ngoài `tmcut_frame_cache.spec.ts` (đo bằng
+  `grep` trên `app/`, `server/`, `electron/`). D1 chứng minh **danh tính và thứ tự thắng**, chưa chứng
+  minh một frame nào được giải và được vẽ — đó là việc của D2 (service) và D3 (consumer).
+- **Chưa giải một frame thật nào.** Không một fixture MP4/MOV/WebM/MKV nào được mở trong lượt này, nên
+  nợ cũ §13.4 ("probe một video container thật trên desktop") và §16.5 vẫn còn nguyên; D2/D3 là chỗ nó
+  được trả.
+- **Parity mới ở mức tên, chưa ở mức pixel.** Check 4 chứng minh hai host **gọi trùng một frame**; chưa có số
+  đo nào nói ảnh WebCodecs tại `t` giống ảnh FFmpeg tại `t` trong dung sai nào đó. FFmpeg trả frame có
+  presentation timestamp `<= t`, Mediabunny cũng vậy nhưng hai bộ giải mã khác nhau có thể khác nhau ở
+  đoạn đầu VFR — chỉ một phép so ảnh thật mới trả lời được, và nó thuộc D3.
+- **`TMCUT_FRAME_CACHE_MAX_ENTRIES = 512` là số học dung lượng, không phải số đo.** Chưa chạy một thư
+  viện lớn để xem bao nhiêu entry là đủ, và chưa biết chi phí giải thật của một frame trên máy này.
+- **Guard 50 ms lấy từ code đang chạy, không từ một nghiên cứu.** `FRAME_TAIL_GUARD_SEC` và trần 24 h
+  được sao đúng từ nhánh desktop (roadmap G-1); nếu WebCodecs cần guard khác, D2 sẽ phải nói lại và
+  con số này phải đổi công khai kèm test.
+- **Luật đua mới chỉ là ledger.** `begin` cho biết ai thua, nhưng chưa có gì **hủy** thật: chưa có
+  `AbortController`, chưa có `input.dispose()`, chưa có `revokeObjectURL` cho frame bị loại — tức chưa
+  chứng minh rằng một request thua cuộc không còn ngốn CPU. Toàn bộ phần đó cần một service, tức D2.

@@ -320,7 +320,8 @@ export function panFilter(pan: number): string
 export function isTrackMuted(track: { muted?: boolean } | null | undefined): boolean
 
 // --- Frame plan: filmstrip / thumbnail timestamps (Roadmap C14) ---
-// Core maths tick lists only; FFmpeg -ss stays in the Electron extractor.
+// Core maths tick lists; since slice D it also owns the identity of one frame
+// request, so no host can name a frame its own way.
 export function filmstripTimes(startTicks: number, durationTicks: number, count: number): number[]
 export function frameTimesForSegments(
   segments: Array<TmcutTimelineClip | {
@@ -334,6 +335,57 @@ export function frameTimesForSegments(
   perSegment: number
 ): Array<{ id: string | number, times: number[] }>
 export function clampFrameTime(atTicks: number, startTicks: number, durationTicks: number): number
+
+// --- Frame requests: one instant, one revision, one decoder ask (slice D) ---
+/** Ceiling for an ask when the duration is not known: a day, not forever. */
+export const TMCUT_FRAME_MAX_TIME_SEC: number
+/** How many decoded frames the app may hold before the oldest is released. */
+export const TMCUT_FRAME_CACHE_MAX_ENTRIES: number
+/** One decoded frame the app is holding: which request it answers, when it was last shown. */
+export interface TmcutFrameCacheEntry {
+  key: string
+  accessedAt: number
+}
+/** The answer to "what may the frame cache keep". */
+export interface TmcutFrameCachePlan {
+  /** Keys to release, invalid entries first, then least recently used. */
+  drop: string[]
+  /** Entries that fit, oldest first. */
+  keep: TmcutFrameCacheEntry[]
+  /** How many entries `keep` holds. */
+  kept: number
+  /** Keys that cannot name a frame; reported so the caller can clean them. */
+  invalid: string[]
+}
+/** One slot's right to paint: the token this ask got and the one it retired. */
+export interface TmcutFrameSlotLedger {
+  begin(slot: string, key: string): { token: number, superseded: number | null }
+  isCurrent(slot: string, token: number): boolean
+  forget(slot: string): boolean
+  size(): number
+}
+/** The millisecond a request is made at; a negative or unusable ask is a refusal. */
+export function frameRequestMillis(atSec: number): number | null
+/** The pixel width asked for, clamped to what a decoder is worth bothering. */
+export function frameRequestWidth(width?: number): number
+/** A cached frame is named by exactly one request — nothing else may be shown. */
+export function isFrameCacheKey(key: unknown): boolean
+/** The one name both hosts give the same frame: revision, instant, size. */
+export function frameRequestKey(
+  fingerprint: string | null | undefined,
+  atSec: number,
+  width?: number
+): string | null
+/** Where to actually ask the decoder, inside the media it has. */
+export function frameTimeWithinMedia(
+  atSec: number,
+  durationSec: number | null | undefined,
+  maxSec?: number
+): number | null
+/** Who is still allowed to paint, per slot: only the newest request. */
+export function createFrameSlotLedger(): TmcutFrameSlotLedger
+/** Which cached frames to release so at most `maxEntries` remain. */
+export function planFrameCacheEviction(entries: TmcutFrameCacheEntry[], maxEntries: number): TmcutFrameCachePlan
 
 export function createSelection(ids?: Array<string | unknown>): string[]
 export function toggleSelected(selection: string[], id: string): string[]
