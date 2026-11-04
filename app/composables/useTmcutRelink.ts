@@ -21,7 +21,7 @@ import type { TmcutAsset } from '~/types/tmcut'
 export function useTmcutRelink() {
   const { t } = useI18n()
   const toast = useToast()
-  const { isDesktop, relink, uploadWebFile, uploadVideoThumb, captureVideoThumb, persistLibrary, importError } = useTmcutMedia()
+  const { isDesktop, relink, uploadWebFile, uploadVideoThumb, captureVideoThumb, persistLibrary, importError, cacheAssetBytes } = useTmcutMedia()
   const { pickFile, pickWebFiles } = useFileSystem()
 
   function filterFor(asset: TmcutAsset) {
@@ -43,6 +43,9 @@ export function useTmcutRelink() {
     try {
       const uploaded = await uploadWebFile(file, file.name)
       const ok = await relink(asset.id, uploaded.url, { name: file.name, size: uploaded.size })
+      // relink() re-learned the file and stamped a fresh revision; the bytes in
+      // hand are that revision, so this is the one moment they are cheap to keep.
+      if (ok) await cacheAssetBytes(asset, file)
       if (ok && asset.kind === 'video') {
         const thumb = await captureVideoThumb(blobUrl)
         if (thumb) {

@@ -349,7 +349,7 @@ Mỗi slice chạy 5 gate (`tmcut-verify-gate-pipeline`) rồi commit + push, nh
 |---|---|---|---|---|
 | A | Chốt kiến trúc: ADR-028…033, sửa prose FFmpeg của V4 roadmap, lưu baseline — **xong ở slice A2 (§14); con số "6 dòng" ở dòng này là thiếu, đo lại là 14** | `docs/`, ADR mới | typecheck exit 0 và 0 `error TS`; suite ≥90/93 như baseline; bốn doc guards **và** `docs_markdown` xanh (5/5 exit 0) | — |
 | B | `MediaProbeService` + Mediabunny cho **cả hai host**, trả schema §4.1 (undefined + warnings, không sentinel 0) — **đã code `1b57ca1`, nhưng exit gate mới đạt một phần: WAV + file hỏng + ảnh tĩnh trên hai host, fixture video MP4/MOV/WebM/MKV chưa (§13.4)** | `packages/core/src/mediaInfo.mjs` mới, `webProbe.ts`, `useTmcutPlatform.ts` | probe test trên fixture MP4/MOV/WebM/MKV + file hỏng; ffprobe **vẫn còn** cho tới khi D | A |
-| C | Asset cache fingerprint (IndexedDB/OPFS), trạng thái `queued\|probing\|ready\|partial\|unsupported\|error` — **tách ba phần: C1 (audit §16) dựng tầng dữ liệu — sáu trạng thái vào record, fingerprint đúng bằng `cacheKeyForPath`, relink reset mọi thứ probe cũ học và giữ nguyên reference theo Q6; C2 (audit §17) dựng tầng chữ — bảng nhìn state → chữ/icon/tone, predicate `isMediaOffline`, plate Media Offline trên library + timeline + preview, một dòng relink dùng chung cho ba bề mặt; C2b vẫn mở = cache bytes phía client (IndexedDB/OPFS) thay cho `POST /api/v1/media/upload`, tức chỗ ADR-033 thực sự áp dụng** | `useTmcutMedia.ts`, `assetImport.ts`, `useTmcutRelink.ts` | relink test; không serialize File object — **C1: 16 check ở `tmcut_asset_import.spec.ts`; C2: 13 check ở `tmcut_media_offline.spec.ts` (bảng nhìn + locale hai chiều + truth table offline + hành vi huỷ/relink)** | B |
+| C | Asset cache fingerprint (IndexedDB/OPFS), trạng thái `queued\|probing\|ready\|partial\|unsupported\|error` — **tách ba phần: C1 (audit §16) dựng tầng dữ liệu — sáu trạng thái vào record, fingerprint đúng bằng `cacheKeyForPath`, relink reset mọi thứ probe cũ học và giữ nguyên reference theo Q6; C2 (audit §17) dựng tầng chữ — bảng nhìn state → chữ/icon/tone, predicate `isMediaOffline`, plate Media Offline trên library + timeline + preview, một dòng relink dùng chung cho ba bề mặt; C2b (audit §18) dựng một nửa — store + write (import/relink) + reconcile-on-open + panel row, luật pure ở `byteCache.mjs`; đường đọc (playback/probe/thumb/waveform/export lấy bytes từ cache) chưa có nên ADR-033 vẫn **CHỜ**** | `useTmcutMedia.ts`, `assetImport.ts`, `useTmcutRelink.ts`, `byteStore.ts` mới, `packages/core/src/byteCache.mjs` mới | relink test; không serialize File object — **C1: 16 check ở `tmcut_asset_import.spec.ts`; C2: 13 check ở `tmcut_media_offline.spec.ts` (bảng nhìn + locale hai chiều + truth table offline + hành vi huỷ/relink); C2b: 26 check ở `tmcut_byte_cache.spec.ts` (9 core law, 10 store/backends, 1 boundary, 6 integration)** | B |
 | D | Thumbnail + filmstrip bằng `VideoDecoder`/Canvas; bỏ `-ss` IPC | `useTmcutFrames.ts`, `frames.mjs` | thumb test theo timestamp; cancel stale request | B |
 | E | Autocut analysis (scene + silence) phía decoder; retire `analysis.mjs` stderr parse | `analysis.mjs`, `useTmcutAutocut.ts` | parity với kết quả cũ trên fixture, hoặc khai tử tính năng có ADR | D |
 | F | Scene graph + WebGL2 compositor cho **preview** (nâng cấp #96 thành slice đầu của renderer chung, không phải DOM stacking tạm) | `TmcutPreviewPlayer.vue`, `paintStack.mjs`, `renderAt.mjs` | preview composite đủ `rows`, pixel gate DOM↔GPU | B |
@@ -757,6 +757,8 @@ tự mở.
   module đã serve — chưa phải một cú chuột trên trình duyệt đã sign-in.
 - **Cache vật lý phía client chưa tồn tại.** `fingerprint` hôm nay mới là tên dẫn xuất cho slice D và điều kiện cho C2; bytes của web
   host vẫn nằm ở `/uploads/` phía server, nên ADR-033 vẫn **CHỜ** và hàng C của §8 chỉ đóng một nửa.
+  *(Cập nhật lượt C2b, đo 2026-11-04, §18: cache vật lý đã tồn tại và đã ghi — dòng này giữ nguyên vì nó là số đo của lượt C1.
+  ADR-033 vẫn CHỜ, nhưng khoản mở giờ là **đường đọc** và **thôi bắt buộc upload**, không còn là "chưa có cache".)*
 - **`partial` chưa có nguồn thật.** Bảng chuyển và test core pin ý nghĩa của nó, nhưng chưa một probe thật nào trả `partial` qua hai
   nhánh của `analyzeAsset` — cần file VFR thật hoặc container có duration ước lượng, đúng khoản nợ §13.4 đã ghi.
 - **Video container trên desktop.** Hai nhánh `ok: false` và `result.stat` đo bằng IPC fake hình controller; chưa mở một fixture
@@ -849,9 +851,108 @@ vi assert `assets.length` vẫn là 1 sau cả huỷ lẫn relink hỏng, và re
 - **Cache bytes phía client chưa tồn tại.** ADR-033 vẫn **CHỜ**: fingerprint đã là khoá dẫn xuất
   ổn định từ C1, nhưng web host vẫn lấy bytes từ `/uploads/` phía server. Việc này tách thành
   slice **C2b** (IndexedDB/OPFS, giới hạn dung lượng, eviction theo revision), không tính vào C2.
+  *Cập nhật lượt C2b (đo 2026-11-04, §18): cache vật lý đã dựng và đã ghi khi import/relink, nên
+  câu "chưa tồn tại" không còn đúng; ADR-033 vẫn **CHỜ** vì phần chưa dựng là **đường đọc** —
+  playback, probe và thumb vẫn đi từ `/uploads/`, chưa có reader nào lấy bytes từ cache.*
 - **`partial` vẫn chưa có nguồn thật.** Bảng nhìn đã có hàng `partial` (warning, tam giác cảnh
   báo), nhưng chưa một probe thật nào trả `partial` qua hai nhánh `analyzeAsset` — cần file VFR
   thật, đúng nợ §13.4.
 - **Timeline vẫn tự probe.** `TmcutTimeline.vue:685` và `:882` gọi `media.probe` năm field; plate
   timeline đọc asset record chứ không đọc verdict của probe đó, nên đổi sang `probeInfo` vẫn là
   việc của slice D.
+
+
+## 18. Slice C2b — máy giữ bản thứ hai của file, và thư mục nói đang giữ bao nhiêu (đo ngày 2026-11-04)
+
+C1 dựng **điều kiện** cho ADR-033 (một khoá dẫn xuất ổn định từ path + revision), C2 dựng **chữ**
+cho điều kiện đó. C2b là chỗ ADR-033 thật sự bắt đầu áp dụng: browser tự giữ một bản copy bytes của
+asset, đúng dưới fingerprint mà C1 định nghĩa, nên mở lại một dự án không còn buộc phải hỏi một máy
+chủ có thể đang không có file. Lượt này dựng ba thứ — **đường ghi** (import và relink mỗi lần giữ
+bytes của chính nó), **dọn** (đối chiếu index với backend hai chiều mỗi lần mở library, rồi eviction
+theo ngân sách), và **một dòng nhìn thấy được** trong panel media: đang giữ bao nhiêu file, bao
+nhiêu byte, và một nút trả lại hết. Đường **đọc** — playback, probe, thumbnail, waveform, export lấy
+bytes từ cache thay vì từ `/uploads/` — cố ý **chưa** dựng, và đó là lý do ADR-033 vẫn **CHỜ** chứ
+chưa phải đã xong; nói cách khác C2b chứng minh phần **ghi** của ADR-033, chưa chứng minh phần
+**local-first**.
+
+### 18.1 Cái đã dựng
+
+| File | Vai | Bằng chứng |
+|---|---|---|
+| [packages/core/src/byteCache.mjs:10](file:///D:/Applications/tm-studio/packages/core/src/byteCache.mjs#L10) | `TMCUT_BYTE_CACHE_MAX_BYTES` = 2 GiB và `TMCUT_BYTE_CACHE_QUOTA_SHARE` = 0.4 — một disk to không mua được một cache vô hạn | check "a budget is never unlimited, even when the device says nothing": quota `NaN`/0/âm cho budget **đúng bằng trần** chứ không phải `Infinity`, và `Math.floor(quota * 0.4)` khi quota hợp lệ |
+| [packages/core/src/byteCache.mjs:37](file:///D:/Applications/tm-studio/packages/core/src/byteCache.mjs#L37) | `isByteCacheKey`: một fingerprint đúng tám hex, **không** gì khác được phép đặt tên file | check "a cache key is exactly one revision fingerprint" liệt kê path, digest in hoa, digest bị cắt và bị nối thêm — tất cả `false`; "a file larger than the whole budget is never copied" đo `byteCacheFits` (file to hơn cả ngân sách thì không vào cache, trước cả eviction) |
+| [packages/core/src/byteCache.mjs:68](file:///D:/Applications/tm-studio/packages/core/src/byteCache.mjs#L68) | `planByteCacheEviction(entries, budget, liveKeys)` → `{drop, keep, keptBytes, invalid}`: khoá sai dạng bị **khai** và loại trước; rồi bytes mà library không còn gọi tên; rồi entry không tự lọt; rồi LRU theo `(accessedAt, key)` | bốn checks "eviction drops the leak first…", "bytes whose asset is gone are dropped before the LRU runs", "an entry that cannot fit the budget alone is dropped even when live", "an index entry that is not a fingerprint is reported, not obeyed" đo đúng **thứ tự** drop (không phải chỉ tập drop) và `keptBytes` trong ngân sách; "eviction is deterministic and tolerates a messy index" chứng minh một mảng vào lộn xộn/trùng key vẫn cho **một** kế hoạch duy nhất |
+| [packages/core/src/index.mjs:23](file:///D:/Applications/tm-studio/packages/core/src/index.mjs#L23) + [packages/core/src/index.d.ts:1937](file:///D:/Applications/tm-studio/packages/core/src/index.d.ts#L1937) | luật được export **và** có khối khai kiểu viết tay (tsup chỉ build runtime; `.d.ts` do `scripts/prepare-dist.mjs` sao sang `dist`, và app type-check lấy `dist`) | check "core declares the byte-cache law to the app": năm tên cộng `TmcutByteCachePlan` phải có trong `.d.ts`. Check này **fail trước** khi khối được viết, và `nuxt typecheck` lúc đó báo 4 × TS2305 |
+| [app/utils/tmcut/byteStore.ts:90](file:///D:/Applications/tm-studio/app/utils/tmcut/byteStore.ts#L90) | `byteStoreBackend()`: thang OPFS → IndexedDB → `none`, probe memoised; `none` là **một trạng thái**, không phải exception | checks "the store names the backend it actually reached" và "the store off is a state, not an exception" đo cả ba nhánh; "only one module in the app opens a browser byte store" quét **toàn bộ** cây `app/`: đúng **một** file gọi `getDirectory()` (`byteStore.ts`), và `indexedDB` chỉ xuất hiện ở `byteStore.ts` cùng `useSystemStorage.ts` — file sau xoá database chứ không bao giờ cất một byte |
+| [app/utils/tmcut/byteStore.ts:129](file:///D:/Applications/tm-studio/app/utils/tmcut/byteStore.ts#L129) | index `tmcut_byte_index_v1` (Map) là **authority** về việc cache đang mang tên những gì — budget đọc từ nó, panel đọc từ nó | check "the storage layer asks core for every decision": mọi quyết định của store đi qua `byteCacheBudgetBytes`/`isByteCacheKey`/`byteCacheFits`/`planByteCacheEviction`, không một ngưỡng nào tự chế trong `app/` |
+| [app/utils/tmcut/byteStore.ts:266](file:///D:/Applications/tm-studio/app/utils/tmcut/byteStore.ts#L266) + [:299](file:///D:/Applications/tm-studio/app/utils/tmcut/byteStore.ts#L299) | `putCachedBytes` chỉ nhận key hợp lệ và file vừa ngân sách; `readCachedBytes` **tự lành**: row nói có mà bytes không còn thì quên row, trả `null`. Cả hai không bao giờ throw | checks "a stored revision reads back as the same bytes", "a read the cache cannot serve is forgotten, not trusted", "an unknown or illegal key never reaches the filesystem", "a file bigger than the budget stays uncached" |
+| [app/utils/tmcut/byteStore.ts:326](file:///D:/Applications/tm-studio/app/utils/tmcut/byteStore.ts#L326) | `pruneByteCache` đối chiếu **hai chiều** trước khi chạy luật core: row mất bytes → quên; bytes index không gọi tên → xoá; backend không liệt kê được → **không free gì** lượt đó thay vì đoán | checks "the index and the bytes are reconciled both ways" (dựng cả hai phía vết lệch: row ma và file mồ côi) và "over budget, the least recently used revision is the one freed" |
+| [app/utils/tmcut/byteStore.ts:364](file:///D:/Applications/tm-studio/app/utils/tmcut/byteStore.ts#L364) + [:377](file:///D:/Applications/tm-studio/app/utils/tmcut/byteStore.ts#L377) | `byteCacheInfo` (backend, available, entries, usedBytes, budgetBytes) cho panel; `clearCachedBytes` trả lại hết — index luôn rỗng kể cả khi backend từ chối xoá, vì index là authority | check "the IndexedDB fallback really stores and really evicts" khép lại bằng `clearCachedBytes()`: **0** key trong backend và **{}** trong index ("the clear control empties the backend / and the index with it"); check "the store off is a state, not an exception" đo `byteCacheInfo` khi không có store (`backend: 'none'`, `available: false`, `entries: 0`, `prune().dropped === 0`) |
+| [app/composables/useTmcutMedia.ts:678](file:///D:/Applications/tm-studio/app/composables/useTmcutMedia.ts#L678) + [app/composables/useTmcutRelink.ts:48](file:///D:/Applications/tm-studio/app/composables/useTmcutRelink.ts#L48) | **đúng hai** chỗ ghi: ngay sau `assets.value.unshift(asset)` khi import web, và `if (ok)` sau `const ok = await relink(...)` khi relink thật sự được probe nhận | RED đo được trước khi nối đường ghi: check này (tên lúc đó "the library keeps a copy under the fingerprint it wrote", nay là "an import keeps its own copy of the bytes") fail với `false !== true`; hai check hành vi assert `cachedByteKeys().has(asset.fingerprint)` — và với relink, key được giữ là fingerprint **mới**, không phải của file đã chết |
+| [app/composables/useTmcutMedia.ts:103](file:///D:/Applications/tm-studio/app/composables/useTmcutMedia.ts#L103) + [:285](file:///D:/Applications/tm-studio/app/composables/useTmcutMedia.ts#L285) | `liveByteKeys()` = tập fingerprint library đang thực sự gọi tên; `loadLibrary()` nhánh web chạy `pruneByteCache(liveByteKeys())` rồi `refreshByteCache()` | check "bytes the library stopped naming are freed on the next open": import hai asset, `removeAsset` một, `libraryLoaded = false`, `loadLibrary()` → bytes của asset đã xoá **không còn** trong store, asset kia vẫn còn |
+| [app/components/tmcut/TmcutMediaPanel.vue:78](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutMediaPanel.vue#L78) + [:822](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutMediaPanel.vue#L822) | `cacheLine` (available → "Browser cache: {size} · {count} files", không có store → chữ "off") và một hàng trong panel assets, kèm nút trả lại cache chỉ hiện khi `entries > 0` | check "the library panel tells what is kept and can give it back" đọc source panel và đòi **ba** chuỗi: `byteCache`, `t('tmcut.media.cacheSummary'` và `clearMediaByteCache` ("the user, not the browser, decides when it goes"), rồi đọc **cả hai** locale cho bốn khoá `cacheSummary`/`cacheOff`/`cacheClear`/`cacheCleared` — khác rỗng và không phải echo của key. Hàng render gắn `v-if="isAssetTab && !isDesktop"` ([`:822`](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutMediaPanel.vue#L822)) và nút chỉ hiện khi `byteCache.entries > 0` ([`:825`](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutMediaPanel.vue#L825)) vì desktop đọc file thẳng từ đĩa |
+| `i18n/locales/en.json`, `vi.json` | bốn khoá `tmcut.media.cacheSummary`, `cacheOff`, `cacheClear`, `cacheCleared` | check đọc **cả hai** locale: key phải có, khác rỗng, không phải echo của chính nó; serve `en.json` và `vi.json` trên dev server mỗi file **1** lần chuỗi `cacheSummary` |
+| [tests/unit/tmcut_byte_cache.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_byte_cache.spec.ts) | 26 check, bốn phần: **9** luật thuần trên core (budget, key, fit, eviction), **9** store trên ba backend giả (read-back, tự lành, key lạ, quá budget, off, IDB, reconcile, LRU), **3** cấu trúc (module scan, store-hỏi-core, `.d.ts` declares), **5** pipeline thật (import, no-store, relink, prune-on-open, panel) | `SPEC_EXIT=0`, `26/26`, `2199ms` — chạy trong plain node, không trình duyệt |
+
+### 18.2 Ba quyết định ghi lại
+
+1. **Luật ở core, storage ở app — và app không được tự quyết một ngưỡng nào.** Ngân sách, tư cách
+   key, thứ tự drop đều là những câu hỏi trả lời được bằng số học, nên chúng sống trong
+   [packages/core/src/byteCache.mjs](file:///D:/Applications/tm-studio/packages/core/src/byteCache.mjs),
+   chỗ không có một API trình duyệt nào và plain node chạy được đúng luật đó. `byteStore.ts` là chỗ
+   duy nhất trong `app/` mở OPFS/IndexedDB, và check "only one module in the app opens a browser byte
+   store" không tin lời comment: nó quét cây `app/`.
+   Vì sao phải ghim: hai backend, một luật; nếu mỗi chỗ tự chọn ngưỡng thì một phiên bản Chrome cũ
+   sẽ giữ nhiều gấp đôi một phiên bản khác mà không ai giải thích được.
+2. **Fingerprint là hộ chiếu, và index là authority được đối chiếu hai chiều.** Key của một bản copy
+   là `assetFingerprint(path, meta)` — chính cái tên C1 đã chọn — nên một revision relink **không
+   thể** bị nhầm với file đã chết: fingerprint đổi thì key đổi, và bản cũ rơi vào nhóm "library không
+   còn gọi tên" để bị giải phóng ở lượt open kế tiếp. Index đi trước: một row mà bytes không còn bị
+   **quên** (đọc tự lành, không throw), một bytes mà index không gọi tên bị **xoá** (không tồn tại
+   một file vô hình nào đọc lại được), và một backend không liệt kê được thì **không free gì cả**
+   lượt đó — một store không đọc được không cho phép ta đoán nó chứa gì.
+3. **Chứng minh phần ghi, chưa vẽ phần đọc.** Ở đây TDD chặn một cách làm "nhanh hơn": sau khi cache
+   có bytes, rất tự nhiên để `checkMissing`/probe đọc cache và báo asset `ready` — và đó đúng là lời
+   dối C1 vừa giết, vì `<video src>` vẫn trỏ `/uploads/…`: trạng thái nói "có file" trong khi mọi bề
+   mặt thật không phát được. Nên C2b chỉ ghi, chỉ dọn, chỉ nói cho người dùng biết đang giữ bao
+   nhiêu, và để **đường đọc** cho các slice đã có bề mặt đọc bytes thật: D (thumbnail/filmstrip),
+   G (waveform), H (export). ADR-033 vì vậy vẫn **CHỜ** sau lượt này, với blocking mới là D/G/H chứ
+   không còn "cache chưa tồn tại".
+
+### 18.3 Bằng chứng đã đo
+
+| Gate | Lệnh | Kết quả | Số đo |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | `TC_EXIT=0`, `grep -c "error TS"` = **0**. Lần đầu **TC_EXIT=2** với **4** × TS2305 (`'tmcut-core' has no exported member 'byteCacheBudgetBytes'`…): runtime `dist/index.js` có **6** hit nhưng `.d.ts` viết tay có **0** — sửa bằng check khai kiểu (RED) rồi khối `index.d.ts:1937`, build core `npm run build` exit 0; một lần **TC_EXIT=2** khác do 1 × TS2345 ở `byteStore.ts(123,33)` (`quota` có thể `undefined`) → `?? Number.NaN` |
+| 2 Lint | `npx eslint` trên đúng 8 file đã chạm | PASS | lần đầu `LINT_EXIT=1` với **12** lỗi: **4** × `@typescript-eslint/no-dynamic-delete` trong `byteStore.ts` (refactor index từ `Record` sang `Map` + helper `keptIndex`, không `// eslint-disable`) và **8** stylistic trong spec (2 sửa bằng `--fix` **phạm vi từng file**, 6 sửa tay: `max-statements-per-line`, `member-delimiter-style`) → `LINT_EXIT=0`; chạy **sau** khi `.nuxt/eslint.config.mjs` sinh lại **28552** byte lúc 12:05, và lint lại lần nữa sau lần sinh đó |
+| 3 Unit | `npx tsx tests/unit/run-all.mts` | PASS | `TEST_EXIT=0`, **99/99** specs (98 → 99), 0 hàng FAIL; `PASS tmcut_byte_cache.spec.ts (2199ms) === All 26 byte cache checks passed ===`. Hai RED đo được trước khi viết code: check "the library keeps a copy under the fingerprint it wrote" và check "TMCUT_BYTE_CACHE_MAX_BYTES is declared, not only exported" |
+| 4 Live | 5 route `/tmcut*` trên `:4003`, đọc console sau mỗi lần navigate | **BLOCKED** (một phần đo được) | cả năm route — `/tmcut`, `/tmcut/autocut`, `/tmcut/templates`, `/tmcut/factory`, `/tmcut/editor` — **redirect về `/login?redirect=…`**: ảnh chụp `/tmcut` là trang "Welcome back", không phải hub. Điểm đo được: **0** dòng `[error]`/`[warn]`/`[issue]` trên **cả năm** lần navigate, chỉ dòng `<Suspense> is an experimental feature` (noise đã biết) → shell app compile và render sạch, nhưng **hàng cache trong panel media chưa được nhìn thấy bằng mắt**. Agent bị cấm động vào credentials nên cần chủ repo mở phiên ở tab `:4003` rồi sweep lại |
+| 4b Serve | `GET /_nuxt/@fs/D:/Applications/tm-studio/<path>` — byte size + symbol đã compile | PASS | `byteStore.ts` **38790**, `useTmcutMedia.ts` **117157**, `useTmcutRelink.ts` **11869**, `TmcutMediaPanel.vue` **210359**, `en.json` **137364**, `vi.json` **158150** byte, tất cả **HTTP 200**. Module serve có `putCachedBytes`/`pruneByteCache`/`byteCacheInfo`/`clearCachedBytes`; `useTmcutMedia` có `cacheAssetBytes` **3** hit; relink **2** hit; panel có `cacheLine` **3** hit, `clearBrowserCache` **3** hit và `cacheSummary` **1** hit; `cacheSummary` **1** hit trong **cả hai** locale serve |
+| 5 Docs | bốn guard tài liệu + `docs_markdown`, chạy trên cây docs **sau khi** viết §18, hàng C của §8, ghi chú §16.5/§17.5 và ba chỗ ADR-033 | PASS | `tmcut_doc_table_shape` **3/3** exit 0 (cả cây audit có **260** dòng bảng, 0 dòng sai số cột); `tmcut_docs_link_integrity` **4/4** exit 0 (§18 thêm **22** link `file:///` trên **21** đích, mọi anchor `#L` đối chiếu số dòng thật — `byteCache.mjs` 102, `byteStore.ts` 391, `index.d.ts` 1970, `useTmcutMedia.ts` 1094, panel 1496); `tmcut_doc_line_length` **4/4** exit 0 (dòng dài nhất **1155** char ở hàng C của §8, ceiling 1356); `tmcut_doc_citations` **5/5** exit 0; `docs_markdown` **12** checks exit 0 |
+
+### 18.4 Chưa chứng minh
+
+- **Chưa một cú chuột thật.** Cả năm route `/tmcut*` trên `:4003` đều redirect về trang đăng nhập
+  (ảnh chụp viewport của `/tmcut` là "Welcome back", không phải hub), nên chưa thấy dòng cache render
+  trong panel, chưa bấm nút trả lại cache, và chưa một lần import thật nào ghi bytes vào OPFS của
+  trình duyệt. Điều đo được chỉ là shell app render **sạch**: 0 `[error]`/`[warn]`/`[issue]` trên năm
+  lần navigate. Cần: chủ repo mở phiên ở tab `:4003`, import một file, rồi đọc console và nhìn hàng
+  cache.
+- **ADR-033 chưa đóng — phần đọc.** `readCachedBytes` **không** có một call-site nào ngoài test:
+  playback, probe, thumbnail, waveform và export vẫn đọc từ `/uploads/` (desktop: từ đĩa). Bytes nằm
+  trong máy hôm nay là bytes **được giữ**, chưa phải bytes **được dùng**, nên local-first chưa thật
+  sự có nghĩa ở mặt hành vi. Việc này thuộc D (thumb/filmstrip), G (waveform) và H (export).
+- **Ba backend mới chạy trên trình duyệt giả.** `installOpfs(...)` và IndexedDB fake đo được **luật**
+  (đọc lại đúng byte, reconcile hai chiều, eviction LRU) nhưng chưa phải Chrome/Edge thật: chưa có
+  `navigator.storage.estimate()` thật, chưa có `QuotaExceededError` thật khi đĩa gần đầy, chưa có
+  trường hợp OPFS bị trình duyệt reclaim giữa hai phiên.
+- **Upload server vẫn bắt buộc.** `POST /api/v1/media/upload` vẫn chạy trước khi cache ghi (đường ghi
+  nối **sau** bước store thành công), nên web host hôm nay vẫn gửi file lên server. Bỏ bắt buộc đó
+  là một quyết định khác (Q4 nói server = storage), không phải việc của C2b.
+- **Thang đo dung lượng thật chưa đo.** Budget đọc từ quota thiết bị, nhưng chưa một lượt nào ghi đủ
+  asset để chạm trần 2 GiB rồi quan sát thứ tự free trên dữ liệu thật — checks "the index and the
+  bytes are reconciled both ways" và "over budget, the least recently used revision is the one
+  freed" làm điều đó ở quy mô vài file.
+- **Desktop cố ý không cache, chưa có test cho điều đó.** Hàng panel gắn `!isDesktop` và chỉ nhánh
+  `importWebFiles` gọi `cacheAssetBytes`; đó là quyết định đúng (desktop đọc file thẳng từ đĩa) nhưng
+  chưa một check nào assert một phiên desktop **không** tạo row nào trong index.

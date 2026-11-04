@@ -52,7 +52,7 @@ Vì vậy register này dùng số tiếp theo của dãy đang chạy (028…03
 | ADR-030 | decode/encode qua WebCodecs, hỏi capability trước khi dùng | **MỘT PHẦN** — probe đã đọc `isConfigSupported`/codec table; chưa có encoder nào | slice H |
 | ADR-031 | một timeline evaluator + một composition model cho hai host | **ĐÃ ÁP DỤNG** — `evaluateTimeline`, `renderAt`, `createFrameScheduler`, `paintStack` | slice J phải trả nốt phần core đang in văn bản FFmpeg |
 | ADR-032 | Electron là shell, không sở hữu media engine thứ hai | **MỘT PHẦN** — engine HTML-video thứ hai đã xoá (ADR-023); engine FFmpeg desktop còn tới slice I. Slice C1 cộng thêm một bằng chứng "một service cho hai host": nhánh desktop và nhánh web của `analyzeAsset` cùng đi qua một verdict table (audit §16.2) | slice I |
-| ADR-033 | media đi trong máy mặc định; rời máy là một lựa chọn hiển thị | **CHỜ** — web host vẫn stream file đã chọn lên server (`server/api/v1/media/upload.post.ts`). Slice C1 dựng **điều kiện** (fingerprint dẫn xuất từ path + revision, audit §16.2); C2 dựng **chữ** cho cùng điều kiện đó: `isMediaOffline` + bảng nhìn + plate Media Offline trên ba bề mặt, người dùng biết bytes đang ở đâu (audit §17). Chưa dựng: cache vật lý phía client thay cho upload | C2b / H |
+| ADR-033 | media đi trong máy mặc định; rời máy là một lựa chọn hiển thị | **CHỜ** — web host vẫn stream file đã chọn lên server (`server/api/v1/media/upload.post.ts`). Slice C1 dựng **điều kiện** (fingerprint dẫn xuất từ path + revision, audit §16.2); C2 dựng **chữ** cho cùng điều kiện đó: `isMediaOffline` + bảng nhìn + plate Media Offline trên ba bề mặt, người dùng biết bytes đang ở đâu (audit §17); C2b dựng **cache vật lý** — `byteCache.mjs` (luật) + `byteStore.ts` (OPFS/IndexedDB/index), ghi khi import và relink, reconcile khi mở library, panel nói đang giữ bao nhiêu (audit §18). Chưa dựng: **đường đọc** — playback/probe/thumb/waveform/export vẫn đi `/uploads/`, và upload vẫn bắt buộc | D / G / H |
 
 ---
 
@@ -177,9 +177,17 @@ tự khai là cloud ở UI. Route `/api/v1/media/upload` tồn tại tới slice
 "đang xử lý trong máy" với "đang gửi lên server". Đây là lý do C đứng ngay sau B.
 
 **Trạng thái.** Slice C1 làm xong nửa đầu của "fingerprint": `assetFingerprint` gọi đúng `cacheKeyForPath` của core và record mang
-sáu trạng thái import (audit §16). Nửa sau — cache vật lý phía client thay cho `POST /api/v1/media/upload`, và một trạng thái nói
-được bytes đang ở đâu — **chưa** có dòng code nào: bytes web hôm nay vẫn đi lên server, còn `queued`/`probing` chỉ mô tả tiến trình
-probe chứ không mô tả vị trí bytes. ADR-033 vì vậy vẫn **CHỜ**: C2 (đo ngày 2026-11-04, audit §17) mới cho người dùng **biết** bytes đang ở đâu — sáu nhãn trạng thái, predicate `isMediaOffline`, plate Media Offline trên library, timeline và preview, cùng một dòng relink dùng chung — còn **đường đi** của bytes thì chưa đổi: web host vẫn upload lên `/uploads/`. Phần đó tách thành C2b (cache IndexedDB/OPFS keyed by fingerprint), và C2b mới là chỗ ADR-033 bắt đầu áp dụng.
+sáu trạng thái import (audit §16). C2 cho người dùng **biết** bytes đang ở đâu — sáu nhãn trạng thái, predicate `isMediaOffline`,
+plate Media Offline trên library, timeline và preview, cùng một dòng relink dùng chung (audit §17, đo ngày 2026-11-04).
+C2b (đo cùng ngày, audit §18) dựng **cache vật lý phía client**: luật thuần ở `packages/core/src/byteCache.mjs` (ngân sách theo
+quota thiết bị với trần 2 GiB, key phải là một fingerprint tám hex, thứ tự eviction), storage ở `app/utils/tmcut/byteStore.ts`
+(OPFS → IndexedDB → `none`, một index localStorage là authority và được đối chiếu hai chiều mỗi lần mở library), đường ghi nối
+vào đúng hai chỗ — import web và relink thành công — cùng một dòng trong panel media nói đang giữ bao nhiêu file, bao nhiêu byte,
+kèm nút trả lại hết. Hai vế vẫn còn mở, và đó là lý do ADR-033 còn **CHỜ**: (1) **đường đọc** chưa có — playback, probe, thumbnail,
+waveform và export vẫn lấy bytes từ `/uploads/` (desktop: từ đĩa), `readCachedBytes` chưa có một call-site nào ngoài test;
+(2) **upload vẫn bắt buộc** — cache ghi *sau* bước store thành công, nên web host hôm nay vẫn gửi file lên server.
+Vì vậy C2b chứng minh phần **giữ** của ADR-033, chưa chứng minh phần **local-first**: nói cách khác, bytes nằm trong máy là bytes
+**được giữ**, chưa phải bytes **được dùng**. Hai vế đó thuộc slice D (thumb/filmstrip), G (waveform) và H (export).
 
 **Điều kiện mở lại.** Cloud render (plan §Phase 10) là tính năng tùy chọn, bật per-job, có consent, và không được âm thầm thay đường local.
 
@@ -248,4 +256,4 @@ biên giới server Q4 (commit `521d050`) và khoá schema Q5. Sáu file `server
 và guard `tmcut_project_schema_v3.spec.ts` đóng băng hình dạng project. **Không** route nào bị xoá, **không** field nào bị đổi tên.
 Xoá route, xoá binary và đổi UI là chuyện của slice I, chưa xảy ra.
 Bằng chứng đo từng phần nằm ở [docs/audit/zero-ffmpeg-audit.md §15](file:///D:/Applications/tm-studio/docs/audit/zero-ffmpeg-audit.md#L619).
-Lượt C1 (audit §16, commit `6d3e825`) và lượt C2 (audit §17, đo ngày 2026-11-04) nối tiếp ba phần trên theo đúng thứ tự chủ repo chọn: Q6 giờ có đủ **cả hai tầng** — dữ liệu ở C1, chữ trên màn hình ở C2 — còn ADR-033 vẫn **CHỜ** vì cache bytes phía client là việc của C2b.
+Lượt C1 (audit §16, commit `6d3e825`), lượt C2 (audit §17) và lượt C2b (audit §18, đo ngày 2026-11-04) nối tiếp ba phần trên theo đúng thứ tự chủ repo chọn: Q6 giờ có đủ **cả hai tầng** — dữ liệu ở C1, chữ trên màn hình ở C2. ADR-033 vẫn **CHỜ** sau C2b, nhưng vì một lý do hẹp hơn trước: cache vật lý phía client **đã tồn tại và đã ghi** (luật ở core, storage ở app, ghi khi import/relink, đối chiếu khi mở library, một dòng trong panel), còn thứ chưa có là **đường đọc** — playback/probe/thumb/waveform/export vẫn đi `/uploads/` — và **thôi bắt buộc upload**. Hai việc đó thuộc D/G/H, không thuộc C2b.

@@ -36,6 +36,8 @@ const {
   importing,
   webUpload,
   isDesktop,
+  byteCache,
+  clearMediaByteCache,
   generateProxy,
   importFiles,
   importWebFiles,
@@ -70,6 +72,20 @@ const {
 
 const thumbErrors = ref<Record<string, boolean>>({})
 const waveformMap = ref<Record<string, number[]>>({})
+
+// What the browser keeps of the library on this machine (slice C2b). Desktop
+// reads the files where they live, so the cache row is a web-runtime answer.
+const cacheLine = computed(() => byteCache.value.available
+  ? t('tmcut.media.cacheSummary', {
+      size: formatFileSize(byteCache.value.usedBytes),
+      count: byteCache.value.entries
+    })
+  : t('tmcut.media.cacheOff'))
+
+async function clearBrowserCache() {
+  await clearMediaByteCache()
+  toast.add({ title: t('tmcut.media.cacheCleared'), color: 'neutral' })
+}
 
 // Direct file preview state (clip list at the bottom of the bin)
 const previewModalOpen = ref(false)
@@ -793,6 +809,28 @@ function showInFolder(filePath?: string) {
           @click="mediaView = 'grid'"
         />
       </div>
+    </div>
+
+    <!-- The browser's own copy of the library (slice C2b): one line says how
+         much is kept, and giving it back is the user's call, not the
+         browser's. Hidden on desktop, which reads the files where they live. -->
+    <div
+      v-if="isAssetTab && !isDesktop"
+      class="mx-3 mt-1.5 flex items-center justify-between gap-2"
+    >
+      <div class="truncate text-[10px] text-muted">
+        {{ cacheLine }}
+      </div>
+      <UButton
+        v-if="byteCache.entries > 0"
+        icon="i-lucide-hard-drive-download"
+        size="xs"
+        variant="ghost"
+        color="neutral"
+        :aria-label="t('tmcut.media.cacheClear')"
+        :title="t('tmcut.media.cacheClear')"
+        @click="clearBrowserCache"
+      />
     </div>
 
     <div ref="mediaScrollRef" class="flex-1 overflow-y-auto p-3 space-y-2" @scroll="onMediaBinScroll">

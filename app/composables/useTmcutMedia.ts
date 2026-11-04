@@ -12,6 +12,13 @@ import {
 } from '~/utils/tmcut/media'
 import { clampWaveformPoints } from '~/utils/tmcut/waveform'
 import { assetFingerprint, assetStatusForImport, buildAssetRecord } from '~/utils/tmcut/assetImport'
+import {
+  byteCacheInfo,
+  clearCachedBytes,
+  pruneByteCache,
+  putCachedBytes,
+  type TmcutByteCacheInfo
+} from '~/utils/tmcut/byteStore'
 import { readStoredFlag, writeStored } from '~/utils/tmcut/localStore'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { toURL } from '~/utils/ffmpegHelper'
@@ -46,6 +53,8 @@ const importError = ref<string | null>(null)
 // banner while importWebFiles streams files to the local server.
 const webUpload = ref<{ done: number, total: number } | null>(null)
 const proxyPreview = ref(true)
+// What the browser byte store currently holds, for the library panel.
+const byteCache = ref<TmcutByteCacheInfo>({ backend: 'none', available: false, entries: 0, usedBytes: 0, budgetBytes: 0 })
 
 if (import.meta.client && typeof window !== 'undefined') {
   proxyPreview.value = readStoredFlag(PROXY_PREVIEW_KEY, true)
@@ -81,6 +90,36 @@ function isWebUploadPath(path: string | null | undefined): boolean {
 // somewhere: uploaded server copies. Blob:/data: URLs are session-bound.
 function isDurableAssetPath(path: string): boolean {
   return isWebUploadPath(path) || /^(https?:)/.test(path)
+}
+
+// ===== Client byte cache (slice C2b, ADR-033) =====
+// On the web runtime the server copy is the only place the editor has read
+// bytes from so far, and a dev-server restart or a cleared uploads folder takes
+// it away. So an import also keeps a copy in the browser, under the revision the
+// asset record already carries. Nothing reads it back yet: thumbnails (slice D),
+// waveforms (slice G) and export (slice H) are the first consumers, and the
+// byte axis stays owned by checkMissing until a reader makes the copy
+// authoritative.
+function liveByteKeys(): Set<string> {
+  // A fingerprint names one revision of one file, so the library's own records
+  // are the only proof the cache has that a copy is still wanted.
+  return new Set(assets.value.map(a => a.fingerprint).filter((key): key is string => !!key))
+}
+
+async function refreshByteCache() {
+  byteCache.value = await byteCacheInfo()
+}
+
+/** Copy one asset's bytes under the revision its record carries. */
+async function cacheAssetBytes(asset: TmcutAsset, bytes: Blob): Promise<void> {
+  if (!asset.fingerprint) return
+  await putCachedBytes(asset.fingerprint, bytes, liveByteKeys())
+  await refreshByteCache()
+}
+
+async function clearMediaByteCache() {
+  await clearCachedBytes()
+  await refreshByteCache()
 }
 
 function thumbNameFor(name: string): string {
@@ -241,6 +280,10 @@ export function useTmcutMedia() {
         console.error('Failed to parse media registry from localStorage:', error)
         assets.value = []
       }
+      // Opening the library is the reconcile point: a delete or a relink that
+      // happened in another session left bytes behind that nothing names now.
+      await pruneByteCache(liveByteKeys())
+      await refreshByteCache()
       return
     }
     if (!import.meta.server) {
@@ -630,6 +673,9 @@ export function useTmcutMedia() {
           applyVerdict(asset, info ? info.importStatus : 'ready')
           assets.value.unshift(asset)
           created.push(asset)
+          // The library keeps its own copy of what the user just handed over,
+          // so the next session can still read this revision off the machine.
+          await cacheAssetBytes(asset, file)
         } catch (error) {
           console.error('Web media upload failed:', file.name, error)
           importError.value = error instanceof Error ? error.message : 'upload failed'
@@ -1010,6 +1056,9 @@ export function useTmcutMedia() {
     onMediaDownloadProgress,
     captureVideoThumb,
     checkMissing,
+    byteCache,
+    clearMediaByteCache,
+    cacheAssetBytes,
     relink,
     removeAsset,
     linkAssetToProject,

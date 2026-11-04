@@ -1933,3 +1933,38 @@ export function evaluateClip(
   } | null | undefined,
   localTicks: number
 ): CoreClipVisual
+
+// --- Client byte cache (zero-FFmpeg slice C2b, ADR-033) ---
+/** Hard ceiling: a big disk never buys an unbounded cache. */
+export const TMCUT_BYTE_CACHE_MAX_BYTES: number
+/** Share of the device quota the cache may claim. */
+export const TMCUT_BYTE_CACHE_QUOTA_SHARE: number
+/** One revision the browser holds: its key, its size, the last time it was read. */
+export interface TmcutByteCacheEntry {
+  key: string
+  bytes: number
+  accessedAt: number
+}
+/** The answer to "what may the cache keep". */
+export interface TmcutByteCachePlan {
+  /** Keys to delete, in the order the law decided them. */
+  drop: string[]
+  /** Entries that fit, oldest first. */
+  keep: TmcutByteCacheEntry[]
+  /** Bytes `keep` totals — always within the budget when a budget exists. */
+  keptBytes: number
+  /** Index keys that cannot name a file; reported so the caller can clean them. */
+  invalid: string[]
+}
+/** Bytes the cache may hold; an unusable quota still gets the ceiling, never infinity. */
+export function byteCacheBudgetBytes(quotaBytes: number): number
+/** A cache key is exactly one revision fingerprint — nothing else may name a file. */
+export function isByteCacheKey(key: unknown): boolean
+/** Whether one file can live in the cache at all, before eviction is asked. */
+export function byteCacheFits(sizeBytes: number, budgetBytes: number): boolean
+/** Which cached revisions to delete so the store fits `budgetBytes`. */
+export function planByteCacheEviction(
+  entries: TmcutByteCacheEntry[],
+  budgetBytes: number,
+  liveKeys?: Iterable<string>
+): TmcutByteCachePlan
