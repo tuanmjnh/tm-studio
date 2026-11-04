@@ -8,6 +8,7 @@ import { resolveUploadFilePath, uploadsContentTypeForName } from '../../../utils
 import { activeJobId, createJob, failJob, finishJob, reportOutTime } from '../../../utils/renderJobs'
 
 /**
+ * ZERO-FFMPEG-LEGACY: slated for removal with slice I, recorded in the zero-FFmpeg audit (docs/audit/zero-ffmpeg-audit.md).
  * Web-runtime TMCut export (web-parity step 3). The browser cannot run ffmpeg
  * and the desktop runtime delegates to the Electron main process; this endpoint
  * gives the web runtime the same render by running the ALREADY COMPILED ffmpeg

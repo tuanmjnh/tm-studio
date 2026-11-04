@@ -5,6 +5,7 @@ import { resolveUploadFilePath } from '../../../utils/uploads'
 import { sceneDetectionArgs, silenceDetectionArgs } from '#shared/utils/detection-args.cjs'
 
 /**
+ * ZERO-FFMPEG-LEGACY: slated for removal with slice I, recorded in the zero-FFmpeg audit (docs/audit/zero-ffmpeg-audit.md).
  * Web-runtime media analysis (web-parity step 4). AutoCut's EDL scoring needs
  * two ffmpeg passes — shot detection (`select='gt(scene,T)',showinfo`) and
  * silence detection (`silencedetect`) — which the desktop runtime runs in the

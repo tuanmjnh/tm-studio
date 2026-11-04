@@ -1,6 +1,7 @@
 import { getJob } from '../../../../utils/renderJobs'
 
 /**
+ * ZERO-FFMPEG-LEGACY: polls the render job that slice I removes with the ffmpeg binary.
  * Poll a web-runtime render job started by POST /api/v1/media/render.
  * Returns the live progress (ffmpeg's reported output time vs. the timeline
  * span), then the final /uploads/ URL or the failure message. Jobs are kept

@@ -1,4 +1,5 @@
 /**
+ * ZERO-FFMPEG-LEGACY: registry for the render job that slice I removes with the ffmpeg binary.
  * In-memory registry for web-runtime render jobs (TMCut export on the Nitro
  * server). The POST that starts a render answers immediately with a jobId and
  * ffmpeg runs in the background; the client polls GET

@@ -7,6 +7,7 @@ import { config } from '../../../config/index'
 import { resolveUploadFilePath } from '../../../utils/uploads'
 
 /**
+ * ZERO-FFMPEG-LEGACY: slated for removal with slice I, recorded in the zero-FFmpeg audit (docs/audit/zero-ffmpeg-audit.md).
  * Web-runtime preview proxy (web-parity step 2). The browser cannot run
  * ffmpeg; the desktop runtime delegates the heavy scaling pass to the
  * main process (electron/tools/tmcut.controller.cjs generateProxy). This

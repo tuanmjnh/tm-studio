@@ -398,6 +398,12 @@ Phải đo `VideoEncoder.isConfigSupported` trên máy dev (Chrome/Electron 44) 
 được trả lời trong [docs/adr/zero-ffmpeg-decisions.md §8](file:///D:/Applications/tm-studio/docs/adr/zero-ffmpeg-decisions.md#L183) — bảng nào đã chốt, bảng nào là đề xuất có điều kiện.
 Ba mục **1, 7, 9** phá tính năng hoặc xoá dữ liệu nên vẫn cần chủ repo xác nhận **trước khi thi hành**; slice A2 chỉ ghi quyết định, chưa xoá gì.
 
+**Trạng thái 2026-11-04.** Chủ repo đã trả lời chín câu bằng [docs/adr/zero-ffmpeg-decisions.md §10](file:///D:/Applications/tm-studio/docs/adr/zero-ffmpeg-decisions.md#L217):
+mục **1** bỏ hẳn stabilization (project cũ giữ nguyên, đánh dấu unsupported), mục **9** chọn (b) — sơn subtitle qua `paintStack`, khai rõ phần ASS không hỗ trợ.
+Mục **3** (HTML-video) **vẫn mở**: nó spawn ffmpeg nên không sống sót qua slice I nguyên trạng, và engine encode thay thế chưa được quyết;
+marker `ZERO-FFMPEG-LEGACY` trong `server/utils/htmlVideoRender.ts` ghi đúng hai phương án đó chứ không chọn hộ.
+Mục **7** chưa thi hành: binary và `resources/*.exe` vẫn nằm nguyên trên máy dev tới slice I.
+
 ---
 
 ## 11. Definition of Done §25 → bằng chứng sẽ chứng minh
@@ -528,12 +534,12 @@ trước khi cái thay thế có test.
 
 | Sản phẩm | Ở đâu | Số đo |
 |---|---|---|
-| Register ADR-028…033, kèm ánh xạ từ dãy ADR-001…006 của plan §26 | `docs/adr/zero-ffmpeg-decisions.md` (file mới) | **214** dòng, đo bằng `split('\n').length` trên bản cuối cùng qua gate |
+| Register ADR-028…033, kèm ánh xạ từ dãy ADR-001…006 của plan §26 | `docs/adr/zero-ffmpeg-decisions.md` (file mới) | **214** dòng, đo bằng `split('\n').length` trên bản cuối cùng qua gate; §10 ghi thêm bộ quyết định Q1…Q9 ngày 2026-11-04, bản hiện tại **242** dòng và anchor `#L183` không đổi vì §10 nối ở cuối file |
 | Lệnh supersede **tại chỗ** cho ADR-006 | `docs/tmcut-v4-universal-rendering-multiplatform-roadmap.md` | hàng ADR nằm ở dòng **1503** sau slice (trước: 1501, lệch vì chèn banner) |
 | Lệnh supersede **tại chỗ** cho ADR-015 | `docs/v4-phase-0-audit.md:235` | sửa trong một dòng, nên `#L229`/`#L233`/`#L235` mà audit này cite vẫn đúng |
 | Prose cho phép FFmpeg tồn tại | V4 roadmap | **14** dòng rewritten + 1 banner chèn sau dòng 8; `git diff --numstat` = **16/14**, `git diff -U0` = 14 hunk một-dòng |
 | Trạng thái §5.2, §5.3, §10, §11 của chính audit | file này | §5.2 và §5.3 đóng một phần; §10 trỏ sang register; DoD thêm 2 hàng "một phần" |
-| Phép đo lại số witness phía core | §2.3, §7, hàng J của §8, và §14.4 (mới) | Ba con số cũ (10 / 10+2 / 11) quy về **11 + 1 + 2** trên **45** file test core; anchor `#L176` và `#L178` đều được sửa thành `#L183` vì mục 8 của register bản cuối nằm ở dòng **183** (register **214** dòng). |
+| Phép đo lại số witness phía core | §2.3, §7, hàng J của §8, và §14.4 (mới) | Ba con số cũ (10 / 10+2 / 11) quy về **11 + 1 + 2** trên **45** file test core; anchor `#L176` và `#L178` đều được sửa thành `#L183` vì mục 8 của register bản cuối nằm ở dòng **183** (register **214** dòng lúc đó, **242** ở bản hiện tại). |
 
 Ba quyết định thiết kế của phần register, ghi lại vì chúng sẽ bị hiểu sai nếu chỉ đọc bảng:
 

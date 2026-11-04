@@ -10,6 +10,9 @@ import { config } from '../config/index'
 import { failJob, finishJob, reportOutTime, setJobDuration } from './renderJobs'
 
 /**
+ * ZERO-FFMPEG-LEGACY: the encode step below spawns the bundled ffmpeg, which
+ * slice I removes, so this engine moves to WebCodecs or retires; the Playwright
+ * capture that feeds it needs no external tool.
  * HTML/CSS → MP4 capture engine.
  *
  * This follows the HyperFrames contract (heygen-com/hyperframes, Apache-2.0):

@@ -211,3 +211,31 @@ slice A2 chỉ ghi quyết định, chưa xoá gì.
   `timeline.tracks` flat; đó là một **migration**, cần ADR riêng (audit §5.4), không phải một field đổi tên.
 - **Không** cam kết ngày. Thứ tự slice và exit gate nằm ở audit §8; mỗi slice vẫn chạy đủ 5 gate của
   `tmcut-verify-gate-pipeline` rồi commit + push.
+
+---
+
+## 10. Chủ repo chốt ngày 2026-11-04: Q1…Q9
+
+Ngày 2026-11-04 chủ repo trả lời **chín** câu hỏi đã đưa ra một lần, nguyên văn "mình chọn Q1a Q2b Q3b Q4a* Q5b Q6a Q7a Q8a Q9a".
+Đánh số của chủ repo là đánh số trong tin nhắn quyết định, **không** trùng bảng §8 ở trên (chín câu của audit §10);
+bảng dưới ghi lại đủ bộ, kèm việc mỗi câu mở ra ở slice nào. Hàng nào trùng với §8 thì §8 được xác nhận, không bị viết lại.
+
+| Q | Câu | Chốt | Việc phải làm, và ở slice nào |
+|---|---|---|---|
+| 1 | Stabilization | **Bỏ hẳn** khỏi TMCut Browser Edition: xoá nút trong UI và key i18n, không làm optical-flow. | Project cũ còn dữ liệu stabilization phải **giữ nguyên và đánh dấu unsupported**, không im lặng xoá. UI + i18n ở slice I, emitter `stabilize` ở slice J. Xác nhận hàng 1 của §8. |
+| 2 | Subtitle burn-in | **Sơn bằng text track** qua `paintStack` đã có; không parser ASS, không libass. | Feature ASS không hỗ trợ phải khai rõ ràng. Slice H cho export, slice J cho emitter `subtitles`. Xác nhận hàng 9 của §8. |
+| 3 | Binary FFmpeg trong package | **Gỡ khỏi package ở slice I**, nhưng giữ file trên máy dev cho tới khi slice H xong và parity đã đo thật. | Không xoá binary hay bản backup nào trước mốc đó. |
+| 4 | FFmpeg phía server | **Server chỉ là storage.** Bỏ render, analyze, proxy phía server; render = WebCodecs + TMCut Core, analyze = MediaProbeService + Mediabunny + Web API, proxy và thumbnail = pipeline local trong browser. | `upload.post.ts` **không mất** khả năng Web upload: nó là Storage Upload API thuần, không FFmpeg, không binary xử lý media. Media ở local mặc định, chỉ upload khi user yêu cầu rõ (Cloud Library, Stock Library). Không cloud render ở bản này. Luật này đã có guard: `tests/unit/tmcut_server_media_boundary.spec.ts`. |
+| 5 | Project schema | **Khoá schema v3 thật**: `version: 3` với `timeline.tracks`; sửa roadmap và interface mẫu cho khớp repo. | Không migrate sang `tracks` và `sequences` khi chưa có yêu cầu chức năng thật; migration cũ phải tiếp tục chạy. |
+| 6 | Đường dẫn media chết | **Media Offline / Missing Media kèm nút Relink.** | Không tự mở dialog, không xoá asset reference khỏi project khi đường dẫn hỏng. Slice C. |
+| 7 | Font | **Chỉ font đi cùng app** tới slice J; không quảng bá import font khi chưa làm. | Đánh giá FontFace + OPFS ở slice J, rồi mới nói tới ADR-025. |
+| 8 | `backup/ffmpeg-engine-2026-11-03/` | **Giữ untracked tới hết slice I**, không vào build, không xoá bằng `git clean`. | Chỉ xoá sau khi parity xác nhận không cần tới nó nữa. Xác nhận hàng 6 của §8. |
+| 9 | Hai lỗi làm đỏ test suite | **Sửa đúng hai chỗ**: `app/pages/login.vue` không bao giờ lưu password trong localStorage (chỉ username, và dọn password bản cũ), `package.json` thêm `imports` map cho `#shared/utils/*` đã kiểm chứng bằng Node, TypeScript và bundler thật. | Xong ở commit `44f70c6`. Giữ nguyên dependency `tm-hub-client 1.0.9`, không đổi cách synthetic blob, không ghi đè thay đổi khác trong working tree. |
+
+Thứ tự thực hiện chủ repo chọn: **Q9 trước**, rồi biên giới server (Q4), rồi khoá schema (Q5), rồi phạm vi Q1/Q2/Q6/Q7,
+cuối cùng Q3/Q8 (binary và backup) ở slice I sau khi đã đo và xác nhận parity.
+
+Tính đến lần sửa này, code đã chạm vì các quyết định trên chỉ là phần Q9 (commit `44f70c6`) và phần ghi biên giới Q4 thành luật:
+sáu file `server/**` spawn hoặc phục vụ job FFmpeg mang marker `ZERO-FFMPEG-LEGACY` khai rõ slice nào giết chúng,
+guard `tmcut_server_media_boundary.spec.ts` đóng băng danh sách đó, và **không** route nào bị xoá.
+Xoá route, xoá binary và đổi UI là chuyện của slice I, chưa xảy ra.
