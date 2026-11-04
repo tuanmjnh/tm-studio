@@ -678,17 +678,20 @@ async function handleAddVideo() {
   if (!filePath || typeof filePath !== 'string') return
 
   const filename = filePath.split(/[\\/]/).pop() || 'Video'
-  // ADR-020: ask the host (ffprobe) instead of spawning a media element. That
-  // element fired `onerror` for every container Chromium cannot decode — the
-  // picker above offers mkv and avi — and gave those clips the same 10 s as a
-  // "real" length. A file that truly reports nothing still falls back.
-  const probed = await platform.media.probe(filePath)
+  // The clip's length now comes from the container itself, through the one
+  // probe service both hosts share. Before this the answer was host-specific:
+  // ffprobe on desktop, and on web a media element that ADR-020 already
+  // recorded as firing `onerror` for the containers Chromium cannot decode —
+  // mkv and avi among what this picker offers. A file with no stored length
+  // still answers undefined and keeps the fallback it always had.
+  const probed = await platform.media.probeInfo(filePath)
+  const durationSec = probed.duration ?? 0
   addClipToTrack('video', {
     name: filename,
     src: filePath,
     in: 0,
-    out: probed && probed.durationSec > 0
-      ? Math.round(secToTicks(probed.durationSec))
+    out: durationSec > 0
+      ? Math.round(secToTicks(durationSec))
       : 10 * TICKS_PER_SECOND,
     speed: 1
   })
@@ -876,16 +879,18 @@ async function handleAddAudio() {
   if (!filePath || typeof filePath !== 'string') return
 
   const filename = filePath.split(/[\\/]/).pop() || 'Audio'
-  // Same host question as "add video" above: the audio picker offers flac and
-  // ogg, which Chromium often cannot decode, and every failure landed the clip
-  // at a flat 15 s.
-  const probed = await platform.media.probe(filePath)
+  // Same question as "add video" above, and the same answer: one container read
+  // instead of a host-specific leg, so the flac and ogg this picker offers get
+  // the length their file actually stores. The 15 s below stays the fallback for
+  // a file that stores none.
+  const probed = await platform.media.probeInfo(filePath)
+  const durationSec = probed.duration ?? 0
   addClipToTrack('audio', {
     name: filename,
     src: filePath,
     in: 0,
-    out: probed && probed.durationSec > 0
-      ? Math.round(secToTicks(probed.durationSec))
+    out: durationSec > 0
+      ? Math.round(secToTicks(durationSec))
       : 15 * TICKS_PER_SECOND,
     volume: 100
   })

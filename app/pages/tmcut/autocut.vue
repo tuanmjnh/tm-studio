@@ -17,7 +17,7 @@ const toast = useToast()
 const { pickFile, pickWebFiles } = useFileSystem()
 const { assets, isDesktop, importing, importError, webUpload, loadLibrary, importFiles, importWebFiles, findAssetBySrc, getThumbUrl, mediaUrl } = useTmcutMedia()
 const { analyzing, stageKey, analysisError, analyzeSource, applyDraft } = useTmcutAutocut()
-const { available: canExtractFrames, extractFrames } = useTmcutFrames()
+const { extractFrames } = useTmcutFrames()
 
 // AutoCut v2: transcript vocabulary analysis options.
 // hydrate from sanitized localStorage prefs, persist on change. All
@@ -341,31 +341,35 @@ function confirmMediaSource() {
 // ===== Analysis (step 3) =====
 
 // Per-segment thumbnails (roadmap G-1, core C14 plans the timestamps):
-// one cached still per segment at its representative time (EDL thumb,
-// falling back to the midpoint), extracted with bounded concurrency.
-// Web sessions keep the shared source poster (no IPC there).
+// one still per segment at its representative time (EDL thumb, falling back to
+// the midpoint), asked through the shared frame service. Both hosts run it —
+// the bytes come from the client cache, so a web session sees its own cut
+// points for the first time.
 const segmentThumbs = ref<Record<number, string>>({})
 let thumbRequest = 0
 
 async function loadSegmentThumbs() {
   const asset = sourceAsset.value
   const result = edlResult.value
-  if (!asset || !result || !canExtractFrames.value) return
+  if (!asset || !result) return
   const request = ++thumbRequest
   segmentThumbs.value = {}
   const jobs = result.edl.segments.map((segment, index) => ({
     id: index,
-    src: asset.path,
+    slot: `thumb:${asset.id}#${index}`,
+    fingerprint: asset.fingerprint,
+    src: mediaUrl(asset.path),
     atSec: Number.isFinite(segment.thumb) ? Number(segment.thumb) : (segment.start + segment.end) / 2,
-    width: 224
+    width: 224,
+    durationSec: asset.meta.durationSec
   }))
   const frames = await extractFrames(jobs)
   if (request !== thumbRequest) return // a newer analysis superseded this batch
   const next: Record<number, string> = {}
-  frames.forEach((path, id) => {
-    // extractFrames returns cache file paths; display needs the
-    // privileged media:// URL builder (mediaUrl → toURL).
-    next[Number(id)] = mediaUrl(path)
+  frames.forEach((url, id) => {
+    // The service answers with an object URL; mediaUrl passes it through and
+    // still resolves a desktop cache path if one ever comes back.
+    next[Number(id)] = mediaUrl(url)
   })
   segmentThumbs.value = next
 }

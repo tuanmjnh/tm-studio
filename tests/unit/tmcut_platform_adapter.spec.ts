@@ -206,12 +206,14 @@ async function main() {
     assert.deepEqual(await web.media.probe('a.mp4'), { durationSec: 8, width: 1280, height: 720, fps: 0, hasAudio: true })
     assert.deepEqual(urls, ['/uploads/a.mp4'], 'the web host probes the URL it can actually load')
 
-    // The consumers this slice exists for: the two "add a file to the timeline"
-    // handlers used to guess with a media element, which reports an error for
-    // containers Chromium cannot decode and handed every such clip a flat 10 s
-    // or 15 s length.
+    // The consumers this leg was written for have moved past it: the two "add a
+    // file to the timeline" handlers first guessed with a media element, then
+    // asked this host leg, and now read the container through the one probe
+    // service on both hosts. `media.probe` stays in the contract only until the
+    // binary is cut, so no renderer module may call it any more — that ban is
+    // pinned in tmcut_media_probe.spec.ts.
     const timeline = read('app/components/tmcut/TmcutTimeline.vue')
-    assert.match(timeline, /platform\.media\.probe\(filePath\)/, 'the timeline asks the host')
+    assert.match(timeline, /platform\.media\.probeInfo\(filePath\)/, 'the timeline asks the demuxer service')
     assert.doesNotMatch(timeline, /tempVideo|tempAudio/, 'no element-based duration guess left behind')
   })
 

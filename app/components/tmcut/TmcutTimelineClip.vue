@@ -26,7 +26,7 @@ const { selectedClipId, selectClip, updateClip, pushHistory, snapTimeSec, relate
 const { zoom, playhead } = useTmcutPlayback()
 const { findAssetBySrc, loadWaveform, mediaUrl, isDesktop } = useTmcutMedia()
 const { snapOn } = useTmcutUiPrefs()
-const { available: canExtractFrames, clipFilmstrip } = useTmcutFrames()
+const { clipFilmstrip, forgetStrip } = useTmcutFrames()
 const { relinkWithPicker } = useTmcutRelink()
 
 const isSelected = computed(() => selectedClipId.value === props.clip.id)
@@ -145,13 +145,14 @@ const mediaOffline = computed(() =>
 )
 const offlineView = computed(() => assetStateView(clipAsset.value ?? { status: 'missing' }))
 
-// Per-clip filmstrip (roadmap G-1/R42): 8 frames sampled from THIS
-// clip's own [in, out] source range (core C14 filmstripTimes through
-// useTmcutFrames), drawn over the asset-level strip background above.
-// Trims debounce 300ms so dragging never floods the frame cache, and
-// stale resolutions drop via a request id. Failed slots stay empty so
-// the asset-level fallback shows through; web sessions keep the
-// fallback entirely (no extraction IPC there).
+// Per-clip filmstrip (roadmap G-1/R42, zero-FFmpeg slice D3): 8 stills sampled
+// from THIS clip's own [in, out] source range (core C14 filmstripTimes, asked
+// through the shared frame service), drawn over the asset-level strip
+// background above. Trims debounce 300ms so dragging never floods the frame
+// cache; the strip's slots belong to the clip id, so a re-trim retires the
+// older asks instead of racing them. A dead frame leaves its slot empty so the
+// fallback shows through, and both hosts run this — the bytes come from the
+// client cache, not from an extraction IPC.
 const STRIP_COUNT = 8
 const stripFrames = ref<string[]>([])
 let stripRequest = 0
@@ -159,12 +160,21 @@ let stripTimer: ReturnType<typeof setTimeout> | null = null
 
 async function refreshClipStrip() {
   const request = ++stripRequest
-  if (props.trackType !== 'video' || !props.clip.src || !canExtractFrames.value) {
+  if (props.trackType !== 'video' || !props.clip.src) {
     stripFrames.value = []
     return
   }
-  // clipFilmstrip extracts at SECONDS — decode the ticks range.
-  const frames = await clipFilmstrip(props.clip.src, ticksToSec(props.clip.in || 0), ticksToSec(props.clip.out), STRIP_COUNT)
+  const asset = clipAsset.value
+  // in/out are source ticks and the sampler speaks seconds.
+  const frames = await clipFilmstrip({
+    clipKey: props.clip.id,
+    fingerprint: asset?.fingerprint,
+    src: mediaUrl(asset?.path || props.clip.src),
+    inSec: ticksToSec(props.clip.in || 0),
+    outSec: ticksToSec(props.clip.out),
+    count: STRIP_COUNT,
+    durationSec: asset?.meta.durationSec ?? null
+  })
   if (request !== stripRequest) return // superseded by a newer src/range
   stripFrames.value = frames
 }
@@ -186,6 +196,9 @@ onUnmounted(() => {
   if (stripTimer) clearTimeout(stripTimer)
   stripTimer = null
   stripRequest += 1
+  // The clip is gone, so its stills may no longer paint — and a clip deleted
+  // mid-decode should stop costing decoder time.
+  forgetStrip(props.clip.id)
 })
 
 // Audio waveform bars rendered inside the clip body.

@@ -1,58 +1,44 @@
 /**
- * Single-frame extraction (roadmap G-1, core C14 plans the timestamps):
- * IPC to the Electron main process, which seeks FFmpeg and caches the PNG
- * per (path, mtime, size, time, width). Web sessions have no IPC — the
- * `available` flag lets callers hide controls instead of shipping dead
- * buttons, and every call resolves to null rather than throwing.
+ * The frame legs the app uses (roadmap G-1/R42, zero-FFmpeg slice D).
  *
- * All methods return cache FILE PATHS; run displayable values through
- * mediaUrl() / toURL (the privileged media:// protocol) before rendering.
+ * Two of them go through the shared pipeline (`~/utils/tmcut/frameStore` plus
+ * `frameStrip`): a batch of instants and a per-clip filmstrip. Both hosts run
+ * them — core plans the timestamps, the client byte cache supplies the bytes,
+ * one decoder pool bounds the work — so a web session gets thumbnails for the
+ * first time and Electron has no second answer to the same question. Both hand
+ * back `blob:` object URLs, ready for `src`.
+ *
+ * The third leg is the desktop HUD snapshot, and it stays IPC: that button
+ * reports the FILE it saved, which only the main process can hand out.
+ * `available` lets the control hide itself on web instead of shipping dead.
  */
 
 import { tmcutHostIpc } from '~/utils/tmcut/hostBridge'
-import { filmstripTimes, secToTicks, ticksToSec } from 'tmcut-core'
+import { frameService, requestFrame } from '~/utils/tmcut/frameStore'
+import { createStripReader } from '~/utils/tmcut/frameStrip'
+import type { TmcutStripAsk } from '~/utils/tmcut/frameStrip'
 
 export interface TmcutFrameJob {
   id: string | number
+  /** The C1 revision fingerprint; with no fingerprint there is no frame. */
+  fingerprint: string | null | undefined
+  /** Where to read when the client cache holds no copy. */
   src: string
   atSec: number
   width?: number
+  durationSec?: number | null
+  /** Who owns the ask; a re-run under the same slot retires the older one. */
+  slot?: string
 }
 
-// One bounded pool for ALL batches: N timeline clips mounting at once
-// must not spawn N × 3 ffmpeg processes on the main side.
-const MAX_CONCURRENT_FRAMES = 3
-let activeFrameJobs = 0
-const frameSlotWaiters: Array<() => void> = []
-
-function acquireFrameSlot(): Promise<void> {
-  return new Promise((resolve) => {
-    const tryAcquire = () => {
-      if (activeFrameJobs < MAX_CONCURRENT_FRAMES) {
-        activeFrameJobs += 1
-        resolve()
-      } else {
-        frameSlotWaiters.push(tryAcquire)
-      }
-    }
-    tryAcquire()
-  })
-}
-
-function releaseFrameSlot() {
-  activeFrameJobs = Math.max(0, activeFrameJobs - 1)
-  frameSlotWaiters.shift()?.()
-}
-
-// Session-level per-clip filmstrips: one entry per (src, in, out) shared
-// across clip instances, so copies and remounts never re-extract. Keys are
-// created after the caller's trim debounce, so drags do not flood them.
-const clipStripCache = new Map<string, string[]>()
-const clipStripInFlight = new Map<string, Promise<string[]>>()
+// One reader for the session, so every clip's slots live in one ledger and a
+// copy of the same clip re-asks the same instants instead of opening decoders.
+const clipStripReader = createStripReader(frameService)
 
 export function useTmcutFrames() {
   const available = computed(() => !!tmcutHostIpc())
 
+  /** Desktop only: an FFmpeg cache file path, for controls that name a file. */
   async function extractFrame(src: string, atSec: number, width = 320): Promise<string | null> {
     const ipc = tmcutHostIpc()
     if (!ipc || !src || !Number.isFinite(atSec)) return null
@@ -64,62 +50,42 @@ export function useTmcutFrames() {
     }
   }
 
-  /** Bounded-concurrency batch extraction (segment thumbnail rows). */
-  async function extractFrames(jobs: TmcutFrameJob[], concurrency = 3): Promise<Map<string | number, string>> {
+  /**
+   * One instant per entry, asked through the shared service. The pool core
+   * names decides how many decoders run, so a caller asking for a hundred
+   * stills and a caller asking for one pay the same concurrency.
+   */
+  async function extractFrames(jobs: TmcutFrameJob[]): Promise<Map<string | number, string>> {
     const frames = new Map<string | number, string>()
-    if (!tmcutHostIpc() || jobs.length === 0) return frames
-    let cursor = 0
-    async function worker() {
-      while (cursor < jobs.length) {
-        const job = jobs[cursor]
-        cursor += 1
-        if (!job) continue
-        await acquireFrameSlot()
-        try {
-          const frame = await extractFrame(job.src, job.atSec, job.width ?? 320)
-          if (frame) frames.set(job.id, frame)
-        } finally {
-          releaseFrameSlot()
-        }
-      }
-    }
-    const workers = Array.from({ length: Math.max(1, Math.min(concurrency, jobs.length)) }, () => worker())
-    await Promise.all(workers)
+    if (jobs.length === 0) return frames
+    const urls = await Promise.all(jobs.map(job => requestFrame({
+      slot: job.slot ?? `batch:${job.id}`,
+      fingerprint: job.fingerprint,
+      atSec: job.atSec,
+      width: job.width,
+      durationSec: job.durationSec,
+      src: job.src
+    })))
+    jobs.forEach((job, index) => {
+      const url = urls[index]
+      if (url) frames.set(job.id, url)
+    })
     return frames
   }
 
   /**
-   * Per-clip timeline filmstrip (roadmap G-1/R42): `count` frames across
-   * the clip's own source range [inSec, outSec]. Timestamps come from core
-   * C14 `filmstripTimes` (ticks) and cross the v1-seconds boundary here;
-   * in/out are source time, so speed does not affect sampling. Failed
-   * slots stay as '' so the layout keeps its positions — callers fall
-   * back to the asset-level strip behind them.
+   * Per-clip timeline filmstrip (roadmap G-1/R42): `count` stills sampled from
+   * the clip's own source range. All the law — which instants, which slot, who
+   * may paint, what happens to a dead frame — lives in `frameStrip.ts`.
    */
-  async function clipFilmstrip(src: string, inSec: number, outSec: number, count = 8): Promise<string[]> {
-    if (!src || !Number.isFinite(inSec) || !Number.isFinite(outSec) || outSec <= inSec) return []
-    const key = `${src}|${Math.round(inSec * 1000)}|${Math.round(outSec * 1000)}`
-    const cached = clipStripCache.get(key)
-    if (cached) return cached
-    const pending = clipStripInFlight.get(key)
-    if (pending) return pending
-    const times = filmstripTimes(secToTicks(inSec), secToTicks(outSec - inSec), count)
-    if (times.length === 0) return []
-    const jobs = times.map((time, index) => ({ id: index, src, atSec: ticksToSec(time), width: 160 }))
-    const promise = extractFrames(jobs)
-      .then((frames) => {
-        const strip = times.map((_, index) => frames.get(index) ?? '')
-        clipStripCache.set(key, strip)
-        clipStripInFlight.delete(key)
-        return strip
-      })
-      .catch(() => {
-        clipStripInFlight.delete(key)
-        return []
-      })
-    clipStripInFlight.set(key, promise)
-    return promise
+  function clipFilmstrip(ask: TmcutStripAsk): Promise<string[]> {
+    return clipStripReader.read(ask)
   }
 
-  return { available, extractFrame, extractFrames, clipFilmstrip }
+  /** The clip left the timeline: its pending asks stop costing decoder time. */
+  function forgetStrip(clipKey: string): number {
+    return clipStripReader.forget(clipKey)
+  }
+
+  return { available, extractFrame, extractFrames, clipFilmstrip, forgetStrip }
 }

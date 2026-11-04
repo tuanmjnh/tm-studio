@@ -1117,3 +1117,118 @@ probe, waveform, export) vẫn chưa có.
   không có token relay; agent bị cấm đụng credentials, nên cần chủ repo mở phiên để sweep lại một lần
   sạch hoàn toàn.
 
+## 21. Slice D3 — consumer thật đi qua pipeline chung, và pixel thật được **đo** trên cả hai host (đo ngày 2026-11-04)
+
+§20.4 để lại hai món nợ và lượt này trả cả hai: *"không một pixel thật nào"* (nợ fixture của §13.4,
+§16.5) và *"không một bề mặt nào gọi service"*. D3 là lượt **nối**, không thêm luật nào vào core, nên
+chuẩn của nó không phải "module có tồn tại" mà là hai câu đo được: một bề mặt người dùng nhìn thấy đã
+vẽ từ pipeline chung chưa, và một container thật đã được giải ra bytes thật chưa.
+
+Thay đổi nhìn thấy được lớn nhất không nằm trong bảng nào dưới đây: dải thumbnail của một clip và lưới
+thumbnail của AutoCut **bỏ được cờ IPC**. Trước D3 cả hai đứng sau `canExtractFrames` — tức là mọi
+session browser chỉ nhận poster cấp asset, và mọi con số "parity hai host" của §20 mới ở mức code. Bây
+giờ cả hai surface hỏi đúng `frameService` mà Electron hỏi, và phần tử `available` chỉ còn một chỗ
+chính đáng: nút snapshot của HUD, vì nó báo tên **file** đã lưu.
+
+### 21.1 Cái đã dựng
+
+| File | Vai | Bằng chứng |
+|---|---|---|
+| [app/utils/tmcut/frameStrip.ts:57](file:///D:/Applications/tm-studio/app/utils/tmcut/frameStrip.ts#L57) | Luật **thứ hai** của một frame: core trả lời *lấy mẫu ở đâu* (`filmstripTimes`), file này trả lời *hỏi bằng slot nào, bao nhiêu ô, ai được vẽ*. Không tự giải pixel, không tự đặt tên frame — nên service không biết gì về clip và timeline không tự làm phép tính sampling | **11** checks của `tmcut_frame_strip.spec.ts`; "one sampled instant is one ask, at core times and strip width" đối chiếu **từng** `atSec` và **từng** key với `core.filmstripTimes` + `core.frameRequestKey`, và assert mọi ask đều `width === 160` |
+| [app/utils/tmcut/frameStrip.ts:53](file:///D:/Applications/tm-studio/app/utils/tmcut/frameStrip.ts#L53) | `stripSlot` đặt tên ô theo **danh tính clip** (`strip:<clipId>#<i>`), không theo range: mount lại cùng clip → cùng slot hỏi cùng frame → service trả từ cache, không mở decoder; trim lại → cùng slot hỏi frame khác → ask cũ bị retire. Và **không** có cache kết quả cấp dải: cache frame đã khoá theo (revision, khoảnh khắc, width), thêm một cache mảng nữa chỉ tạo thêm một cách trả về URL đã bị revoke | checks "the slots belong to the clip, so a remount reuses the frames", "a re-trim retires the older strip instead of racing it"; §21.2 đo lại chính hai hành vi này trong trình duyệt thật (`msSecondRead` = **0 ms**, `reusedSameUrls` = **true**) |
+| [app/utils/tmcut/frameStrip.ts:77](file:///D:/Applications/tm-studio/app/utils/tmcut/frameStrip.ts#L77) + [:94](file:///D:/Applications/tm-studio/app/utils/tmcut/frameStrip.ts#L94) | Mọi khoảnh khắc được hỏi **cùng một lúc** (`Promise.all`) — số decoder chạy song song do core quyết, không do số `await` viết tay; `forget(clipKey)` thu hồi **từng** slot mà clip đó từng sở hữu | checks "an owner that leaves takes its asks with it" (đếm slot trả về), "a failed frame leaves its slot empty, not the strip shorter" (một frame chết để lại `''`, dải vẫn đủ `count` ô), "an unreal range asks for nothing" (4/4, NaN, +Infinity, `count: 0` → `[]` và **0** ask), "a junk fingerprint is a strip of holes, not a throw" (`fingerprint: '/uploads/a.mp4'` → toàn `''`, **0** decoder) |
+| [app/composables/useTmcutFrames.ts:36](file:///D:/Applications/tm-studio/app/composables/useTmcutFrames.ts#L36) | **Một** reader cho cả session, nên mọi slot của mọi clip nằm trong cùng một ledger và một bản sao của cùng clip hỏi lại đúng những frame đã giải. Composable giờ chỉ còn là **đường nối**: `clipFilmstrip` / `forgetStrip` / `extractFrames`, không có pool riêng | check "the composable delegates the clip strip to the shared service" assert composable chứa `createStripReader`, giữ nguyên bốn tên hàm cho caller cũ và **không** còn `MAX_CONCURRENT_FRAMES` — renderer không được giữ cái đếm decoder thứ hai |
+| [app/components/tmcut/TmcutTimelineClip.vue:161](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutTimelineClip.vue#L161) + [:201](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutTimelineClip.vue#L201) | Dải của clip hỏi service với `fingerprint` của asset C1, `durationSec` do **container** trả lời, và `clipKey` là id clip; `onUnmounted` gọi `forgetStrip` nên một clip xoá giữa lúc giải mã ngừng ngay việc trả tiền | check "the timeline clip and the analysis grid show strips on web too": regex `canExtractFrames[\s\S]{0,120}(clipFilmstrip\|extractFrames)` phải **không** khớp ở cả hai file, và ask phải có `clipKey: props.clip.id` + `fingerprint:` |
+| [app/pages/tmcut/autocut.vue:351](file:///D:/Applications/tm-studio/app/pages/tmcut/autocut.vue#L351) + [:366](file:///D:/Applications/tm-studio/app/pages/tmcut/autocut.vue#L366) | Lưới thumbnail theo segment đi qua `extractFrames` với slot `thumb:<assetId>#<i>`; service trả **object URL** nên không còn bước "đường dẫn file cache → `mediaUrl`" mà một session web không bao giờ có | cùng check trên assert `autocut.vue` vẫn gọi `mediaUrl` (để phân giải thứ nó được đưa), và `extractFrames` không còn bị chặn sau cờ IPC |
+| [app/components/tmcut/TmcutTimeline.vue:687](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutTimeline.vue#L687) + [:886](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutTimeline.vue#L886) | Hai picker "add video" / "add audio" lấy độ dài clip từ `platform.media.probeInfo` — cùng một service hai host — thay vì chân `platform.media.probe` (ffprobe). Không có độ dài trong container thì giữ nguyên fallback cũ (10 s video, 15 s audio), không đoán | check "the desktop pickers size a clip from the demuxer, not the binary leg" trong [tests/unit/tmcut_media_probe.spec.ts:308](file:///D:/Applications/tm-studio/tests/unit/tmcut_media_probe.spec.ts#L308): `platform.media.probe(` **cấm** trong timeline, đúng **2** call-site `probeInfo`, và một walk toàn cây `app/` assert **không** module nào còn gọi chân đó |
+| [app/utils/tmcut/mediaProbe.ts:238](file:///D:/Applications/tm-studio/app/utils/tmcut/mediaProbe.ts#L238) + `tests/fixtures/containers/` | Bốn container **thật** (h264.mp4 **4448** B brand `isom`, h264.mov **4395** B brand `qt  `, h264.mkv **4252** B, vp9.webm **2909** B — cùng 64×36, 0.600000 s, 10 fps) được commit, nên một lần demux không còn phụ thuộc vào máy nào sinh ra nó | **9** checks của [tests/unit/tmcut_real_containers.spec.ts:120](file:///D:/Applications/tm-studio/tests/unit/tmcut_real_containers.spec.ts#L120): mỗi file trả đúng container + codec + duration + raster + **1** video track; `.mov` **không** bị gọi là WebM và ngược lại; cùng file đọc qua **ranged HTTP** trả lời y như đọc bytes (`served.stats.partial > 0`) |
+| [tests/unit/tmcut_real_containers.spec.ts:156](file:///D:/Applications/tm-studio/tests/unit/tmcut_real_containers.spec.ts#L156) | Node (không WebCodecs) phải nói **thật** những gì nó làm được: demux vẫn đúng, chỉ vẽ frame là không | check đo `hasWebCodecs === false`, `canDecode === false`, `importStatus === 'partial'`, warning `VIDEO_NOT_DECODABLE` **ghi tên codec thật** (`avc`), và bốn warning bịa (`CONTAINER_UNDEMODABLE`, `DIMENSIONS_UNKNOWN`, `DURATION_UNKNOWN`, `SIZE_UNKNOWN`) **không** xuất hiện |
+| [tests/unit/tmcut_frame_service.spec.ts:72](file:///D:/Applications/tm-studio/tests/unit/tmcut_frame_service.spec.ts#L72) | Check "both hosts run the same number of decoders" được viết **lại** thành "the app runs one decoder pool, sized by core": D1/D2 so sánh pool của service với semaphore `-ss` private trong `useTmcutFrames.ts`; D3 chuyển leg đó sang service nên giữ phép so sánh cũ là **khoanh dung hai pool** | check giờ walk `app/` và assert danh sách file chứa `MAX_CONCURRENT_FRAMES\|activeFrameJobs` == `[]` — một pool duy nhất là **cấu trúc**, không phải hai con số trùng nhau |
+| [tests/unit/tmcut_platform_adapter.spec.ts:216](file:///D:/Applications/tm-studio/tests/unit/tmcut_platform_adapter.spec.ts#L216) | Pin cũ của slice B ("timeline gọi `media.probe`") đã **cũ đi vì luật đổi có chủ đích**, nên sửa **test**, không sửa code: timeline gọi `probeInfo`, và không còn `tempVideo`/`tempAudio` (đo độ dài bằng `<video>`) | `assert.match(timeline, /platform\.media\.probeInfo\(filePath\)/)` + `doesNotMatch(/tempVideo\|tempAudio/)`; lệnh cấm `media.probe` nằm ở `tmcut_media_probe.spec.ts` để một chỗ khai báo một luật |
+
+### 21.2 Pixel thật: số đo trên hai host
+
+Cùng **một** file, cùng **một** code, hai runtime. Browser được đo bằng chính module của repo do dev
+server phát (`/_nuxt/@fs/…`, `content-type: text/javascript`) nên không phải một bản build khác, và
+bytes fixture phục vụ qua một server scratch có CORS + `Accept-Ranges` để đường `UrlSource` thật sự
+chạy. Fingerprints dùng để đo là 8 hex hợp lệ (`deadbeef`, và một giá trị **riêng cho từng file** ở
+các dòng "per-file") vì `isByteCacheKey` yêu cầu đúng `/^[0-9a-f]{8}$/`.
+
+| Host | Cái đo | Kết quả |
+|---|---|---|
+| Node (plain, không WebCodecs) | `probeMedia` trên h264.mp4 / h264.mov / h264.mkv / vp9.webm | container `MP4` / `QuickTime File Format` / `Matroska` / `WebM`; codec `avc` / `avc` / `avc` / `vp9`; duration **0.6** với `durationSource: 'container'`; raster **64×36**; `canDecode` **false**, `importStatus` **'partial'**, warning `VIDEO_NOT_DECODABLE` — **demux được, vẽ thì không**, và đó là câu trả lời trung thực chứ không phải một lỗi |
+| Chromium (dev server `:4003`) | `hasFrameDecoder()` + `VideoDecoder.isConfigSupported` | `VideoDecoder` tồn tại = **true**; `avc1.640034` → **true**, `vp09.00.10.08` → **true**. Hai profile đúng với hai codec fixture |
+| Chromium | `probeMedia` trên cùng 4 file | **Toàn bộ con số giống Node** (container, codec, duration, raster) và thêm `canDecode: true`, `importStatus: 'ready'`, `warnings: []` → parity là **đo**, không phải assert |
+| Chromium | `decodeFrame` một frame 160px | **13606** byte `image/png`, raster **160×90**, luminance trải **0–255** (không phải một khung đen/1 màu) |
+| Chromium | `createStripReader(frameService).read` — 8 ô, fingerprint `deadbeef`, mp4 | **8/8** ô có `blob:` URL, mỗi cái **13328–13802** byte ở **160×90**; lần đọc đầu **652 ms**; đọc lại cùng ask **0 ms**, **cùng chính xác** những URL đó, `inFlight() === 0`; `forget()` trả về **8** slot |
+| Chromium | per-file, mỗi file một fingerprint riêng (không dùng lại cache) | webm **634 ms**, mkv **514 ms**, mov **799 ms** — cả ba **8/8** ô, `importStatus: 'ready'` |
+| Chromium | `<video>.canPlayType` trên cùng file | `video/quicktime` → **`''`** (trình duyệt từ chối hẳn), `video/x-matroska` → `'maybe'`. Nghĩa là **`.mov` được chính app này vẽ đủ 8 still trong khi element video của Chromium còn không nhận nó** — đó là thứ §20 chỉ nói bằng lời |
+
+Số đo đáng ghi nhất nằm ở chỗ nó **không** phải bằng chứng cho app: chạy 4 file với **cùng một**
+fingerprint cho ra hai lần đọc **32 ms / 29 ms** và các frame **giống nhau từng byte**. Không có lỗi —
+fingerprint **chính là** danh tính revision, nên bốn file cùng danh tính thì là một file. Hệ quả thật
+nằm ở caller: truyền sai fingerprint là vẽ pixel của asset khác, và `isByteCacheKey` chỉ chặn được hình
+dạng, không chặn được xuất xứ. Vì vậy mọi ask trong D3 lấy `asset.fingerprint` từ hàng asset C1,
+không bao giờ từ một chuỗi component tự ghép.
+
+### 21.3 Ba quyết định ghi lại
+
+1. **Không có cache dải, dù nó "miễn phí".** Một cache `clipKey → string[]` sẽ đánh thắng cache frame
+   ở đúng một tình huống: người dùng scrub nhanh. Đổi lại nó giữ URL của một dải đã retire, và một lần
+   trả `revoke`d URL là một khung trắng không ai giải thích được. Slot theo clip id cho kết quả y hệt
+   (0 ms ở §21.2) mà không thêm tầng nào để sai.
+2. **`available` chỉ còn ở chỗ nó có nghĩa.** Cờ IPC desktop là câu trả lời cho "runtime này có nói
+   được với main process không", không phải cho "có vẽ được frame không". Câu thứ hai thuộc
+   `hasFrameDecoder()`. Bỏ cờ khỏi hai surface hiển thị, giữ cờ ở nút snapshot: snapshot **báo tên file
+   đã lưu**, mà chỉ main process mới có đường dẫn thật — check "the HUD snapshot keeps reporting a
+   file, so it stays desktop-only" chặn cả việc player tự mở một đường frame thứ hai.
+3. **Độ dài clip là một câu hỏi về container, không về binary.** `probeInfo` là service duy nhất hai
+   host cùng trả lời; `media.probe` (ffprobe) giờ có **0** call-site trong `app/` và chỉ còn trong
+   contract cho tới slice I. Ghi lại kèm fallback: một file không có độ dài lưu vẫn nhận 10 s / 15 s
+   như nó vẫn nhận — D3 đổi **nguồn** của con số, không đổi cách app xử lý sự thiếu vắng nó.
+
+### 21.4 Bằng chứng đã đo
+
+| Gate | Lệnh | Kết quả | Số đo |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | `exit=0`, `grep -c "error TS"` = **0**; `.nuxt/eslint.config.mjs` **28552** byte, mtime **14:29** — lần chạy **sau** hai comment-only edit ở `TmcutTimeline.vue`, nên đây là gate 1 cuối cùng mà gate 2 dưới đây dựa vào |
+| 2 Lint | `npx eslint` trên **10** file đã chạm, chạy **sau** gate 1 | PASS | Lần đầu `exit=1` với **3** problems, **cả ba ở `tmcut_real_containers.spec.ts`**: 2 × `@stylistic/member-delimiter-style` (`:53`) + 1 × `@typescript-eslint/no-explicit-any` (`:106`). Sửa tay (viết `Map<string, TmcutMediaInfo>` + `import type` từ `tmcut-core`, tách mỗi member một dòng), **không** `--fix`, **không** lint repo-wide → `exit=0`, **0** problems. Sau hai comment-only edit: gate 1 chạy lại (mtime config **14:29**) rồi lint lại **10** file: `exit=0`, **0** problems, config **không** đổi mtime sau đó → kết quả này là kết quả cuối |
+| 3 Unit | `npx tsx tests/unit/run-all.mts` | PASS | `exit=0`, **103/103** specs, **0** hàng FAIL — lần chạy **sau** hai comment-only edit. Spec mới: `tmcut_frame_strip` **11/11** (1003 ms), `tmcut_real_containers` **9/9** (1028 ms). Spec đổi nội dung: `tmcut_media_probe` **13/13** (1146 ms), `tmcut_platform_adapter` **12/12** (15759 ms), `tmcut_frame_service` **19/19** (1307 ms) |
+| 3b Core | `node --test test/*.test.mjs`, `check-boundaries.mjs`, `tsc --noEmit -p packages/core/tsconfig.check.json` | PASS | core **598** tests / **598** pass / **0** fail, exit 0; boundaries **PASS — core imports nothing platform-specific**; core typecheck exit 0. D3 không thêm luật nào vào core, nên không có test core mới |
+| 4 Live | 5 route `/tmcut*` trên `:4003` qua chrome-devtools, đọc console sau mỗi lần navigate | **BLOCKED** | Cả năm route **redirect về `/login`** (`/login?redirect=/tmcut`, `/tmcut/autocut`, `/tmcut/editor`, `/tmcut/templates`, `/tmcut/factory`) — tab QA này không có phiên và agent bị cấm đụng credentials. Trên các page đã tới được: **0** dòng `[error]`, **0** `[warn]`, **1** dòng `[issue]` (a11y "form field should have an id or name", count 9/4/26/29/50 — của **form login**, đã ghi từ §20.4). Nghĩa là **timeline thật với clip thật chưa hề được render trong lượt này**; mọi con số §21.2 là số đo ở tầng module, không phải số đo của một bề mặt người dùng nhìn thấy |
+| 5 Docs | năm guard chạy **sau khi** viết §21 **và** sau lần sửa số ở ba hàng trên | PASS | `docs_markdown` **12** checks exit 0; `tmcut_doc_citations` **5/5**; `tmcut_doc_line_length` **4/4** exit 0 (§21 có **17** link tới file trong repo, **cả 17** mang anchor `#L…` và mọi anchor đối chiếu **dòng thật** bằng cách in chính nội dung dòng đó — `frameStrip.ts` **53/57/77/94**, `useTmcutFrames.ts` **36**, `TmcutTimelineClip.vue` **161/201**, `autocut.vue` **351/366**, `TmcutTimeline.vue` **687/886**, `mediaProbe.ts` **238**, `tmcut_real_containers.spec.ts` **120/156**, `tmcut_frame_service.spec.ts` **72**, `tmcut_media_probe.spec.ts` **308**, `tmcut_platform_adapter.spec.ts` **216**; lần đối chiếu đầu phát hiện **3** anchor lệch vì hai comment-only edit ở `TmcutTimeline.vue` (685→687, 883→886) và một anchor trỏ vào thân check thay vì đầu check (117→120, 153→156) — đã sửa số, không sửa code; hàng prose dài nhất của §21 = **118** char, ceiling **1356**); `tmcut_doc_table_shape` **3/3** exit 0 (**30** hàng bảng trong §21, 0 hàng sai số cột); `tmcut_docs_link_integrity` **4/4** exit 0 — **0** link chết, **0** anchor quá số dòng |
+
+### 21.5 Chưa chứng minh
+
+- **Không một bề mặt authed nào.** Gate 4 BLOCKED như trên: dải 8 frame của một clip thật trên
+  `TmcutTimelineClip.vue` và lưới thumbnail của AutoCut **chưa từng được nhìn thấy trên màn hình**. Hai
+  surface này vừa bỏ cờ IPC, nên đường đi của chúng trên web là **mới toanh** và chỉ có bằng chứng ở mức
+  service. Cần một phiên đăng nhập (chủ repo) để sweep lại một lần thật.
+- **Overlay "Compile error" trên dev server là dư lượng chẩn đoán của agent, không phải lỗi app.** Khi
+  đo §21.2, agent `import()` trực tiếp `mediabunny/src/*.ts` qua `/@fs/`; package đã publish **không**
+  kèm thư mục `shared/` mà `src/` tham chiếu (`dist/modules/shared/` có, `mediabunny/shared/` không), nên
+  Vite ghi một lỗi transform và Nuxt phát lại nó cho mỗi lần kết nối. Bằng chứng app vẫn lành:
+  `import('/_nuxt/@fs/…/app/utils/tmcut/frameDecode.ts')` (chính là module import `mediabunny`) trả
+  `hasFrameDecoder() === true`, và mọi request của trang đều 200/304 — không request nào chạm
+  `mediabunny/src`. Hai lần đổi-nội-dung `nuxt.config.ts` (đã khôi phục **byte-identical**, hash
+  `82fb8a55…`) không đủ xoá lỗi này vì PID dev server giữ nguyên (`12152`); **một lần restart dev server
+  thủ công sẽ sạch**, và agent không tự tắt process của chủ repo.
+- **AVI vẫn là lỗ của thư viện, không phải của app.** `ALL_FORMATS` của Mediabunny 1.65.1 là HLS, MP4,
+  QuickTime, Matroska, WebM, WAVE, OGG, FLAC, MP3, ADTS, MPEG TS — **không có AVI**. Repo cũng **không**
+  có một `CONTAINER_MAGIC`/`sniffContainer` nào (không có `packages/core/src/containers.mjs`), và D3
+  không tự chế một bộ ngửi header. Vì vậy một file `.avi` thả vào app sẽ đi đường "demux không được",
+  nhưng **hành vi thật của nó trên app chưa được đo** — đây là ghi chú để slice E/K quyết định có cần
+  một đường báo lỗi riêng cho AVI hay không.
+- **Fingerprint dùng khi đo là giá trị tự chọn, không phải fingerprint C1 sinh ra từ asset thật.** Các
+  con số §21.2 chứng minh pipeline vẽ đúng với một fingerprint **định dạng hợp lệ**; chúng **không**
+  chứng minh chuỗi `asset.fingerprint → byteStore (OPFS thật) → frame` trên một project đã import. Chưa
+  có bằng chứng end-to-end nào từ một lần import thật.
+- **`TMCUT_FRAME_MAX_CONCURRENT = 3` vẫn là số kế thừa.** 652/634/514/799 ms là thời gian của **cả dải
+  8 frame**, không phải chi phí một decoder, và chưa tách được phần chờ IndexedDB khỏi phần giải mã
+  (`acquire()` đứng trước cả hai — nợ cũ của §20.4 vẫn còn).
+- **Chưa đo trên Electron.** Mọi số browser ở trên lấy từ Chromium của máy dev; WebCodecs của Electron
+  (một Chromium bản khác) **chưa** được đo cho đường frame mới. Parity desktop vẫn đang ở mức code +
+  Node, chưa ở mức app thật.
+- **Chưa có key i18n nào mới.** D3 chỉ đổi nguồn của dữ liệu hiển thị, không thêm chữ nào — nên
+  `i18n/locales/en.json` và `vi.json` không đổi, và không có bề mặt nào cần dịch lại.
+

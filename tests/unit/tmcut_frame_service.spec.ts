@@ -69,15 +69,18 @@ async function main() {
     assert.ok(dts.includes('TMCUT_FRAME_MAX_CONCURRENT'), 'the app must be able to see the bound')
   })
 
-  await check('both hosts run the same number of decoders', () => {
-    // The desktop already bounds its `-ss` pool (useTmcutFrames.ts) because N
-    // clips mounting at once must not spawn N × 3 processes. The shared service
-    // inherits that bound, so parity is a test, not a hope.
+  await check('the app runs one decoder pool, sized by core', () => {
+    // Slice D1/D2 pinned this against the desktop's private `-ss` semaphore in
+    // useTmcutFrames.ts. Slice D3 moved the batch and filmstrip legs into the
+    // shared service, so the renderer must not keep a second counter: two pools
+    // means two answers to "how many decoders may run".
+    const files = walkApp(join(root, 'app'))
+    const privatePools = files.filter(file => /MAX_CONCURRENT_FRAMES|activeFrameJobs/.test(read(file)))
+    assert.deepEqual(privatePools, [], 'no module in app/ counts decoders on its own')
     const composable = read('app/composables/useTmcutFrames.ts')
-    const desktop = /const MAX_CONCURRENT_FRAMES = (\d+)/.exec(composable)
-    assert.ok(desktop, 'the desktop still states its pool bound')
-    assert.equal(Number(desktop![1]), core.TMCUT_FRAME_MAX_CONCURRENT,
-      'one frame pipeline means one pool size')
+    assert.ok(composable.includes('requestFrame'), 'the legs ask the one service')
+    assert.ok(read('app/utils/tmcut/frameStore.ts').includes('TMCUT_FRAME_MAX_CONCURRENT'),
+      'and the only bound is the core one')
   })
 
   // -------------------------------------------------------------------------

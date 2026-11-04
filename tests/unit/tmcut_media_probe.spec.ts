@@ -22,7 +22,10 @@
  *    nor a location refusing outright;
  *  - the adapter leg: name, kind and hints derived from the stored locator, and
  *    the source resolver that must ignore the playback proxy;
- *  - rule 12 structurally: exactly one file in `app/` may import a demuxer.
+ *  - the timeline's two desktop pickers taking a clip's length from this
+ *    service, which is how the ruler and the bin stop disagreeing;
+ *  - rule 12 structurally: exactly two files in `app/` may open a container —
+ *    one to describe it, one to draw a frame of it.
  *
  * Run: node node_modules/tsx/dist/cli.mjs --tsconfig tsconfig.test.json \
  *        tests/unit/tmcut_media_probe.spec.ts
@@ -300,6 +303,34 @@ async function main() {
     } finally {
       await host.close()
     }
+  })
+
+  await check('the desktop pickers size a clip from the demuxer, not the binary leg', () => {
+    // `media.probe` is the adapter's ffprobe-over-IPC answer. The two desktop
+    // "add file" legs used to take a new clip's length from it, so the ruler and
+    // the media bin could disagree about the same file. Both now ask the one
+    // service, and a container that stores no length still answers `undefined`
+    // rather than a zero — which is what keeps the honest fallback reachable.
+    const timeline = read('app/components/tmcut/TmcutTimeline.vue')
+    assert.ok(!/platform\.media\.probe\(/.test(timeline), 'the timeline may not call the ffprobe leg')
+    assert.equal(timeline.split('platform.media.probeInfo(').length - 1, 2, 'both pickers ask the demuxer')
+    assert.match(timeline, /out: durationSec > 0[\s\S]{0,90}?10 \* TICKS_PER_SECOND/,
+      'a video the container gives no length for keeps its fallback')
+    assert.match(timeline, /out: durationSec > 0[\s\S]{0,90}?15 \* TICKS_PER_SECOND/,
+      'and so does an audio file')
+    // Nothing else in the renderer asks it either, which is the measurement the
+    // slice that cuts the binary needs: the leg stays in the contract for host
+    // parity until then, but no feature depends on it.
+    const stillAsking: string[] = []
+    const walkApp = (dir: string) => {
+      for (const entry of readdirSync(join(root, dir), { withFileTypes: true })) {
+        const rel = `${dir}/${entry.name}`
+        if (entry.isDirectory()) walkApp(rel)
+        else if (/\.(ts|vue|mjs)$/.test(entry.name) && /media\.probe\(/.test(read(rel))) stillAsking.push(rel)
+      }
+    }
+    walkApp('app')
+    assert.deepEqual(stillAsking, [], 'no renderer module calls media.probe')
   })
 
   await check('two seams own the demuxer, and no component reaches past them (rule 12)', async () => {
