@@ -13,12 +13,13 @@ import {
   TMCUT_SCENE_THRESHOLD,
   TMCUT_SILENCE_NOISE_DB,
   TMCUT_SILENCE_MIN_DURATION_SEC,
+  TMCUT_SILENCE_WINDOW_SEC,
   TMCUT_SILENCE_FLOOR_DBFS,
   sceneSampleTimes,
   sceneScore,
   cutsToShots,
   dbfsOf,
-  levelSeries,
+  peakLevelSeries,
   silenceSpans
 } from '../src/detection.mjs'
 import { filmstripTimes, secToTicks, ticksToSec } from '../src/index.mjs'
@@ -100,18 +101,18 @@ describe('detection (slice E)', () => {
     assert.equal(dbfsOf(Number.NaN), TMCUT_SILENCE_FLOOR_DBFS)
   })
 
-  it('levelSeries measures one level per window, including the short last one', () => {
+  it('peakLevelSeries measures one level per window, including the short last one', () => {
     const rate = 100
     const loud = new Float32Array(rate).fill(1)
     const quiet = new Float32Array(rate).fill(0)
     const tail = new Float32Array(25).fill(0)
     // 1 s loud, 1 s quiet, 0.25 s quiet: five 0.5 s windows, the last one short.
-    const series = levelSeries([...loud, ...quiet, ...tail], rate, 0.5)
+    const series = peakLevelSeries([...loud, ...quiet, ...tail], rate, 0.5)
     assert.equal(series.length, 5)
     assert.deepEqual(series, [0, 0, TMCUT_SILENCE_FLOOR_DBFS, TMCUT_SILENCE_FLOOR_DBFS, TMCUT_SILENCE_FLOOR_DBFS])
     // Nothing to measure answers with nothing, not a zero level.
-    assert.deepEqual(levelSeries([], rate, 0.5), [])
-    assert.deepEqual(levelSeries(loud, 0, 0.5), [])
+    assert.deepEqual(peakLevelSeries([], rate, 0.5), [])
+    assert.deepEqual(peakLevelSeries(loud, 0, 0.5), [])
   })
 
   it('silenceSpans keeps runs that are long enough and drops ones that are not', () => {
@@ -141,13 +142,16 @@ describe('detection (slice E)', () => {
     )
   })
 
-  it('the defaults are one number for both producers', () => {
-    // The FFmpeg argv builder (shared/utils/detection-args.cjs) still carries
-    // the same three values; the temporary cross-check goes with the argv, in
-    // slice I — until then a drift here would silently re-cut every EDL.
-    assert.equal(TMCUT_SCENE_THRESHOLD, 0.4)
+  it('the calibrated numbers are one number for both hosts', () => {
+    // Both of these are MEASURED, not inherited — docs/audit/zero-ffmpeg-audit.md
+    // carries the scene band and the real-voice silence table. They are pinned
+    // here because a drift of a few hundredths re-cuts every EDL in silence.
+    // The FFmpeg argv builder (shared/utils/detection-args.cjs) still carries its
+    // own 0.4 on its own scale; that number goes with the argv, in slice I.
+    assert.equal(TMCUT_SCENE_THRESHOLD, 0.18)
     assert.equal(TMCUT_SILENCE_NOISE_DB, -30)
     assert.equal(TMCUT_SILENCE_MIN_DURATION_SEC, 0.5)
+    assert.equal(TMCUT_SILENCE_WINDOW_SEC, 0.02)
     assert.ok(TMCUT_SILENCE_FLOOR_DBFS < TMCUT_SILENCE_NOISE_DB,
       'the floor has to be quieter than the quietest thing we call silence')
   })

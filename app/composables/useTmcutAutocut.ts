@@ -1,10 +1,6 @@
-import { tmcutHostIpc } from '~/utils/tmcut/hostBridge'
 import type { TmcutAsset } from '~/types/tmcut'
-import type { TmcutAnalysisResult } from '#shared/types/electron'
 import type { TmcutEdl, TmcutEdlSegment } from 'tmcut-core'
 import {
-  parseSceneOutput,
-  parseSilenceOutput,
   scoreSegments,
   validateEdl,
   editPlanFromEdl,
@@ -13,6 +9,10 @@ import {
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
 import { useTmcutAi } from '~/composables/useTmcutAi'
+import { createAutocutDetect } from '~/utils/tmcut/autocutDetect'
+import { decodeLumaSeries, hasFrameDecoder } from '~/utils/tmcut/frameDecode'
+import { decodePcm } from '~/utils/tmcut/audioDecode'
+import { toURL } from '~/utils/ffmpegHelper'
 import {
   buildTriageSpans,
   triageSystemPrompt,
@@ -47,10 +47,16 @@ export interface AutocutAnalysis {
   edl: TmcutEdl
   sceneCount: number
   transcriptUsed: boolean
-  /** total source duration, seconds (from FFmpeg scene probe) */
+  /** total source duration, seconds (from the probe in `asset.meta`) */
   sourceDurationSec: number
-  /** number of silence ranges detected by FFmpeg silencedetect */
+  /** number of quiet runs the decoder found */
   silenceCount: number
+  /** Whether any sound was decoded at all — false means "nothing was heard",
+   *  which is NOT the same claim as "these seconds are quiet". */
+  audioHeard: boolean
+  /** Instants the scene pass asked for, and the ones the decoder could not give. */
+  framesSampled: number
+  framesMissing: number
   /** total seconds covered by the detected silences */
   silenceRemovedSec: number
   /** total seconds covered by the transcript (speech coverage) */
@@ -68,27 +74,24 @@ export interface AutocutAnalysis {
 }
 
 /**
- * The two detection passes (shots, silence) for one source, from the desktop
- * main process or — for a web asset, which already lives on the local server as
- * a `/uploads/` file — from POST /api/v1/media/analyze. Both run the same
- * ffmpeg filters and hand back the raw log, so tmcut-core scores identically
- * on either runtime. Null when neither can read the file.
+ * The two detection passes for one source, run in this renderer (zero-FFmpeg
+ * slice E4). Both hosts used to hand the file to FFmpeg — Electron through an IPC
+ * call into the main process, the web page through a server route — and parse the
+ * log back into seconds. Now the same demuxer that paints the thumbnails answers
+ * both questions on both hosts, and `tmcut-core` decides what the pixels and the
+ * samples mean, so one clip cannot give two shot lists depending on which window
+ * opened it.
  */
-function resolveAnalyzer(filePath: string): ((kind: 'scenes' | 'silence') => Promise<TmcutAnalysisResult>) | null {
-  const ipc = tmcutHostIpc()
-  if (ipc?.analyzeScenes && ipc.analyzeSilence) {
-    return kind => (kind === 'scenes' ? ipc.analyzeScenes!({ filePath }) : ipc.analyzeSilence!({ filePath }))
-  }
-  if (filePath.startsWith('/uploads/')) {
-    return kind => $fetch<TmcutAnalysisResult>('/api/v1/media/analyze', { method: 'POST', body: { kind, src: filePath } })
-  }
-  return null
-}
+const autocutDetector = createAutocutDetect({
+  readGrids: decodeLumaSeries,
+  readPcm: decodePcm,
+  canDecodeVideo: hasFrameDecoder
+})
 
 /**
- * AutoCut pipeline driver (roadmap section 65.6): scene/silence detection
- * in main, optional Whisper transcript via the AI gateway, pure scoring
- * in tmcut-core, draft project application without touching sources.
+ * AutoCut pipeline driver (roadmap section 65.6): scene and silence detection in
+ * the browser engine, optional Whisper transcript via the AI gateway, pure
+ * scoring in tmcut-core, draft project application without touching sources.
  */
 export function useTmcutAutocut() {
   const { createProject, addClipToTrack, switchCanvas } = useTmcutProject()
@@ -99,30 +102,43 @@ export function useTmcutAutocut() {
   const stageKey = ref('')
   const analysisError = ref<string | null>(null)
 
+  // One scan at a time, and the user may stop it: the walk holds a demuxer open,
+  // so cancelling has to reach the decoder rather than only the await.
+  let running: AbortController | null = null
+
+  function cancel() {
+    running?.abort()
+  }
+
   async function analyzeSource(
     asset: TmcutAsset,
     profile: AutocutProfile,
     options?: AutocutOptions
   ): Promise<AutocutAnalysis | null> {
-    const analyze = resolveAnalyzer(asset.path)
-    if (!analyze) {
-      analysisError.value = 'desktop-only'
-      return null
-    }
     analyzing.value = true
     analysisError.value = null
+    const controller = new AbortController()
+    running = controller
     try {
       stageKey.value = 'tmcut.steps.stageScenes'
-      const scenes = await analyze('scenes')
-      if (!scenes?.ok) throw new Error(scenes?.error || 'scene-detection-failed')
-
-      stageKey.value = 'tmcut.steps.stageSilence'
-      const silence = await analyze('silence')
-      if (!silence?.ok) throw new Error(silence?.error || 'silence-detection-failed')
-
-      const durationSec = scenes.durationSec || silence.durationSec || asset.meta.durationSec || 0
-      const shotList = parseSceneOutput(scenes.log, durationSec)
-      const silenceList = parseSilenceOutput(silence.log, durationSec)
+      const durationSec = Number(asset.meta?.durationSec) || 0
+      const detected = await autocutDetector.detect({
+        fingerprint: asset.fingerprint,
+        src: toURL(asset.path),
+        durationSec,
+        signal: controller.signal,
+        onStage: (stage) => {
+          stageKey.value = stage === 'scenes'
+            ? 'tmcut.steps.stageScenes'
+            : 'tmcut.steps.stageSilence'
+        }
+      })
+      if (detected.error) {
+        analysisError.value = detected.error
+        return null
+      }
+      const shotList = detected.shots
+      const silenceList = detected.silences
 
       // Transcript is best-effort: EDL scoring degrades gracefully without it.
       let speech: Array<{ start: number, end: number }> = []
@@ -215,6 +231,9 @@ export function useTmcutAutocut() {
         transcriptUsed,
         sourceDurationSec: durationSec,
         silenceCount: silenceList.length,
+        audioHeard: detected.audioHeard,
+        framesSampled: detected.sampled,
+        framesMissing: detected.missing,
         silenceRemovedSec,
         speechSec,
         transcript: transcriptText,
@@ -229,6 +248,7 @@ export function useTmcutAutocut() {
     } finally {
       analyzing.value = false
       stageKey.value = ''
+      if (running === controller) running = null
     }
   }
 
@@ -306,6 +326,7 @@ export function useTmcutAutocut() {
     stageKey,
     analysisError,
     analyzeSource,
+    cancel,
     applyDraft
   }
 }

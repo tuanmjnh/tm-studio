@@ -7,9 +7,10 @@
 //
 //  - an injected reader delivers the PCM for the asked range, or null when this
 //    host cannot decode audio;
-//  - core turns channels into one level per window (`loudestLevelSeries`, so a
+//  - core turns channels into one level per window (`loudestPeakSeries`, so a
 //    dead channel can never make audible content look quiet) and decides what
-//    quiet is (`silenceSpans`, the same law the stderr reader now shares).
+//    quiet is (`silenceSpans`, the same measure FFmpeg's `silencedetect` used —
+//    the loudest sample of the window, at the window width slice E4 measured).
 //
 // The reader is a parameter, not an import, for the same reason the scene scan
 // takes its grid reader: sample work needs Web Audio and WebCodecs, which plain
@@ -20,7 +21,7 @@
 // and core is told so (`offsetSec`) — the glue never adds the two numbers itself,
 // so a scan of the same file cannot report different seconds on a different host.
 
-import { loudestLevelSeries, silenceSpans } from 'tmcut-core'
+import { loudestPeakSeries, silenceSpans } from 'tmcut-core'
 
 export interface TmcutSilenceScanAsk {
   /** Source range to listen to, seconds — the clip's own in/out, not the timeline. */
@@ -67,7 +68,7 @@ export function createSilenceScan(readPcm: TmcutPcmReader) {
 
     const pcm = await readPcm({ inSec: from, outSec: to, signal })
     if (!pcm) return emptyResult()
-    const levels = loudestLevelSeries(pcm.channels, pcm.sampleRate, ask.windowSec)
+    const levels = loudestPeakSeries(pcm.channels, pcm.sampleRate, ask.windowSec)
     if (signal.aborted) return emptyResult(levels.length)
 
     const options = {

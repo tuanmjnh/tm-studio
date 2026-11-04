@@ -2,12 +2,12 @@
 //
 // A decoder hands back whole packets. Asked for 0.5 s of a 44.1 kHz AAC file it
 // started at 0.48762 s (measured in Chromium, one packet of 1024 samples early),
-// and a level window that overlaps the tone by 12 ms reads -27 dB — loud enough
-// to lose a full window, which moved a quiet span half a second late. So the seam
+// and a level window that overlaps the tone by 12 ms is loud enough to lose the
+// whole window, which moved a quiet span half a second late. So the seam
 // trims the head before the laws see it, and that arithmetic is core's.
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { levelSeries, pcmHeadTrim, silenceSpans } from '../src/detection.mjs'
+import { peakLevelSeries, pcmHeadTrim, silenceSpans } from '../src/detection.mjs'
 
 const rate = 44100
 
@@ -41,11 +41,11 @@ describe('pcmHeadTrim', () => {
     // A decoder asked for 0.5 s hands over the packet that contains it, which
     // started `packet` samples earlier than the ask.
     const delivered = signal.slice(Math.round(ask.inSec * rate) - packet, Math.round(ask.outSec * rate))
-    const treated = silenceSpans(levelSeries(delivered, rate, windowSec),
+    const treated = silenceSpans(peakLevelSeries(delivered, rate, windowSec),
       { windowSec, offsetSec: ask.inSec })
     assert.equal(treated[0].start, 1.5, 'untrimmed, the first window carries tone and the span starts a window late')
     const trimmed = delivered.slice(pcmHeadTrim(ask.inSec, ask.inSec - packet / rate, rate))
-    const aligned = silenceSpans(levelSeries(trimmed, rate, windowSec),
+    const aligned = silenceSpans(peakLevelSeries(trimmed, rate, windowSec),
       { windowSec, offsetSec: ask.inSec })
     assert.deepEqual(aligned, [{ start: 1, end: 2 }], 'trimmed, the span sits on the second it was asked at')
   })

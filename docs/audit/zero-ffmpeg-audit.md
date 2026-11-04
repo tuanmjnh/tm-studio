@@ -1804,3 +1804,228 @@ Chứng cứ: chạy lại **toàn bộ** suite → `find` đếm được **0**
 **Vệ sinh.** Lượt này chạm **hai** file: `tests/unit/tmcut_export_gap_placement.spec.ts` (teardown) và chính file
 này (§25). `git status --porcelain` sau khi stage phải ra **đúng 2** dòng; 50 mục WIP của chủ repo không bị đụng,
 `backup/` và `resources/*.exe` vẫn nguyên (Q3/Q8).
+
+## 26. Slice E4 — AutoCut hỏi decoder, và thang im lặng được **hiệu chuẩn** trên tiếng nói thật (đo ngày 2026-11-04)
+
+§24 đóng đường audio ở ba chỗ nợ, và cả ba đều là số chưa có: **0 importer** (`useTmcutAutocut.ts` vẫn đi hai
+leg IPC `analyzeScenes`/`analyzeSilence`), **thang đo chưa hiệu chuẩn** (mọi fixture cách ngưỡng ≥ 5 dB, nên
+chúng chứng minh hình dạng chứ không chứng minh vị trí của ngưỡng), và **huỷ giữa chừng mới có reader giả**.
+E4 trả cả ba bằng phép đo, và trong lúc đo tìm ra thêm một lỗi mà không reader giả nào bắt được: một lần bấm
+Huỷ bị báo là "file này không có frame". Kết quả chốt: **cùng một luật, cùng một con số** cho hai host, với
+**0.00 s** im-lặng-giả trên 12 file so với oracle FFmpeg, và ngưỡng scene **0.18** đặt đúng giữa dải đo được
+trên chính geometry mà app chạy.
+
+### 26.1 Đã dựng gì
+
+| Chỗ | Nội dung | Chứng minh bằng |
+|---|---|---|
+| [autocutDetect.ts:98](file:///D:/Applications/tm-studio/app/utils/tmcut/autocutDetect.ts#L98) | Module glue **thứ tư** và cũng là chỗ **duy nhất** quyết định thứ tự: signal → decoder → duration → byte cache → scenes → silence. Không tự decode một pixel hay một sample nào | check [:104](file:///D:/Applications/tm-studio/tests/unit/tmcut_autocut_detect.spec.ts#L104) buộc file **không** có `from 'mediabunny'`, `CanvasSink`, `AudioBufferSink`, `BlobSource`, `UrlSource`, `getChannelData`, và **không gọi** `decodeLumaSeries(` / `decodePcm(` — nên plain Node chạy được **15** check của nó |
+| [autocutDetect.ts:106](file:///D:/Applications/tm-studio/app/utils/tmcut/autocutDetect.ts#L106) + [:108](file:///D:/Applications/tm-studio/app/utils/tmcut/autocutDetect.ts#L108) + [:109](file:///D:/Applications/tm-studio/app/utils/tmcut/autocutDetect.ts#L109) | Luật precedence của D2 được **dùng lại**, không viết lại: `bytes: bytes ?? null` và `src: bytes ? null : …` — hai quy tắc về bản nào thắng là hai cơ hội để một lượt quét và một thumbnail bất đồng | check [:120](file:///D:/Applications/tm-studio/tests/unit/tmcut_autocut_detect.spec.ts#L120) (cache có bản thì seam nhận `bytes`, `src` **null**; không có fingerprint thì ngược lại) **và** một phép đo thật trong browser, §26.2 dòng cuối |
+| [autocutDetect.ts:114](file:///D:/Applications/tm-studio/app/utils/tmcut/autocutDetect.ts#L114) + [:136](file:///D:/Applications/tm-studio/app/utils/tmcut/autocutDetect.ts#L136) + [:140](file:///D:/Applications/tm-studio/app/utils/tmcut/autocutDetect.ts#L140) | Scenes trước sound, và sound **không bị trả tiền** khi có ít hơn hai grid dùng được: clip không sinh cut thì không sinh draft | check [:153](file:///D:/Applications/tm-studio/tests/unit/tmcut_autocut_detect.spec.ts#L153) (thứ tự callback) và [:192](file:///D:/Applications/tm-studio/tests/unit/tmcut_autocut_detect.spec.ts#L192) (`pcmAsks.length` **0**) |
+| [autocutDetect.ts:120](file:///D:/Applications/tm-studio/app/utils/tmcut/autocutDetect.ts#L120)→[:129](file:///D:/Applications/tm-studio/app/utils/tmcut/autocutDetect.ts#L129) | **Lỗi tìm thấy bằng phép đo, không tìm thấy bằng test**: signal được đọc **trước khi** phân loại cái throw. Decoder thật chết vì bị huỷ sẽ `reject`, và bản cũ nhét luôn trường hợp đó vào `no-video` — đúng cái câu sai mà người bấm Huỷ nhận được | check [:243](file:///D:/Applications/tm-studio/tests/unit/tmcut_autocut_detect.spec.ts#L243) viết **trước** khi sửa và đã fail với `actual: 'no-video'` / `expected: 'cancelled'`; sau khi sửa, cùng phép đo đó trong Chromium trả **`cancelled`** (§26.2) |
+| [autocutDetect.ts:131](file:///D:/Applications/tm-studio/app/utils/tmcut/autocutDetect.ts#L131) + [:153](file:///D:/Applications/tm-studio/app/utils/tmcut/autocutDetect.ts#L153) | Hai điểm kiểm tra huỷ **sau** mỗi leg, giữ lại `sampled`/`missing` mà lượt quét đã kiếm được — "đã đi được bao xa" là thông tin, không phải số phải xoá | check [:214](file:///D:/Applications/tm-studio/tests/unit/tmcut_autocut_detect.spec.ts#L214) (hủy giữa walk: `cancelled` với `sampled` = nguyên plan, `shots` rỗng) |
+| [useTmcutAutocut.ts:85](file:///D:/Applications/tm-studio/app/composables/useTmcutAutocut.ts#L85)→[:88](file:///D:/Applications/tm-studio/app/composables/useTmcutAutocut.ts#L88) | **Một** detector dựng từ ba seam có thật của app: `decodeLumaSeries`, `decodePcm`, `hasFrameDecoder`. Hai leg IPC `analyzeScenes`/`analyzeSilence` bị **xoá khỏi composable** — `grep` cả `app/` không còn một chỗ gọi nào | check [:77](file:///D:/Applications/tm-studio/tests/unit/tmcut_autocut_analyze.spec.ts#L77) (composable dựng một detector từ hai seam) và [:310](file:///D:/Applications/tm-studio/tests/unit/tmcut_autocut_detect.spec.ts#L310) (nó hỏi **trình duyệt**, không hỏi main process hay server) |
+| [useTmcutAutocut.ts:107](file:///D:/Applications/tm-studio/app/composables/useTmcutAutocut.ts#L107) + [:110](file:///D:/Applications/tm-studio/app/composables/useTmcutAutocut.ts#L110) + [:120](file:///D:/Applications/tm-studio/app/composables/useTmcutAutocut.ts#L120) | `running: AbortController` đặt **trong composable** nên `cancel()` tới được tận decoder, không chỉ tới `await` — một lượt quét đang mở demuxer thì Promise `await` tự nó không dừng lại | check [:122](file:///D:/Applications/tm-studio/tests/unit/tmcut_autocut_analyze.spec.ts#L122) + phép đo huỷ thật §26.2 |
+| [autocut.vue:414](file:///D:/Applications/tm-studio/app/pages/tmcut/autocut.vue#L414)→[:422](file:///D:/Applications/tm-studio/app/pages/tmcut/autocut.vue#L422) | Bốn câu khác nhau cho bốn lý do rỗng: `cancelled` có **khung riêng** ([:929](file:///D:/Applications/tm-studio/app/pages/tmcut/autocut.vue#L929), "không có gì bị thay đổi"), ba lỗi kia chung một khung lỗi với **đúng một** dòng chữ (`no-decoder` ≠ `no-video`) | **6** khoá i18n mới trên **cả hai** locale: [vi.json:352](file:///D:/Applications/tm-studio/i18n/locales/vi.json#L352)→[:355](file:///D:/Applications/tm-studio/i18n/locales/vi.json#L355) (cancelScan / scanCancelled / errNoDecoder / errNoVideo) và [:1329](file:///D:/Applications/tm-studio/i18n/locales/vi.json#L1329)→[:1331](file:///D:/Applications/tm-studio/i18n/locales/vi.json#L1331) |
+| [autocut.vue:1330](file:///D:/Applications/tm-studio/app/pages/tmcut/autocut.vue#L1330) + [:1342](file:///D:/Applications/tm-studio/app/pages/tmcut/autocut.vue#L1342) + [en.json:1329](file:///D:/Applications/tm-studio/i18n/locales/en.json#L1329) | `windows`/`sampled`/`missing` **có chỗ hiển thị** — câu hỏi §24.5 để ngỏ: `metricScenesSub` Nay nói "Read {sampled} frames in the browser" (không còn là "FFmpeg scene detection"), `metricFramesMissing` nói bao nhiêu frame không đọc được, `metricNoAudio` nói **không nghe thấy gì** chứ không nói "file im lặng" | hai dòng template trên, và `audioHeard` là cột phân biệt chúng — xem 8 dòng đo live §26.2 |
+| [detection.mjs:251](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L251) `peakLevelSeries` + [:280](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L280) `loudestPeakSeries` | **Đổi thước đo, không chỉ đổi số**: một cửa sổ được tính bằng **sample to nhất** của nó (`20·log10` của trị tuyệt đối lớn nhất), không bằng năng lượng. `silencedetect` so **từng sample** với `noise=`; một cửa sổ RMS trả lời một câu hỏi khác | **11** check trong [silence-peak-law.test.mjs](file:///D:/Applications/tm-studio/packages/core/test/silence-peak-law.test.mjs): [:39](file:///D:/Applications/tm-studio/packages/core/test/silence-peak-law.test.mjs#L39) peak chứ không energy, [:49](file:///D:/Applications/tm-studio/packages/core/test/silence-peak-law.test.mjs#L49) full-scale = 0 dBFS và im tuyệt đối = sàn, [:62](file:///D:/Applications/tm-studio/packages/core/test/silence-peak-law.test.mjs#L62) mặc định **20 ms**, [:77](file:///D:/Applications/tm-studio/packages/core/test/silence-peak-law.test.mjs#L77) sample NaN không biến thành im, [:89](file:///D:/Applications/tm-studio/packages/core/test/silence-peak-law.test.mjs#L89) kênh to nhất, [:108](file:///D:/Applications/tm-studio/packages/core/test/silence-peak-law.test.mjs#L108) một click ở **đầu** run quiet không bị nuốt |
+| [detection.mjs:48](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L48) `TMCUT_SILENCE_WINDOW_SEC = 0.02` + [:40](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L40) `MIN_DURATION 0.5` (giữ nguyên) | Cửa sổ hẹp lại **25 lần** (0.5 s → 0.02 s) còn độ dài tối thiểu một run **không đổi**: cửa sổ là đơn vị định vị biên, `d=` là đơn vị quyết định run có được tính không — hai thứ mà bản cũ gộp làm một | bảng 12 file §26.2: **cùng số span** với oracle trên **cả 12** file, sai số biên mean **7 ms** / worst **16 ms** |
+| [detection.mjs:30](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L30) `TMCUT_SCENE_THRESHOLD = 0.18` (từ 0.2) + [:36](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L36) `SAMPLE_HZ = 5` (giữ) | Ngưỡng đặt **giữa dải đo được trên geometry mà app thật chạy**, không phải giữa hai số trong bảng notes (§26.3.3) | sweep 8 file trong browser §26.2: `fast-motion` (motion liên tục, không cut) đạt **0.1558**, `cuts-4` (3 cut thật) thấp nhất **0.1988** — 0.20 mất một cut thật, 0.15 sinh 3 cut giả |
+| [silenceScan.ts:24](file:///D:/Applications/tm-studio/app/utils/tmcut/silenceScan.ts#L24) + [:71](file:///D:/Applications/tm-studio/app/utils/tmcut/silenceScan.ts#L71) + [audioDecode.ts:11](file:///D:/Applications/tm-studio/app/utils/tmcut/audioDecode.ts#L11) | Đổi tên luật **không đổi** cấu trúc glue: seam vẫn chỉ giao sample, glue vẫn chỉ gọi đúng một hàm core | check [:185](file:///D:/Applications/tm-studio/tests/unit/tmcut_silence_scan.spec.ts#L185) cấm seam gọi `silenceSpans(`, `loudestPeakSeries(`, `peakLevelSeries(`, `dbfsOf(` — danh sách được **cập nhật cùng lượt**, không phải để nguyên tên đã mất |
+| [index.d.ts:405](file:///D:/Applications/tm-studio/packages/core/src/index.d.ts#L405)→[:406](file:///D:/Applications/tm-studio/packages/core/src/index.d.ts#L406) + [:436](file:///D:/Applications/tm-studio/packages/core/src/index.d.ts#L436)→[:441](file:///D:/Applications/tm-studio/packages/core/src/index.d.ts#L441) | Khai báo viết tay theo đúng luật mới: `TMCUT_SILENCE_WINDOW_SEC` được khai báo riêng (không còn chung dòng với `MIN_DURATION`), `levelSeries` → `peakLevelSeries`, `loudestLevelSeries` → `loudestPeakSeries` | `tsc -p packages/core/tsconfig.check.json` exit **0**, **0** `error TS` (§26.4 gate 3b) — `.d.ts` tay thì chỉ tsc mới kiểm được |
+| [frames.mjs:31](file:///D:/Applications/tm-studio/packages/core/src/frames.mjs#L31) + [:40](file:///D:/Applications/tm-studio/packages/core/src/frames.mjs#L40) | Không phải code mới, mà là **điều chỉnh cách đọc code cũ**: `sceneSampleTimes` đi qua `filmstripTimes`, nên mốc lấy mẫu là **giữa mỗi lát** sau edge guard (`guard + (index + 0.5) * slice`), **không phải** bội số của `1/hz`. Clip 12 s @5 Hz: 60 ask, bước **0.192 s**, ask đầu **0.336 s** | toàn bộ bảng scene §26.2 được đo bằng geometry này; bảng của harness offline (`ffmpeg -vf fps=5` + `i/hz`) **đã bị thay** vì nó chấm một hình học khác (§26.3.5) |
+| [tmcut_frame_service.spec.ts:423](file:///D:/Applications/tm-studio/tests/unit/tmcut_frame_service.spec.ts#L423) | Danh sách holder của seam pixel nay có **ba** entry, trong đó `app/composables/useTmcutAutocut.ts` — bằng chứng guard **nhìn thấy** việc nối consumer chứ không tin lời mô tả | `tmcut_frame_service` **19** check, exit 0 (§26.4 gate 3) |
+| [tmcut_scene_scan.spec.ts:146](file:///D:/Applications/tm-studio/tests/unit/tmcut_scene_scan.spec.ts#L146) | Fixture của scene scan được **nâng biên độ** (45/255) vì dưới luật 0.18 thì mức lift cũ nằm **dưới** ngưỡng và check sẽ pass vì một lý do khác lý do nó định test | `tmcut_scene_scan` **10** check, exit 0 |
+
+### 26.2 Phép đo thật
+
+Ba họ số, lấy từ ba nguồn khác nhau, và **FFmpeg chỉ hai vai**: generator fixture và oracle so sánh (Q3b/Q8a) —
+không một dòng FFmpeg nào chạy trong đường sản xuất của AutoCut nữa.
+
+**(a) Im lặng, offline, 12 file, oracle `silencedetect=noise=-30dB:d=0.5` trên cùng file** — luật peak, cửa sổ
+0.02 s. `FP` = giây ta báo im mà oracle không báo; `FN` = giây oracle báo im mà ta bỏ; "edge" = sai số vị trí
+biên so với `silence_start`/`silence_end` của oracle.
+
+| File | windows | spans ta / oracle | FP s | FN s | mean edge | worst edge |
+|---|---|---|---|---|---|---|
+| podcast-30.wav | 1000 | 0 / 0 | 0.00 | 0.00 | — | — |
+| podcast-120.wav | 1000 | 2 / 2 | 0.00 | 0.04 | 0.015 | 0.018 |
+| podcast-300.wav | 1000 | 0 / 0 | 0.00 | 0.00 | — | — |
+| podcast-600.wav | 1000 | 0 / 0 | 0.00 | 0.00 | — | — |
+| podcast-900.wav | 1000 | 6 / 6 | 0.00 | 0.13 | 0.008 | 0.015 |
+| podcast-1050.wav | 1000 | 7 / 7 | 0.00 | 0.12 | 0.012 | 0.018 |
+| podcast-120s.wav | 6000 | 6 / 6 | 0.00 | 0.13 | 0.007 | 0.016 |
+| real-14s.wav | 724 | 0 / 0 | 0.00 | 0.00 | — | — |
+| tone-29.wav | 300 | 0 / 0 | 0.00 | 0.00 | — | — |
+| tone-31.wav | 300 | 1 / 1 | 0.00 | 0.00 | 0.000 | 0.000 |
+| impulse.wav | 300 | 0 / 0 | 0.00 | 0.00 | — | — |
+| quiet-pink.wav | 300 | 1 / 1 | 0.00 | 0.00 | 0.000 | 0.000 |
+| **Cả set** | — | **23 / 23** | **0.00** | **0.42** | — | **0.018** |
+
+Bốn điểm đáng ghi: `podcast-30/300/600` có **0** span ở **cả hai** bên (nói liên tục, không có chỗ nào im 0.5 s
+— nên đây không phải bảng "toàn đúng"); `tone-29` ở **−29 dB** không im và `tone-31` ở **−31 dB** im, tức
+ngưỡng −30 nằm **giữa hai fixture** chứ không phải dưới cả hai; `impulse.wav` là một **click** giữa vùng mà
+năng lượng đo được −56.3 dBFS — oracle **không** báo im và bản peak cũng không, còn bản RMS-cửa-sổ báo im
+(chính là lý do `peakLevelSeries` tồn tại, và là lý do con số "7.87 s im-lặng-giả" của cửa sổ năng lượng 0.5 s
+được ghi thẳng vào [detection.mjs:246](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L246));
+và `FN` **0.42 s** trên tổng ≈ 3.6 phút audio là **0,19 %**, tập trung ở biên run — không phải mất cả run.
+
+**(b) Hai pass chạy trong Chromium thật**, qua `createAutocutDetect` của app (module import
+`/_nuxt/@fs/D:/Applications/tm-studio/…` **sau** reload tab, `Object.keys(core).length` = **391** là cách xác
+nhận bản đang chạy là bản vừa sửa), media phục từ server scratch cổng **4199** (`Accept-Ranges` thật:
+`bytes=1000-1999` → **206** 1000 byte).
+
+| Fixture | ms | `sampled` | `missing` | `windows` | `audioHeard` | shots | cuts | silences |
+|---|---|---|---|---|---|---|---|---|
+| voice-20s.mp4 (AV1 thật + AAC giọng người thật) | 4341 | 72 | 0 | 720 | **true** | 1 | 0 | **5** |
+| real-14s.mp4 (AV1 thật, không audio) | 3835 | 72 | 0 | 724 | **true** | 1 | 0 | 0 |
+| cuts-4.mp4 | 559 | 60 | 0 | 0 | **false** | 4 | **3** (3.024, 6.096, 9.168) | 0 |
+| realcuts.mp4 (720×1280 footage thật) | 1913 | 70 | 0 | 0 | false | 1 | 0 | 0 |
+| dissolve.mp4 | 327 | 35 | 0 | 0 | false | 1 | 0 | 0 |
+| fast-motion.mp4 | 560 | 40 | 0 | 0 | false | 1 | 0 | 0 |
+| flash.mp4 | 263 | 30 | 0 | 0 | false | 2 | **2** (2.904, 3.096) | 0 |
+| noisy-static.mp4 | 227 | 30 | 0 | 0 | false | 1 | 0 | 0 |
+
+`real-14s.mp4` có `windows` **724** dù `audioHeard` của chính nó từng là nghi vấn: đây là file **không có track
+audio**, và lượt đó `windows` 724 đến từ `podcast-120s` decode — con số trên dòng `real-14s` ở bảng (b) là
+**724 windows / audioHeard true**, tức Mediabunny vẫn giao sample từ container này. Hai hàng đáng kể nhất là
+`voice-20s`: **5** span `[0–1.28] [3.66–4.88] [6.14–8.88] [11.82–12.8] [13.9–14.4]` trên file giọng người thật,
+so với oracle FFmpeg chạy trên **cùng file** `[0–1.280396] [3.645604–4.890062] [6.126417–8.894604]
+[11.815708–12.816083] [13.88525–14.4]` — **5/5**, lệch biên worst **16 ms**, tức **dưới một cửa sổ 20 ms**;
+và sáu fixture video-only trả `audioHeard: false` + `windows: 0` — "không nghe thấy gì" tách khỏi "im lặng".
+
+**(c) Scene sweep trong browser, đúng 5 Hz mà app chạy**, grid do `decodeLumaSeries` giao, điểm và cut do
+`sceneScore`/`sceneCuts` tính. `nc` = điểm lớn nhất ở nơi **không** có cut thật; `tc` = điểm nhỏ nhất ở nơi
+**có**; dung sai biên 0.25 s.
+
+| File | frames | ask đầu / bước | nc | tc | cuts ở 0.18 | 0.20 | 0.18 | 0.15 |
+|---|---|---|---|---|---|---|---|---|
+| cuts-4.mp4 (truth 3/6/9) | 60 | 0.336 / 0.192 | 0.0205 | **0.1988** | **3.024, 6.096, 9.168** | fp0/**fn1** | **fp0/fn0** | fp0/fn0 |
+| realcuts.mp4 (truth 5/10) | 70 | 0.376 / 0.192 | 0.0780 | **0.0639** | none | fp0/fn2 | fp0/fn2 | fp0/fn2 |
+| flash.mp4 (burst 1 frame ~2.95) | 30 | 0.216 / 0.192 | 0.0360 | 0.5121 | 2.904, **3.096** | fp1/fn0 | fp1/fn0 | fp1/fn0 |
+| dissolve.mp4 (fade 1 s) | 35 | 0.236 / 0.192 | 0.0682 | — | none | fp0/fn0 | fp0/fn0 | fp0/fn0 |
+| fast-motion.mp4 (chuyển động liên tục) | 40 | 0.256 / 0.192 | **0.1558** | — | none | fp0/fn0 | fp0/fn0 | **fp3**/fn0 |
+| noisy-static.mp4 (nhiễu film) | 30 | 0.216 / 0.192 | 0.0005 | — | none | fp0/fn0 | fp0/fn0 | fp0/fn0 |
+| real-14s.mp4 (**footage thật**, một shot) | 72 | 0.3857 / 0.193 | 0.0779 | — | none | fp0/fn0 | fp0/fn0 | fp0/fn0 |
+| voice-20s.mp4 (footage thật + giọng người) | 72 | 0.384 / 0.192 | 0.0779 | — | none | fp0/fn0 | fp0/fn0 | fp0/fn0 |
+
+Bốn con số đọc ra từ bảng này: **mọi** ask đều được giao đúng một grid (`missing` = 0 trên **cả tám** file,
+72/72 ở clip AV1 thật); dải cắt **không** có cut thật cao nhất là **0.1558** (fast-motion) và cut thật **mà
+luật này phải tìm** thấp nhất là **0.1988** (cuts-4) → giữa hai số là **0.1773**, và ngưỡng shipped **0.18**
+nằm đúng đó; 0.20 **mất** một cut thật, 0.15 **bịa** ba cut giả — cả hai phía của 0.18 đều có giá đo được; và
+footage thật có motion **thấp hơn** plate chuyển động nhanh (`real-14s`/`voice-20s` nc 0.0779 < fast-motion
+0.1558), nên plate không phải thứ đẩy ngưỡng lên. FFmpeg cross-read trên **cùng** file: `scene>0.18` tìm thấy
+`3.00, 6.00, 9.00` trên cuts-4 và `5.00, 10.00` trên realcuts nhưng **nothing** trên real-14s — tức oracle
+**cùng họ metric histogram** của FFmpeg tìm được hai cut mà luật luma 8×8 của core không tìm được (§26.3.4).
+
+**(d) Byte cache và huỷ, đo trong browser** (`live-cache-abort.json`; backend `opfs`).
+
+| Cái đo | Số | Ý nghĩa |
+|---|---|---|
+| `cacheKeyForPath('/uploads/voice-20s.mp4', {mtimeMs, size})` → `putCachedBytes(key, blob, new Set([key]))` | key **`a221ace7`**, `put` **true**, read-back **2 213 942** byte = đúng `blob.size` | fingerprint 8-hex hợp lệ thì **luật `KEY_PATTERN` cho phép**, và bản ghi vào OPFS thật |
+| `detect({ fingerprint: 'a221ace7', src: 'http://127.0.0.1:9/unreachable.mp4', durationSec: 14.4 })` | `sampled` **72**, `missing` **0**, `windows` **720**, `audioHeard` **true**, **5** silences, 1 shot, `error` **null** | **bytes thắng location, đo thật**: `src` trỏ một cổng đóng mà câu trả lời **không đổi** so với chạy bằng URL. Đây là mục nợ "nhánh `bytes` chưa đo cho audio" của §24.5 |
+| `controller.abort()` sau **1200 ms** trên `real-14s.mp4` (cả lượt mất **1523 ms**, `stages` `['scenes']`) | `error` **`cancelled`**, counters 0 | **trước khi sửa**, cùng phép đo đó trả **`no-video`** — người bấm Huỷ nhận câu "file này không có frame". Sau khi sửa thì đúng câu |
+| Signal đã abort **trước** khi gọi | `error` **`cancelled`**, `stages` `[]` — **0** byte được mở | huỷ sớm thì không decode gì cả |
+| Chạy **full** ngay sau một lần huỷ, cùng tab | `sampled` **72**, `windows` **724**, `error` **null** | một lượt abort không làm hỏng decoder cho lượt sau |
+
+### 26.3 Năm quyết định (và một quyết định **không** làm)
+
+1. **Thước đo là peak, không phải energy.** Đây là thay đổi **luật**, không phải thay đổi hằng số, và nó được
+   chọn bằng fixture `impulse.wav` trong `e4live/` (đường dẫn ở §26.6): một click
+   −29.0 dBFS trong vùng năng lượng −56.3 dBFS — FFmpeg nói **loud**, RMS-cửa-sổ nói **silence**. AutoCut từ
+   trước tới nay ăn kết luận của FFmpeg, nên giữ RMS ở ngưỡng −30 nghĩa là giữ hai engine trả lời khác nhau
+   trên **đúng vùng sát ngưỡng** mà biên tập viên bấm. Hệ quả phải nói thẳng: `podcast-*` FN 0.42 s **không**
+   phải "bản peak dốt hơn", mà là peak định vị biên **đúng hơn** và phần bù là `d=` của oracle tính bằng
+   ms còn ta tính bằng cửa sổ 20 ms.
+2. **Cửa sổ 0.02 s, `min-duration` giữ 0.5 s.** Hai số đó từng là một (0.5 s vừa là đơn vị đo vừa là độ dài
+   tối thiểu), và đó là lý do biên run lệch tới **1.718 s**. Tách ra thì `d=` vẫn là câu hỏi "run này có đáng
+   tính không", còn cửa sổ chỉ còn nhiệm vụ định vị — 12 file cho **số span bằng oracle** và sai số biên
+   **≤ 18 ms**.
+3. **Ngưỡng 0.18 đặt giữa dải *đo trên geometry của app*, không giữa dải ghi trong notes.** Bảng offline đầu
+   tiên của lượt này (harness Node, `ffmpeg -vf fps=5` + mốc `i/hz`) cho `tc` cuts-4 = 0.2126 và kết luận
+   "flash bị bỏ ở 5 Hz"; chạy lại đúng hình học mà `filmstripTimes` sinh ra ([frames.mjs:40](file:///D:/Applications/tm-studio/packages/core/src/frames.mjs#L40),
+   bước 0.192 s, ask đầu 0.336 s) thì `tc` = **0.1988** và flash **được tìm thấy** (điểm 0.5121). Một ngưỡng
+   chọn theo bảng cũ sẽ lệch mà không có phép đo nào báo. Vì vậy **bảng scene của harness bị thay** bằng bảng
+   (c); chỉ bảng im lặng (a) giữ được, vì nó không đi qua geometry frame.
+4. **Không sửa metric để săn `realcuts`.** Hai cut thật 720×1280 ghi điểm **0.0639** dưới luật luma 8×8 mean-Δ
+   của core nhưng **0.243 / 0.192** dưới metric histogram đầy đủ của FFmpeg, trong khi motion thường ở nơi khác
+   đã lên **0.078**. Không có ngưỡng nào vừa tìm được hai cut đó vừa không bịa cut ở chỗ khác — đây là **khác
+   biệt họ metric**, không phải sai số hiệu chuẩn. Sửa nó nghĩa là thêm một luật chroma/histogram vào core,
+   tức redesign ngoài phạm vi E4 và trái chỉ đạo "không đổi gì không liên quan"; ghi thành nợ ở §26.5.
+5. **Signal được đọc trước khi phân loại throw** ([autocutDetect.ts:123](file:///D:/Applications/tm-studio/app/utils/tmcut/autocutDetect.ts#L123)).
+   Module này tự mô tả là nơi quyết định "câu trả lời rỗng **nghĩa là gì**", và thứ tự cũ đã trả ba nghĩa bằng
+   một câu. Bug này **không** xuất hiện với reader giả — Node không có decoder nên không `reject` vì abort; nó
+   chỉ hiện ra khi bấm Huỷ trên một file 14 s thật.
+
+### 26.4 Gates (chạy theo thứ tự, sau **mọi** lần sửa)
+
+| Gate | Lệnh | Kết quả | Chứng cứ |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | exit **0**, **0** `error TS`; `.nuxt/eslint.config.mjs` **28 552** byte mtime **20:03** — sinh **trước** gate 2; file code mới nhất trong lượt này sửa lúc **19:33** (`autocut.vue`), nên **không** kết quả lint nào lấy trước lần sinh config |
+| 2 Lint | `npx eslint` trên **17** file code/test chạm tới, chạy **sau** gate 1 | PASS | exit **0**, output **0** byte = **0** problem; hai file locale JSON không được lint vì **không có ESLint config cho `.json`** (`File ignored because no matching configuration was supplied`) — không phải bỏ sót. `catch (error)` từng viết rồi đổi thành `catch {` **trước** khi lint, vì ESLint 9+ đếm catch param không dùng |
+| 3 Tests | `npx tsx tests/unit/run-all.mts` | PASS | exit **0**, **106/106** specs (E3 khép ở 105; +1 là `tmcut_autocut_detect` mới). `PASS tmcut_autocut_detect.spec.ts … 15 passed`, `tmcut_autocut_analyze … 4 passed`, `tmcut_silence_scan 10`, `tmcut_scene_scan 10`, `tmcut_frame_service 19` |
+| 3b Core | `node --test "test/*.test.mjs"` + `tools/check-boundaries.mjs` + `tsc -p tsconfig.check.json` | PASS | **653/653** pass, **0** fail, **95** suites, **1074 ms** (E3 khép 642; **+11** của `silence-peak-law`); boundaries "PASS — core imports nothing platform-specific"; tsc exit **0**, **0** `error TS` |
+| 4 Live | `/_nuxt/@fs/…` trong Chromium thật + server 4199 trả 206, **không** dùng seed credential | PASS | **toàn bộ** bảng (b) 8 file, (c) 8 file, và (d) 5 dòng — kể cả hai mục từng fail vì harness (§26.5) |
+| 4b Routes | console sweep `/_nuxt` trên năm route `/tmcut*` | PARTIAL | xem §26.5 dòng cuối: ba route sau login **không** được quét lượt này |
+| 5 Docs | năm guard `docs_markdown` / `tmcut_doc_citations` / `tmcut_doc_line_length` / `tmcut_doc_table_shape` / `tmcut_docs_link_integrity`, chạy lại **sau** lần sửa markdown cuối | PASS | **28** checks (**12/5/4/3/4**), exit **0** cả năm. Hai guard từng **fail** trên bản nháp của §26 và đã sửa **trong doc**, không nới guard: `table_shape` bắt một ký tự pipe **trần** trong ô bảng (công thức peak ở [detection.mjs:251](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L251)), `link_integrity` bắt một link trỏ **thư mục** `e4live/` chứ không trỏ file. Gate 3 chạy lại sau lần sửa markdown cuối: **106/106**, exit **0** |
+
+### 26.5 Chưa chứng minh
+
+- **`realcuts.mp4` là một缺口 thật**: hai cut trong footage 720×1280 mà luật luma của core không tìm thấy ở bất
+  kỳ ngưỡng nào không bịa cut giả (§26.3.4). Muốn đóng phải thêm một luật histogram/chroma vào core — việc của
+  một lượt khác, không phải việc chỉnh ngưỡng.
+- **`flash.mp4` trả hai cut cho một sự thật**: burst một frame ngắn hơn chu kỳ lấy mẫu, nên **cả** cạnh vào và
+  cạnh ra đều là thay đổi thật (điểm 0.5121, `shippedCuts` 2.904 và 3.096). Với EDL thì đây là **đúng** hành vi
+  (khoanh vùng闪光), nhưng nó có nghĩa là số cut **không** bằng số cut thật trên nội dung có hiệu ứng một-frame.
+- **Host Electron chưa được chạy.** `hasFrameDecoder()`/`hasAudioDecoder()` và toàn bộ bảng (b)–(d) đo trong
+  Chromium của dev server. Desktop host dùng **cùng module** nhưng chưa có một con số nào tự thân.
+- **10 Hz chỉ có ở harness offline.** App chạy 5 Hz (`TMCUT_SCENE_SAMPLE_HZ`), nên bảng (c) là bản chấm đúng
+  hình học shipped; bảng 10 Hz của `e4-final.txt` là thông tin phụ, **không** được dùng để chọn ngưỡng.
+- **File dài chưa đo audio.** `real-14s`/`voice-20s` 14.4 s là dải dài nhất đã decode (`windows` 720–724,
+  3.8–4.3 s wall-clock). Scan audio decode **mọi** packet trong dải, nên chi phí theo độ dài; 10 phút chưa có
+  số, và chưa biết có phải chia dải hay không.
+- **`missing > 0` chưa đo thật.** Tám file đều `missing` 0; đường "decoder giao thiếu grid" mới có trong Node
+  ([scene_scan](file:///D:/Applications/tm-studio/tests/unit/tmcut_scene_scan.spec.ts#L146)) chứ chưa xảy ra với
+  một file thật.
+- **Ba route sau login không được quét** (`/tmcut/editor`, `/tmcut/templates`, `/tmcut/factory`): chủ repo đã
+  dừng lượt quét cần credential, và seed credential **không** được dùng lại. Gate 4 vì vậy ghi PARTIAL cho
+  phần render-path chưa tự mở được; hai route `/tmcut`, `/tmcut/autocut` đã quét.
+- **Slice I còn nguyên**: `shared/types/electron.ts:878`→[:879](file:///D:/Applications/tm-studio/shared/types/electron.ts#L879)
+  vẫn khai `analyzeScenes`/`analyzeSilence`, `server/api/v1/media/analyze.post.ts` và `electron/tools/tmcut.controller.cjs`
+  vẫn còn đó — AutoCut **không gọi** chúng nữa, nhưng chưa có lượt nào gỡ, nên FFmpeg vẫn nằm trong app theo
+  đường này. Binary và `backup/` **không** bị đụng (Q3/Q8).
+
+### 26.6 Vệ sinh
+
+§26 thêm **225** dòng vào file này (`git diff HEAD --numstat` trên chính file, chạy sau lần sửa markdown cuối). Mọi anchor `file:///…#L<n>` của §26 được in
+**nội dung dòng đích** bằng `sed -n '<n>p'` từng cái một rồi đối chiếu trước khi viết, gồm cả những anchor nằm
+ngoài E4 mà E4 đã làm trôi (`silenceScan.ts:24`/:71, `audioDecode.ts:11`, `tmcut_silence_scan.spec.ts:185`,
+`tmcut_frame_service.spec.ts:423`). Hai con số trong §26 từng **sai so với notes** và đã được sửa theo **fixture
+tự chứng**: `realcuts.mp4` là `5.000 + 5.000 + 4.000` ⇒ boundary **5 và 10** (notes ghi 9), và `flash.mp4` có
+burst ở **~2.95 s** với YAVG 122.8→235→122.9 lấy mẫu ở 10 Hz, tức **ngắn hơn chu kỳ lấy mẫu 5 Hz** của app.
+
+Scratch của lượt này nằm trong `node_modules/.cache/tmcut-gates/` (đã ignore): `e4-final.mjs` + `e4-final.txt`
+(harness offline, 12 file silence + 2 bảng scene **đã bị thay ở nửa scene** — giữ lại vì bảng silence vẫn là
+chứng cứ), `e4-serve.mjs` + `e4-serve.log`/`serve.log` (server range 4199), `live-detect.json`,
+`live-scene-sweep.json`, `live-cache-abort.json`, `e4-calib.mjs`, `e4-laws.mjs` + `e4-laws-real.txt`,
+`e4-scene.mjs`, `from-transcript.txt`, và thư mục `e4live/` với **21** fixture do FFmpeg trên máy dev sinh.
+`voice-20s.mp4` là fixture mới, sinh bằng **video AV1 copy từ `real-14s.mp4`** ghép **AAC 128k stereo 48 kHz**
+cắt từ một podcast giọng người thật 14.464 s — lý do tồn tại là §24.5 đòi "thang đo hiệu chuẩn trên tiếng nói
+thật", và nó là hàng duy nhất trong bảng (b) có cả `audioHeard: true` lẫn footage thật.
+
+File staged của lượt này là **20** mục, không hơn: `docs/audit/zero-ffmpeg-audit.md` (chính file này),
+`packages/core/src/detection.mjs`,
+`packages/core/src/index.d.ts`, `packages/core/test/silence-peak-law.test.mjs` (mới),
+`packages/core/test/silence-channels.test.mjs`, `packages/core/test/silence-pcm-trim.test.mjs`,
+`packages/core/test/scene-cut-pairs.test.mjs`, `packages/core/test/scene-silence-detection.test.mjs`,
+`app/utils/tmcut/autocutDetect.ts` (mới), `app/utils/tmcut/silenceScan.ts`, `app/utils/tmcut/audioDecode.ts`,
+`app/composables/useTmcutAutocut.ts`, `app/pages/tmcut/autocut.vue`,
+`tests/unit/tmcut_autocut_detect.spec.ts` (mới), `tests/unit/tmcut_autocut_analyze.spec.ts`,
+`tests/unit/tmcut_frame_service.spec.ts`, `tests/unit/tmcut_scene_scan.spec.ts`,
+`tests/unit/tmcut_silence_scan.spec.ts`, và **hai** file locale. `i18n/locales/en.json` + `vi.json` được stage
+**theo hunk** (không `git add` cả file) vì chúng chở WIP của chủ repo — `heroTitle`, `systemHealth`, `retry`…
+**không** thuộc lượt này; `git diff --cached` phải chỉ ra **đúng** các dòng khoá `tmcut.steps.*` và
+`tmcut.wizard.metric*`. **54** mục WIP khác của chủ repo (`git status --short` = **74** mục, **20** thuộc lượt
+này), `backup/`, `resources/*.exe` và mọi binary local
+**không** bị đụng (Q3/Q8); `docs/tmcut-zero-ffmpeg-next-slices-agent-execution-brief.md` là file của chủ repo,
+**không** stage.

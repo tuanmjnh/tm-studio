@@ -394,14 +394,16 @@ export function planFrameCacheEviction(entries: TmcutFrameCacheEntry[], maxEntri
 // quiet — used to be answered only by FFmpeg's stderr. The laws below own the
 // numbers, so a frame scan and a PCM scan cannot decide separately what a cut or
 // silence is. Times are SECONDS, like the EDL; ticks are the app's boundary.
-/** The number FFmpeg's `scene` threshold used, NOT its scale — see detection.mjs. */
+/** The cut score, calibrated on measured content — see detection.mjs. */
 export const TMCUT_SCENE_THRESHOLD: number
 /** Looks per second a shot can be found at. */
 export const TMCUT_SCENE_SAMPLE_HZ: number
 /** Quiet, in dBFS. */
 export const TMCUT_SILENCE_NOISE_DB: number
-/** How long quiet must last to count — and how wide one level window is. */
+/** How long quiet must last to count. */
 export const TMCUT_SILENCE_MIN_DURATION_SEC: number
+/** How wide one level window is — 20 ms, measured on real voice. */
+export const TMCUT_SILENCE_WINDOW_SEC: number
 /** The level digital silence gets, because a logarithm has no value for it. */
 export const TMCUT_SILENCE_FLOOR_DBFS: number
 /** The instants a scene scan looks at, planned by the C14 strip law. */
@@ -431,12 +433,12 @@ export function cutsToShots(
   durationSec: number,
   options?: { minGapSec?: number, minShotSec?: number }
 ): CoreSceneSegment[]
-/** RMS of one window of PCM as dBFS. */
-export function dbfsOf(rms: number): number
-/** One dBFS level per window of PCM, the short tail included. */
-export function levelSeries(samples: ArrayLike<number>, sampleRate: number, windowSec?: number): number[]
-/** One dBFS level per window, taken from the loudest channel of PCM. */
-export function loudestLevelSeries(
+/** The magnitude of one window of PCM — peak or RMS — as dBFS. */
+export function dbfsOf(magnitude: number): number
+/** One dBFS level per window of PCM: its loudest single sample, short tail included. */
+export function peakLevelSeries(samples: ArrayLike<number>, sampleRate: number, windowSec?: number): number[]
+/** One peak dBFS level per window, taken from the loudest channel of PCM. */
+export function loudestPeakSeries(
   channels: ArrayLike<ArrayLike<number> | null | undefined> | null | undefined,
   sampleRate: number,
   windowSec?: number

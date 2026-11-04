@@ -8,7 +8,7 @@
 //
 // What lives here is the reading, and nothing else. Which windows are quiet, how
 // several channels become one number and what seconds a span is reported in are
-// core laws (`loudestLevelSeries`, `silenceSpans`) — see `silenceScan.ts`, which
+// core laws (`loudestPeakSeries`, `silenceSpans`) — see `silenceScan.ts`, which
 // stays importable by plain Node precisely because it holds no decoder.
 
 import { AudioBufferSink } from 'mediabunny'

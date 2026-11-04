@@ -17,14 +17,17 @@ import { filmstripTimes } from './frames.mjs'
 import { ticksToSec } from './time.mjs'
 
 /**
- * The cut score AutoCut used with FFmpeg — a number on a DIFFERENT scale.
- * Measured on one hard cut (testsrc2 -> smptebars at 1.000 s): this grid score
- * tops out at 0.2626 while FFmpeg's `scene` reports 0.694299, and inside a shot
- * the two floors differ the same way (0.0261..0.0288 here, 0.0004..0.0112
- * there). Keeping the value keeps the name; it does not keep the behaviour, so
- * slice E4 calibrates it before this scan goes anywhere near a timeline.
+ * The cut score, on THIS grid's scale: mean absolute luma change over 64 cells,
+ * 0..1. Calibrated in slice E4 on seven kinds of content (hard cuts, fast motion,
+ * a dissolve, camera noise, real footage, a 0.1 s flash, a time jump) at both
+ * sample rates: the quietest real cut scored 0.2126 and the loudest content
+ * inside a shot scored 0.1554 at 5 Hz (0.0988 at 10 Hz), so anything in
+ * (0.1554, 0.2126] finds every cut measured and calls nothing inside a shot one.
+ * 0.18 sits in that band. The FFmpeg number this replaces was 0.4 on a DIFFERENT
+ * scale (the same hard cut scored 0.694299 there) and is provably miss-y here: a
+ * scan at 0.4 reported the 1.000 s cut of the calibration clip as zero cuts.
  */
-export const TMCUT_SCENE_THRESHOLD = 0.4
+export const TMCUT_SCENE_THRESHOLD = 0.18
 /**
  * Looks per second a shot can be found at. A cut is missed between samples, and
  * the error is half a period: on the same clip the 1.000 s cut was found at
@@ -33,8 +36,16 @@ export const TMCUT_SCENE_THRESHOLD = 0.4
 export const TMCUT_SCENE_SAMPLE_HZ = 5
 /** Quiet, in dBFS — the same number `silencedetect=noise=` was fed. */
 export const TMCUT_SILENCE_NOISE_DB = -30
-/** How long quiet has to last to count, and how wide one level window is. */
+/** How long quiet has to last to count. */
 export const TMCUT_SILENCE_MIN_DURATION_SEC = 0.5
+/**
+ * How wide one level window is: 20 ms, chosen on real voice, not carried over.
+ * The window and the measurement are one decision — see `peakLevelSeries`. At
+ * 44.1 kHz that is 882 samples, so a window still holds a full cycle of an 80 Hz
+ * voice, and 0.5 s of quiet is 25 windows rather than one: the edge of a
+ * sentence lands within 16 ms instead of within half a second.
+ */
+export const TMCUT_SILENCE_WINDOW_SEC = 0.02
 /** Digital silence has no logarithm; it gets this instead of -Infinity. */
 export const TMCUT_SILENCE_FLOOR_DBFS = -120
 /** Cells per side of the grid a shot score is computed on: 64 numbers per frame. */
@@ -213,18 +224,31 @@ export function cutsToShots(cutSeconds, durationSec, options = {}) {
   return shots
 }
 
-/** Root-mean-square of one window of PCM, as dBFS. */
-export function dbfsOf(rms) {
-  const value = Number(rms)
+/** The magnitude of one window of PCM — peak or RMS — as dBFS. */
+export function dbfsOf(magnitude) {
+  const value = Number(magnitude)
   if (!Number.isFinite(value) || value <= 0) return TMCUT_SILENCE_FLOOR_DBFS
   return round2(20 * Math.log10(value))
 }
 
 /**
- * One dBFS level per `windowSec` of PCM, the tail window included even when
- * short. Non-numeric samples are ignored rather than counted as silence.
+ * One dBFS level per `windowSec` of PCM: the LOUDEST SINGLE SAMPLE of the window,
+ * the short tail included. Not its energy.
+ *
+ * FFmpeg's `silencedetect`, the pass every AutoCut EDL so far was built on,
+ * compares every sample against `noise=` and restarts its clock when one crosses
+ * — so on the file whose answer both hosts must keep, the measure is the peak.
+ * Measured (slice E4, docs/audit/zero-ffmpeg-audit.md): a fixture carrying one
+ * click at -29.0 dBFS in a field whose energy is -56.3 dBFS is NOT silence to
+ * FFmpeg, and an energy window called it silence. Graded against FFmpeg on 120 s
+ * of real podcast speech, peak windows of 0.02 s give 0.00 s of false silence and
+ * <= 0.13 s missed, with edges within 16 ms; the 0.5 s energy window they replace
+ * reported 7.87 s of false silence and edges off by up to 1.718 s.
+ *
+ * Non-numeric samples are skipped rather than measured; a window with nothing
+ * measurable gets the floor, which is what a decoder that delivered nothing owes.
  */
-export function levelSeries(samples, sampleRate, windowSec = TMCUT_SILENCE_MIN_DURATION_SEC) {
+export function peakLevelSeries(samples, sampleRate, windowSec = TMCUT_SILENCE_WINDOW_SEC) {
   const rate = Number(sampleRate)
   const window = Number(windowSec)
   const length = samples?.length ?? 0
@@ -234,31 +258,30 @@ export function levelSeries(samples, sampleRate, windowSec = TMCUT_SILENCE_MIN_D
   const levels = []
   for (let start = 0; start < length; start += size) {
     const stop = Math.min(start + size, length)
-    let sum = 0
-    let counted = 0
+    let loudest = 0
     for (let index = start; index < stop; index++) {
       const sample = Number(samples[index])
       if (!Number.isFinite(sample)) continue
-      sum += sample * sample
-      counted += 1
+      const magnitude = sample < 0 ? -sample : sample
+      if (magnitude > loudest) loudest = magnitude
     }
-    levels.push(counted > 0 ? dbfsOf(Math.sqrt(sum / counted)) : TMCUT_SILENCE_FLOOR_DBFS)
+    levels.push(dbfsOf(loudest))
   }
   return levels
 }
 
 /**
- * One dBFS level per window for PCM carrying several channels: the LOUDEST
+ * One peak dBFS level per window for PCM carrying several channels: the LOUDEST
  * channel wins each window, so a window counts as quiet only when nothing in
  * it is audible. A channel that was not delivered, or is empty, is skipped
- * rather than scored as silence — the same rule `levelSeries` applies to a
+ * rather than scored as silence — the same rule `peakLevelSeries` applies to a
  * non-numeric sample.
  */
-export function loudestLevelSeries(channels, sampleRate, windowSec = TMCUT_SILENCE_MIN_DURATION_SEC) {
+export function loudestPeakSeries(channels, sampleRate, windowSec = TMCUT_SILENCE_WINDOW_SEC) {
   const list = Array.isArray(channels) ? channels : Array.from(channels ?? [])
   const series = []
   for (const channel of list) {
-    const levels = levelSeries(channel, sampleRate, windowSec)
+    const levels = peakLevelSeries(channel, sampleRate, windowSec)
     if (levels.length > 0) series.push(levels)
   }
   if (series.length === 0) return []
@@ -303,7 +326,7 @@ export function pcmHeadTrim(askedSec, deliveredSec, sampleRate) {
  * trimmed clip reports source seconds, so no caller has to add them afterwards.
  */
 export function silenceSpans(levels, options = {}) {
-  const windowSec = optionNumber(options.windowSec, TMCUT_SILENCE_MIN_DURATION_SEC)
+  const windowSec = optionNumber(options.windowSec, TMCUT_SILENCE_WINDOW_SEC)
   const noiseDb = optionNumber(options.noiseDb, TMCUT_SILENCE_NOISE_DB)
   const minDuration = optionNumber(options.minDurationSec, TMCUT_SILENCE_MIN_DURATION_SEC)
   const offsetSec = Math.max(0, optionNumber(options.offsetSec, 0))

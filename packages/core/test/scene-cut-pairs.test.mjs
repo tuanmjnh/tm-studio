@@ -44,9 +44,22 @@ describe('sceneCuts', () => {
 
   it('is strictly greater than the threshold, like the filter it replaces', () => {
     const times = [0, 1]
-    // 102/255 scores exactly the threshold: `select='gt(scene,X)'` calls that "not a cut".
-    assert.equal(sceneScoreOf(flat(0), flat(102)), TMCUT_SCENE_THRESHOLD)
-    assert.deepEqual(sceneCuts(times, [flat(0), flat(102)]), [])
+    // 51/255 scores exactly 0.2, so a caller aimed at 0.2 sees the same tie the
+    // old 0.4 default used to: `select='gt(scene,X)'` calls an equal score "not a cut".
+    assert.equal(sceneScoreOf(flat(0), flat(51)), 0.2)
+    assert.deepEqual(sceneCuts(times, [flat(0), flat(51)], { threshold: 0.2 }), [])
+    assert.deepEqual(sceneCuts(times, [flat(0), flat(51)], { threshold: 0.19 }), [1])
+    // The calibrated default falls between two reachable scores: 64 cells of 45
+    // are 0.1765 (quiet) and of 46 are 0.1804 (a cut). Straddling it proves the
+    // default is wired in, not just a number in a comment.
+    assert.ok(sceneScoreOf(flat(0), flat(45)) < TMCUT_SCENE_THRESHOLD,
+      '45 must sit below the default the scan actually uses')
+    assert.ok(TMCUT_SCENE_THRESHOLD < sceneScoreOf(flat(0), flat(46)),
+      '46 must sit above it')
+    assert.equal(sceneScoreOf(flat(0), flat(45)), 0.1765)
+    assert.deepEqual(sceneCuts(times, [flat(0), flat(45)]), [])
+    assert.equal(sceneScoreOf(flat(0), flat(46)), 0.1804)
+    assert.deepEqual(sceneCuts(times, [flat(0), flat(46)]), [1])
     assert.deepEqual(sceneCuts(times, [flat(0), flat(255)]), [1])
     assert.deepEqual(sceneCuts(times, [flat(120), flat(120)]), [])
   })

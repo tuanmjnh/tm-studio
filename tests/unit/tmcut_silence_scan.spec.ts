@@ -10,14 +10,14 @@
  *    to hold a demuxer, and the only one that touches samples.
  *  - `app/utils/tmcut/silenceScan.ts` holds no platform code: it hands the range
  *    to an injected reader and asks core what the samples mean.
- *  - core owns every number: `loudestLevelSeries` decides how channels become one
+ *  - core owns every number: `loudestPeakSeries` decides how channels become one
  *    level per window, `silenceSpans` decides what quiet is.
  *
  * What is pinned, in order:
  *  - the window width and the floor are core's defaults, so the desktop and the
  *    browser cannot disagree about what a decibel is or how long quiet must last;
  *  - the loudest channel wins a window — that is why the scan calls
- *    `loudestLevelSeries` rather than mixing channels first;
+ *    `loudestPeakSeries` rather than mixing channels first;
  *  - a trimmed read still reports SOURCE seconds: the seam starts at the clip's
  *    in point, core shifts by it (`offsetSec`), the glue adds nothing;
  *  - a host with no audio decoder, an empty track and an unreal range are all
@@ -49,9 +49,11 @@ async function main() {
   const { createSilenceScan } = await import('../../app/utils/tmcut/silenceScan')
 
   const rate = 8000
-  const windowSec = core.TMCUT_SILENCE_MIN_DURATION_SEC
+  const windowSec = core.TMCUT_SILENCE_WINDOW_SEC
   const samples = (seconds: number) => rate * seconds
-  /** One second of tone, then one second of nothing: four core-sized windows. */
+  /** How many core-sized windows `seconds` of PCM becomes. */
+  const windowsOf = (seconds: number) => Math.round(seconds / windowSec)
+  /** One second of tone, then one second of nothing: two core-sized halves. */
   const loudThenQuiet = () => [
     new Float32Array([...new Float32Array(samples(1)).fill(0.5), ...new Float32Array(samples(1))])
   ]
@@ -83,11 +85,11 @@ async function main() {
     const result = await scan.scan({ inSec: 0, outSec: 2 })
     assert.deepEqual(seen, [{ inSec: 0, outSec: 2 }], 'one range is one read')
     assert.deepEqual(result.spans, core.silenceSpans(
-      core.loudestLevelSeries(loudThenQuiet(), rate, windowSec),
+      core.loudestPeakSeries(loudThenQuiet(), rate, windowSec),
       { windowSec, offsetSec: 0, durationSec: 2 }
     ))
     assert.deepEqual(result.spans, [{ start: 1, end: 2 }])
-    assert.equal(result.windows, 4, 'four of core-sized windows were levelled')
+    assert.equal(result.windows, windowsOf(2), 'the whole range was levelled at core\'s window')
   })
 
   await check('a trimmed read reports source seconds, not window-relative ones', async () => {
@@ -96,7 +98,7 @@ async function main() {
     assert.deepEqual(trimmed.spans, [{ start: 11, end: 12 }],
       'the clip was trimmed 10s in, so its quiet tail sits at 11s of the source')
     assert.deepEqual(trimmed.spans, core.silenceSpans(
-      core.loudestLevelSeries(loudThenQuiet(), rate, windowSec),
+      core.loudestPeakSeries(loudThenQuiet(), rate, windowSec),
       { windowSec, offsetSec: 10, durationSec: 2 }
     ), 'the shift is core\'s offsetSec, not glue arithmetic')
   })
@@ -106,7 +108,7 @@ async function main() {
     const scan = createSilenceScan(async () => ({ sampleRate: rate, channels: deadAndLoud }))
     const result = await scan.scan({ inSec: 0, outSec: 2 })
     assert.deepEqual(result.spans, [], 'one audible channel is enough to keep both seconds loud')
-    assert.equal(result.windows, 4)
+    assert.equal(result.windows, windowsOf(2))
   })
 
   await check('an unreal range asks the decoder for nothing', async () => {
@@ -145,11 +147,11 @@ async function main() {
     const plain = await scan.scan({ inSec: 0, outSec: 4 })
     assert.deepEqual(plain.spans, [{ start: 1, end: 2 }, { start: 3, end: 4 }])
     assert.deepEqual(await scan.scan({ inSec: 0, outSec: 4, minDurationSec: 2 }),
-      { windows: 8, spans: [] }, 'a one-second gap is not a two-second silence')
+      { windows: windowsOf(4), spans: [] }, 'a one-second gap is not a two-second silence')
     assert.deepEqual(await scan.scan({ inSec: 0, outSec: 4, noiseDb: 0 }),
-      { windows: 8, spans: [{ start: 0, end: 4 }] }, 'a raised floor counts the tone as quiet too')
+      { windows: windowsOf(4), spans: [{ start: 0, end: 4 }] }, 'a raised floor counts the tone as quiet too')
     assert.deepEqual((await scan.scan({ inSec: 0, outSec: 4, windowSec: 2 })).spans,
-      core.silenceSpans(core.loudestLevelSeries(alternating(), rate, 2),
+      core.silenceSpans(core.loudestPeakSeries(alternating(), rate, 2),
         { windowSec: 2, offsetSec: 0, durationSec: 4 }),
       'a widened window is core\'s maths, not a re-sample')
   })
@@ -165,7 +167,7 @@ async function main() {
     const result = await scan.scan({ inSec: 0, outSec: 2, signal: controller.signal })
     assert.equal(asked, 1)
     assert.deepEqual(result.spans, [], 'a cancelled scan paints no EDL')
-    assert.equal(result.windows, 4, 'what was read is still counted, only the answer is dropped')
+    assert.equal(result.windows, windowsOf(2), 'what was read is still counted, only the answer is dropped')
     const afterAbort = await scan.scan({ inSec: 0, outSec: 2, signal: controller.signal })
     assert.equal(asked, 1, 'an already-cancelled scan must not open the decoder again')
     assert.deepEqual(afterAbort.spans, [])
@@ -180,7 +182,7 @@ async function main() {
     assert.match(seam, /hasAudioDecoder/, 'a host without an audio decoder is answered, not crashed')
     assert.match(seam, /pcmHeadTrim\(/,
       'a packet that starts before the ask is trimmed by core\'s law, not by local arithmetic')
-    assert.ok(!/\b(silenceSpans|loudestLevelSeries|dbfsOf|levelSeries)\(/.test(seam),
+    assert.ok(!/\b(silenceSpans|loudestPeakSeries|peakLevelSeries|dbfsOf)\(/.test(seam),
       'the seam delivers samples; what they mean is decided in core')
   })
 

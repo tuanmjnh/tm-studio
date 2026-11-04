@@ -16,7 +16,7 @@ const { t } = useI18n()
 const toast = useToast()
 const { pickFile, pickWebFiles } = useFileSystem()
 const { assets, isDesktop, importing, importError, webUpload, loadLibrary, importFiles, importWebFiles, findAssetBySrc, getThumbUrl, mediaUrl } = useTmcutMedia()
-const { analyzing, stageKey, analysisError, analyzeSource, applyDraft } = useTmcutAutocut()
+const { analyzing, stageKey, analysisError, analyzeSource, applyDraft, cancel: cancelScan } = useTmcutAutocut()
 const { extractFrames } = useTmcutFrames()
 
 // AutoCut v2: transcript vocabulary analysis options.
@@ -405,6 +405,23 @@ function rescoreWith(profile: AutocutProfile) {
   selectedProfile.value = profile
   void startAnalysis()
 }
+
+// Slice E4: the detector answers with a code, and each code means something the
+// viewer needs to hear differently. A cancelled walk is not a failure (and must
+// not wear error colours), a host with no decoder is not the file's fault, and a
+// file the engine cannot open is not "needs the desktop app" any more. Anything
+// else stays the raw message, because a real exception carries its own reason.
+const CANCELLED = 'cancelled'
+const ANALYSIS_ERROR_KEYS: Record<string, string> = {
+  'no-decoder': 'tmcut.steps.errNoDecoder',
+  'no-video': 'tmcut.steps.errNoVideo'
+}
+const analysisCancelled = computed(() => !analyzing.value && analysisError.value === CANCELLED)
+const analysisFailed = computed(() => !!analysisError.value && analysisError.value !== CANCELLED)
+const analysisErrorText = computed(() => {
+  const key = ANALYSIS_ERROR_KEYS[analysisError.value || '']
+  return key ? t(key) : analysisError.value
+})
 
 function toggleInclude(index: number) {
   const position = included.value.indexOf(index)
@@ -896,16 +913,44 @@ async function handleAccept() {
             <p class="text-xs text-muted mt-1">
               {{ stageKey ? t(stageKey) : '' }}
             </p>
+            <div class="flex justify-center mt-4">
+              <TmcutButton
+                variant="soft"
+                color="neutral"
+                @click="cancelScan"
+              >
+                {{ t('tmcut.steps.cancelScan') }}
+              </TmcutButton>
+            </div>
+          </div>
+
+          <!-- Cancelled: the user stopped the walk, so this is a state, not a failure -->
+          <div
+            v-else-if="analysisCancelled"
+            class="border border-default rounded-xl p-6 text-center"
+          >
+            <UIcon name="i-lucide-circle-stop" class="w-8 h-8 text-muted mx-auto mb-2" />
+            <p class="text-sm font-medium text-highlighted">
+              {{ t('tmcut.steps.scanCancelled') }}
+            </p>
+            <div class="flex justify-center gap-3 mt-4">
+              <UButton variant="soft" color="neutral" @click="currentStep = 2">
+                {{ t('tmcut.back') }}
+              </UButton>
+              <UButton color="primary" variant="solid" @click="startAnalysis">
+                {{ t('tmcut.steps.retry') }}
+              </UButton>
+            </div>
           </div>
 
           <!-- Error state -->
-          <div v-else-if="analysisError" class="border border-error-500/40 bg-error-950/30 rounded-xl p-6 text-center">
+          <div v-else-if="analysisFailed" class="border border-error-500/40 bg-error-950/30 rounded-xl p-6 text-center">
             <UIcon name="i-lucide-alert-triangle" class="w-8 h-8 text-error-400 mx-auto mb-2" />
             <p class="text-sm font-medium text-error-200">
               {{ t('tmcut.steps.analyzeFailed') }}
             </p>
             <p class="text-xs text-error-300/70 font-mono mt-1 break-all">
-              {{ analysisError === 'desktop-only' ? t('tmcut.media.desktopOnly') : analysisError }}
+              {{ analysisErrorText }}
             </p>
             <div class="flex justify-center gap-3 mt-4">
               <UButton variant="soft" color="neutral" @click="currentStep = 2">
@@ -1277,7 +1322,13 @@ async function handleAccept() {
                         <UIcon name="i-lucide-scissors" class="w-3.5 h-3.5 text-primary-500" />
                       </div>
                       <span class="text-sm font-bold text-highlighted">{{ edlResult!.sceneCount }}</span>
-                      <span class="text-xs text-muted truncate">{{ t('tmcut.wizard.metricScenesSub') }}</span>
+                      <span class="text-xs text-muted truncate">{{ t('tmcut.wizard.metricScenesSub', { sampled: edlResult!.framesSampled }) }}</span>
+                      <span
+                        v-if="edlResult!.framesMissing > 0"
+                        class="text-xs text-warning-400 truncate"
+                      >
+                        {{ t('tmcut.wizard.metricFramesMissing', { missing: edlResult!.framesMissing }) }}
+                      </span>
                     </div>
                     <div class="flat-panel rounded-lg p-2.5 flex flex-col">
                       <div class="flex items-center justify-between mb-0.5">
@@ -1285,7 +1336,12 @@ async function handleAccept() {
                         <UIcon name="i-lucide-volume-x" class="w-3.5 h-3.5 text-primary-500" />
                       </div>
                       <span class="text-sm font-bold text-highlighted">{{ edlResult!.silenceCount }}</span>
-                      <span class="text-xs text-muted truncate">{{ t('tmcut.wizard.metricSilencesSub', { duration: formatDurationSec(edlResult!.silenceRemovedSec) }) }}</span>
+                      <!-- "0 silences" only means quiet when audio was heard at all:
+                           a clip with no audio track is not a silent clip. -->
+                      <span v-if="!edlResult!.audioHeard" class="text-xs text-warning-400 truncate">
+                        {{ t('tmcut.wizard.metricNoAudio') }}
+                      </span>
+                      <span v-else class="text-xs text-muted truncate">{{ t('tmcut.wizard.metricSilencesSub', { duration: formatDurationSec(edlResult!.silenceRemovedSec) }) }}</span>
                     </div>
                     <div class="flat-panel rounded-lg p-2.5 flex flex-col">
                       <div class="flex items-center justify-between mb-0.5">

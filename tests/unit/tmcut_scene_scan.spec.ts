@@ -139,17 +139,17 @@ async function main() {
 
   await check('a caller-thinned sample rate and threshold reach core, not a local copy', async () => {
     const scan = createSceneScan(times => Promise.resolve(
-      times.map(atSec => (atSec >= 1 ? solid(60) : solid(10)))
+      times.map(atSec => (atSec >= 1 ? solid(55) : solid(10)))
     ))
     const defaultRun = await scan.scan({ inSec: 0, outSec: 2, durationSec: 2 })
     const eager = await scan.scan({ inSec: 0, outSec: 2, durationSec: 2, threshold: 0.01 })
-    assert.equal(defaultRun.cuts.length, 0, 'a 50/255 lift is under the default threshold')
+    assert.equal(defaultRun.cuts.length, 0, 'a 45/255 lift is under the 0.18 default E4 calibrated to')
     assert.ok(eager.cuts.length > 0, 'a lowered threshold must find it')
     assert.deepEqual(eager.cuts, core.sceneCuts(
       core.sceneSampleTimes(core.secToTicks(0), core.secToTicks(2)).map((t: number) => core.ticksToSec(t)),
       core.sceneSampleTimes(core.secToTicks(0), core.secToTicks(2))
         .map((t: number) => core.ticksToSec(t))
-        .map(atSec => (atSec >= 1 ? solid(60) : solid(10))),
+        .map(atSec => (atSec >= 1 ? solid(55) : solid(10))),
       { threshold: 0.01 }
     ))
   })
