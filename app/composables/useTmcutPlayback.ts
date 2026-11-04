@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import { TICKS_PER_SECOND, compositePlan, createFrameScheduler, isRamped, renderAt, speedAt, ticksToSec } from 'tmcut-core'
+import { TICKS_PER_SECOND, compositePlan, createFrameScheduler, renderAt, speedAt, ticksToSec } from 'tmcut-core'
 import type { CoreEvaluatedLayer } from 'tmcut-core'
 import { useTmcutProject } from './useTmcutProject'
 import type { TmcutTimelineItem } from './useTmcutProject'
@@ -291,13 +291,30 @@ export function useTmcutPlayback() {
     seekToFrame(currentFrameIndex.value + delta)
   }
 
+  // One media-clock rate for every footage element (Zero-FFmpeg F4): the
+  // element must advance at the rate the seek target was BUILT with, or the
+  // corrective seek fires every frame and the picture is a thrash instead of a
+  // fast clip. The export has always divided `setpts` by the clip's speed for
+  // every row, ramped or not (render/video.ts), so this is the screen-side
+  // reading of that same number — core's `speedAt`, once, for the whole stack.
+  // A constant `speed` is a speed: `isRamped` is not a gate here.
+  function mediaRate(clip: TmcutTimelineItem | null | undefined): number {
+    const shuttle = Math.abs(shuttleRate.value)
+    // No footage under the playhead: nothing is retimed, only the shuttle.
+    if (!clip) return Math.max(0.1, shuttle)
+    // Read the curve at the tick the PLAN was built for, not at a fresh
+    // playhead reading: a ramp sampled somewhere else is a third answer.
+    const at = Math.round((renderSeconds.value - clipStartSec(clip)) * TICKS_PER_SECOND)
+    return Math.min(16, Math.max(0.25, shuttle * speedAt(clip, at)))
+  }
+
   // One media-clock law for the footage elements that are NOT the main one —
   // the crossfade partner and every stacked surface. Seek-driven for a reverse
   // clip or a reverse (J) shuttle, native forward play with drift correction
   // otherwise, paused whenever nothing is playing. Keeping this in one place is
   // what stops a second row from running a different clock than the first.
-  function syncSecondaryVideo(el: HTMLVideoElement, target: number, reverse?: boolean) {
-    if (shuttleRate.value < 0 || reverse) {
+  function syncSecondaryVideo(el: HTMLVideoElement, clip: TmcutTimelineItem, target: number) {
+    if (shuttleRate.value < 0 || clip.reverse) {
       if (!el.paused) el.pause()
       if (Math.abs(el.currentTime - target) > 0.25) {
         try {
@@ -315,7 +332,7 @@ export function useTmcutPlayback() {
         // ignore seeks on unloaded metadata; retried next frame
       }
     }
-    el.playbackRate = Math.max(0.1, Math.abs(shuttleRate.value))
+    el.playbackRate = mediaRate(clip)
     if (isPlaying.value) {
       if (el.paused) el.play().catch(() => {})
     } else if (!el.paused) {
@@ -332,7 +349,7 @@ export function useTmcutPlayback() {
       if (!el.paused) el.pause()
       return
     }
-    syncSecondaryVideo(el, pair.outgoingMediaTime, pair.outgoing.reverse)
+    syncSecondaryVideo(el, pair.outgoing, pair.outgoingMediaTime)
   }
 
   // The stacked surfaces' media elements, keyed by the surface each one paints
@@ -355,7 +372,7 @@ export function useTmcutPlayback() {
     for (const surface of stackedSurfaces.value) {
       const el = stackedVideoEls.get(surface.key)
       if (!el) continue
-      syncSecondaryVideo(el, surface.mediaTimeSec, surface.clip.reverse)
+      syncSecondaryVideo(el, surface.clip, surface.mediaTimeSec)
     }
   }
 
@@ -463,19 +480,13 @@ export function useTmcutPlayback() {
             }
           }
         } else {
-          // Speed ramp (R124 A4): ride the instantaneous curve speed so
-          // the element advances at the same rate the export's setpts
-          // expression produces; the drift-correcting seek below stays the
-          // anchor either way. Embedded audio warps with the rate here —
-          // the export keeps it at the base speed (documented v1 gap).
-          const ramped = isRamped(activeVideoClip.value.clip)
-          if (ramped && !videoRef.value.paused) {
-            const at = Math.round((playhead.value - clipStartSec(activeVideoClip.value.clip)) * TICKS_PER_SECOND)
-            const want = Math.min(16, Math.max(0.25, Math.abs(shuttleRate.value) * speedAt(activeVideoClip.value.clip, at)))
-            if (Math.abs(videoRef.value.playbackRate - want) > 0.02) {
-              videoRef.value.playbackRate = want
-            }
-          }
+          // The same rate law every other footage element runs on: shuttle x
+          // core's speed for this clip at this tick. The drift-correcting seek
+          // below stays the anchor either way. Embedded audio warps with the
+          // rate here — the export keeps it at the base speed (documented v1
+          // gap). Applied while the element is paused too, so a resumed
+          // element never plays one frame at the wrong rate.
+          videoRef.value.playbackRate = mediaRate(activeVideoClip.value.clip)
           if (Math.abs(videoRef.value.currentTime - targetTime) > 0.3) {
             try {
               videoRef.value.currentTime = targetTime
@@ -511,7 +522,7 @@ export function useTmcutPlayback() {
     isPlaying.value = true
     lastTimestamp = 0
     if (videoRef.value) {
-      videoRef.value.playbackRate = Math.max(0.1, Math.abs(shuttleRate.value))
+      videoRef.value.playbackRate = mediaRate(activeVideoClip.value?.clip)
       videoRef.value.play().catch(() => {})
     }
     syncOutgoingVideo()
@@ -559,7 +570,7 @@ export function useTmcutPlayback() {
     }
     shuttleRate.value = shuttleRate.value < 1 ? 1 : Math.min(8, shuttleRate.value * 2)
     if (videoRef.value) {
-      videoRef.value.playbackRate = shuttleRate.value
+      videoRef.value.playbackRate = mediaRate(activeVideoClip.value?.clip)
     }
   }
 

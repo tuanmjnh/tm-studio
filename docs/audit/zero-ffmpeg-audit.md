@@ -2573,3 +2573,116 @@ chính file này và [roadmap](file:///D:/Applications/tm-studio/docs/tmcut-v4-u
 khối `ExportTrackSelection`, `compileTimelineToFfmpeg`, header spec): không hunk nào là WIP của chủ repo, nên
 stage theo **đường dẫn** là đủ, không cần patch một hunk như §29. Không file locale, không `package.json`,
 không binary, không `backup/` được chạm tới.
+
+## 31. Slice F4a — một luật tốc độ cho **mọi** phần tử footage (đo ngày 2026-11-04)
+
+§29.8 và §30.7 cùng ghi một món nợ: `speedAt` chưa từng đến với hàng stacked. Lượt này trả đúng món đó,
+không mở mặt trận khác.
+
+### 31.1 Nợ nằm ở hai chiếc đồng hồ chứ không phải một
+
+F2b cho mỗi hàng stacked một phần tử `<video>` và **một** hàm lái chúng — nhưng hàm đó đặt `playbackRate`
+từ `shuttleRate` **một mình nó**, trong khi target seek nó được trao đến từ `layer.sourceTicks`, tức câu trả
+lời của core cho một clip `speed` 2 hoặc đang chạy trên ramp. Hai số đó không cùng một luật:
+
+| Phần tử | Target đến từ | `playbackRate` trước F4 | Có khớp không |
+| --- | --- | --- | --- |
+| Hàng stacked `speed` 2 | `layer.sourceTicks` (đã chia speed) | `\|shuttle\|` = **1** | **Không** — element tự chạy 1x trong khi target tiến 2x |
+| Phần tử chính, clip `speed` 1.5 **không** ramp | `layer.sourceTicks` | `\|shuttle\|` = **1** (vì `isRamped` false) | Không — phải bám vào corrective seek |
+| Phần tử chính, clip có ramp | `layer.sourceTicks` | `\|shuttle\| × speedAt` | Có, nhưng chỉ ở dòng này |
+| Partner `outgoing` của crossfade | `pair.outgoingMediaTime` | `\|shuttle\|` | Không nếu partner có speed |
+
+Lệch ở dòng đầu không phải "chậm một chút": corrective seek (ngưỡng `> 0.3 s`) **bắn mọi frame**, vì element
+luôn bị target bỏ lại phía sau. Trên màn hình đó là một chuỗi seek, không phải một clip chạy nhanh.
+
+### 31.2 Luật mới: `mediaRate(clip)` — một chỗ đọc `speedAt`
+
+[useTmcutPlayback.ts:301](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L301). Bốn
+chỗ từng tự quyết tốc độ giờ chỉ gọi nó: hàng stacked và partner crossfade qua
+[syncSecondaryVideo:316](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L316),
+phần tử chính trong `step()` [:489](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L489),
+`play()` [:525](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L525) và `shuttleForward()`
+[:573](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L573). Nội dung luật:
+
+- **`speedAt(clip, at)` một lần duy nhất** trong cả composable, với `at` là tick **local** của clip tính từ
+  `renderSeconds` — đúng tick mà plan được dựng, không phải một lần đọc playhead mới hơn.
+- **`isRamped` không còn là cửa**: `speedAt` trả `validateSpeed(clip.speed)` khi không ramp, nên một clip
+  `speed` thường cũng đi qua cùng một cánh cửa. `isRamped` rời import của composable (Inspector và
+  `clipTime.ts` vẫn dùng cho việc khác — ramp preset và `rampTimelineToSource`).
+- **Nhân với `|shuttleRate|`, kẹp `[0.25, 16]`**: L L trên một ramp đang đọc 1.5x cho ra 6x, cùng tích mà
+  `setpts=(PTS-STARTPTS)/speed` của file
+  ([render/video.ts:260](file:///D:/Applications/tm-studio/app/utils/tmcut/render/video.ts#L260)) vẽ cho row đó.
+- **Không có footage dưới playhead thì chỉ có shuttle** (`!clip` → `max(0.1, |shuttle|)`): không bịa speed
+  cho một element không paint gì.
+- **Reverse vẫn seek-driven**: `clip.reverse` hoặc `shuttleRate < 0` đưa element về `pause()` và bước bằng
+  seek, **không** đặt rate — HTMLMediaElement không decode ngược, đây là chỗ duy nhất luật cấm nhân tốc độ.
+- `syncSecondaryVideo` **đổi chữ ký** từ `(el, target, reverse?)` sang `(el, clip, target)`: tham số thứ ba
+  là một boolean lẻ tẻ, còn clip cho cả `reverse` **lẫn** speed — hai thứ cùng một nguồn.
+
+### 31.3 RED đo được, trước khi có code
+
+`node_modules/.cache/tmcut-gates/f4-red.txt` (spec chạy bằng `tsx --tsconfig tsconfig.test.json`; chạy trần
+không alias được `tmcut-core`):
+
+```
+FAILED: AssertionError [ERR_ASSERTION]: a sped stacked row must advance at 2x; at 1x its own seek target outruns it every frame
+1 !== 2
+    at <anonymous> (tests/unit/tmcut_speed_clock.spec.ts:101:12)
+```
+
+Đúng assertion của check 1 — hàng 2x chạy 1x — chứ không phải lỗi harness. Runner dừng ở failure đầu tiên,
+nên RED chỉ có **một** dòng đo được; `:101` là vị trí **trước** khi sửa stylistic, check 1 hiện nằm ở
+[spec:98](file:///D:/Applications/tm-studio/tests/unit/tmcut_speed_clock.spec.ts#L98). Check 2 (constant speed)
+và check 5 (pin nguồn) là hai kết luận **rút từ code đang tồn tại** — cửa `isRamped` và hai chỗ ghi
+`playbackRate` tay — không phải từ log; ghi rõ ở đây để §31 không tự phong cho mình ba RED.
+
+### 31.4 Pin nguồn: luật không được phép bản địa hóa trở lại
+
+[tmcut_speed_clock.spec.ts:178](file:///D:/Applications/tm-studio/tests/unit/tmcut_speed_clock.spec.ts#L178)
+đọc **text** của composable và đòi: đúng **một** occurrence của `speedAt(`, và **mọi** dòng chứa
+`.playbackRate =` hoặc là `= 1` (pause/reset) hoặc là `= mediaRate(`. Một lần nữa luật "hai chỗ cùng quyết
+một việc" bị khóa bằng regex chứ không bằng lời hứa — §30 làm y vậy với `.find()` của exporter.
+
+Check 3 là check nặng nhất về mặt hành vi: nó asserts **tích** shuttle × ramp (1.5 rồi 6), tức pin không chỉ
+nói "gọi đúng hàm" mà nói "gọi ra đúng số". Check 4 giữ nhánh reverse: `paused === true` sau một frame.
+
+### 31.5 Gate (đo lượt này)
+
+| Gate | Lệnh | Kết quả | Bằng chứng |
+| --- | --- | --- | --- |
+| 1 Types | `npx nuxt typecheck` | **PASS** | exit 0, 0 × `error TS`; `.nuxt/eslint.config.mjs` regenerate 23:17, 28567 bytes |
+| 2 Lint | `npx eslint` trên **2** file đã chạm | **PASS** | exit 0, log 0 bytes. Lần chạy **đầu** FAIL 4 lỗi stylistic ngay trong spec mới (`max-statements-per-line` ×3, `quotes` ×1) — sửa spec, không sửa rule |
+| 3 Tests | `npx tsx tests/unit/run-all.mts` | **PASS** | **109/109** (thêm `tmcut_speed_clock` so với 108 của F3), exit 0 |
+| 3b Smoke | `run-all.mts --smoke` | **PASS** | **112/112**, exit 0 — graph FFmpeg không đổi, chạy để chắc không hồi quy đường render |
+| 3c Core | `packages/core` | **N/A** | lượt này **không** sửa core; `mediaRate` đọc `speedAt` đã có sẵn |
+| 4 Live | 8 route `/tmcut*` trên :4003, Chromium | **PASS cho đường preview** | `/tmcut`, `/tmcut/autocut`, `/tmcut/editor`, `/tmcut/html-video`: chỉ dòng `<Suspense>` info. `templates`/`factory`/`process`: `[error] 401` từ `GET /api/v1/ai/relay/catalog` (hub auth hết phiên, **không** phải code này); `process` thêm `[issue] form field thiếu id/name` ×2 (markup có sẵn); `voice`: `[error] 502` từ `GET /api/v1/media/tts/status?baseUrl=127.0.0.1:8000` (dịch vụ TTS không chạy) |
+| 5 Docs | 5 guard markdown + commit | xem cuối §31 | — |
+
+Số dòng: composable **673 → 684** (+32/−21: một hàm mới, bốn chỗ gọi, bỏ một cửa `isRamped`); spec mới
+**197** dòng. `git diff --cached` = 0 dòng **trước** khi stage, tức WIP của chủ repo vẫn chưa được indexed.
+
+### 31.6 Chưa chứng minh
+
+- **Không có pixel.** Spec điều khiển element **stub**, không decode. Luật đúng theo số, nhưng "một clip 2x
+  ở hàng trên trông nhanh gấp đôi trên màn hình" chưa đo trên footage thật trong Chromium — đó là F6
+  (visual-regression fixtures), và F6 nên đo **cả** hai host.
+- **Electron host** chưa chạy lượt này.
+- **Audio nhúng trong clip** giờ warp theo rate mới trên **mọi** hàng, vì `playbackRate` kéo cả audio. File
+  giữ audio ở speed gốc (`asetpts` chia `speed` cho ramp; phần tử embedded audio trên preview thì không).
+  Trước F4, hàng stacked chạy 1x nên audio của nó **gần** file hơn; đổi luật hình làm **lệch audio** ở đúng
+  chỗ nó từng lệch hình. Hàng stacked luôn `muted` trên preview (§29), nên không nghe được — nhưng audio của
+  `videoBase` có ramp thì có. Cần một check riêng khi G (Web Audio) tiếp quản đường audio; ghi nợ ở đó.
+- **F4b chưa làm**: plate effect theo layer (vignette/crop/blend) vẫn do DOM tự tính, và DOM vẫn chạy lại
+  `evaluateClip` thay vì đọc số từ `surface.layer` (`clipVisual` trong player). §29.8 giữ nguyên hai món này.
+- **`mediaTimeAt(clip, playhead.value)`** vẫn là fallback khi `layer.sourceTicks === null`
+  ([useTmcutPlayback.ts:152](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L152)):
+  nó trộn đồng hồ app vào đường của core. F4a không đụng vì nó là **target**, không phải **rate**.
+
+### 31.7 Bảo vệ working tree
+
+Lượt này staged **4** đường dẫn: [useTmcutPlayback.ts](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts),
+[tmcut_speed_clock.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_speed_clock.spec.ts), chính file
+này và [roadmap](file:///D:/Applications/tm-studio/docs/tmcut-v4-universal-rendering-multiplatform-roadmap.md).
+`git diff` trên composable **đã đọc hết** trước khi stage: mọi hunk nằm trong vùng `mediaRate` /
+`syncSecondaryVideo` / `step` / `play` / `shuttleForward` và một dòng import — không hunk nào là WIP của chủ
+repo. Không file locale, không `package.json`, không binary, không `backup/`, **không** đụng FFmpeg.
