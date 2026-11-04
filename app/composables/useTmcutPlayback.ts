@@ -1,8 +1,21 @@
 import { ref, computed } from 'vue'
-import { TICKS_PER_SECOND, createFrameScheduler, isRamped, renderAt, selectPaintRows, speedAt, ticksToSec } from 'tmcut-core'
+import { TICKS_PER_SECOND, compositePlan, createFrameScheduler, isRamped, renderAt, speedAt, ticksToSec } from 'tmcut-core'
+import type { CoreEvaluatedLayer } from 'tmcut-core'
 import { useTmcutProject } from './useTmcutProject'
 import type { TmcutTimelineItem } from './useTmcutProject'
 import { clipMediaTimeSec, clipStartSec } from '~/utils/tmcut/clipTime'
+
+// One surface the canvas paints at this tick, straight from core's plan.
+type PaintSurface = {
+  key: string
+  role: 'paint' | 'outgoing'
+  trackId: string | null
+  trackIndex: number
+  clip: TmcutTimelineItem
+  layer: CoreEvaluatedLayer
+  mediaTimeSec: number
+  ownsAudio: boolean
+}
 
 // Shared playback state across TMCut editor
 const playhead = ref(0) // Playhead position in seconds
@@ -98,97 +111,102 @@ export function useTmcutPlayback() {
     Math.round(playhead.value * TICKS_PER_SECOND)
   ))
 
-  // The ONE footage row the canvas paints (gap G18), now answered by core:
-  // `selectPaintRows` picks the first visible footage row that holds a layer at
-  // this tick, so a gap hands the canvas to the next row and a hidden row's
-  // transition never reaches the screen. Nothing composites two rows yet: a
-  // single <video> carries the picture, exactly as the exporter builds a single
-  // concat chain, so both hosts follow one rule instead of two — and the rows
-  // after `base` are the footage a compositor still has to stack.
+  // Every surface the canvas must paint at this tick, in core's stack order
+  // (Zero-FFmpeg slice F1/F2): `compositePlan` answers which layer of which row
+  // is the picture, which is a transition's outgoing partner, and what overlays
+  // the footage. The app used to answer all three itself — a `footageRow`
+  // lookup, a pair scan over the layers, a "top layer" filter — while the
+  // exporter answered them a second way, and that pair of answers is the drift
+  // F1 retired the single-row law for.
   //
-  // `trackIndex` is the row's position in the evaluation's track list, which
-  // `evaluateTimeline` builds one entry per input track in order, so joining
-  // back to the authored track is a single index lookup.
-  const footageRow = computed(() => {
-    const base = selectPaintRows(playheadEvaluation.value).base
-    if (!base) return null
-    return {
-      items: currentProject.value?.timeline?.tracks?.[base.trackIndex]?.items ?? [],
-      layers: base.layers
+  // A surface joins back to the authored clip through `trackIndex`, the row's
+  // position in `evaluateTimeline`'s own track list, and carries the evaluator's
+  // layer BY REFERENCE: opacity, transform and source position must be the ones
+  // core computed for this tick, never a second reading of the clip.
+  //
+  // `ownsAudio` marks the BOTTOM row's picture — the surface whose sound the
+  // file carries, because the export's audio is one concat of that row. During
+  // a crossfade that is the incoming clip, which is the simplification the
+  // player already documents on the outgoing element.
+  const paintPlan = computed(() => compositePlan(playheadEvaluation.value))
+  const paintSurfaces = computed<PaintSurface[]>(() => {
+    const tracks = currentProject.value?.timeline?.tracks
+    if (!tracks) return []
+    const surfaces: PaintSurface[] = []
+    let audioClaimed = false
+    for (const slot of paintPlan.value.slots) {
+      if (slot.kind !== 'footage') continue
+      const clip = tracks[slot.trackIndex]?.items?.find(item => item.id === slot.clipId)
+      if (!clip) continue
+      const ownsAudio = slot.role === 'paint' && !audioClaimed
+      if (ownsAudio) audioClaimed = true
+      surfaces.push({
+        key: `${slot.trackId}:${slot.clipId}:${slot.role}`,
+        role: slot.role,
+        trackId: slot.trackId,
+        trackIndex: slot.trackIndex,
+        clip,
+        layer: slot.layer,
+        mediaTimeSec: slot.layer.sourceTicks === null
+          ? mediaTimeAt(clip, playhead.value)
+          : ticksToSec(slot.layer.sourceTicks),
+        ownsAudio
+      })
     }
+    return surfaces
   })
 
-  // Transition crossfade state (roadmap B3 / core C5): while the playhead
-  // sits inside a transition window BOTH clips are live — the INCOMING
-  // clip carries `transitionIn`, the OUTGOING clip is the neighbor whose
-  // end lands on the window end (an intact pair). Core's `evaluateTimeline`
-  // owns the window/role/progress/source math for BOTH stored clip shapes
-  // (DSL v3 and the app's flat offset/in/out); a broken pair (neighbor
-  // moved/trimmed since) yields no window and renders as a plain cut,
-  // matching what the export badge warns about until R3.
+  // Transition crossfade state (roadmap B3 / core C5): while the playhead sits
+  // inside a transition window core gives that row TWO surfaces — the outgoing
+  // partner directly under the picture — so the pair is read off the surface
+  // list rather than re-detected here. A broken pair (neighbor moved/trimmed
+  // since) yields no window and renders as a plain cut, matching what the export
+  // badge warns about until R3.
   //
-  // The window is read from `footageRow`, not from row 0: the crossfade
-  // element is a real <video>, so a window belonging to a hidden row would
-  // otherwise show through while the row that paints could not crossfade.
+  // The pair must belong to the row that owns the audio: the crossfade element
+  // is a real <video>, so a window from any other row would show through while
+  // the painting row could not crossfade. F2b lifts that scoping once every row
+  // has its own element.
   const transitionCrossfade = computed(() => {
-    const row = footageRow.value
-    if (!row) return null
-    const incomingLayer = row.layers.find(layer => layer.transition?.role === 'incoming')
-    if (!incomingLayer?.transition?.type) return null
-    const outgoingLayer = row.layers.find(layer =>
-      layer.clipId !== incomingLayer.clipId && layer.transition?.role === 'outgoing')
-    if (!outgoingLayer || outgoingLayer.sourceTicks === null) return null
-    const incoming = row.items.find(item => item.id === incomingLayer.clipId)
-    const outgoing = row.items.find(item => item.id === outgoingLayer.clipId)
-    if (!incoming || !outgoing) return null
+    const surfaces = paintSurfaces.value
+    const index = surfaces.findIndex(surface => surface.ownsAudio)
+    if (index < 1) return null
+    const paint = surfaces[index]
+    const partner = surfaces[index - 1]
+    if (!paint || !partner) return null
+    if (partner.role !== 'outgoing' || partner.trackIndex !== paint.trackIndex) return null
+    const spec = paint.layer.transition
+    if (!spec?.type || partner.layer.sourceTicks === null) return null
     return {
-      incoming,
-      outgoing,
-      type: incomingLayer.transition.type,
-      progress: incomingLayer.transition.progress,
-      outgoingMediaTime: ticksToSec(outgoingLayer.sourceTicks)
+      incoming: paint.clip,
+      outgoing: partner.clip,
+      type: spec.type,
+      progress: spec.progress,
+      outgoingMediaTime: partner.mediaTimeSec
     }
   })
 
-  // Active video clip at the render position — the TOP layer of `footageRow`.
-  // Within that row the latest-starting live layer is on top, and inside a
-  // transition window that is the incoming clip (the outgoing clip owns the
-  // second <video> element instead), so the main element never shows a
-  // half-blended frame.
+  // Active video clip at the render position — the surface that owns the audio,
+  // i.e. the bottom of the stack. Inside a transition window that is the
+  // incoming clip (its partner owns the second <video> element instead), so the
+  // main element never shows a half-blended frame.
   const activeVideoClip = computed(() => {
-    const row = footageRow.value
-    if (!row) return null
-    const crossfade = transitionCrossfade.value
-    const live = row.layers.filter(layer =>
-      !(crossfade && layer.clipId === crossfade.outgoing.id))
-    const top = live[live.length - 1]
-    if (!top) return null
-    const clip = row.items.find(item => item.id === top.clipId)
-    if (!clip) return null
-    return {
-      clip,
-      mediaCurrentTime: top.sourceTicks === null
-        ? mediaTimeAt(clip, playhead.value)
-        : ticksToSec(top.sourceTicks)
-    }
+    const surface = paintSurfaces.value.find(item => item.ownsAudio)
+    if (!surface) return null
+    return { clip: surface.clip, mediaCurrentTime: surface.mediaTimeSec }
   })
 
-  // Active text overlays at the render position — across EVERY text track, so
-  // parallel caption/watermark tracks all render (R122). The evaluator owns
-  // which clips are live (ADR-018), so the preview reads its layer list
-  // instead of testing a window of its own; hidden rows stay hidden the way
-  // the video path already treats them.
+  // Active text overlays at the render position — across EVERY visible text
+  // track, so parallel caption/watermark tracks all render (R122). The plan
+  // places them after all footage, which is also the DOM's paint order.
   const activeTextClips = computed<TmcutTimelineItem[]>(() => {
     const tracks = currentProject.value?.timeline?.tracks
     if (!tracks) return []
     const out: TmcutTimelineItem[] = []
-    for (const evaluation of playheadEvaluation.value.tracks) {
-      if (evaluation.type !== 'text' || evaluation.hidden) continue
-      const track = tracks.find(item => item.type === 'text' && item.id === evaluation.id)
-      for (const layer of evaluation.layers) {
-        const clip = track?.items?.find(item => item.id === layer.clipId)
-        if (clip) out.push(clip)
-      }
+    for (const slot of paintPlan.value.slots) {
+      if (slot.kind !== 'overlay') continue
+      const clip = tracks[slot.trackIndex]?.items?.find(item => item.id === slot.clipId)
+      if (clip) out.push(clip)
     }
     return out
   })
@@ -539,6 +557,7 @@ export function useTmcutPlayback() {
     zoom,
     videoRef,
     outgoingVideoRef,
+    paintSurfaces,
     activeVideoClip,
     transitionCrossfade,
     activeTextClips,

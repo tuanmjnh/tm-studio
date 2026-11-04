@@ -2151,3 +2151,115 @@ cộng chính file này. **Không** file app, **không** locale, **không** `bac
 của chủ repo (`app/pages/system/*` đang được tái cấu trúc, `i18n/locales/*`, `electron/main.cjs`, `package.json`,
 `pnpm-lock.yaml`, `server/*`, `backup/`, `docs/content/`…) và **không** bị đụng; sau commit `git status --short`
 phải còn đúng **56**. `git diff --cached --name-only` trước commit phải liệt kê **đúng** bảy đường dẫn trên.
+
+## 28. Slice F2a — preview đọc plan của core, cây DOM vẫn chưa đổi (đo ngày 2026-11-04)
+
+§27 dựng chỗ đúng; F2a là lượt **chuyển consumer đầu tiên** về đó. Từ tick này
+[useTmcutPlayback.ts](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts) không còn tự trả lời
+"layer nào là ảnh, layer nào là partner của transition, chữ nào phủ lên": nó gọi `compositePlan` **một** lần trên
+evaluation của render position ([:131](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L131))
+và mọi computed khác suy ra từ plan đó.
+
+### 28.1 Bốn computed, và nguồn trả lời của chúng
+
+| Computed | Trước F2a | Sau F2a |
+| --- | --- | --- |
+| `footageRow` — hàng nào chiếm canvas | app tự quét song song danh sách hàng video với danh sách evaluation | **xóa**; không còn dòng nào trong `app/` giữ luật "hàng nào được vẽ" |
+| `transitionCrossfade` | app tự đọc `layer.transition.role` trên đúng một hàng | đọc từ **danh sách surface**: partner `outgoing` nằm ngay dưới surface mang audio và **cùng** `trackIndex` ([:170](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L170)) |
+| `activeVideoClip` | "layer trên cùng của `footageRow`" | surface **mang audio**, tức đáy stack ([:193](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L193)) |
+| `activeTextClips` | tự lọc `evaluation.tracks` theo type text và bỏ hàng `hidden` | các slot `kind: 'overlay'` của plan, theo đúng thứ tự plan ([:202](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L202)) |
+
+Output **mới** là `paintSurfaces` ([:132](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L132),
+kiểu `PaintSurface` ở [:9](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L9)): mỗi surface là
+`{ key, role, trackId, trackIndex, clip, layer, mediaTimeSec, ownsAudio }`. F2a đưa nó ra khỏi composable nhưng
+**chưa** cho DOM dùng — [TmcutPreviewPlayer.vue](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue)
+không nhắc tên này ở dòng nào (đo: **0** lần), nó vẫn bind **42** lần vào ba computed cũ. Đó là lý do F2 tách làm hai
+lượt: **luật** đổi trước, **cây DOM** đổi sau.
+
+### 28.2 Điều F2a quyết, và điều nó cố ý không đụng
+
+- `ownsAudio` gắn cho surface `paint` **đầu tiên** theo thứ tự plan — hàng đáy, cũng là hàng export nối audio.
+  Trong cửa crossfade đó là clip **đến**, đúng đơn giản hoá player đã ghi trên `<video>` thứ hai.
+- Surface mang `layer` **nguyên con** evaluator trả cho tick này, nên opacity, transform và source-time mà DOM dùng
+  là số core tính, không phải một lần đọc clip thứ hai.
+- Hình dạng `transitionCrossfade` giữ **nguyên** `{ incoming, outgoing, type, progress, outgoingMediaTime }`, vì
+  player và ba spec khác (`tmcut_footage_row_rule`, `tmcut_frame_scheduler`, `tmcut_transitions`) đang bind vào nó.
+- `mediaTimeSec` vẫn lấy `layer.sourceTicks` khi core có nó, chỉ rơi về `mediaTimeAt(clip, playhead)` khi layer
+  không mang vị trí nguồn — cùng luật §24, không phải luật mới.
+- Vì cây DOM chưa đổi, **ảnh trên màn hình hôm nay giống hôm qua**. Đây là trạng thái trung gian có chủ đích,
+  không phải bằng chứng "stack đã chạy".
+
+### 28.3 TDD: RED đo trên chính bản HEAD
+
+Spec viết trước: [tmcut_preview_paint_plan.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_preview_paint_plan.spec.ts)
+**167** dòng, **6** check, chạy trên **composable thật** qua store harness. RED không suy ra từ lời kể — nó được
+**đo**: snapshot `git show HEAD:app/composables/useTmcutPlayback.ts` (**568** dòng) vào một file tạm, chạy chính
+assertion của spec trên bản đó:
+
+```
+HEAD composable — paintSurfaces present: false
+AssertionError: Expected values to be strictly deep-equal:  + []  - [ 'two surfaces from two live rows' ]
+```
+
+File tạm và snapshot đã **xóa** ngay sau lần chạy đó; `git status --short` xác nhận không còn dấu vết. Ba bước sai
+trong lượt này, cả ba đều là loại sẽ gặp lại ở F2b/F3:
+
+1. **So sánh tham chiếu giữa hai lần evaluator.** Check 5 ban đầu đòi `surface.layer` **là** layer của một
+   `evaluateTimeline` gọi riêng trong test; hai lời gọi sinh hai object khác nhau nên assertion **không bao giờ**
+   đúng. Bản đúng khẳng định điều thực sự cần chứng minh: `deepEqual` với layer core tính cho cùng tick, cộng
+   `evaluation.tracks[trackIndex].id === surface.trackId` để khoá rằng index đó trỏ về **đúng hàng**.
+2. **Cửa transition overlap ngược.** `applyClipTransition(id, 'fade', 0.5)` coi cặp clip overlap **về trước**, nên
+   cửa là `[3.5, 4)`; bản nháp seek `4.25` → không window → không surface `outgoing`. Cùng bẫy §27.3, lần này lộ ở
+   test app.
+3. **Ai giữ audio.** Bản nháp đòi clip **đi** mang audio. Đọc player thấy luật đang ship là "âm theo clip đến",
+   và audio của file là một concat theo thời gian, nên assertion sửa theo **thực tế đã ship** thay vì đổi hành vi ở
+   lượt chỉ có nhiệm vụ chuyển luật về core.
+
+GREEN: **6/6** check, và cả hai spec cũ bị ảnh hưởng (`tmcut_paint_stack`, `tmcut_footage_row_rule`,
+`tmcut_transitions`, `tmcut_frame_scheduler`) vẫn xanh mà **không** phải nới assertion nào.
+
+### 28.4 Pin bị lật, và vì sao lật là đúng
+
+- [tmcut_paint_stack.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_paint_stack.spec.ts#L186) check 2 từng
+  khoá `/selectPaintRows/` và `/tracks?.[base.trackIndex]/` **ngay trong file preview**; F2a làm cả hai thành **false**.
+  Pin mới ([:186-197](file:///D:/Applications/tm-studio/tests/unit/tmcut_paint_stack.spec.ts#L186)): preview phải khớp
+  `/compositePlan/`, **không được** chứa `selectPaintRows` (luật hàng chỉ đi qua core **một** lần, qua plan, chứ không
+  phải hai cửa vào), không còn `videoEvaluations`, và join back bằng `tracks[slot.trackIndex]`.
+- Helper `currentPreviewRow` trong cùng spec đổi tên thành
+  [`coreBaseRow`](file:///D:/Applications/tm-studio/tests/unit/tmcut_paint_stack.spec.ts#L125): nó mô tả **câu trả lời
+  của core**, không còn mô tả preview. Equivalence sweep (11 layout × 11 tick) giữ **nguyên assertion**.
+- `tmcut_footage_row_rule.spec.ts` **chưa** bị lật: witness check 6 ("preview vẫn chỉ một hàng") chỉ sai khi DOM đổi,
+  tức F2b — nên lượt này để nó nguyên, và đó là lý do F2b phải sửa i18n `parallelTracksWarning` cả `en` lẫn `vi`.
+
+### 28.5 Gates (chạy theo thứ tự; số liệu lấy từ chính lần chạy đó)
+
+| Gate | Lệnh | Kết quả | Bằng chứng |
+| --- | --- | --- | --- |
+| 1 Types | `npx nuxt typecheck` | PASS | exit **0**, `grep -c "error TS"` = **0**; `.nuxt/eslint.config.mjs` sinh lại lúc **21:25** (28552 byte). Lần chạy **đầu tiên FAIL exit 2, 8 error** `TS18048 'paint'/'partner' is possibly undefined` tại [:175-183](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L175) — do index access sau `findIndex`; sửa bằng guard early-return khi thiếu `paint` hoặc `partner` rồi mới PASS |
+| 2 Lint | `npx eslint` trên **3** file chạm tới, chạy **sau** gate 1 | PASS | exit **0**, output **0** byte. Lần chạy đầu **FAIL 12 error** trên spec mới (`@typescript-eslint/no-explicit-any` ×10, unused var, `@stylistic/quotes`) — sửa bằng cách **typen** spec (`ReturnType<typeof useTmcutPlayback>`), không tắt rule |
+| 3 App specs | `npx tsx tests/unit/run-all.mts` | PASS | **107/107** specs, exit **0** (tăng **106 → 107** vì spec mới) |
+| 3b Core | `node --test` + `tools/check-boundaries.mjs` + `tsc -p tsconfig.check.json` (chạy trong `packages/core`) | PASS | **669/669**, `fail 0` — không đổi vì F2a không đụng core; boundaries "core imports nothing platform-specific"; tsc exit **0** |
+| 4 Live | 8 route TMCut trên dev server **:4003**, qua chrome-devtools, `list_console_messages` sau mỗi route | PASS có ghi nợ | **0** lỗi liên quan F2a. Sạch hoàn toàn (chỉ `[info] <Suspense>`): `/tmcut`, `/tmcut/autocut`, `/tmcut/factory`, `/tmcut/html-video`. Noise **có trước, không thuộc lượt này**: `401` trên `GET /api/v1/ai/relay/catalog` (×4 editor, ×2 templates, ×1 process — một fetch tới endpoint cần session, tab Chromium này đăng xuất), `[issue]` a11y "form field should have id/name" ×2 ở `/tmcut/process` (không import gì của playback), `502 (tts.unreachable)` ×2 ở `/tmcut/voice` |
+| 5 Docs | năm guard markdown, chạy lại sau **lần sửa markdown cuối** | PASS | **28** checks (**12/5/4/3/4**), exit **0** cả năm. Guard **bắt** được lỗi của §28: ô gate 1 chứa `\|\|` trong snippet `if (!paint …)` → `tmcut_doc_table_shape` báo "row 2238 has 6 cells, header :2236 has 4"; sửa bằng cách **viết lại ô** đó, không nới guard. Mọi `#L` anchor dưới đây được đo bằng `grep -n` trên file thật trước khi viết |
+
+### 28.6 Chưa chứng minh (nợ ghi thẳng cho F2b và F3)
+
+- **Chưa có bằng chứng live rằng preview vẽ hai hàng.** `paintSurfaces` chưa có consumer nào ngoài test; bằng chứng
+  thật thuộc F2b, kèm lật witness `tmcut_footage_row_rule` check 6 và sửa copy `parallelTracksWarning` cả hai locale.
+- **Cửa transition của hàng không ở đáy stack vẫn vô hình với DOM.** `transitionCrossfade` có chủ đích chỉ đọc cặp
+  quanh surface mang audio (comment ở [:167-169](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L167)
+  ghi rõ F2b sẽ nới); nếu F2b nới mà không có phần tử riêng cho từng hàng thì đó là bug, không phải luật.
+- **`ownsAudio` chưa được đo với file export thật.** Nó khớp luật "audio = concat của `videoBase`" trên lý và trên
+  specs compile command-line, nhưng chưa có phép đo PCM screen-vs-file khi **hai** hàng footage cùng sống.
+- **Electron host không chạy** lượt này; cả hai host dùng chung composable nhưng chưa có số đo desktop.
+
+### 28.7 Bảo vệ working tree
+
+Lượt này staged **4** đường dẫn: [useTmcutPlayback.ts](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts),
+[tmcut_paint_stack.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_paint_stack.spec.ts),
+[tmcut_preview_paint_plan.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_preview_paint_plan.spec.ts) (mới),
+cộng chính file này. **Không** locale, **không** `backup/`, **không** binary, **không** `i18n/locales/*` (WIP của chủ
+repo), **không** `TmcutPreviewPlayer.vue` (để F2b). `git status --short` đo **60** mục trước commit, trong đó **4**
+thuộc lượt này; sau commit phải còn **56** — đúng số WIP của chủ repo mà §27.7 đã đo, vì F2a không thêm file nào khác.
+RED probe (`app/composables/tmpF2aRedProbe.ts`, `tests/unit/tmcut_f2a_redprobe.spec.ts`) là file **của lượt này**,
+đã xóa và không bao giờ staged.

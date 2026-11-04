@@ -13,7 +13,10 @@
  *  1. EQUIVALENCE — the retired preview loop is kept here verbatim as a
  *     reference and compared against core, layout by layout and tick by tick,
  *     so the rewiring is proven to have changed nothing observable.
- *  2. the preview carries no second copy of the rule and reads it off core.
+ *  2. the preview carries no second copy of the rule and reads it off core —
+ *     since Zero-FFmpeg F2a that reading is `compositePlan`, which is built on
+ *     `selectPaintRows`; the composable never calls the row law beside the plan,
+ *     because a second call is a second answer to keep in sync.
  *  3. the SHIPPED composable — which the store harness runs in plain Node —
  *     hands the canvas over exactly where core says it does.
  *  4. THE EXPORTER SIDE OF THE LAW — the exporter answers once per file where
@@ -118,8 +121,8 @@ function retiredPreviewRow(sut: TmcutProject, atTicks: number): PaintedRow {
   return null
 }
 
-/** What the rewired preview composes: core's row joined back to the store. */
-function currentPreviewRow(sut: TmcutProject, atTicks: number): PaintedRow {
+/** Core's answer to the same question: the row that owns the single surface. */
+function coreBaseRow(sut: TmcutProject, atTicks: number): PaintedRow {
   const base = selectPaintRows(evaluateTimeline(sut, atTicks)).base
   if (!base) return null
   return { items: storeTracks(sut)[base.trackIndex]?.items ?? [], layers: base.layers }
@@ -165,7 +168,7 @@ async function main() {
       const layoutName = layout.map(t => `${t.id}${t.hidden ? '!' : ''}`).join(',')
       for (const at of PROBE_TICKS) {
         const before = retiredPreviewRow(sut, at)
-        const after = currentPreviewRow(sut, at)
+        const after = coreBaseRow(sut, at)
         compared++
         if (before) nonNull++
         assert.deepEqual(
@@ -179,17 +182,16 @@ async function main() {
     assert.ok(nonNull >= 40, `the sweep must cover live rows, got ${nonNull}`)
   })
 
-  // 2. No second copy of the rule in the app.
-  await check('the preview reads the row from core and keeps no local loop', () => {
+  // 2. No second copy of the rule in the app. F2a moved the preview behind
+  //    `compositePlan`, so the row law is reached through the plan — and must
+  //    not be called beside it, which would be a second answer to keep in sync.
+  await check('the preview reaches the row through the plan, not its own loop', () => {
     const source = readFileSync(join(ROOT, PREVIEW_HOST), 'utf8')
-    assert.match(source, /selectPaintRows/, 'the preview asks core')
-    assert.match(
-      source,
-      /import \{[^}]*selectPaintRows[^}]*\} from 'tmcut-core'/,
-      'the name comes from tmcut-core, not a local helper'
-    )
+    assert.match(source, /compositePlan/, 'the preview asks core for the plan')
+    assert.doesNotMatch(source, /selectPaintRows/,
+      'the row law is cores, reached once through the plan')
     assert.ok(!source.includes('videoEvaluations'), 'no second copy of the pairing loop in the preview')
-    assert.match(source, /tracks\?\.\[base\.trackIndex\]/, 'the row joins back by the core index')
+    assert.match(source, /tracks\[slot\.trackIndex\]/, 'the row joins back by the core index')
   })
 
   // 3. The composable that ships is the one measured here (the store harness
