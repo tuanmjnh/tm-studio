@@ -341,6 +341,8 @@ export function clampFrameTime(atTicks: number, startTicks: number, durationTick
 export const TMCUT_FRAME_MAX_TIME_SEC: number
 /** How many decoded frames the app may hold before the oldest is released. */
 export const TMCUT_FRAME_CACHE_MAX_ENTRIES: number
+/** How many frames one host may decode at a time — the same bound on both. */
+export const TMCUT_FRAME_MAX_CONCURRENT: number
 /** One decoded frame the app is holding: which request it answers, when it was last shown. */
 export interface TmcutFrameCacheEntry {
   key: string

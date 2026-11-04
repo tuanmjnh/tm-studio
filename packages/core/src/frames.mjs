@@ -110,6 +110,15 @@ export const TMCUT_FRAME_MAX_TIME_SEC = 24 * 3600
  */
 export const TMCUT_FRAME_CACHE_MAX_ENTRIES = 512
 
+/**
+ * How many frames one host may decode at a time. The desktop counted this
+ * because N timeline clips mounting at once would otherwise start N × 3
+ * FFmpeg processes; the browser decoder is cheaper but not free, and a
+ * filmstrip row plus a player HUD plus a media grid can ask for dozens.
+ * One number for both hosts, so neither can quietly double the load.
+ */
+export const TMCUT_FRAME_MAX_CONCURRENT = 3
+
 /** `${fingerprint}-f${millis}-w${pixels}`, and nothing else. */
 const FRAME_KEY_PATTERN = /^[0-9a-f]{8}-f\d+-w\d+$/
 

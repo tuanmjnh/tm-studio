@@ -31,11 +31,13 @@ import { fileURLToPath } from 'node:url'
 // Installs the Vue auto-import and localStorage shims the store is written
 // against. Must stay before every dynamic import below.
 import './helpers/tmcut_store_env'
+import {
+  blobOf, clearByteIndex, installIdbOnly, installNoStorage, installOpfs,
+  opfsLive, readByteIndex, writeByteIndex
+} from './helpers/tmcut_browser_storage'
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..')
 const read = (rel: string) => readFileSync(join(root, rel), 'utf8')
-const INDEX_STORAGE_KEY = 'tmcut_byte_index_v1'
-const CACHE_DIR_NAME = 'tmcut-bytes'
 
 let passed = 0
 async function check(label: string, fn: () => void | Promise<void>) {
@@ -47,272 +49,8 @@ async function check(label: string, fn: () => void | Promise<void>) {
 /** The eight hex characters `cacheKeyForPath` produces, spelled by hand. */
 const KEYS = ['00000001', '00000002', '00000003', '0000000a', 'deadbeef'] as const
 
-function blobOf(size: number, seed = 'x'): Blob {
-  return new Blob([new Uint8Array(size).fill(seed.charCodeAt(0) & 0xff)])
-}
-
 function slow(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms))
-}
-
-// ---------------------------------------------------------------------------
-// A fake OPFS: one directory of files, exactly the handles the store uses.
-// ---------------------------------------------------------------------------
-
-type FakeFile = { kind: 'file', name: string, blob: Blob }
-type FakeDir = { kind: 'directory', name: string, children: Map<string, FakeNode>, detached?: boolean }
-type FakeNode = FakeFile | FakeDir
-
-function notFound(name: string): Error {
-  const error = new Error(`NotFoundError: ${name}`) as Error & { name: string }
-  error.name = 'NotFoundError'
-  return error
-}
-
-function fakeDirectory(name: string): FakeDir {
-  return { kind: 'directory', name, children: new Map<string, FakeNode>() }
-}
-
-function fileHandleOf(node: FakeFile) {
-  return {
-    kind: 'file' as const,
-    name: node.name,
-    async getFile() {
-      return node.blob
-    },
-    async createWritable() {
-      let pending = node.blob
-      return {
-        async write(value: Blob | ArrayBuffer) {
-          pending = value instanceof Blob ? value : new Blob([value])
-        },
-        async close() {
-          node.blob = pending
-        }
-      }
-    }
-  }
-}
-
-function directoryHandleOf(dir: FakeDir) {
-  // A directory the browser reclaimed keeps no files: a handle to it must fail,
-  // exactly as a detached OPFS handle does.
-  const live = <T>(run: () => T): T => {
-    if (dir.detached) throw notFound(dir.name || 'cache')
-    return run()
-  }
-  return {
-    kind: 'directory',
-    name: dir.name,
-    async getDirectoryHandle(childName: string, options: { create?: boolean } = {}) {
-      return live(() => {
-        const existing = dir.children.get(childName)
-        if (existing && existing.kind === 'directory') return directoryHandleOf(existing)
-        if (options.create) {
-          const created = fakeDirectory(childName)
-          dir.children.set(childName, created)
-          return directoryHandleOf(created)
-        }
-        throw notFound(childName)
-      })
-    },
-    async getFileHandle(fileName: string, options: { create?: boolean } = {}) {
-      return live(() => {
-        const existing = dir.children.get(fileName)
-        if (existing && existing.kind === 'file') return fileHandleOf(existing)
-        if (options.create) {
-          const created: FakeFile = { kind: 'file', name: fileName, blob: new Blob([]) }
-          dir.children.set(fileName, created)
-          return fileHandleOf(created)
-        }
-        throw notFound(fileName)
-      })
-    },
-    async removeEntry(target: string) {
-      live(() => dir.children.delete(target))
-    },
-    async* entries() {
-      if (dir.detached) return
-      for (const [key, value] of [...dir.children]) {
-        yield [key, value.kind === 'directory' ? directoryHandleOf(value) : fileHandleOf(value)] as [string, unknown]
-      }
-    }
-  }
-}
-
-type OpfsHandle = {
-  /** File names currently held inside the cache directory. */
-  keys: () => string[]
-  /** Bytes actually on the fake disk for one name; 0 when it is not there. */
-  bytes: (name: string) => number
-  /** The browser reclaimed the whole directory: the index now lies. */
-  dropAll: () => void
-  /** The cache dir is deleted, but one orphan file is placed in it. */
-  writeOrphan: (name: string, size: number) => Promise<void>
-}
-
-function installOpfs(quotaBytes: number): OpfsHandle {
-  const g = globalThis as Record<string, unknown>
-  const rootDir = fakeDirectory('')
-  const quota = quotaBytes
-
-  const cacheDir = (): FakeDir | undefined => {
-    const cache = rootDir.children.get(CACHE_DIR_NAME)
-    return cache && cache.kind === 'directory' ? cache : undefined
-  }
-
-  const navigator_ = {
-    userAgent: 'node',
-    storage: {
-      async getDirectory() {
-        return directoryHandleOf(rootDir)
-      },
-      async estimate() {
-        const files = cacheDir()?.children.values() ?? []
-        let usage = 0
-        for (const node of files) if (node.kind === 'file') usage += node.blob.size
-        return { quota, usage }
-      }
-    }
-  }
-  Object.defineProperty(g, 'navigator', { value: navigator_, configurable: true, writable: true })
-
-  const handle: OpfsHandle = {
-    keys: () => [...cacheDir()?.children.keys() ?? []],
-    bytes: (name: string) => cacheDir()?.children.get(name)?.kind === 'file'
-      ? (cacheDir()!.children.get(name) as FakeFile).blob.size
-      : 0,
-    dropAll: () => {
-      const cache = rootDir.children.get(CACHE_DIR_NAME)
-      if (cache && cache.kind === 'directory') cache.detached = true
-      rootDir.children.delete(CACHE_DIR_NAME)
-    },
-    writeOrphan: async (name: string, size: number) => {
-      const handle = await directoryHandleOf(rootDir)
-        .getDirectoryHandle(CACHE_DIR_NAME, { create: true })
-      const file = await (handle as ReturnType<typeof directoryHandleOf>).getFileHandle(name, { create: true })
-      const writable = await file.createWritable()
-      await writable.write(blobOf(size, 'o'))
-      await writable.close()
-    }
-  }
-  lastOpfs = handle
-  return handle
-}
-
-/** No OPFS, no IndexedDB: the runtime the store must live with. */
-function installNoStorage() {
-  const g = globalThis as Record<string, unknown>
-  Object.defineProperty(g, 'navigator', { value: { userAgent: 'node' }, configurable: true, writable: true })
-  Object.defineProperty(g, 'indexedDB', { value: undefined, configurable: true, writable: true })
-}
-
-/** No OPFS, IndexedDB only: the fallback path. */
-function installIdbOnly() {
-  const g = globalThis as Record<string, unknown>
-  Object.defineProperty(g, 'navigator', { value: { userAgent: 'node' }, configurable: true, writable: true })
-  return installIdb()
-}
-
-// ---------------------------------------------------------------------------
-// A fake IndexedDB: one object store per database, the calls the store makes.
-// ---------------------------------------------------------------------------
-
-type IdbRecord = { key: string, blob: Blob }
-
-function requestFor<T>(result: T) {
-  const request = {
-    result,
-    error: null as Error | null,
-    onsuccess: null as ((() => void) | null),
-    onerror: null as ((() => void) | null)
-  }
-  queueMicrotask(() => request.onsuccess?.())
-  return request
-}
-
-function installIdb() {
-  const g = globalThis as Record<string, unknown>
-  const records = new Map<string, IdbRecord>()
-  // Per database name, so a second `open` of the same DB sees the store it
-  // created on the first upgrade — the way a real browser does.
-  const stores = new Map<string, Set<string>>()
-  const factory = {
-    open(name: string) {
-      const isNew = !stores.has(name)
-      if (isNew) stores.set(name, new Set<string>())
-      const db = {
-        name,
-        objectStoreNames: { contains: (store: string) => stores.get(name)?.has(store) ?? false },
-        createObjectStore: (store: string) => {
-          stores.get(name)?.add(store)
-          return {}
-        },
-        transaction: () => ({
-          objectStore: (store: string) => {
-            if (!stores.get(name)?.has(store)) throw new Error(`NotFoundError: ${store}`)
-            return {
-              put: (record: IdbRecord) => {
-                records.set(record.key, record)
-                return requestFor(undefined)
-              },
-              get: (key: string) => requestFor(records.get(key)),
-              delete: (key: string) => {
-                records.delete(key)
-                return requestFor(undefined)
-              },
-              getAllKeys: () => requestFor([...records.keys()]),
-              clear: () => {
-                records.clear()
-                return requestFor(undefined)
-              }
-            }
-          },
-          get done() {
-            return Promise.resolve()
-          }
-        }),
-        close: () => {}
-      }
-      const request = {
-        result: db as unknown,
-        error: null as Error | null,
-        onupgradeneeded: null as ((() => void) | null),
-        onsuccess: null as ((() => void) | null),
-        onerror: null as ((() => void) | null)
-      }
-      queueMicrotask(() => {
-        if (isNew) request.onupgradeneeded?.()
-        request.onsuccess?.()
-      })
-      return request
-    },
-    deleteDatabase: (name: string) => {
-      stores.delete(name)
-      for (const key of [...records.keys()]) records.delete(key)
-      return requestFor(undefined)
-    }
-  }
-  Object.defineProperty(g, 'indexedDB', { value: factory, configurable: true, writable: true })
-  return {
-    keys: () => [...records.keys()],
-    bytes: (key: string) => records.get(key)?.blob.size ?? 0
-  }
-}
-
-function clearIndex() {
-  globalThis.localStorage?.removeItem(INDEX_STORAGE_KEY)
-}
-
-type IndexRow = { bytes: number, accessedAt: number }
-
-function indexRaw(): Record<string, IndexRow> {
-  const raw = globalThis.localStorage?.getItem(INDEX_STORAGE_KEY)
-  return raw ? JSON.parse(String(raw)) as Record<string, IndexRow> : {}
-}
-
-function indexWrite(rows: Record<string, IndexRow>) {
-  globalThis.localStorage?.setItem(INDEX_STORAGE_KEY, JSON.stringify(rows))
 }
 
 function walkApp(dir: string, prefix = 'app'): string[] {
@@ -444,7 +182,7 @@ async function main() {
   const live = (keys: string[]) => new Set(keys)
 
   await check('the store names the backend it actually reached', async () => {
-    clearIndex()
+    clearByteIndex()
     installOpfs(1024)
     resetByteStoreProbe()
     assert.equal(await byteStoreBackend(), 'opfs', 'OPFS wins when the browser offers it')
@@ -458,7 +196,7 @@ async function main() {
   })
 
   await check('a stored revision reads back as the same bytes', async () => {
-    clearIndex()
+    clearByteIndex()
     const opfs = installOpfs(1024 * 1024)
     resetByteStoreProbe()
     const blob = blobOf(1200, 'a')
@@ -466,26 +204,26 @@ async function main() {
     const back = await readCachedBytes(KEYS[0])
     assert.ok(back, 'the cache answers')
     assert.equal(back!.size, blob.size, 'byte for byte')
-    assert.equal(indexRaw()[KEYS[0]]?.bytes, blob.size, 'the index carries the size the UI shows')
+    assert.equal(readByteIndex()[KEYS[0]]?.bytes, blob.size, 'the index carries the size the UI shows')
     assert.equal(opfs.bytes(KEYS[0]), blob.size, 'and the file is really there')
     assert.equal((await byteCacheInfo()).usedBytes, blob.size)
   })
 
   await check('a read the cache cannot serve is forgotten, not trusted', async () => {
-    clearIndex()
+    clearByteIndex()
     const opfs = installOpfs(1024 * 1024)
     resetByteStoreProbe()
     await putCachedBytes(KEYS[0], blobOf(500, 'b'), live([KEYS[0]]))
     opfs.dropAll()
     assert.equal(await readCachedBytes(KEYS[0]), null, 'the browser reclaimed the file')
-    assert.equal(indexRaw()[KEYS[0]], undefined, 'and the index stopped lying about it')
+    assert.equal(readByteIndex()[KEYS[0]], undefined, 'and the index stopped lying about it')
     assert.equal(await putCachedBytes(KEYS[1], blobOf(300, 'c'), live([KEYS[1]])), true,
       'the store re-opens its directory instead of staying dead')
     assert.equal(opfs.bytes(KEYS[1]), 300)
   })
 
   await check('an unknown or illegal key never reaches the filesystem', async () => {
-    clearIndex()
+    clearByteIndex()
     const opfs = installOpfs(1024 * 1024)
     resetByteStoreProbe()
     assert.equal(await putCachedBytes('../escape', blobOf(10), live([])), false)
@@ -496,7 +234,7 @@ async function main() {
   })
 
   await check('a file bigger than the budget stays uncached', async () => {
-    clearIndex()
+    clearByteIndex()
     const opfs = installOpfs(100)
     resetByteStoreProbe()
     assert.equal(await byteCacheBudget(), 40, 'the quota the browser reports is shared, not spent')
@@ -507,7 +245,7 @@ async function main() {
   })
 
   await check('the store off is a state, not an exception', async () => {
-    clearIndex()
+    clearByteIndex()
     installNoStorage()
     resetByteStoreProbe()
     assert.equal(await putCachedBytes(KEYS[0], blobOf(10), live([KEYS[0]])), false)
@@ -520,7 +258,7 @@ async function main() {
   })
 
   await check('the IndexedDB fallback really stores and really evicts', async () => {
-    clearIndex()
+    clearByteIndex()
     const idb = installIdbOnly()
     resetByteStoreProbe()
     assert.equal(await putCachedBytes(KEYS[0], blobOf(1000), live([KEYS[0]])), true)
@@ -530,30 +268,30 @@ async function main() {
     const pruned = await pruneByteCache(live([KEYS[1]]))
     assert.ok(pruned.dropped >= 1, 'the revision the library stopped naming is freed')
     assert.deepEqual(idb.keys(), [KEYS[1]], 'and it is gone from the store, not only from the index')
-    assert.equal(indexRaw()[KEYS[0]], undefined)
+    assert.equal(readByteIndex()[KEYS[0]], undefined)
     await clearCachedBytes()
     assert.deepEqual(idb.keys(), [], 'the clear control empties the backend')
-    assert.deepEqual(indexRaw(), {}, 'and the index with it')
+    assert.deepEqual(readByteIndex(), {}, 'and the index with it')
   })
 
   await check('the index and the bytes are reconciled both ways', async () => {
-    clearIndex()
+    clearByteIndex()
     const opfs = installOpfs(10 * 1024 * 1024)
     resetByteStoreProbe()
     await putCachedBytes(KEYS[0], blobOf(1000), live([KEYS[0]]))
     // An orphan the index never named: unreachable bytes, the leak ADR-033 fears.
     await opfs.writeOrphan(KEYS[3], 4096)
     // And an index entry whose file somebody else deleted.
-    indexWrite({ ...indexRaw(), [KEYS[2]]: { bytes: 123, accessedAt: 1 } })
+    writeByteIndex({ ...readByteIndex(), [KEYS[2]]: { bytes: 123, accessedAt: 1 } })
     const pruned = await pruneByteCache(live([KEYS[0], KEYS[2]]))
     assert.equal(pruned.dropped, 2, 'one file with no index entry, one entry with no file')
     assert.deepEqual(opfs.keys(), [KEYS[0]], 'the orphan was deleted from the browser')
-    assert.equal(indexRaw()[KEYS[2]], undefined, 'the lie was deleted from the index')
-    assert.equal(indexRaw()[KEYS[0]]?.bytes, 1000, 'the honest entry survived both passes')
+    assert.equal(readByteIndex()[KEYS[2]], undefined, 'the lie was deleted from the index')
+    assert.equal(readByteIndex()[KEYS[0]]?.bytes, 1000, 'the honest entry survived both passes')
   })
 
   await check('over budget, the least recently used revision is the one freed', async () => {
-    clearIndex()
+    clearByteIndex()
     const opfs = installOpfs(600)
     resetByteStoreProbe()
     assert.equal(await byteCacheBudget(), 240)
@@ -564,7 +302,7 @@ async function main() {
     await slow(5)
     await putCachedBytes(KEYS[2], blobOf(100), live([KEYS[0], KEYS[1], KEYS[2]]))
     assert.deepEqual(opfs.keys().sort(), [KEYS[1], KEYS[2]].sort(), 'the third makes three over budget, so the oldest goes')
-    assert.equal(indexRaw()[KEYS[0]], undefined, 'and the index agrees')
+    assert.equal(readByteIndex()[KEYS[0]], undefined, 'and the index agrees')
     // Touch KEYS[2] so the next write frees KEYS[1] instead.
     assert.ok(await readCachedBytes(KEYS[2]))
     await slow(5)
@@ -638,7 +376,7 @@ async function main() {
   }
 
   await check('an import keeps its own copy of the bytes', async () => {
-    clearIndex()
+    clearByteIndex()
     installOpfs(10 * 1024 * 1024)
     resetByteStoreProbe()
     media.assets.value = []
@@ -655,7 +393,7 @@ async function main() {
   })
 
   await check('a browser with no byte store does not fail the import', async () => {
-    clearIndex()
+    clearByteIndex()
     installNoStorage()
     resetByteStoreProbe()
     media.assets.value = []
@@ -670,7 +408,7 @@ async function main() {
   })
 
   await check('a relink caches the bytes it just took', async () => {
-    clearIndex()
+    clearByteIndex()
     installOpfs(10 * 1024 * 1024)
     resetByteStoreProbe()
     media.assets.value = []
@@ -689,7 +427,7 @@ async function main() {
   })
 
   await check('bytes the library stopped naming are freed on the next open', async () => {
-    clearIndex()
+    clearByteIndex()
     const opfs = installOpfs(10 * 1024 * 1024)
     resetByteStoreProbe()
     media.assets.value = []
@@ -733,14 +471,6 @@ function locales() {
     return new Map(Object.entries(media).map(([key, value]) => [`tmcut.media.${key}`, String(value)]))
   }
   return { en: flat('i18n/locales/en.json'), vi: flat('i18n/locales/vi.json') }
-}
-
-/** The OPFS handle installed for the checks currently running. */
-let lastOpfs: OpfsHandle | undefined
-
-function opfsLive(): OpfsHandle {
-  if (!lastOpfs) throw new Error('no OPFS installed for this check')
-  return lastOpfs
 }
 
 /**

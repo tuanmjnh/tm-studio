@@ -302,7 +302,7 @@ async function main() {
     }
   })
 
-  await check('one collector, and no component reaches past it (rule 12)', async () => {
+  await check('two seams own the demuxer, and no component reaches past them (rule 12)', async () => {
     const demuxerFiles: string[] = []
     const walk = (dir: string) => {
       for (const entry of readdirSync(join(root, dir), { withFileTypes: true })) {
@@ -312,7 +312,11 @@ async function main() {
       }
     }
     walk('app')
-    assert.deepEqual(demuxerFiles, ['app/utils/tmcut/mediaProbe.ts'], 'the service owns the demuxer')
+    // Probing a file and drawing one frame of it are different questions, but
+    // each has exactly one module allowed to open a container. Slice D added
+    // the frame seam beside the probe seam; a third importer would be drift.
+    assert.deepEqual(demuxerFiles.sort(), ['app/utils/tmcut/frameDecode.ts', 'app/utils/tmcut/mediaProbe.ts'],
+      'the services own the demuxer')
     // The contract carries the rich question, so a feature asks the host and
     // never a library.
     assert.match(read('packages/core/types/platform.ts'), /probeInfo\(src: string, hints\?: TmcutProbeHints\)/)
