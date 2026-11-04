@@ -2414,6 +2414,9 @@ cộng **một hunk duy nhất** của [en.json](file:///D:/Applications/tm-stud
 [vi.json](file:///D:/Applications/tm-studio/i18n/locales/vi.json), kèm chính file này. Hai locale có **6** hunk mỗi
 file; **5** trong số đó là WIP của chủ repo (`@@ -13`, `-127`, `-2288`, `-2336`, `-2482`), chỉ hunk `@@ -1049 +1050 @@`
 là của F2b, nên stage bằng patch **một hunk**, không `git add` cả file. `git status --short` đo **63** mục trước commit,
-trong đó **9** thuộc lượt này; sau commit phải còn **54**. Probe RED
+trong đó **9** thuộc lượt này; sau commit đo lại **56** — **7** mục biến mất vì **5** file code/spec + doc đã sạch, còn
+**2** file locale vẫn đứng tên vì **5** hunk WIP của chủ repo chưa đi. Con số này từng ghi là 54 trong bản nháp, tức
+cộng nhầm cả hai locale vào nhóm "sạch"; **56** là số đo sau commit, và `git diff --cached` sau commit = **0** dòng.
+Probe RED
 (`app/composables/tmpF2bRedProbe.ts`, `tests/unit/tmcut_f2b_redprobe.spec.ts`) và fixture tạm
 `public/tmcut-qa-f2b.mp4` là file **của lượt này**, đã xóa và không bao giờ staged.
