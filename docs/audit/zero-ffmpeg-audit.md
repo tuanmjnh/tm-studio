@@ -2029,3 +2029,125 @@ File staged của lượt này là **20** mục, không hơn: `docs/audit/zero-f
 này), `backup/`, `resources/*.exe` và mọi binary local
 **không** bị đụng (Q3/Q8); `docs/tmcut-zero-ffmpeg-next-slices-agent-execution-brief.md` là file của chủ repo,
 **không** stage.
+
+## 27. Slice F1 — "vẽ gì, theo thứ tự nào" chuyển vào core, và luật "một hàng duy nhất" nghỉ hưu (đo ngày 2026-11-04)
+
+Brief F mở đầu bằng scene graph + WebGL2 compositor. Trước khi một host **xếp chồng** nhiều hàng footage,
+phải có đúng **một** chỗ trả lời câu hỏi "ở tick này, vẽ những bề mặt nào, cái nào nằm dưới cái nào".
+Hiện tại có **hai** chỗ, và chúng không trả lời giống nhau — nên F1 là bước bắt buộc của F, không phải
+một tuỳ chọn tối ưu.
+
+### 27.1 Ba quyết định của một khung hình, và nơi chúng sống
+
+| Quyết định | Trước F1 | Sau F1 |
+| --- | --- | --- |
+| Hàng footage nào **đủ điều kiện** vẽ ở tick này | core `paintStack.selectPaintRows` — đã đúng chỗ | không đổi; `compositePlan` **gọi** nó chứ không chép luật |
+| Layer nào của một hàng là **ảnh**, layer nào là **partner `outgoing`** của một transition | app, tự quyết mỗi frame: [useTmcutPlayback.ts:133](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L133) và [:158](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L158) | core [composite.mjs:62](file:///D:/Applications/tm-studio/packages/core/src/composite.mjs#L62) |
+| Cái gì **phủ lên toàn stack** (chữ overlay ở mọi hàng text đang hiện) | app `activeTextClips` [:181](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L181), còn export thì tự quyết ở [render/clip.ts:155](file:///D:/Applications/tm-studio/app/utils/tmcut/render/clip.ts#L155) | core [composite.mjs:98](file:///D:/Applications/tm-studio/packages/core/src/composite.mjs#L98) |
+
+Ô thứ nhất của dòng cuối là **nguồn của nợ F3**: `selectExportTracks` vẫn tự bổ hàng `videoRows[0]` thành
+`videoBase` và `videoRows.slice(1)` thành `extraVideoTracks`
+([clip.ts:161](file:///D:/Applications/tm-studio/app/utils/tmcut/render/clip.ts#L161)) — tức export đang
+**re-decide** cái luật mà core đã có từ §23. F1 chưa đụng file app nào; nó chỉ dựng chỗ đúng để F2 và F3
+chuyển về.
+
+### 27.2 Luật mới
+
+`compositePlan(evaluation) → { at, slots }` ([composite.mjs:53](file:///D:/Applications/tm-studio/packages/core/src/composite.mjs#L53)),
+declaration trong [index.d.ts:1962](file:///D:/Applications/tm-studio/packages/core/src/index.d.ts#L1962).
+Mỗi slot là `{ kind, role, clipId, trackId, trackIndex, layer }`:
+
+- `kind`: `footage` (ảnh của một hàng video) hoặc `overlay` (chữ). Footage trước, theo thứ tự track;
+  overlay **sau toàn bộ** footage, cũng theo thứ tự track — đúng thứ tự `evaluateTimeline` sinh ra.
+- `role`: `paint` là bề mặt chính; `outgoing` là clip đang rời đi trong cửa transition, và nó nằm
+  **ngay dưới** `paint` của chính hàng đó (crossfade là clip mới đến **trên** clip ra đi, không ngược lại).
+  Một hàng bình thường cho **một** slot; hàng có crossfade đang chạy cho **hai**.
+- `layer` được mang **theo tham chiếu**, không phải bản sao của một quyết định: plan là *cách đọc* kết quả
+  evaluator, nên chép ra là mở đường cho hai bản khác ý nhau.
+- Hàng `hidden`, hàng audio, và hàng có layer mà evaluator không cho `clipId` (input hỏng) **không** vào plan.
+- Layer `visible: false` (opacity 0) **vẫn** giữ slot — cùng luật §23 đã đo: đó là *look*, không phải *removal*.
+
+F1 cố ý **không** quyết định *cách* vẽ. Host một `<video>` vẫn honour cùng thứ tự (`paint` là phần tử chính,
+`outgoing` là `<video>` thứ hai); host WebGL2 biến `slots` thành scene graph. Chiến lược composite là của
+host; **tập hợp và thứ tự** là của core.
+
+### 27.3 TDD: RED đo được, và hai bẫy fixture đáng ghi lại
+
+Test viết trước: [composite-plan.test.mjs](file:///D:/Applications/tm-studio/packages/core/test/composite-plan.test.mjs)
+**212** dòng, **16** check, **4** describe. RED chạy thật, fail vì đúng một lý do:
+
+```
+Error: Cannot find module 'D:\Applications\tm-studio\packages\core\src\composite.mjs'
+code: 'ERR_MODULE_NOT_FOUND'
+```
+
+Hai lần sửa fixture trước khi GREEN, cả hai là bẫy sẽ gặp lại ở F2/F3 nên ghi lại nguyên văn:
+
+1. **Cửa transition không sinh từ clip "ra đi".** `transitionWindows` chỉ tạo window khi clip **đến** có
+   `transitionIn.duration > 0`, và cần một hàng xóm có `span.end` trùng `endTicks`
+   ([transitions.mjs:628-639](file:///D:/Applications/tm-studio/packages/core/src/transitions.mjs#L628)).
+   Bản nháp đặt hai clip **kề nhau đúng** (`in` bắt đầu ở 4 s sau clip 4 s) → không overlap → không window →
+   `role` không bao giờ xuất hiện. Fix: `out` ở `[0, 4)`, `in` ở `[3, 7)` với `transitionIn` 1 s, probe giữa
+   cửa ở `3.5 * T` (`T = TICKS_PER_SECOND = 120000`, nên bản nháp probe `4500` tick thực ra là **0,0375 s**).
+2. **`hidden` là thuộc tính track, không phải clip.** Bản nháp nhét `{ hidden: true }` vào override của clip
+   → evaluator vẫn coi track hiện → test "hàng ẩn không lên màn hình" không kiểm chứng gì cả.
+
+Vì law nằm trong `selectPaintRows`, một check khoá **drift giữa hai module**:
+`plan.slots.filter(kind === 'footage').map(trackIndex)` phải bằng `selectPaintRows(evaluation).rows.map(…)`
+trên cùng một evaluation, và `plan.at === evaluation.at` (không đánh giá timeline lần hai).
+
+### 27.4 Prose nghỉ hưu, assertion giữ nguyên
+
+Luật "duy nhất một hàng được chiếm canvas" chưa bao giờ bị **đo** là sai; nó là một giới hạn của host, và host
+sắp bỏ giới hạn đó. Việc của F1 là thôi ghi nó như một **luật**:
+
+- header [paintStack.mjs](file:///D:/Applications/tm-studio/packages/core/src/paintStack.mjs): "which footage
+  rows are paintable… `rows[0]` is the BOTTOM of the stack", kèm câu `base` sống tiếp **cho** host một bề mặt;
+- JSDoc `@returns` bỏ đoạn "anything after it is footage the single-row law drops";
+- comment của `CorePaintStack.rows` trong `index.d.ts` đổi từ "owns the canvas, the rest are dropped" sang
+  "the BOTTOM of the stack";
+- mô tả trong [paint-stack.test.mjs:52](file:///D:/Applications/tm-studio/packages/core/test/paint-stack.test.mjs#L52)
+  đổi tên từ "the single-row law" thành "the row law, bottom of the stack first". **Mọi assertion giữ nguyên**,
+  kể cả case overlap (`baseIdAt(both, 3s) === 'row-a'`) vẫn đúng vì `base === rows[0]`; chỉ comment của nó được
+  viết lại thành "hàng ở ĐÁY stack".
+
+Không đổi hành vi của consumer nào: [useTmcutPlayback.ts:113](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L113)
+vẫn đọc `.base`, nên preview hôm nay vẽ y như hôm qua. F2 mới là lúc nó đọc `compositePlan`.
+
+### 27.5 Gates (chạy theo thứ tự, số liệu từ chính lần chạy đó)
+
+| Gate | Lệnh | Kết quả | Bằng chứng |
+| --- | --- | --- | --- |
+| 1 Types | `npx nuxt typecheck` | PASS | exit **0**, `grep -c "error TS"` = **0**; `.nuxt/eslint.config.mjs` được sinh lại lúc **20:54** (28552 byte) |
+| 2 Lint | `npx eslint` trên **6** file chạm tới, chạy **sau** gate 1 | PASS | exit **0**, output **0** byte. Gate 2 từng **fail 1** error `@stylistic/indent` tại `composite.mjs:66`; `--fix` chỉ thụt dòng nối tiếp **+2 space**, đã đọc lại diff và re-lint |
+| 3 App specs | `npx tsx tests/unit/run-all.mts` | PASS | **106/106** specs, exit **0** |
+| 3b Core | `node --test` + `tools/check-boundaries.mjs` + `tsc -p tsconfig.check.json` | PASS | **669/669**, `fail 0` (tăng **653 → 669** vì **16** check mới); boundaries: "core imports nothing platform-specific"; `.d.ts` tsc exit **0** |
+| 4 Live | — | N/A | F1 **không** đổi hành vi host nào: `compositePlan` chưa có consumer, `selectPaintRows` trả về y hệt, và `composite.mjs` là hàm thuần trên một evaluation đã có test pixel ở §21. Cổng live sẽ chạy ở F2 khi preview thật vẽ theo plan |
+| 5 Docs | năm guard markdown, chạy lại sau **lần sửa markdown cuối** | PASS | **28** checks (**12/5/4/3/4**), exit **0** cả năm. `tmcut_doc_table_shape` có thật vì §27.1 và §27.5 đều là bảng; không một ô nào chứa pipe trần |
+
+### 27.6 Chưa chứng minh (nợ ghi thẳng cho F2-F5)
+
+- **Không có ảnh chứng minh plan đúng.** F1 đo plan bằng assertion trên cấu trúc; nó không đo "màn hình hiển thị
+  ba hàng cùng lúc ra sao". Đó là F2 (`useTmcutPlayback` đổi sang `compositePlan`, witness
+  `tmcut_footage_row_rule` bị lật) và F5 (visual regression đo trong Chromium thật).
+- **Slot `outgoing` chưa được host nào seek.** Test chỉ khẳng định `layer.sourceTicks` của partner là
+  `3.5 * T` — nghĩa là core đã đưa đúng vị trí nguồn; còn host có thật sự đặt `<video>` thứ hai vào giây đó
+  thì thuộc F2, vì hiện app vẫn tự làm bằng `transitionCrossfade.outgoingMediaTime`.
+- **Case chưa có luật:** hàng mà `paint` không phải clip `incoming` (geometry ba clip chèn lên cửa transition),
+  và hai cửa transition trên **cùng** một hàng tại một tick. `transitionAt` hiện trả cửa đầu tiên, nên plan
+  thừa hưởng giới hạn đó chứ không nhân rộng; nếu F2 gặp project thật như vậy thì phải mở luật trong core,
+  không vá ở app.
+- **`kind: 'image'` / sticker trên hàng video** không có slot riêng — plan chỉ phân biệt `footage` theo
+  **track** video, nên một hàng video chứa ảnh tĩnh vẫn là `footage`. Đúng với cách export đang xử lý, nhưng
+  chưa đo.
+
+### 27.7 Bảo vệ working tree
+
+Lượt này staged **7** file, không hơn: `packages/core/src/composite.mjs` (mới, **118** dòng),
+`packages/core/test/composite-plan.test.mjs` (mới, **212** dòng), `packages/core/src/paintStack.mjs`,
+`packages/core/src/index.mjs`, `packages/core/src/index.d.ts`, `packages/core/test/paint-stack.test.mjs`,
+cộng chính file này. **Không** file app, **không** locale, **không** `backup/`, **không** binary.
+`git status --short` đo được **63** mục trước commit, trong đó **7** thuộc lượt này — **56** mục còn lại là WIP
+của chủ repo (`app/pages/system/*` đang được tái cấu trúc, `i18n/locales/*`, `electron/main.cjs`, `package.json`,
+`pnpm-lock.yaml`, `server/*`, `backup/`, `docs/content/`…) và **không** bị đụng; sau commit `git status --short`
+phải còn đúng **56**. `git diff --cached --name-only` trước commit phải liệt kê **đúng** bảy đường dẫn trên.

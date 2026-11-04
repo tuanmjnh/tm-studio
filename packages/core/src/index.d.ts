@@ -1918,7 +1918,7 @@ export interface CorePaintRow {
 
 export interface CorePaintStack {
   at: number
-  /** Paint order, track order: `rows[0]` owns the canvas, the rest are dropped. */
+  /** Paint order, track order: `rows[0]` is the BOTTOM of the stack. */
   rows: CorePaintRow[]
   base: CorePaintRow | null
 }
@@ -1933,6 +1933,35 @@ export function paintStackAt(
   input: TmcutProject | TmcutTimeline | CoreEvaluatorTimelineLike | { timeline?: CoreEvaluatorTimelineLike } | null | undefined,
   atTicks: number
 ): CorePaintStack
+
+// --- Composite plan: what to paint, in order (V4 Phase 2, F1) ---
+/** One surface a host must render, carrying the evaluator's layer by reference. */
+export interface CoreCompositeSlot {
+  /** `footage` = a video row's picture; `overlay` = live text painted on top. */
+  kind: 'footage' | 'overlay'
+  /** `paint` = the layer shown; `outgoing` = a transition's partner beneath it. */
+  role: 'paint' | 'outgoing'
+  clipId: string
+  trackId: string | null
+  /** Index into `CoreTimelineEvaluation.tracks`, aligned with the input tracks. */
+  trackIndex: number
+  layer: CoreEvaluatedLayer
+}
+
+export interface CoreCompositePlan {
+  at: number
+  /** Bottom of the stack first: footage rows in track order, then overlays. */
+  slots: CoreCompositeSlot[]
+}
+
+/**
+ * The set and order of surfaces for one `evaluateTimeline` result. Reads
+ * `selectPaintRows` for the row law, so the two cannot drift, and never
+ * evaluates the timeline a second time.
+ */
+export function compositePlan(
+  evaluation: CoreTimelineEvaluation | null | undefined
+): CoreCompositePlan
 
 // --- Clock + host capability contract (V4 Phase 1 / M1) ---
 export function createClock(rate: FrameRate): TmcutClock

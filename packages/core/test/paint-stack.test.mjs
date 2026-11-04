@@ -1,7 +1,7 @@
 // tmcut-core — paint stack tests. Run: node --test test/
 //
-// The single-row law (G18) is asserted as OUTCOMES — which track owns the
-// canvas — never as a re-run of the filter: a test that recomputed
+// The row law (G18) is asserted as OUTCOMES — which track is at the BOTTOM of
+// the stack — never as a re-run of the filter: a test that recomputed
 // `!hidden && layers.length` would pass if the rule changed order or dropped
 // the gap hand-off, and the whole point of the module is that the rule can
 // only change HERE.
@@ -49,7 +49,7 @@ function baseIdAt(timeline, atTicks) {
   return stack.base ? stack.base.trackId : null
 }
 
-describe('selectPaintRows — the single-row law', () => {
+describe('selectPaintRows — the row law, bottom of the stack first', () => {
   it('one footage row owns the canvas for its whole window', () => {
     const timeline = timelineOf(['row-a', [clip('a', 0, 4)]])
     assert.deepEqual(paintStackAt(timeline, 0).rows.map(r => r.trackId), ['row-a'])
@@ -84,7 +84,8 @@ describe('selectPaintRows — the single-row law', () => {
     )
     assert.equal(baseIdAt(handoff, 1 * T), 'row-a')
     assert.equal(baseIdAt(handoff, 5 * T), 'row-b')
-    // Overlap window: only one row may own the canvas, and it is the FIRST.
+    // Overlap window: both rows are paintable, and the BOTTOM of the stack —
+    // the row a single-surface host paints — is the FIRST.
     const both = timelineOf(
       ['row-a', [clip('a', 0, 8)]],
       ['row-b', [clip('b', 2, 8)]]

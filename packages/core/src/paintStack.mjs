@@ -1,13 +1,13 @@
 // =============================================================================
 //  tmcut-core — paint stack
-//  Which footage row owns the canvas at one tick (V4 Phase 2, gap G18).
+//  Which footage rows are paintable at one tick, in paint order (V4 Phase 2,
+//  gap G18; the row half of the plan F1 splits out of the app).
 //
 //  `evaluateTimeline` answers "which clips are live at t?" for every track. It
 //  does not answer the question both renderers actually ask: of the footage
-//  rows, which one PAINTS? Exactly one row can own the canvas today (no host
-//  composites two at once), so the answer is a selection over the evaluation —
-//  video rows, not hidden, holding a layer at this tick, first in track order
-//  wins and the rest are footage the render drops.
+//  rows, which are PAINTABLE? The answer is a selection over the evaluation —
+//  video rows, not hidden, holding a layer at this tick — returned in track
+//  order, which IS the paint order: `rows[0]` is the bottom of the stack.
 //
 //  The rule lives here because both hosts need the SAME one. Before this module
 //  the preview re-implemented it per frame (`footageRow`, app/composables/
@@ -15,8 +15,15 @@
 //  the next visible row — while the exporter pinned the first visible row for
 //  the whole file (`selectExportTracks`, app/utils/tmcut/render/clip.ts). The
 //  two disagree precisely where a project has more than one footage row, which
-//  is the disagreement G18 records. The compositor slice builds its graph from
-//  `rows`, so it stacks from the answer the preview already paints.
+//  is the disagreement G18 records.
+//
+//  This module answers the ROW question only. Which layer of a row is the
+//  picture, which is a transition's outgoing partner, and what overlays the
+//  whole stack is the job of `composite.mjs` — `compositePlan` calls here for
+//  its rows, so the two cannot drift. `base` (== `rows[0]`) survives for the
+//  hosts that still drive one surface: for them the bottom row is the one that
+//  paints, which is exactly what the single-row law was, minus the claim that
+//  no host may stack more.
 //
 //  A row carries `trackIndex`, its position in `evaluateTimeline`'s own track
 //  list — which that call builds one entry per input track, in order, so a host
@@ -41,10 +48,10 @@ import { evaluateTimeline } from './evaluate.mjs'
  *   result, so a per-frame caller never evaluates the timeline twice.
  * @returns {{ at: number, rows: Array<{ trackId: string|null, trackIndex:
  *   number, layers: object[] }>, base: object|null }}
- *   `rows` is the paint order both hosts must follow — `rows[0]` (also `base`)
- *   is the row that owns the canvas today, and anything after it is footage the
- *   single-row law drops. A `base` of `null` means no footage paints at this
- *   tick: the canvas shows its background, exactly as an uncovered gap does.
+ *   `rows` is the paint order, bottom first: `rows[0]` (also `base`) is the row
+ *   a host with a single surface paints, and `compositePlan` stacks all of them.
+ *   A `base` of `null` means no footage paints at this tick: the canvas shows
+ *   its background, exactly as an uncovered gap does.
  */
 export function selectPaintRows(evaluation) {
   const entries = Array.isArray(evaluation?.tracks) ? evaluation.tracks : []
