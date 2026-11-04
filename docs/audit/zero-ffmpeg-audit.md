@@ -415,7 +415,7 @@ Mục **7** chưa thi hành: binary và `resources/*.exe` vẫn nằm nguyên tr
 |---|---|---|
 | Không FFmpeg trong dependency tree | `package.json` + lockfile grep | **đã đúng** (chưa từng có package FFmpeg) |
 | Không binary trong repo/build | `.gitignore` + `electron-builder.yml` | **chưa** — 471 MiB vẫn đóng gói |
-| Không spawn/exec media | grep `child_process` trong `electron/`, `server/` | **chưa** — 12 file, chỉ 1 không liên quan media (`dev-electron-launcher.cjs` spawn chính Electron) |
+| Không spawn/exec media | grep `child_process` trong `electron/`, `server/` | **chưa** — 12 file import `child_process`; **9** file làm media work, **3** không liên quan (`main.cjs` spawn MCP server, `dev-electron-launcher.cjs` spawn Electron, `updater.cjs` chạy `tar`/`powershell`). Kiểm kê theo call site — 23 site, 21 chạm FFmpeg — ở §25.1 |
 | Không FFmpeg IPC/config/env | `ipcPolicy.cjs`, `preload.cjs`, `sqlite.cjs` | **chưa** — 10 kênh, 3 bảng |
 | Không docs hướng dẫn cài FFmpeg | doc guards + `updater.cjs` | **một phần** — 14 dòng roadmap đã đóng ở slice A2 (§5.3); `updater.cjs` và docs center còn tới slice I/K |
 | Probe bằng MediaProbeService | fixture probe test 2 host | **một phần** — slice B đã dựng và đo trên cả hai host (§13); `webProbe.ts` cũ vẫn sống tới slice C (§5.2) |
@@ -1614,3 +1614,193 @@ ra **đúng 13** dòng: `packages/core/src/detection.mjs`, `packages/core/src/in
 `app/utils/tmcut/silenceScan.ts`, `app/utils/tmcut/frameDecode.ts`,
 `tests/unit/tmcut_silence_scan.spec.ts`, `tests/unit/tmcut_scene_scan.spec.ts`,
 `tests/unit/tmcut_frame_service.spec.ts`, `tests/unit/tmcut_media_probe.spec.ts`, và chính file này.
+
+## 25. Blocker `audit:406` — kiểm kê **toàn bộ** `spawn ffmpeg/ffprobe`, và phương án thay thế (đo ngày 2026-11-04)
+
+Execution brief §2 ra lệnh: không được để một `spawn` chưa phân loại sống tới slice I. Lượt này **chỉ kiểm kê
+và chốt ánh xạ — không đổi một dòng code chạy được nào**, nên blocker **CHƯA ĐÓNG**; §25.6 ghi rõ điều kiện
+nào còn thiếu. Con số kiểm kê lấy từ `grep` toàn bộ `electron/ server/ app/ packages/core/src/ shared/
+scripts/ tests/` (trừ `backup/`, `node_modules/`), rồi **mở từng file được grep** — không suy từ tên hàm.
+
+### 25.1 Năm nhóm, và con số thật của từng nhóm
+
+| Nhóm | Bao nhiêu | Nằm ở đâu | Số phận ở slice I |
+|---|---|---|---|
+| (a) FFmpeg làm **media work** | **14** call site, trong **8** file — **12** chạy `ffmpeg`, **2** chỉ verify binary | Electron: [tmcut.controller.cjs:194](file:///D:/Applications/tm-studio/electron/tools/tmcut.controller.cjs#L194) `runFfmpeg`, [:511](file:///D:/Applications/tm-studio/electron/tools/tmcut.controller.cjs#L511) `runFfmpegLog`, `ffmpeg.controller.cjs:65`/`:80`/`:90`/`:100` (4 `execSync` probe `nvenc`/`amf`/`qsv`), [task-manager.cjs:208](file:///D:/Applications/tm-studio/electron/tools/task-manager.cjs#L208)/[:284](file:///D:/Applications/tm-studio/electron/tools/task-manager.cjs#L284) `spawn(task.command)`; server: [analyze.post.ts:39](file:///D:/Applications/tm-studio/server/api/v1/media/analyze.post.ts#L39), [proxy.post.ts:109](file:///D:/Applications/tm-studio/server/api/v1/media/proxy.post.ts#L109), [render.post.ts:122](file:///D:/Applications/tm-studio/server/api/v1/media/render.post.ts#L122), [htmlVideoRender.ts:177](file:///D:/Applications/tm-studio/server/utils/htmlVideoRender.ts#L177); verify: `paths.cjs:70`, `ffmpeg.controller.cjs:124` | xoá sau khi H có output hợp lệ; **không** xoá trước |
+| (b) **ffprobe-only** | **8** chỗ | [tmcut.controller.cjs:230](file:///D:/Applications/tm-studio/electron/tools/tmcut.controller.cjs#L230) (duration) và [:457](file:///D:/Applications/tm-studio/electron/tools/tmcut.controller.cjs#L457) (JSON), [video-probe.mjs:86](file:///D:/Applications/tm-studio/electron/tools/video-generation/video-probe.mjs#L86), [analyze.post.ts:109](file:///D:/Applications/tm-studio/server/api/v1/media/analyze.post.ts#L109), `ffmpeg.controller.cjs:1224`/`:1333`/`:221`/`:573` | thay bằng `MediaProbeService` (đã dựng ở slice B, §13) — **kể cả chỗ probe video của provider adapter**, không chỉ chỗ của editor |
+| (c) spawn **không liên quan media** | **6** call site, trong **4** file | ngoài 9 file media: `electron/main.cjs:606` (`spawn(process.execPath)` cho MCP server), `dev-electron-launcher.cjs:92` (khởi động Electron — dòng `:28` chỉ là `require`), `updater.cjs:152`/`:159` (`tar.exe`/`powershell.exe`); nằm TRONG file media nhưng không chạm FFmpeg: `task-manager.cjs:18` (`taskkill`), `ffmpeg.controller.cjs:70` (`powershell` hỏi `Win32_VideoController`) | **GIỮ** — brief §3 slice I mục 3 cấm xoá bừa; `updater` chỉ đổi vai (nó cài binary mà sản phẩm không còn cần) |
+| (d) `backup/ffmpeg-engine-2026-11-03/` | 20 file import `child_process` | ảnh chụp chính các file ở (a)/(b) | **không tính**; Q8 giữ untracked tới hết slice I, và mọi `grep` phải loại nó ra nếu không muốn **đôi** mọi con số |
+| (e) test dùng FFmpeg làm **oracle** | **11** spec — **10** cái tự `spawnSync` binary media (**20** call site), cộng `tmcut_html_video_smoke` đi qua route server | `tmcut_render_smoke`, `tmcut_detect_smoke`, `tmcut_svg_still`, `tmcut_golden_frame`, `tmcut_render_parity`, `tmcut_text_pixel`, `tmcut_export_paint_stack`, [tmcut_export_gap_placement.spec.ts:62](file:///D:/Applications/tm-studio/tests/unit/tmcut_export_gap_placement.spec.ts#L62), `tmcut_fx_catalog`, `tmcut_transition_preview`, `tmcut_html_video_smoke` | **tách assertion** theo §8 hàng J, không xoá cả file — đây là chỗ duy nhất pixel/duration từng được đo thật |
+
+Cách đếm (để các con số không phải phỏng đoán): script duyệt 9 file media, lấy mọi dòng gọi
+`spawn`/`spawnSync`/`execSync`/`execFile`/`fork`/`exec`, bỏ comment, `import` và hai `.exec()` là regex trên
+`String` (`render.post.ts:152`, `htmlVideoRender.ts:207`). Kết quả **23** call site process trong **9** file:
+**9** dòng nêu thẳng tên binary (4 file), **12** dòng đi qua biến (`exe`, `task.command`, `cmd`, `filePath`),
+**2** dòng không phải FFmpeg (`task-manager.cjs:18` = `taskkill`, `ffmpeg.controller.cjs:70` = `powershell`
+hỏi tên GPU) — hai cái này thuộc nhóm (c). Vì thế FFmpeg-family là **21** call site, còn (a)+(b) = 14+8 = **22**
+lớn hơn 21 đúng một chỗ: `analyze.post.ts:39` là MỘT `spawn(cmd, …)` nhưng chạy cả `ffmpeg` (`:102`) lẫn
+`ffprobe` (`:109`), nên nó được tính ở cả hai hàng.
+
+Chi tiết caller của hai wrapper phía Electron, vì mọi lệnh render của GUI dồn về đây: `runFfmpeg` có **7** lời
+gọi (`tmcut.controller.cjs:278` audio-extract, `:346`, `:388`, `:420`, `:696`, `:744`, `:769`) và
+`runFfmpegLog` có **2** (`:550` scene, `:561` silence). `task.command` mà task-manager spawn được gán ở
+`ffmpeg.controller.cjs:1024`/`:1076` — không có đường nào khác. Bốn `execSync` ở `ffmpeg.controller.cjs:65`,
+`:80`, `:90`, `:100` **không xuất media**: chúng hỏi binary có encoder `h264_nvenc`/`h264_amf`/`h264_qsv` và
+khởi tạo được thật không, kết quả cache trong `detectGpuSupport()`. `paths.cjs:70` và
+`ffmpeg.controller.cjs:124` là `execFile(<exe>, ['-version'])` — verify sự tồn tại của binary, dùng chung cho
+cả `ytDlp` (`paths.cjs:69` phân nhánh theo `type`).
+
+`app/` có **0** spawner (renderer chỉ dựng argv rồi gửi đi), `packages/core/src/` có **0** (chỉ comment),
+`scripts/` có **0**. Bộ spawner phía server **đã bị đóng băng bằng test**:
+[tmcut_server_media_boundary.spec.ts:27](file:///D:/Applications/tm-studio/tests/unit/tmcut_server_media_boundary.spec.ts#L27)
+kê khai `SPAWN_SITES` và [:59](file:///D:/Applications/tm-studio/tests/unit/tmcut_server_media_boundary.spec.ts#L59)
+buộc tập import `node:child_process` trong `server/` **đúng bằng** danh sách đó — nghĩa là mọi thay thế phải
+sửa guard **trong cùng commit**, nếu không gate 3 lật FAIL ngay.
+
+### 25.2 Chuỗi HTML-video: cái mà `audit:406` để mở, đo tới tận cùng
+
+`app/pages/tmcut/html-video.vue` → `TmcutHtmlVideoStudio.vue:217` `POST /api/v1/media/html-video` →
+`server/api/v1/media/html-video.post.ts` (auth, check busy, `resolveChromeExecutable()` → 503 nếu không có
+Chrome, `validateHtmlVideoSpec` của core, rồi **`void runHtmlVideoRender(...)`** — fire-and-forget) →
+`server/utils/htmlVideoRender.ts:230` làm **hai việc rất khác nhau**:
+
+1. **Capture — đã là browser-native, không có FFmpeg.** `playwright-core` launch Chromium headless, `setContent`,
+   chờ hợp đồng HyperFrames `__hf.seek(t)`, `document.fonts.ready`, clamp theo `HTML_VIDEO_LIMITS` của core, rồi
+   mỗi frame một `page.screenshot({type:'jpeg'})` ghi vào `frame-%05d.jpg` trong
+   [htmlVideoRender.ts:237](file:///D:/Applications/tm-studio/server/utils/htmlVideoRender.ts#L237).
+2. **Encode — **chính** cái `spawn` ở :177.** [htmlVideoRender.ts:177](file:///D:/Applications/tm-studio/server/utils/htmlVideoRender.ts#L177):
+   `image2` + `-framerate fps` từ `frame-%05d.jpg` → `libx264 -preset veryfast -crf 20 -pix_fmt yuv420p
+   -movflags frag_keyframe+empty_moov -f mp4` xuất ra `pipe:3`, ghi thẳng vào `config.uploads.dir` với tên
+   `html-<ts>-<rand>-<base>.mp4`, `-progress pipe:1` đẩy `reportOutTime` vào `server/utils/renderJobs.ts`,
+   client poll `GET /api/v1/media/render/<jobId>`, và file được phục qua `GET /uploads/**` (range/206).
+   Timeout 10 phút cho cả hai giai đoạn; `finally` xoá `framesDir`; `unlink(out)` khi lỗi.
+
+Vậy **chức năng thật không phải "render HTML" mà là "JPEG sequence → H.264 MP4"**. Playwright capture giữ
+nguyên; chỉ leg encode chết khi gỡ binary. Hai phương án đúng trong phạm vi brief (§1.1, §2.2):
+
+| Phương án | Đường | Hệ quả phải đo |
+|---|---|---|
+| **A. WebCodecs + Mediabunny muxer** | JPEG → `ImageBitmap` (createImageBitmap) → `VideoEncoder` → sample → `Mp4OutputFormat` của Mediabunny; frame timestamp lấy từ **frame index + fps**, không timer | encode leg **dời từ server sang client**, vì server Node không có WebCodecs → job model phải đổi (client render rồi upload **khi user chọn**, theo Q4: server chỉ là storage) |
+| **B. Về preview-only** | bỏ hẳn nút render ở studio, giữ HTML-video là composition type có UI cảnh báo | mất tính năng export; project cũ còn spec HTML phải mở được và đánh dấu unsupported |
+
+**Không chọn hộ chủ repo.** A hay B chỉ quyết được sau khi slice H đo
+`VideoEncoder.isConfigSupported` trên đúng runtime (§8 hàng H, và chính §12 của audit đã ghi đây là tiền đề
+chưa trả lời). Điểm mới do kiểm kê này lộ ra: **capture đang ghi frame vào `os.tmpdir()`**
+(:237), còn bốn spec khác trong repo lại nói bundler FFmpeg **không mở được file dưới OS temp trên Windows**
+(`tmcut_export_paint_stack`, `tmcut_golden_frame`, `tmcut_text_pixel`, và chính spec gap placement) — nghĩa là
+leg encode của HTML-video **đang đứng trên đúng chỗ mà repo đã khai tử**, một lý do nữa để nó đi theo A và giữ
+frame trong bộ nhớ.
+
+### 25.3 Ánh xạ thay thế — theo **chức năng thật**, không theo tên hàm
+
+| Chức năng thật | Site hiện tại | Thay bằng (chỉ Mediabunny / WebCodecs / Web Audio / core) | Slice | Hành vi có thể mất |
+|---|---|---|---|
+| scene + silence analysis | [analyze.post.ts:102](file:///D:/Applications/tm-studio/server/api/v1/media/analyze.post.ts#L102) và [tmcut.controller.cjs:511](file:///D:/Applications/tm-studio/electron/tools/tmcut.controller.cjs#L511) qua [useTmcutAutocut.ts:79](file:///D:/Applications/tm-studio/app/composables/useTmcutAutocut.ts#L79) / [:83](file:///D:/Applications/tm-studio/app/composables/useTmcutAutocut.ts#L83) | **đã dựng xong ở E1–E3**: `sceneScan` + `silenceScan` + `audioDecode` (§22–§24); E4 **nối** hai nhánh IPC/web vào đường này | **E4** | parity `silencedetect` ở **sát** ngưỡng chưa hiệu chuẩn (§24.5) |
+| frame tại một timestamp | [tmcut.controller.cjs:1127](file:///D:/Applications/tm-studio/electron/tools/tmcut.controller.cjs#L1127) `extractFrame`, `-ss` IPC | `frameDecode`/`frameStore` + Mediabunny `CanvasSink` (§20–§21) — **đã có consumer** | đã đóng ở D3 | — |
+| thumbnail + filmstrip tile 8x1 | `extractThumbnail` (chạy trong `analyzeAsset`) | cùng pipeline D; tile là chuyện composition, không phải decoder | **F** | filmstrip tile hiện là `tile=8x1` do FFmpeg xếp, cần một luật xếp ô trong core |
+| waveform peaks (`-f s16le`) | [tmcut.controller.cjs:1421](file:///D:/Applications/tm-studio/electron/tools/tmcut.controller.cjs#L1421) `generateProxy` và `extractWaveform` | `decodePcm` (E3) + bucket min/max/RMS trong core, cache theo fingerprint | **G** | — |
+| proxy để preview nhẹ | [proxy.post.ts:79](file:///D:/Applications/tm-studio/server/api/v1/media/proxy.post.ts#L79) và [:1421](file:///D:/Applications/tm-studio/electron/tools/tmcut.controller.cjs#L1421) | **không có tương đương trong phạm vi này**: re-encode một stream nhẹ cần `VideoEncoder` + muxer, tức là cần H; cho tới H, preview đi thẳng nguồn local | **H** | proxy cho file 4K trên máy yếu; UI phải nói "proxy chưa khả dụng", không âm thầm render gốc |
+| export timeline | [render.post.ts:121](file:///D:/Applications/tm-studio/server/api/v1/media/render.post.ts#L121) (web) và `task-manager.cjs:208`/`:284` (desktop, `compileTimelineToFfmpeg`) | slice H: scheduler của core → `renderAt`/paint stack → `VideoEncoder` → Mediabunny muxer. Hai host **một** exporter | **H** | toàn bộ argv do `compileTimelineToFfmpeg` dựng — đó là §5.1, việc của J |
+| HTML-video encode | [htmlVideoRender.ts:177](file:///D:/Applications/tm-studio/server/utils/htmlVideoRender.ts#L177) | **A** (WebCodecs + muxer, leg dời sang client) hoặc **B** (preview-only) — chờ đo `isConfigSupported` | **H**, rồi chủ repo chốt | xem §25.2 |
+| caption audio extract (`mp3` mono 16 k) | `extractAudio` [:1127](file:///D:/Applications/tm-studio/electron/tools/tmcut.controller.cjs#L1127) | `decodePcm` (E3) + Web Audio; **mp3 không phải định dạng mà WebCodecs encode**, nên nếu下游 cần mp3 thì đó là `unsupported`, không phải tự đổi container | **G** | file `.mp3` cho service phiên âm ngoài phạm vi |
+| stabilize (vidstab 2 pass) | [tmcut.controller.cjs:1427](file:///D:/Applications/tm-studio/electron/tools/tmcut.controller.cjs#L1427) | **Q1 đã chốt: bỏ hẳn** — xoá nút + key i18n, project cũ giữ nguyên dữ liệu và đánh dấu unsupported | **I/J** | tính năng, **có chủ đích** |
+| subtitle burn-in (libass) | emitter `subtitles` trong `render/` | **Q2 đã chốt: sơn bằng text track qua `paintStack`**; không parser ASS | **F/J** | các tag ASS nâng cao, phải khai rõ |
+| probe duration/streams | 8 chỗ nhóm (b) | `MediaProbeService` (§13). Field không lấy được → `undefined` + warning, **không** sentinel 0 | đã đóng ở B | `bitrate`/`fps` trung bình của VFR — phải đo lại trên fixture, không đoán |
+
+### 25.4 Sáu rủi ro mà việc gỡ binary **không** tự giải quyết
+
+1. **`execSync` nội suy đường dẫn vào shell string.** [ffmpeg.controller.cjs:221](file:///D:/Applications/tm-studio/electron/tools/ffmpeg.controller.cjs#L221)
+   và [:573](file:///D:/Applications/tm-studio/electron/tools/ffmpeg.controller.cjs#L573) dựng
+   `"${ffprobe}" … "${filePath}"` rồi cho `execSync` chạy **qua shell**, tức một tên file có dấu `"` thoát khỏi
+   quoting; [:65](file:///D:/Applications/tm-studio/electron/tools/ffmpeg.controller.cjs#L65) và :80/:90/:100 còn
+   chạy tới **4 phép probe GPU đồng bộ trên main process**. slice I xoá cả nhóm này là **xóa luôn lỗi**, không
+   chỉ xoá engine — nhưng phải ghi để không ai "port" nguyên argv builder sang engine mới.
+2. **Gỡ binary ≠ hết spawn.** `config.tools.ffmpegPath \|\| 'ffmpeg'` ở 5 chỗ
+   ([render.post.ts:121](file:///D:/Applications/tm-studio/server/api/v1/media/render.post.ts#L121),
+   [analyze.post.ts:102](file:///D:/Applications/tm-studio/server/api/v1/media/analyze.post.ts#L102),
+   [proxy.post.ts:79](file:///D:/Applications/tm-studio/server/api/v1/media/proxy.post.ts#L79),
+   htmlVideoRender.ts:161, và `video-probe.mjs` trả `'ffprobe'` khi không có exe bundled). Xóa
+   `resources/*.exe` (**đo: 157 + 159 + 157 MiB**) chỉ khiến nó rơi sang binary **trên `PATH`**. Bằng chứng
+   zero-FFmpeg phải grep cả fallback, không chỉ grep binary.
+3. **Suite sẽ "xanh" mà không đo gì.** Cả 11 spec nhóm (e) đều có đường skip khi không có binary, và **không
+   cái nào** trả exit khác 0 khi skip: **5** cái in `SKIP …` rồi gọi tường minh `process.exit(0)`
+   (`svg_still`, `golden_frame`, `render_parity`, `text_pixel`, `export_gap_placement`), **6** cái in dòng skip
+   rồi để script kết thúc tự nhiên (`fx_catalog`, `transition_preview`, `html_video_smoke` — cả ba chỉ
+   `process.exit(1)` khi thật sự FAIL — và `render_smoke`/`detect_smoke` in `[skip]` rồi return;
+   `export_paint_stack` in SKIP ở `:335` cho riêng pixel gate). `tests/unit/run-all.mts:32` (`const ok =
+   res.status === 0`) tính exit 0 là **PASS**. Từ slice I, gate 3 không còn là bằng chứng của pixel hay
+   duration nữa; ba spec mạnh nhất (`*smoke`) thậm chí **đã** bị loại khỏi mặc định (`run-all.mts:18` và `:21`).
+   E4/F/G/H phải dựng oracle thay thế **trước** khi các oracle này chết.
+4. **`render.post.ts` nhận nguyên argv từ client** (`body.args`, [:69](file:///D:/Applications/tm-studio/server/api/v1/media/render.post.ts#L69),
+   chỉ giới hạn 400 arg / 20 000 ký tự; route chỉ rewrite các giá trị `-i` và token cuối). Nghĩa là caller phía
+   web hôm nay khiến server đọc đường dẫn tùy ý dưới danh tính của chính app. Engine thay thế **không được kế
+   thừa trust model đó**: client phải gửi project, server không nhận lệnh.
+5. **Hai kênh IPC mồ côi và một kênh tự gây spawn.** `tmcut:extractThumbnail` và `tmcut:extractWaveform` có
+   **0** file trong `app/` nhắc tới (chỉ `electron/preload.cjs:119` exposes; `grep -rln` trong `app/` trả rỗng) —
+   retirement gần như miễn phí. Ngược lại [useMcpRendererBridge.ts:173](file:///D:/Applications/tm-studio/app/composables/useMcpRendererBridge.ts#L173)
+   đặt `command: 'ffmpeg'` cho `export.add_job` với `input.mp4` **không tồn tại**, một tool call là spawn thật.
+6. **`maxBuffer` đặt cho `spawn` là vô nghĩa.** Nó chỉ được `exec`/`execFile` tôn trọng; các wrapper ở
+   [tmcut.controller.cjs:194](file:///D:/Applications/tm-studio/electron/tools/tmcut.controller.cjs#L194) và
+   [:511](file:///D:/Applications/tm-studio/electron/tools/tmcut.controller.cjs#L511) vẫn nối chuỗi stdout/stderr
+   không trần, nên comment "chống OOM" mô tả một bảo vệ không tồn tại.
+
+Bề mặt mà slice I phải chạm, cũng đo lại lần này: **30** invoke handler + **10** event của module
+`tools:ffmpeg` (đếm từ `ipcMain.handle(\`${moduleName}:…\``), **42** handler của `tmcut` trong đó **10** gọi tới
+binary, `tools:ffmpeg:*` sinh từ [ipcPolicy.cjs:25](file:///D:/Applications/tm-studio/electron/ipcPolicy.cjs#L25)
+danh sách `TASK_EVENT_NAMES`, và **3** bảng SQLite
+(`ffmpeg_configs` [sqlite.cjs:186](file:///D:/Applications/tm-studio/electron/tools/sqlite.cjs#L186),
+`ffmpeg_batch_configs` [:225](file:///D:/Applications/tm-studio/electron/tools/sqlite.cjs#L225),
+`ffmpeg_history` [:235](file:///D:/Applications/tm-studio/electron/tools/sqlite.cjs#L235)) — bảng history **có dữ
+liệt thật được ghi mỗi lần export desktop**, nên brief §6 mục 5 (backup + retention + rollback) là điều kiện,
+không phải thủ tục.
+
+### 25.5 Quyết định, theo từng nhóm
+
+| Quyết định | Áp dụng cho | Ghi chú |
+|---|---|---|
+| **replace** | (a) frame/thumb/waveform/probe/analysis | **đã** hoặc **đang** có đường browser-first; analysis chờ E4 nối, waveform chờ G, export chờ H |
+| **replace, có điều kiện đo** | HTML-video encode | A hay B tuỳ thuộc kết quả `VideoEncoder.isConfigSupported` của H; **không** quyết bằng văn bản hôm nay |
+| **remove (đã có quyết định sản phẩm)** | stabilize (Q1), subtitle burn-in → text track (Q2), server analyze/proxy/render (Q4) | giữ metadata project cũ; khai `unsupported` rõ ràng, không âm thầm bỏ |
+| **defer** | proxy re-encode, caption mp3 | báo `unsupported` cho tới H/G; **không** native CLI, **không** WASM, **không** engine thứ hai |
+| **keep** | nhóm (c) | process orchestration không liên quan media |
+
+### 25.6 Trạng thái blocker, gates, và cái chưa chứng minh
+
+**Blocker = CHƯA ĐÓNG.** Điều kiện §2.3 của brief cần bốn thứ; kiểm kê này mới trả lời **hai câu hỏi đầu**
+(function/args/input-output/callers/side effects/tests đã có ở §25.1–§25.3) và ghi quyết định ánh xạ. Còn thiếu,
+theo đúng chữ của brief: *service thay thế hoặc quyết định remove/defer đã thi hành*, *mọi caller cũ đã
+chuyển/loại bỏ*, *có test cho hành vi mới và cho `unsupported`*, và *không còn đường gọi `spawn ffmpeg`*.
+Bốn cái đó thuộc **E4 → H → I**, không thuộc lượt này, và **§11 DoD vẫn giữ nguyên số "chưa"** — brief §5 cấm
+tô xanh sớm.
+
+| Gate | Lệnh | Kết quả | Chứng cứ |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | exit **0**, **0** `error TS`; `.nuxt/eslint.config.mjs` sinh lại **trước** gate 2 |
+| 2 Lint | `npx eslint tests/unit/tmcut_export_gap_placement.spec.ts` (file .ts duy nhất chạm tới), chạy **sau** gate 1 | PASS | lần đầu **exit 1**: `@stylistic/max-statements-per-line` ở `:65` do chính dòng teardown mới thêm; đã tách xuống ba dòng, **chạy lại exit 0 / 0 problem** (không `--fix` toàn repo) |
+| 3 Tests | `npx tsx tests/unit/run-all.mts`, rồi `node --test packages/core/test/*.test.mjs`, `node --test electron/tools/*.test.mjs`, `node packages/core/tools/check-boundaries.mjs` | PASS | exit **0**, **105/105** specs, **0** dòng FAIL; `tmcut_export_gap_placement` **7** check; năm doc guard xanh; core **642/642** (92 suites), electron **59/59** (13 suites), boundaries **PASS**; `find` đếm **0** thư mục `.golden-render-*` sau chạy |
+| 4 Live | đăng nhập authed trên `:4003` (hub = `https://tm-hub-app.vercel.app`), 5 route `/tmcut*` | **MỘT PHẦN** | `/login`, `/tmcut`, `/tmcut/autocut`: **0** `[error]`/`[warn]`/`[issue]`, chỉ noise `<Suspense>`; AutoCut render đủ "Select from Device / Choose from Media". `/tmcut/editor`, `/templates`, `/factory` **chưa sweep xong** |
+| 5 Docs | guard line-length / table-shape / citations / link-integrity, chạy lại **sau** lần sửa markdown cuối | PASS | `git diff --numstat` cho file này = **+191/−1**, tức cả file đi từ **1616** → **1806** dòng; §25 chiếm **189** dòng (từ `:1618`); dòng dài nhất **1340** char (ceiling 1356, **0** dòng vượt); **44** anchor `#L` trong §25 — script đọc từng dòng đích, **0** dòng trống/sai |
+
+**Dọn dẹp scratch (việc chủ repo hỏi).** `.golden-render-gap-*` là thư mục tạm của spec FFmpeg
+[tmcut_export_gap_placement.spec.ts:62](file:///D:/Applications/tm-studio/tests/unit/tmcut_export_gap_placement.spec.ts#L62)
+(`mkdtemp` ngay trong repo root, vì bundler FFmpeg trên Windows mở được đường này mà không mở được OS temp).
+Mỗi lần chạy để lại ~1,9 MB: `plate-a.mp4`, `plate-b.mp4`, `gapped.mp4` và dump frame `.rgba`. Đo: **47** thư
+mục, **89 MB**, **0** file tracked, đã nằm trong `.gitignore:46` (`.golden-render-*/`) — tức là **scratch tái sinh
+được, không cần giữ và không cần đưa vào folder tổng**. Đã xoá hết và bịt nguồn sinh: spec nay đăng ký `process.once('exit', …)` để xoá workdir (cả hai nhánh exit đều đi qua `process.exit`, nên `finally` không đủ).
+Chứng cứ: chạy lại **toàn bộ** suite → `find` đếm được **0** thư mục (trước: 47).
+
+**Chưa chứng minh sau lượt này:**
+- **Ba route chưa sweep** (`/tmcut/editor`, `/tmcut/templates`, `/tmcut/factory`) và **chưa lần nào** một timeline
+  có clip thật được render — gate 4 vẫn mở, đúng như §21.4 và §24.5.
+- **Không một con số runtime nào cho phương án A**: `VideoEncoder.isConfigSupported` trên Chrome/Electron 44
+  chưa đo, nên chưa có quyền nói HTML-video đi WebCodecs được.
+- **Chi phí thật của 14 site nhóm (a) chưa đo** — chỉ có argv và caller; thời gian, peak RSS và số file mỗi
+  lệnh tạo ra chưa lấy.
+- **`hasAudioStream()` trả `true` khi ffprobe lỗi** (`catch { return true }`) nên "không có ffprobe" hôm nay
+  **không** hiện ra như hỏng, mà hiện ra như "file có âm thanh" — chưa kiểm chứng bằng một lần chạy thật.
+- **Dữ liệu ba bảng SQLite chưa được đếm**: chưa biết `ffmpeg_history` có bao nhiêu dòng, có ai đọc lại không,
+  nên kế hoạch retention của slice I vẫn là ẩn số.
+
+**Vệ sinh.** Lượt này chạm **hai** file: `tests/unit/tmcut_export_gap_placement.spec.ts` (teardown) và chính file
+này (§25). `git status --porcelain` sau khi stage phải ra **đúng 2** dòng; 50 mục WIP của chủ repo không bị đụng,
+`backup/` và `resources/*.exe` vẫn nguyên (Q3/Q8).

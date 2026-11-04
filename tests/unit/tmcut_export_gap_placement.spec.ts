@@ -60,6 +60,11 @@ const hex = (c: [number, number, number]) => '#' + c.map(v => v.toString(16).pad
 // The bundled ffmpeg cannot open files under the OS temp dir on Windows, and
 // `.golden-render-*/` is the ignore pattern already in .gitignore.
 const workDir = fs.mkdtempSync(path.join(repoRoot, '.golden-render-gap-'))
+// Both exit paths below leave through `process.exit`, so the teardown rides on
+// the process `exit` event rather than a finally block that would not run.
+process.once('exit', () => {
+  fs.rmSync(workDir, { recursive: true, force: true })
+})
 
 function runFfmpeg(args: string[]): void {
   const res = spawnSync(ffmpeg!, ['-hide_banner', '-loglevel', 'error', ...args], { encoding: 'utf8' })
