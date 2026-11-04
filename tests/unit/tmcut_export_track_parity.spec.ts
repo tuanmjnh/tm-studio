@@ -235,6 +235,24 @@ async function main() {
     }
   })
 
+  // 10. F3: the row core puts at the BOTTOM of the stack can carry no input at
+  // all — a v3 clip whose locator holds a `url` and no `path` lands in the flat
+  // model without a `src`, and `renderVideoClips` has nothing to decode for it.
+  // The file then paints the canvas base and overlays the rows above, exactly as
+  // the canvas does; it must not promote a row out of the middle of the stack to
+  // be its base, and must not lose that row's footage either.
+  await check('a bottom row with no input still lets the rows above paint', () => {
+    const OFFLINE: TrackSeed = { id: 'v-offline', type: 'video', clips: [{ id: 'o', start: 0, duration: 2 }] }
+    const selection = selectExportTracks(project([OFFLINE, VIDEO2]))
+    assert.equal(selection.videoBase?.id, 'v-offline', 'the law still counts the empty row as the bottom')
+    assert.deepEqual(selection.extraVideoTracks.map(t => t.id), ['v2'])
+    const compiled = compileTimelineToFfmpeg(project([OFFLINE, VIDEO2]), 'out.mp4')
+    assert.ok(compiled.args.join(' ').includes('b.mp4'), 'the row above the empty bottom row is decoded')
+    assert.equal(compiled.duration, 8, 'and it bounds the file')
+    assert.match(filterComplexOf(compiled), /overlay=enable='gte\(t,0\)\*lt\(t,8\)'/,
+      'it overlays the canvas base instead of becoming it')
+  })
+
   console.log(`\n=== All ${passed} export track parity checks passed ===`)
 }
 

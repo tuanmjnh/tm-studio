@@ -8,10 +8,11 @@
  * answers is exactly the bug class #87 closed, so these checks drive the real
  * composable and the real compiler over the real store and require one row.
  *
- * They also pin the one place the two surfaces still differ: the export stacks
- * every visible footage row (slice #95), while the preview carries a single
- * `<video>` element and therefore shows only the row that owns the canvas. The
- * export banner has to say that, and not promise a picture either way.
+ * They also pin where the two surfaces still differ, which is no longer a row
+ * question. Both stack every visible footage row in core's paint order, so the
+ * banner cannot point at a missing row any more. What is left is per-layer
+ * effect plates: the monitor's vignette is frame-wide where the file bakes it
+ * into its own layer (slice F4). The banner says that, and nothing else.
  *
  * Run: node node_modules/tsx/dist/cli.mjs --tsconfig tsconfig.test.json \
  *        tests/unit/tmcut_footage_row_rule.spec.ts

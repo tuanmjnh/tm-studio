@@ -1934,6 +1934,35 @@ export function paintStackAt(
   atTicks: number
 ): CorePaintStack
 
+// --- File-wide row law: which rows the whole render contains (F3) ---
+/** One row of the file — identity only, so the host joins back by index. */
+export interface CoreFileRow {
+  trackId: string | null
+  /** Index into the input `tracks`, aligned with `evaluateTimeline`'s own list. */
+  trackIndex: number
+}
+
+export interface CoreFileRows {
+  /** Footage rows, paint order, bottom first. `rows === [base, ...stacked]`. */
+  rows: CoreFileRow[]
+  base: CoreFileRow | null
+  /** The footage rows painted ABOVE the base — `rows.slice(1)`, for hosts that must not do the arithmetic. */
+  stacked: CoreFileRow[]
+  /** Text rows, in track order, painted above every footage row. */
+  overlays: CoreFileRow[]
+  /** Every audio row, hidden or not: `muted` is the sound control, `hidden` is not. */
+  audio: CoreFileRow[]
+}
+
+/**
+ * The union of `selectPaintRows` over every tick: the rows a host that builds
+ * one graph for the whole file paints, lane by lane. Reads the timeline, not an
+ * evaluation, so it never samples ticks.
+ */
+export function selectFileRows(
+  input: TmcutProject | TmcutTimeline | CoreEvaluatorTimelineLike | { timeline?: CoreEvaluatorTimelineLike } | null | undefined
+): CoreFileRows
+
 // --- Composite plan: what to paint, in order (V4 Phase 2, F1) ---
 /** One surface a host must render, carrying the evaluator's layer by reference. */
 export interface CoreCompositeSlot {

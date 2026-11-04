@@ -2049,7 +2049,7 @@ một tuỳ chọn tối ưu.
 `videoBase` và `videoRows.slice(1)` thành `extraVideoTracks`
 ([clip.ts:161](file:///D:/Applications/tm-studio/app/utils/tmcut/render/clip.ts#L161)) — tức export đang
 **re-decide** cái luật mà core đã có từ §23. F1 chưa đụng file app nào; nó chỉ dựng chỗ đúng để F2 và F3
-chuyển về.
+chuyển về. *(Nợ này đã đóng ở §30; hai dòng code được trích ở đây là nguyên văn bản HEAD trước F3.)*
 
 ### 27.2 Luật mới
 
@@ -2420,3 +2420,156 @@ cộng nhầm cả hai locale vào nhóm "sạch"; **56** là số đo sau commi
 Probe RED
 (`app/composables/tmpF2bRedProbe.ts`, `tests/unit/tmcut_f2b_redprobe.spec.ts`) và fixture tạm
 `public/tmcut-qa-f2b.mp4` là file **của lượt này**, đã xóa và không bao giờ staged.
+
+## 30. Slice F3 — file đọc luật của core, và bản sao luật trong exporter bị xóa (đo ngày 2026-11-04)
+
+§28 và §29 chuyển **màn hình** về plan của core. F3 chuyển **file**. Câu hỏi "hàng nào được vẽ" từng có
+**ba** chỗ trả lời: `selectPaintRows` per-tick của core (§23), loop DOM của preview (F2b xóa), và
+`paints()` + `videoRows[0]` / `videoRows.slice(1)` của exporter (F3 xóa). Còn lại **một** luật, **hai**
+scope: per-tick cho màn hình, per-file cho command line — và test **đo** rằng cái sau là union của cái trước,
+không phải test kể lại.
+
+### 30.1 Luật per-file mới trong core
+
+`selectFileRows(input) → { rows, base, stacked, overlays, audio }`
+([paintStack.mjs:140](file:///D:/Applications/tm-studio/packages/core/src/paintStack.mjs#L140)), declaration ở
+[index.d.ts:1962](file:///D:/Applications/tm-studio/packages/core/src/index.d.ts#L1962) với
+`CoreFileRow` ([:1939](file:///D:/Applications/tm-studio/packages/core/src/index.d.ts#L1939)) và
+`CoreFileRows` ([:1945](file:///D:/Applications/tm-studio/packages/core/src/index.d.ts#L1945)).
+
+| Điều kiện vào hàng | Vì sao |
+| --- | --- |
+| `type` thuộc lane (video vào stack, text vào overlays, audio vào lane tiếng) | cùng phân lane với `selectPaintRows` |
+| `hidden !== true`, chỉ áp lane hình | `hidden` là control **hình ảnh**; một row audio bị ẩn vẫn mix — bất đối xứng core ghi từ §23 |
+| tồn tại clip có `clipSpan(clip).duration > 0` | đúng vị từ per-tick từng cho hàng **sống**; không phải vị từ "clip có input chưa" |
+
+Core trả **danh tính hàng** (`{ trackId, trackIndex }`), không mang item — cùng khuôn với mọi luật per-tick,
+nên host vẫn là chỗ duy nhất biết clip là gì. Input chấp nhận cả project lồng `timeline` lẫn timeline trần
+(`timelineOf`, [paintStack.mjs:97](file:///D:/Applications/tm-studio/packages/core/src/paintStack.mjs#L97)).
+
+Mười check mới trong
+[paint-stack.test.mjs:216](file:///D:/Applications/tm-studio/packages/core/test/paint-stack.test.mjs#L216),
+hai check nặng nhất **đo** mệnh đề "một luật, hai scope" thay vì assert độc lập:
+
+- **union-equality** ([:234](file:///D:/Applications/tm-studio/packages/core/test/paint-stack.test.mjs#L234)):
+  quét 6 timeline qua mọi tick nguyên giây, tập hàng per-tick của `selectPaintRows` **bằng** tập hàng
+  per-file của `selectFileRows`.
+- **hàng đọc từ timeline, không từ mẫu tick**
+  ([:251](file:///D:/Applications/tm-studio/packages/core/test/paint-stack.test.mjs#L251)): một clip 0.1 s nằm
+  lọt giữa hai probe vẫn khiến hàng đó hợp lệ — lưới tick **không** phải nguồn sự thật.
+
+### 30.2 Bản sao luật bị xóa, và vì sao `src` không phải là luật
+
+Nguyên văn HEAD, đã xóa trong
+[clip.ts](file:///D:/Applications/tm-studio/app/utils/tmcut/render/clip.ts):
+
+```ts
+function paints(track: TmcutTrack, needed: 'src' | 'text'): boolean {
+  if (track.hidden === true) return false
+  return (track.items || []).some(item => (needed === 'src' ? !!item.src : !!item.text))
+}
+```
+
+Hai vị từ nhìn giống nhau và **không** cùng trả lời một câu. `!!item.src` hỏi "clip này có gì để giải mã
+chưa" — một sự thật **mapping**, thuộc về lúc dựng command line. `clipSpan(clip).duration > 0` hỏi "hàng này
+có thể sống không" — một sự thật **luật**, và là luật canvas đã đọc từ F2a. Project một hàng mà mọi clip bị
+trim về 0 từng cho hai câu trả lời khác nhau, và RED đo đúng chỗ đó
+(`node_modules/.cache/tmcut-gates/f3-app-red.txt`):
+
+```
+FAILED: AssertionError [ERR_ASSERTION]: footage rows of the file [vz,v1]
+  actual: ['vz','v1']   expected: ['v1']
+  at tests/unit/tmcut_paint_stack.spec.ts:288
+```
+
+Vị từ per-clip vẫn ở lại đúng chỗ của nó: `renderVideoClips` / `renderAudioClips` / `renderTextClips` vẫn bỏ
+một clip không có input, vì "clip này không có gì để decode" là chuyện của **mapping**, không của luật hàng.
+
+### 30.3 Bẫy mà quyết định đó mở ra — và cách nó bị khóa bằng test
+
+Bỏ `src` khỏi luật hàng có hệ quả mà đọc code đơn thuần không thấy ngay: một hàng **không có input nào** giờ
+có thể là `videoBase`, và [render/index.ts:122](file:///D:/Applications/tm-studio/app/utils/tmcut/render/index.ts#L122)
+quyết nhánh bằng `isColorSource = videoClips.length === 0`. Nhánh Case 1 (nền canvas) từng **không** chạy
+leg composite, nên mọi hàng bên trên một đáy rỗng sẽ bị **im lặng bỏ** — đúng lớp bug F3 đóng lại, mở ra ở một
+file khác. Sửa: `stackedRows` dựng **trước** nhánh
+([:58](file:///D:/Applications/tm-studio/app/utils/tmcut/render/index.ts#L58)) và `compositePaintRows` chạy ở
+**cả hai** nhánh ([:167](file:///D:/Applications/tm-studio/app/utils/tmcut/render/index.ts#L167) cho Case 1,
+[:215](file:///D:/Applications/tm-studio/app/utils/tmcut/render/index.ts#L215) cho Case 2). Khóa bằng check 10
+của [tmcut_export_track_parity.spec.ts:244](file:///D:/Applications/tm-studio/tests/unit/tmcut_export_track_parity.spec.ts#L244):
+đáy `v-offline` (clip 2 s, **không** `src`) cộng hàng trên 8 s ⇒ `videoBase` vẫn là `v-offline`, file dài
+**8 s**, chỉ **`b.mp4`** được decode, và graph có đúng cửa `overlay=enable='gte(t,0)*lt(t,8)'`. Poster modal
+không đổi hành vi: [TmcutExportModal.vue:392](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutExportModal.vue#L392)
+tìm `items.find(c => !!c.src)` rồi `if (!clip?.src) return ''`.
+
+### 30.4 API giữ nguyên, vì nợ nằm ở luật chứ không ở tên
+
+`ExportTrackSelection` ([clip.ts:152](file:///D:/Applications/tm-studio/app/utils/tmcut/render/clip.ts#L152))
+và `selectExportTracks` giữ **nguyên shape**; thân hàm giờ là một **join**
+([:160](file:///D:/Applications/tm-studio/app/utils/tmcut/render/clip.ts#L160)): `trackIndex` → track authored.
+Không consumer nào phải sửa, modal không phải sửa, và mọi spec cũ chỉ đổi **câu chuyện** chứ không đổi
+assertion. Hai check mới trong [tmcut_paint_stack.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_paint_stack.spec.ts)
+nói thẳng điều F3 claims — stack của **file** là union của stack **canvas**
+([:274](file:///D:/Applications/tm-studio/tests/unit/tmcut_paint_stack.spec.ts#L274)) và caption của file là
+union của các hàng overlay ([:295](file:///D:/Applications/tm-studio/tests/unit/tmcut_paint_stack.spec.ts#L295)),
+cả hai đọc **compiler thật**. Check 9 ([:316](file:///D:/Applications/tm-studio/tests/unit/tmcut_paint_stack.spec.ts#L316))
+khóa ở tầng nguồn: file phải gọi `selectFileRows`, và **không** được `.filter` theo `type` hay tái dựng
+`videoRows[0]` / `.slice(1)` — tức bản sao luật không được phép quay lại.
+
+### 30.5 Số đo của lượt này
+
+| File | Trước | Sau | Lệch |
+| --- | --- | --- | --- |
+| [packages/core/src/paintStack.mjs](file:///D:/Applications/tm-studio/packages/core/src/paintStack.mjs) | 84 | 169 | **+85** (luật per-file + header) |
+| [packages/core/src/index.d.ts](file:///D:/Applications/tm-studio/packages/core/src/index.d.ts) | 2115 | 2144 | **+29** |
+| [packages/core/test/paint-stack.test.mjs](file:///D:/Applications/tm-studio/packages/core/test/paint-stack.test.mjs) | 203 | 364 | **+161** (10 check) |
+| [app/utils/tmcut/render/clip.ts](file:///D:/Applications/tm-studio/app/utils/tmcut/render/clip.ts) | 214 | 222 | **+8**, và `paints()` bị **xóa** |
+| [app/utils/tmcut/render/index.ts](file:///D:/Applications/tm-studio/app/utils/tmcut/render/index.ts) | 316 | 331 | **+15** (composite ở cả hai nhánh) |
+| [tests/unit/tmcut_paint_stack.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_paint_stack.spec.ts) | 273 | 329 | 6 → **9** check |
+| [tests/unit/tmcut_export_track_parity.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_export_track_parity.spec.ts) | 244 | 262 | 10 → **11** check |
+| [tests/unit/tmcut_footage_row_rule.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_footage_row_rule.spec.ts) | 185 | 186 | chỉ header: bỏ câu "preview một `<video>`" |
+
+### 30.6 Gates (chạy theo thứ tự; số liệu lấy từ chính lần chạy đó)
+
+| Gate | Lệnh | Kết quả | Bằng chứng |
+| --- | --- | --- | --- |
+| 1 Types | `npx nuxt typecheck` | PASS | exit **0**, `grep -c "error TS"` = **0**; `.nuxt/eslint.config.mjs` sinh lại lần cuối **22:59**, 28567 byte |
+| 2 Lint | `npx eslint` trên **8** file chạm tới, chạy **sau** lần sinh config 22:59 | PASS | exit **0**, output **0** byte; config **không** đổi mtime sau đó, nên kết quả này không stale |
+| 3 App specs | `npx tsx tests/unit/run-all.mts` | PASS | **108/108**, exit **0**; số file spec **không** đổi vì F3 thêm **check**, không thêm file |
+| 3' Smoke | `npx tsx tests/unit/run-all.mts --smoke` | PASS | **111/111**, exit **0**: `tmcut_render_smoke` **7** render FFmpeg thật, `tmcut_detect_smoke` **4**, `tmcut_html_video_smoke` **6** — graph do compiler F3 dựng **được chạy**, không chỉ được so text |
+| 3b Core | `node --test "test/*.test.mjs"` + `tools/check-boundaries.mjs` + `tsc -p tsconfig.check.json` | PASS | **669 → 679/679**, fail 0; boundaries "core imports nothing platform-specific"; tsc exit **0**, output **0** byte |
+| 4 Live | **8** route TMCut trên **:4003**, chrome-devtools (`list_pages` trước) | PASS | **0** lỗi do F3. Sạch (chỉ `[info] <Suspense>`): `/tmcut`, `/tmcut/autocut`, `/tmcut/templates`, `/tmcut/html-video`, `/tmcut/factory`. Noise **có trước**: `401` trên `GET /api/v1/ai/relay/catalog` (editor ×3, process ×1 — xác nhận bằng `list_network_requests`), `[issue]` a11y "form field should have id/name" ×2 ở process, `502 error.tts.unreachable` ×2 ở voice |
+| 5 Docs | năm guard markdown, chạy lại sau **lần sửa markdown cuối** | PASS | **28** checks (**12/5/4/3/4**), exit **0** cả năm |
+
+RED đo **trước** khi code tồn tại, không suy ra từ lời kể: `f3-core-red.txt` là `SyntaxError: The requested
+module '../src/paintStack.mjs' does not provide an export named 'selectFileRows'`; `f3-app-red.txt` ở 30.2.
+
+### 30.7 Chưa chứng minh
+
+- **Không có pixel cho Case 1 có đáy rỗng.** Check 10 chứng minh **command line + filtergraph**, không chứng
+  minh khung hình thật của project đó. `--smoke` render 7 project thật nhưng **không** project nào có
+  `videoBase` rỗng `src` — thêm fixture vào `tmcut_render_smoke` là việc của F6.
+- **Electron host không chạy lượt này.** Cùng compiler, cùng core, nhưng desktop chưa đo trên đường F3.
+- **Ba bộ lọc `type ===` còn lại ở UI** không phải luật paint-row, nhưng là câu hỏi "hàng nào" lần thứ hai ở
+  surface khác: [TmcutExportModal.vue:532](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutExportModal.vue#L532)
+  (validation rotation), [TmcutTimeline.vue:796](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutTimeline.vue#L796)
+  (clip làm nguồn STT cho auto-caption), [TmcutHtmlVideoStudio.vue:311](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutHtmlVideoStudio.vue#L311)
+  (cue cho renderer riêng của nó). F3 **cố ý** không đụng: chúng không quyết định vẽ gì. Ghi nợ để F4/F5 quyết.
+- **`speedAt` trên hàng stacked và plate effect theo layer** vẫn là nợ F4 (ghi ở §29.8); F3 không đụng.
+- **Luật per-file chưa biết transition.** `selectFileRows` nói hàng nào hợp lệ; cửa crossfade của hàng đó vẫn
+  do app tính — đúng ranh giới §27 đã vẽ, F3 không dịch chuyển nó.
+
+### 30.8 Bảo vệ working tree
+
+Lượt này staged **10** đường dẫn: [clip.ts](file:///D:/Applications/tm-studio/app/utils/tmcut/render/clip.ts),
+[render/index.ts](file:///D:/Applications/tm-studio/app/utils/tmcut/render/index.ts),
+[paintStack.mjs](file:///D:/Applications/tm-studio/packages/core/src/paintStack.mjs),
+[index.d.ts](file:///D:/Applications/tm-studio/packages/core/src/index.d.ts),
+[paint-stack.test.mjs](file:///D:/Applications/tm-studio/packages/core/test/paint-stack.test.mjs),
+[tmcut_paint_stack.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_paint_stack.spec.ts),
+[tmcut_export_track_parity.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_export_track_parity.spec.ts),
+[tmcut_footage_row_rule.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_footage_row_rule.spec.ts),
+chính file này và [roadmap](file:///D:/Applications/tm-studio/docs/tmcut-v4-universal-rendering-multiplatform-roadmap.md).
+`git diff -U0` trên ba file app/spec **đã đọc trước khi stage** để chắc mọi hunk nằm trong vùng F3 (imports,
+khối `ExportTrackSelection`, `compileTimelineToFfmpeg`, header spec): không hunk nào là WIP của chủ repo, nên
+stage theo **đường dẫn** là đủ, không cần patch một hunk như §29. Không file locale, không `package.json`,
+không binary, không `backup/` được chạm tới.

@@ -8,7 +8,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { evaluateTimeline } from '../src/evaluate.mjs'
-import { paintStackAt, selectPaintRows } from '../src/paintStack.mjs'
+import { paintStackAt, selectFileRows, selectPaintRows } from '../src/paintStack.mjs'
 import { TICKS_PER_SECOND } from '../src/time.mjs'
 
 const T = TICKS_PER_SECOND
@@ -199,5 +199,166 @@ describe('paintStackAt — inputs and entry points', () => {
     assert.deepEqual(selectPaintRows(null), { at: 0, rows: [], base: null })
     assert.deepEqual(selectPaintRows({ at: 5, tracks: [{ type: 'video', hidden: false }] }), { at: 5, rows: [], base: null })
     assert.equal(selectPaintRows({ at: 5, tracks: [{ type: 'video', layers: [{}] }] }).rows[0].trackId, null)
+  })
+})
+
+// =============================================================================
+//  The FILE-WIDE row law (Zero-FFmpeg F3).
+//
+//  `selectPaintRows` answers "which rows paint at t?". A host that builds one
+//  static graph for the whole file needs the union of that answer over every t
+//  — and until now it wrote its own version of that union (the app's
+//  `selectExportTracks` filtered `hidden` and required a clip to carry a `src`,
+//  then took `[0]` as the base). Two rules that disagree about a row are exactly
+//  what these tests exist to make impossible, so the file law is asserted as
+//  the PER-TICK LAW SEEN WHOLE, not as its own filter.
+// =============================================================================
+describe('selectFileRows — the same law, asked of the whole file', () => {
+  /** Rows the sweep below walks, in authored order. */
+  const SWEEP = [
+    timelineOf(['row-a', [clip('a', 0, 4)]]),
+    timelineOf(['row-a', [clip('a', 0, 4)]], ['row-b', [clip('b', 6, 4)]]),
+    timelineOf(['row-a', [clip('a', 0, 8)]], ['row-b', [clip('b', 3, 8)]]),
+    timelineOf(['row-a', [clip('a', 0, 8)], { hidden: true }], ['row-b', [clip('b', 0, 8)]]),
+    timelineOf(['row-a', [clip('a', 0, 0)]], ['row-b', [clip('b', 0, 4)]]),
+    timelineOf(
+      ['cap', [clip('t', 1, 2)], { type: 'text' }],
+      ['row-a', [clip('a', 0, 4)]],
+      ['music', [clip('m', 0, 9)], { type: 'audio' }],
+      ['row-b', [clip('b', 6, 4)]]
+    )
+  ]
+  /** Whole-second probes — every clip in SWEEP lives across at least one. */
+  const PROBE = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 30].map(seconds => seconds * T)
+
+  it('the footage rows of the file are exactly the union of the per-tick rows', () => {
+    for (const timeline of SWEEP) {
+      const seen = []
+      for (const at of PROBE) {
+        for (const row of paintStackAt(timeline, at).rows) {
+          if (!seen.includes(row.trackId)) seen.push(row.trackId)
+        }
+      }
+      const layout = timeline.tracks.map(t => `${t.id}${t.hidden ? '!' : ''}`).join(',')
+      assert.deepEqual(
+        selectFileRows(timeline).rows.map(r => r.trackId),
+        seen,
+        `the file must not name a row the canvas never paints, nor drop one it does [${layout}]`
+      )
+    }
+  })
+
+  it('a row is read from the timeline, not from a sample of ticks', () => {
+    // A 0.1 s clip between the whole-second probes: no per-tick answer at those
+    // ticks names it, and the file law still must.
+    const timeline = timelineOf(['row-a', [clip('a', 0, 4)]], ['row-narrow', [clip('n', 0.2, 0.1)]])
+    assert.deepEqual(
+      selectFileRows(timeline).rows.map(r => r.trackId),
+      ['row-a', 'row-narrow'],
+      'the file reaches a clip between the probes'
+    )
+    assert.deepEqual(
+      paintStackAt(timeline, 0).rows.map(r => r.trackId),
+      ['row-a'],
+      'and the tick sample alone would have missed it'
+    )
+  })
+
+  it('the bottom of the file stack is the FIRST row, not the earliest clip', () => {
+    const timeline = timelineOf(
+      ['row-late', [clip('l', 6, 4)]],
+      ['row-early', [clip('e', 0, 4)]]
+    )
+    const plan = selectFileRows(timeline)
+    assert.deepEqual(plan.rows.map(r => r.trackId), ['row-late', 'row-early'])
+    assert.equal(plan.base.trackId, 'row-late', 'authored order is the paint order, file-wide')
+    assert.deepEqual(plan.stacked.map(r => r.trackId), ['row-early'])
+    assert.equal(paintStackAt(timeline, 1 * T).base.trackId, 'row-early',
+      'at one tick only the row with a layer paints')
+  })
+
+  it('a hidden row leaves the file and the row below takes the base', () => {
+    const timeline = timelineOf(
+      ['row-a', [clip('a', 0, 4)], { hidden: true }],
+      ['row-b', [clip('b', 0, 4)]],
+      ['row-c', [clip('c', 0, 4)]]
+    )
+    const plan = selectFileRows(timeline)
+    assert.deepEqual(plan.rows.map(r => r.trackId), ['row-b', 'row-c'])
+    assert.equal(plan.base.trackId, 'row-b')
+    assert.deepEqual(plan.stacked.map(r => r.trackId), ['row-c'])
+  })
+
+  it('a row whose clips are all zero-duration is not a row of the file', () => {
+    // The old app rule asked only whether a clip carried media, so a row of
+    // trimmed-to-nothing clips could become the BASE — and the rows that
+    // actually had frames were stacked on top of a bottom that paints nothing.
+    const timeline = timelineOf(
+      ['row-empty', [clip('z', 0, 0), clip('z2', 4, 0)]],
+      ['row-live', [clip('a', 0, 4)]]
+    )
+    const plan = selectFileRows(timeline)
+    assert.deepEqual(plan.rows.map(r => r.trackId), ['row-live'])
+    assert.equal(plan.base.trackId, 'row-live')
+    assert.deepEqual(plan.stacked, [])
+  })
+
+  it('text rows are the overlay lane and never the footage stack', () => {
+    const timeline = timelineOf(
+      ['cap-late', [clip('t2', 6, 2)], { type: 'text' }],
+      ['cap-hidden', [clip('t3', 0, 4)], { type: 'text', hidden: true }],
+      ['cap-zero', [clip('t4', 0, 0)], { type: 'text' }],
+      ['row-a', [clip('a', 0, 4)]]
+    )
+    const plan = selectFileRows(timeline)
+    assert.deepEqual(plan.overlays.map(r => r.trackId), ['cap-late'],
+      'a caption row counts for the file whether or not it is live at tick 0')
+    assert.deepEqual(plan.rows.map(r => r.trackId), ['row-a'], 'and stays out of the paint stack')
+  })
+
+  it('audio keeps the picture rule out: a hidden row is still mixed', () => {
+    const timeline = timelineOf(
+      ['music', [clip('m', 0, 9)], { type: 'audio', hidden: true }],
+      ['sfx', [clip('s', 0, 9)], { type: 'audio' }]
+    )
+    const plan = selectFileRows(timeline)
+    assert.deepEqual(plan.audio.map(r => r.trackId), ['music', 'sfx'],
+      '`hidden` is a picture control; the sound lane reads `muted`, which core does not gate')
+    assert.deepEqual(plan.rows, [])
+  })
+
+  it('carries row identity only — the items stay with the host', () => {
+    const timeline = timelineOf(['row-a', [clip('a', 0, 4)]])
+    assert.deepEqual(selectFileRows(timeline).rows, [{ trackId: 'row-a', trackIndex: 0 }])
+  })
+
+  it('trackIndex joins back to the authored track, lane by lane', () => {
+    const timeline = timelineOf(
+      ['cap', [clip('t', 0, 4)], { type: 'text' }],
+      ['row-a', [clip('a', 0, 4)]],
+      ['music', [clip('m', 0, 4)], { type: 'audio' }],
+      ['row-b', [clip('b', 6, 4)]]
+    )
+    const plan = selectFileRows(timeline)
+    const lanes = [plan.rows, plan.stacked, plan.overlays, plan.audio]
+    assert.ok(lanes.flat().length > 0, 'the layout names rows in more than one lane')
+    for (const lane of lanes) {
+      for (const row of lane) {
+        assert.equal(timeline.tracks[row.trackIndex].id, row.trackId,
+          'the index is the position in the input tracks, exactly like the evaluation')
+      }
+    }
+  })
+
+  it('accepts a project wrapper, a bare timeline and nothing at all', () => {
+    const timeline = timelineOf(['row-a', [clip('a', 0, 4)]])
+    const EMPTY = { rows: [], base: null, stacked: [], overlays: [], audio: [] }
+    assert.deepEqual(Object.keys(selectFileRows(timeline)).sort(), Object.keys(EMPTY).sort())
+    assert.equal(selectFileRows(timeline).base.trackId, 'row-a')
+    assert.deepEqual(selectFileRows({ timeline }), selectFileRows(timeline))
+    assert.deepEqual(selectFileRows(null), EMPTY)
+    assert.deepEqual(selectFileRows(undefined), EMPTY)
+    assert.deepEqual(selectFileRows({ tracks: [{ id: 'no-type' }] }), EMPTY)
+    assert.deepEqual(selectFileRows({ timeline: { tracks: 'not-an-array' } }), EMPTY)
   })
 })

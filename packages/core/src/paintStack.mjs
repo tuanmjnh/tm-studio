@@ -31,6 +31,15 @@
 //  not carry the items: the evaluation stays renderer-agnostic, and joining is
 //  the host's business.
 //
+//  The module answers that question at TWO scopes. `selectPaintRows` reads one
+//  evaluation (per tick, what the preview asks every frame); `selectFileRows`
+//  reads the timeline (per file, what a host that builds one static graph for
+//  the whole render asks). The second is the union of the first, written once —
+//  the exporter used to hold its own version of it, and the two disagreed about
+//  a row made of trimmed-to-nothing clips: the app asked whether a clip carried
+//  media, core asks whether a clip can be live at all. Same law, same answer,
+//  F3.
+//
 //  What the rule deliberately does NOT do: skip a row whose only live layer is
 //  transparent. `evaluateTimeline` marks such a layer `visible: false` but still
 //  returns it, and the preview keeps owning the canvas through it (the layer's
@@ -40,6 +49,7 @@
 // =============================================================================
 
 import { evaluateTimeline } from './evaluate.mjs'
+import { clipSpan } from './timeline.mjs'
 
 /**
  * The footage rows eligible to paint at one tick, in track order.
@@ -81,4 +91,79 @@ export function selectPaintRows(evaluation) {
  */
 export function paintStackAt(input, atTicks) {
   return selectPaintRows(evaluateTimeline(input, atTicks))
+}
+
+/** The same timeline resolution `evaluateTimeline` makes, so both see one shape. */
+function timelineOf(input) {
+  if (input && Array.isArray(input.tracks)) return input
+  return input?.timeline ?? null
+}
+
+/**
+ * Does this row hold a clip that can be live at some tick? Exactly the
+ * condition `evaluateTimeline` applies to a clip (`span.duration > 0`), read
+ * over the row instead of over one tick — so a row the per-tick law would never
+ * name at the sampled ticks still counts, and a row of zero-length clips never
+ * does.
+ */
+function hasLiveClip(track) {
+  const items = Array.isArray(track?.items) ? track.items : []
+  for (const clip of items) {
+    if (clipSpan(clip).duration > 0) return true
+  }
+  return false
+}
+
+/**
+ * The rows of the whole file, lane by lane, in the order each lane paints.
+ *
+ * This is `selectPaintRows` seen whole rather than at one tick: the footage
+ * lanes are the union of the per-tick rows, so a host that builds one static
+ * graph per render stacks precisely the rows the canvas stacks, and never picks
+ * a bottom row of its own. Like the per-tick law it reports identity only —
+ * `{ trackId, trackIndex }` — and the host joins the index back to the track it
+ * authored.
+ *
+ * The lanes differ in one documented way: `audio` is not a picture lane, so the
+ * picture rule never reads it. `hidden` is a picture control and `muted` is the
+ * sound one, so a hidden audio row is still mixed — the same asymmetry
+ * `evaluateTimeline` keeps (`visible` from `hidden`, `audible` from `muted`).
+ * An empty audio row is harmless: the host pulls clips per clip.
+ *
+ * @param {{ timeline?: object } | { tracks: object[] }} input project or timeline
+ * @returns {{ rows: object[], base: object|null, stacked: object[],
+ *   overlays: object[], audio: object[] }}
+ *   `rows` (== `base` then `stacked`) is the footage stack, bottom first;
+ *   `overlays` the text rows, in track order, painted above all footage;
+ *   `audio` every audio row.
+ */
+export function selectFileRows(input) {
+  const timeline = timelineOf(input)
+  const tracks = Array.isArray(timeline?.tracks) ? timeline.tracks : []
+  const rows = []
+  const overlays = []
+  const audio = []
+  for (let index = 0; index < tracks.length; index++) {
+    const track = tracks[index]
+    const type = track?.type
+    if (type !== 'video' && type !== 'text' && type !== 'audio') continue
+    const row = { trackId: track.id ?? null, trackIndex: index }
+    // The sound lane takes the picture rule out of it entirely: `hidden` is a
+    // picture control, and an empty audio row costs the host nothing.
+    if (type === 'audio') {
+      audio.push(row)
+      continue
+    }
+    if (track.hidden === true) continue
+    if (!hasLiveClip(track)) continue
+    if (type === 'video') rows.push(row)
+    else overlays.push(row)
+  }
+  return {
+    rows,
+    base: rows[0] ?? null,
+    stacked: rows.slice(1),
+    overlays,
+    audio
+  }
 }

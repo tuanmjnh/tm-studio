@@ -20,13 +20,12 @@
  *  3. the SHIPPED composable — which the store harness runs in plain Node —
  *     hands the canvas over exactly where core says it does.
  *  4. THE EXPORTER SIDE OF THE LAW — the exporter answers once per file where
- *     core answers per tick, and the two must be one rule seen two ways:
- *     `videoBase` is the BOTTOM of the stack and `extraVideoTracks` are the
- *     rows painted on top of it, in exactly the order core reports in `rows`.
- *     The compositor (slice #95) turns that stack into the file. What still
- *     differs — and is pinned, not accepted silently — is that the canvas
- *     carries only `base`, so where two rows are live at once the preview
- *     shows the bottom one and the file shows both.
+ *     core answers per tick, and Zero-FFmpeg F3 proved the two are ONE rule
+ *     seen two ways: `selectExportTracks` joins core's `selectFileRows`, and
+ *     the rows it hands the compiler are the union of the rows the canvas
+ *     paints, layout by layout — footage AND captions. What is left between the
+ *     surfaces is no longer a row question but a layer question (per-layer
+ *     crop, blend and vignette: F4).
  *
  * Run: node node_modules/tsx/dist/cli.mjs --tsconfig tsconfig.test.json \
  *        tests/unit/tmcut_paint_stack.spec.ts
@@ -35,7 +34,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { TICKS_PER_SECOND, evaluateTimeline, selectPaintRows } from 'tmcut-core'
+import { TICKS_PER_SECOND, compositePlan, evaluateTimeline, selectPaintRows } from 'tmcut-core'
 import type { CoreEvaluatedLayer } from 'tmcut-core'
 import { freshStore } from './helpers/tmcut_store_env'
 import { selectExportTracks } from '../../app/utils/tmcut/render'
@@ -43,6 +42,7 @@ import type { TmcutProject, TmcutTimelineItem, TmcutTrack } from '../../app/comp
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const PREVIEW_HOST = 'app/composables/useTmcutPlayback.ts'
+const EXPORT_HOST = 'app/utils/tmcut/render/clip.ts'
 
 let passed = 0
 
@@ -149,6 +149,7 @@ const LAYOUTS: TrackSeed[][] = [
   [ROW_FADED, ROW_B_OVERLAP],
   [CAPTIONS, ROW_A, MUSIC, ROW_B_OVERLAP],
   [MUSIC, CAPTIONS],
+  [{ ...CAPTIONS, hidden: true }, ROW_A],
   [{ ...ROW_A, hidden: true }, { ...ROW_B_OVERLAP, hidden: true }]
 ]
 
@@ -248,9 +249,10 @@ async function main() {
     assert.equal(selectExportTracks(hidden).videoBase?.id, 'v2')
   })
 
-  // 6. The rows after `base` are the footage the preview drops. Core still
-  //    names each one, with its own index, its own layers and its own window,
-  //    so the exporter can composite them — which is what slice #95 does.
+  // 6. The rows above `base` stay identifiable for whoever composites them:
+  //    core names each one with its own index, its own layers and its own
+  //    window — which is what the file stack leg (#95) and the canvas stack leg
+  //    (F2b) both build on.
   await check('the rows above the base stay identifiable for the compositor', () => {
     const sut = project([ROW_A, ROW_B_OVERLAP, MUSIC])
     const stack = selectPaintRows(evaluateTimeline(sut, tk(3)))
@@ -262,6 +264,60 @@ async function main() {
       'audio rows stay out of the paint stack'
     )
     assert.equal(stack.rows.some(r => r.trackId === 'a1'), false)
+  })
+
+  // 7. F3: the export side of the law is not a second rule. For every layout,
+  //    the footage rows the exporter hands the compiler are exactly the rows
+  //    the canvas names at SOME tick, in track order — which is where the two
+  //    copies used to part company: the app asked whether a clip carried media,
+  //    core asks whether a clip can be live at all.
+  await check('the file stack is the union of the canvas stack', () => {
+    for (const layout of LAYOUTS) {
+      const sut = project(layout)
+      const name = layout.map(t => `${t.id}${t.hidden ? '!' : ''}`).join(',')
+      const live = new Set<number>()
+      for (const at of PROBE_TICKS) {
+        for (const row of selectPaintRows(evaluateTimeline(sut, at)).rows) live.add(row.trackIndex)
+      }
+      const expected = storeTracks(sut)
+        .map((track, index) => (live.has(index) ? track.id : null))
+        .filter((id): id is string => id !== null)
+      const selection = selectExportTracks(sut)
+      const fileRows = [selection.videoBase?.id, ...selection.extraVideoTracks.map(t => t.id)]
+        .filter((id): id is string => id !== null && id !== undefined)
+      assert.deepEqual(fileRows, expected, `footage rows of the file [${name}]`)
+    }
+  })
+
+  // 8. Same proof for the caption lane, read off the plan the preview paints:
+  //    a row the screen overlays at some tick is in the file, and a row it
+  //    hides never is.
+  await check('the file captions are the union of the overlay rows', () => {
+    for (const layout of LAYOUTS) {
+      const sut = project(layout)
+      const name = layout.map(t => `${t.id}${t.hidden ? '!' : ''}`).join(',')
+      const live = new Set<number>()
+      for (const at of PROBE_TICKS) {
+        for (const slot of compositePlan(evaluateTimeline(sut, at)).slots) {
+          if (slot.kind === 'overlay') live.add(slot.trackIndex)
+        }
+      }
+      const expected = storeTracks(sut)
+        .map((track, index) => (live.has(index) ? track.id : null))
+        .filter((id): id is string => id !== null)
+      assert.deepEqual(selectExportTracks(sut).textTracks.map(t => t.id), expected, `caption rows of the file [${name}]`)
+    }
+  })
+
+  // 9. Neither host may keep a copy of the row rule. Check 2 pins the preview
+  //    (it reaches the rows only through the plan); this pins the exporter: it
+  //    joins core's answer, so the `[0]` that chose the bottom of the stack and
+  //    the `slice(1)` that chose the rows above it are gone from the app.
+  await check('the exporter joins core rows instead of filtering tracks', () => {
+    const source = readFileSync(join(ROOT, EXPORT_HOST), 'utf8')
+    assert.match(source, /selectFileRows/, 'the exporter asks core which rows the file has')
+    assert.doesNotMatch(source, /\.filter\([^)]*\.type ===/, 'no row filter survives in the app')
+    assert.doesNotMatch(source, /videoRows\[0\]|\.slice\(1\)/, 'and no bottom-of-stack arithmetic')
   })
 
   console.log(`=== All ${passed} paint-stack checks passed ===`)

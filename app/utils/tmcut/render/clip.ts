@@ -1,6 +1,6 @@
 import type { TmcutTimelineItem, TmcutTrack } from '~/composables/useTmcutProject'
-import type { TmcutCropRect, TmcutMask } from 'tmcut-core'
-import { classifyAssetKind, normalizeMask, resolveClipLayout, ticksToSec } from 'tmcut-core'
+import type { CoreFileRow, TmcutCropRect, TmcutMask } from 'tmcut-core'
+import { classifyAssetKind, normalizeMask, resolveClipLayout, selectFileRows, ticksToSec } from 'tmcut-core'
 import { clipDurationTicks } from '~/utils/tmcut/clipTime'
 
 /**
@@ -117,27 +117,37 @@ export function toRenderClip(item: TmcutTimelineItem, track?: TmcutTrack | null)
 }
 
 /**
- * Which rows the export may paint, decided by the SAME rule the preview uses:
- * `evaluateTimeline` walks every track and marks a layer invisible when its
- * track is `hidden`, so a hidden row must not reach the file either, and every
- * visible caption row is content — not only the first text track.
+ * Which rows the export may paint. The RULE is core's — `selectFileRows`
+ * (packages/core/src/paintStack.mjs) is the file-wide reading of the per-tick
+ * law the canvas has read since F2a, so the rows the screen stacks and the rows
+ * the file builds are one answer, not two copies of it.
  *
- * `videoBase` is the BOTTOM of the footage stack — the first visible row with
- * content, which is what `selectPaintRows` calls `base` (slice #93 put that
- * rule in core). The rows after it are `extraVideoTracks`: visible footage that
- * paints ABOVE the base, so `compositePaintRows` builds each one its own chain
- * and overlays it during its own clip windows. They are the same list the
- * extent reads (content must not shorten the render) and the same list the
- * export banner warns about, because the PREVIEW still has one footage element
- * and shows only the base.
+ * What lives here is the JOIN: core reports `{ trackId, trackIndex }` and never
+ * carries items, so the app maps its own authored tracks back by the index the
+ * evaluation itself was built in.
  *
- * Audio is deliberately NOT gated by `hidden`: muting a row is the sound
- * control, hiding it is a picture control, and an audio track has no picture.
- * The evaluator reads the same two flags the same way (`visible` from
- * `hidden`, `audible` from `muted`). A stacked footage row contributes no
- * sound lane either — the preview plays the audio of the row that owns the
- * canvas, and a file that mixed the rows above it would be louder than the
- * screen it is supposed to match.
+ * `videoBase` is the BOTTOM of the footage stack and `extraVideoTracks` the rows
+ * painted above it, which `compositePaintRows` overlays during their own clip
+ * windows. `textTracks` are the caption rows the plan overlays above all
+ * footage. Audio keeps the asymmetry core documents in the same module: `hidden`
+ * is a picture control, `muted` is the sound one, so a hidden audio row is still
+ * mixed (`audible` comes from `muted` in `evaluateTimeline` too). A stacked
+ * footage row contributes no sound lane of its own — the preview plays the audio
+ * of the row that owns the canvas, and a file that mixed the rows above it would
+ * be louder than the screen it is supposed to match.
+ *
+ * What the row law does NOT decide is which CLIPS of a row reach the command
+ * line: `renderVideoClips`, `renderAudioClips` and `renderTextClips` still drop
+ * an item with no input, because "this clip has nothing to decode" is a mapping
+ * fact, not a paint-order one. A row can therefore be the bottom of the stack
+ * and still carry no input — a v3 clip that points at a `locator.url` lands in
+ * the flat model with no `src` — and then the file paints the canvas base with
+ * the rows above it overlaid, exactly as the canvas does, instead of quietly
+ * promoting a row from the middle of the stack.
+ *
+ * The extent reads the same lists the compiler does, so a row the rule drops is
+ * a row that cannot bound the file either, and the export banner warns about
+ * exactly the rows `extraVideoTracks` names.
  */
 export interface ExportTrackSelection {
   videoBase: TmcutTrack | null
@@ -146,22 +156,20 @@ export interface ExportTrackSelection {
   audioTracks: TmcutTrack[]
 }
 
-function paints(track: TmcutTrack, needed: 'src' | 'text'): boolean {
-  if (track.hidden === true) return false
-  return (track.items || []).some(item => (needed === 'src' ? !!item.src : !!item.text))
-}
-
 /** Read-only view of the project's rows, in track order. Pure. */
 export function selectExportTracks(
   project: { timeline?: { tracks?: TmcutTrack[] } } | null | undefined
 ): ExportTrackSelection {
-  const tracks = project?.timeline?.tracks || []
-  const videoRows = tracks.filter(t => t.type === 'video' && paints(t, 'src'))
+  const rows = selectFileRows(project)
+  const join = (row: CoreFileRow | null): TmcutTrack | null =>
+    row ? project?.timeline?.tracks?.[row.trackIndex] ?? null : null
+  const joinAll = (list: CoreFileRow[]): TmcutTrack[] =>
+    list.map(join).filter((track): track is TmcutTrack => !!track)
   return {
-    videoBase: videoRows[0] ?? null,
-    extraVideoTracks: videoRows.slice(1),
-    textTracks: tracks.filter(t => t.type === 'text' && paints(t, 'text')),
-    audioTracks: tracks.filter(t => t.type === 'audio')
+    videoBase: join(rows.base),
+    extraVideoTracks: joinAll(rows.stacked),
+    textTracks: joinAll(rows.overlays),
+    audioTracks: joinAll(rows.audio)
   }
 }
 

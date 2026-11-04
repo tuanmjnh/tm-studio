@@ -38,11 +38,10 @@ export function compileTimelineToFfmpeg(
   const fps = canvasFpsValue(project.canvas)
   const mode: TmcutCompileMode = options.mode || 'video'
 
-  // V4 Phase 2 (5): one selection rule for preview and export. The preview
-  // asks `evaluateTimeline`, which reads every track and drops a hidden one;
-  // the export used to `.find()` the first video track and the first text
-  // track and never consult `hidden`, so the file could not match the screen
-  // in either direction.
+  // V4 Phase 2 (5), closed by Zero-FFmpeg F3: the rows are not chosen here.
+  // `selectExportTracks` joins core's file-wide row law (`selectFileRows`), the
+  // same law the canvas reads per tick — so a row the screen stacks is a row the
+  // file builds, and a row the screen hides never reaches the command line.
   const selection = selectExportTracks(project)
   const videoTrack = selection.videoBase
 
@@ -53,10 +52,14 @@ export function compileTimelineToFfmpeg(
   // project layers music, voiceover and SFX on separate rows and they all
   // mix into the output bus. `renderAudioClips` takes the whole array.
   const audioClips = renderAudioClips(selection.audioTracks)
-  // Footage rows above the base: no audio lane of their own (the preview has
-  // one footage element, and it plays the row that owns the canvas), but they
-  // are decoded, stacked over the base, and count toward the extent below.
-  const extraVideoClips = selection.extraVideoTracks.flatMap(renderVideoClips)
+  // Footage rows above the base: no audio lane of their own (the preview plays
+  // the sound of the row that owns the canvas), but they are decoded, stacked
+  // over the base by the composite leg below, and count toward the extent.
+  const stackedRows = selection.extraVideoTracks.map(track => ({
+    clips: renderVideoClips(track),
+    transitionWindows: transitionWindows(track)
+  }))
+  const extraVideoClips = stackedRows.flatMap(row => row.clips)
 
   // Timeline extent in seconds. Every track counts, because the store's
   // contentDuration (useTmcutProject.ts) does: a caption that starts after the
@@ -153,6 +156,23 @@ export function compileTimelineToFfmpeg(
       currentAudioStream = '[a_base]'
     }
 
+    // F3: the bottom row of the stack may carry no input at all — a v3 clip
+    // whose locator holds a `url` and no `path` lands in the flat model without
+    // a `src`, so `renderVideoClips` has nothing to decode while the row is
+    // still, by core's law, the row at the BOTTOM. The canvas paints the
+    // background under the rows above it; the file must not promote a row out of
+    // the middle of the stack to be its base, so the same composite leg runs
+    // here. The background source already spans `totalDuration`, which counted
+    // these rows, so no pad is needed.
+    currentVideoStream = compositePaintRows(graph, currentVideoStream, stackedRows, {
+      canvasW,
+      canvasH,
+      fps,
+      bgColor,
+      hasAudio: false,
+      transitionWindows: []
+    })
+
     // Apply text overlays if any
     currentVideoStream = applyTextOverlays(graph, currentVideoStream, textClips, { canvasW, canvasH, fps })
   } else {
@@ -172,15 +192,10 @@ export function compileTimelineToFfmpeg(
     currentVideoStream = videoPipeline.videoStream
     currentAudioStream = videoPipeline.audioStream
 
-    // G18, the composite leg: the rows `selectExportTracks` reports above the
-    // base are footage the paint rule puts ON TOP of it, not footage to drop.
-    // A row that outlives the base has to extend the bus first, or the overlay
-    // would be cut off where the bottom row ends — the same reason a caption
-    // tail extends it below.
-    const stackedRows = selection.extraVideoTracks.map(track => ({
-      clips: renderVideoClips(track),
-      transitionWindows: transitionWindows(track)
-    }))
+    // G18, the composite leg: the rows core names above the base are footage the
+    // paint rule puts ON TOP of it, not footage to drop. A row that outlives the
+    // base has to extend the bus first, or the overlay would be cut off where the
+    // bottom row ends — the same reason a caption tail extends it below.
     const stackEnd = extraVideoClips.reduce(
       (end, clip) => Math.max(end, clip.offsetSec + renderClipDuration(clip)), 0)
     if (stackEnd > footageEnd + 0.001) {
