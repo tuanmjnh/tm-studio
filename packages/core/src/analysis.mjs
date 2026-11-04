@@ -3,35 +3,30 @@
 //  Pure media-analysis helpers for AutoCut (docs sections 39-40, Phase 16).
 //  The Electron runtime executes ffmpeg and returns RAW stderr text; this
 //  module parses it and scores segments per AutoCut profile. No process,
-//  no filesystem, no network — fully unit-tested.
+//  no filesystem, no network — fully unit-tested. The shot law itself lives in
+//  detection.mjs, shared with the decoder-side scan slice E puts next to it.
 // =============================================================================
+
+import { cutsToShots } from './detection.mjs'
 
 /**
  * Parse `select='gt(scene,N)',showinfo` stderr into shot segments.
- * showinfo prints `pts_time:<sec>` per scene cut; shots span consecutive
- * cuts, the tail ending at durationSec.
+ * showinfo prints `pts_time:<sec>` per scene cut; the cut INSTANTS are what
+ * this reader owns, and turning them into shots is one law shared with the
+ * decoder-side scan (detection.mjs `cutsToShots`), so both producers hand the
+ * scorer the same list for the same instants.
  */
 export function parseSceneOutput(stderrText, durationSec) {
   const text = String(stderrText ?? '')
-  const duration = Number.isFinite(durationSec) && durationSec > 0 ? durationSec : 0
-  const cuts = [0]
+  const cuts = []
   const pattern = /pts_time:(\d+(?:\.\d+)?)/g
   let match = pattern.exec(text)
   while (match) {
     const time = Number(match[1])
-    if (Number.isFinite(time) && time > 0.04 && time > cuts[cuts.length - 1] + 0.04) {
-      cuts.push(time)
-    }
+    if (Number.isFinite(time)) cuts.push(time)
     match = pattern.exec(text)
   }
-  const end = duration > 0 ? duration : cuts[cuts.length - 1]
-  const segments = []
-  for (let i = 0; i < cuts.length; i += 1) {
-    const start = cuts[i]
-    const stop = i + 1 < cuts.length ? cuts[i + 1] : end
-    if (stop - start >= 0.2) segments.push({ start: round3(start), end: round3(stop) })
-  }
-  return segments
+  return cutsToShots(cuts, durationSec)
 }
 
 /**
