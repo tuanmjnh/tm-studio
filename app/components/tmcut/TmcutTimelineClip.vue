@@ -6,6 +6,8 @@ import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
 import { useTmcutUiPrefs } from '~/composables/useTmcutUiPrefs'
 import { useTmcutFrames } from '~/composables/useTmcutFrames'
+import { useTmcutRelink } from '~/composables/useTmcutRelink'
+import { assetStateView, isMediaOffline } from '~/utils/tmcut/assetImport'
 import { useI18n } from 'vue-i18n'
 import { propsWithKeyframes, keyframeTimes, secToTicks, ticksToSec, KNOWN_TRANSITIONS, TICKS_PER_SECOND } from 'tmcut-core'
 import { clipDurationSec, clipStartSec, clipEndSec, clipEndTicks } from '~/utils/tmcut/clipTime'
@@ -25,6 +27,7 @@ const { zoom, playhead } = useTmcutPlayback()
 const { findAssetBySrc, loadWaveform, mediaUrl, isDesktop } = useTmcutMedia()
 const { snapOn } = useTmcutUiPrefs()
 const { available: canExtractFrames, clipFilmstrip } = useTmcutFrames()
+const { relinkWithPicker } = useTmcutRelink()
 
 const isSelected = computed(() => selectedClipId.value === props.clip.id)
 
@@ -125,6 +128,22 @@ const filmstripStyle = computed(() => {
     backgroundPosition: `-${offset}px center`
   }
 })
+
+// Offline plate (zero-FFmpeg slice C2, Q6). A clip whose bytes are gone keeps
+// its geometry, its trims and its effects, and says what is wrong instead of
+// painting a black box the user has to diagnose. The words and the icon come
+// from the same table the library card reads, so a card and a clip cannot
+// disagree about what `unsupported` means. A clip with no asset record at all
+// (the file left the library) is offline too — but there is nothing to relink,
+// so the plate stays a statement rather than a button.
+const clipAsset = computed(() =>
+  props.trackType === 'text' || !props.clip.src ? null : findAssetBySrc(props.clip.src) ?? null
+)
+const mediaOffline = computed(() =>
+  props.trackType !== 'text' && !!props.clip.src
+  && (!clipAsset.value || isMediaOffline(clipAsset.value))
+)
+const offlineView = computed(() => assetStateView(clipAsset.value ?? { status: 'missing' }))
 
 // Per-clip filmstrip (roadmap G-1/R42): 8 frames sampled from THIS
 // clip's own [in, out] source range (core C14 filmstripTimes through
@@ -553,6 +572,33 @@ function runToggleLock() {
         >
         <div v-else class="h-full flex-1 min-w-0" />
       </template>
+    </div>
+
+    <!-- Offline plate: hatched so it reads as "not here" even without the word,
+         and the clip stays draggable underneath — only the relink button takes
+         the pointer. -->
+    <div
+      v-if="mediaOffline"
+      class="absolute inset-0 z-6 flex items-center gap-1.5 px-2 bg-black/70"
+      style="background-image: repeating-linear-gradient(45deg, rgba(251,191,36,0.14) 0 6px, transparent 6px 12px)"
+      :title="t('tmcut.media.mediaOfflineHint')"
+    >
+      <UIcon :name="offlineView.icon" class="size-3.5 shrink-0 text-warning-400" />
+      <span class="truncate text-[10px] font-semibold text-warning-200">
+        {{ t('tmcut.media.mediaOffline') }}
+      </span>
+      <UButton
+        v-if="clipAsset"
+        icon="i-lucide-folder-search"
+        size="xs"
+        variant="ghost"
+        color="warning"
+        :aria-label="t('tmcut.media.relink')"
+        :title="t('tmcut.media.relink')"
+        class="ml-auto shrink-0"
+        @pointerdown.stop
+        @click.stop="relinkWithPicker(clipAsset)"
+      />
     </div>
 
     <!-- Clip Content Body (z-[1]: above the strip layers, below the

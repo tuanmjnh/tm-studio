@@ -4,10 +4,12 @@ import type { TmcutAsset, TmcutMediaFolder } from '~/types/tmcut'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
 import { useTmcutMediaImport } from '~/composables/useTmcutMediaImport'
+import { useTmcutRelink } from '~/composables/useTmcutRelink'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { useTmcutRecorder } from '~/composables/useTmcutRecorder'
-import { useFileSystem } from '~/composables/useFileSystem'
 import { formatDurationSec, formatFileSize, mediaFileKey } from '~/utils/tmcut/media'
+import { assetStateView, isMediaOffline } from '~/utils/tmcut/assetImport'
+import type { TmcutImportTone } from '~/utils/tmcut/assetImport'
 import { TMCUT_ASSET_MIME } from '~/utils/tmcut/dnd'
 import type { TmcutAssetDragPayload } from '~/utils/tmcut/dnd'
 import { filterAssetsByFolder, secToTicks, TICKS_PER_SECOND } from 'tmcut-core'
@@ -32,17 +34,11 @@ const {
   missingAssets,
   analyzingCount,
   importing,
-  importError,
   webUpload,
   isDesktop,
   generateProxy,
-  persistLibrary,
   importFiles,
   importWebFiles,
-  uploadWebFile,
-  uploadVideoThumb,
-  captureVideoThumb,
-  relink,
   removeAsset,
   addAssetToTimeline,
   loadWaveform,
@@ -59,10 +55,10 @@ const {
   moveAssetToFolder,
   getAssetFolderId
 } = useTmcutMedia()
+const { relinkWithPicker } = useTmcutRelink()
 
 const { playhead } = useTmcutPlayback()
-const { pickFile, pickWebFiles } = useFileSystem()
-const { mediaFilters, handleImportMedia } = useTmcutMediaImport()
+const { handleImportMedia } = useTmcutMediaImport()
 
 const {
   recording: recordingVoiceover,
@@ -398,49 +394,30 @@ async function onMediaPanelDrop(e: DragEvent) {
   }
 }
 async function handleRelink(asset: TmcutAsset) {
-  if (!isDesktop.value) {
-    const ext = asset.kind === 'video' ? mediaFilters[0]! : asset.kind === 'audio' ? mediaFilters[1]! : mediaFilters[2]!
-    const files = await pickWebFiles(ext.extensions, false)
-    const file = files[0]
-    if (!file) return
-    // R152: the replacement file is uploaded to the local server like a
-    // fresh import — relink() re-probes the stored bytes, so the blob: URL
-    // below only drives the cover frame and is revoked when done.
-    let ok = false
-    const blobUrl = URL.createObjectURL(file)
-    try {
-      const uploaded = await uploadWebFile(file, file.name)
-      ok = await relink(asset.id, uploaded.url, { name: file.name, size: uploaded.size })
-      if (ok && asset.kind === 'video') {
-        const thumb = await captureVideoThumb(blobUrl)
-        if (thumb) {
-          asset.thumbPath = await uploadVideoThumb(file, thumb)
-          // relink() persisted its own snapshot before the cover landed.
-          persistLibrary()
-        }
-      }
-    } catch (error) {
-      console.error('Web relink upload failed:', error)
-      importError.value = error instanceof Error ? error.message : 'upload failed'
-    } finally {
-      URL.revokeObjectURL(blobUrl)
-    }
-    toast.add({
-      title: t(ok ? 'tmcut.media.relinked' : 'tmcut.media.relinkFailed'),
-      color: ok ? 'success' : 'warning'
-    })
-    return
+  await relinkWithPicker(asset)
+}
+
+/**
+ * Badge colour per tone. The meaning (which state, which word, which icon) comes
+ * from `assetImport.ts` so this row, the grid chip, the timeline clip and the
+ * preview cannot disagree about what `partial` looks like.
+ */
+const IMPORT_TONE_CLASSES: Record<TmcutImportTone, string> = {
+  neutral: 'bg-muted text-toned',
+  primary: 'bg-primary/15 text-primary',
+  success: 'bg-emerald-500/15 text-emerald-400',
+  warning: 'bg-warning-500/15 text-warning-400',
+  error: 'bg-error-500/15 text-error-400'
+}
+
+function importBadge(asset: TmcutAsset) {
+  const view = assetStateView(asset)
+  return {
+    icon: view.icon,
+    label: t(view.key),
+    spin: view.state === 'probing',
+    classes: IMPORT_TONE_CLASSES[view.tone]
   }
-  const ext = asset.kind === 'video' ? mediaFilters[0]! : asset.kind === 'audio' ? mediaFilters[1]! : mediaFilters[2]!
-  const picked = await pickFile({ title: t('tmcut.media.relink'), filters: [ext] })
-  if (!picked) return
-  const filePath = Array.isArray(picked) ? picked[0] : picked
-  if (!filePath) return
-  const ok = await relink(asset.id, filePath)
-  toast.add({
-    title: t(ok ? 'tmcut.media.relinked' : 'tmcut.media.relinkFailed'),
-    color: ok ? 'success' : 'warning'
-  })
 }
 
 function handleRemoveAsset(asset: TmcutAsset) {
@@ -862,7 +839,7 @@ function showInFolder(filePath?: string) {
             v-for="asset in visibleAssets"
             :key="asset.id"
             class="group/thumb relative flex gap-2 p-1.5 min-w-0 rounded-md bg-accented/60 cursor-pointer border transition-colors"
-            :class="asset.status === 'missing' ? 'border-warning-500/60' : 'border-transparent hover:border-primary/60'"
+            :class="isMediaOffline(asset) ? 'border-warning-500/60' : 'border-transparent hover:border-primary/60'"
             :title="asset.name"
             :draggable="asset.status !== 'missing'"
             tabindex="0"
@@ -904,7 +881,7 @@ function showInFolder(filePath?: string) {
                 />
               </div>
               <div
-                v-if="asset.status === 'missing'"
+                v-if="isMediaOffline(asset)"
                 class="absolute inset-0 bg-warning-950/60 flex items-center justify-center"
               >
                 <UIcon name="i-lucide-alert-triangle" class="size-4 text-warning-400" />
@@ -964,10 +941,22 @@ function showInFolder(filePath?: string) {
                   {{ getFolderBadge(asset)?.name }}
                 </template>
               </p>
-              <p v-if="asset.status === 'missing'" class="text-[9px] font-medium text-warning-400 truncate">
-                {{ t('tmcut.media.missing') }}
-              </p>
-              <p v-else-if="asset.proxyStatus === 'ready'" class="text-[9px] font-mono text-emerald-400 truncate">
+              <!-- Import-state row (zero-FFmpeg slice C2): the six verdicts are
+                   words, not colours alone, so a screen reader and a colour-blind
+                   user get the same answer. The byte fact (missing) rides the same
+                   table because it shares the badge. -->
+              <span
+                class="inline-flex items-center gap-1 self-start rounded-full px-1.5 py-0.5 text-[9px] font-medium truncate max-w-full"
+                :class="importBadge(asset).classes"
+              >
+                <UIcon
+                  :name="importBadge(asset).icon"
+                  class="size-2.5 shrink-0"
+                  :class="importBadge(asset).spin ? 'animate-spin' : ''"
+                />
+                {{ importBadge(asset).label }}
+              </span>
+              <p v-if="asset.proxyStatus === 'ready'" class="text-[9px] font-mono text-emerald-400 truncate">
                 ✓ PXY
               </p>
             </div>
@@ -985,7 +974,7 @@ function showInFolder(filePath?: string) {
                    compact icon column. UIcon has no color prop —
                    text-warning + pointer affordance keep it honest. -->
               <UIcon
-                v-if="asset.status === 'missing'"
+                v-if="isMediaOffline(asset)"
                 name="i-lucide-folder-search"
                 :title="t('tmcut.media.relink')"
                 class="size-4 text-warning cursor-pointer hover:opacity-75 transition-opacity pointer-events-none group-hover/thumb:pointer-events-auto"
@@ -1053,7 +1042,7 @@ function showInFolder(filePath?: string) {
             v-for="asset in visibleAssets"
             :key="asset.id"
             class="group/thumb relative rounded-md bg-accented/60 cursor-pointer border transition-colors overflow-hidden"
-            :class="asset.status === 'missing' ? 'border-warning-500/60' : 'border-transparent hover:border-primary/60'"
+            :class="isMediaOffline(asset) ? 'border-warning-500/60' : 'border-transparent hover:border-primary/60'"
             :title="asset.name"
             :draggable="asset.status !== 'missing'"
             tabindex="0"
@@ -1098,6 +1087,18 @@ function showInFolder(filePath?: string) {
                 v-if="asset.proxyStatus === 'ready'"
                 class="absolute top-1 right-1 px-1 rounded bg-warning-500/90 text-[9px] font-bold text-black"
               >PXY</span>
+              <!-- Import-state chip (slice C2): same table as the list row. -->
+              <span
+                class="absolute bottom-1 left-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-medium"
+                :class="importBadge(asset).classes"
+              >
+                <UIcon
+                  :name="importBadge(asset).icon"
+                  class="size-2.5 shrink-0"
+                  :class="importBadge(asset).spin ? 'animate-spin' : ''"
+                />
+                {{ importBadge(asset).label }}
+              </span>
 
               <!-- Hover actions: bottom-anchored strip on the
                    thumbnail (opacity-only reveal). -->
@@ -1107,7 +1108,7 @@ function showInFolder(filePath?: string) {
                 <!-- Missing assets swap the timeline plus for the
                      relink affordance (list-view icon pattern). -->
                 <UIcon
-                  v-if="asset.status === 'missing'"
+                  v-if="isMediaOffline(asset)"
                   name="i-lucide-folder-search"
                   :title="t('tmcut.media.relink')"
                   class="size-4 text-warning cursor-pointer hover:opacity-75 transition-opacity pointer-events-auto"

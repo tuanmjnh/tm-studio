@@ -9,13 +9,16 @@ import { effectCssParts } from '~/utils/tmcut/fxPreview'
 import { previewScale, evalKeyframe, gainAt, evaluateClip, textAnimationAt, safeAreaRects, SAFE_AREA_PRESETS, TICKS_PER_SECOND, secToTicks, maskCssMaskImage, resolveClipLayout, previewTransitionRamp, classifyAssetKind, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_FONT_SIZE, textBoxPadding, textShadowOffset, textStrokeWidth } from 'tmcut-core'
 import type { TmcutKeyframe, TmcutTextAnimationType } from 'tmcut-core'
 import { clipDurationTicks, clipStartSec, clipEndSec, clipMediaTimeSec } from '~/utils/tmcut/clipTime'
+import { assetStateView, isMediaOffline } from '~/utils/tmcut/assetImport'
 import { useTmcutFrames } from '~/composables/useTmcutFrames'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
+import { useTmcutRelink } from '~/composables/useTmcutRelink'
 
 const { t } = useI18n()
 const toast = useToast()
 const { available: canExtractFrames, extractFrame } = useTmcutFrames()
 const { proxyPreview, findAssetBySrc } = useTmcutMedia()
+const { relinkWithPicker } = useTmcutRelink()
 // Phase 5 (R90): runtime media decisions live behind one engine seam —
 // every playable URL and every desktop-only capability question goes
 // through it now (the preview never touches FFmpeg on either runtime).
@@ -414,6 +417,27 @@ function onMediaError(source: 'video' | 'image' = 'video') {
   if (source === 'video' && el && el.currentSrc && el.currentSrc !== currentMediaSrc.value) return
   mediaLoadError.value = true
 }
+
+// "Media Offline" (roadmap Q6(a), slice C2): the library already knows a clip's
+// bytes are not on this machine, so the canvas says so up front instead of
+// waiting for a decode to fail and showing one black frame. The plate is a
+// statement, never a dialog — relinking only happens when the user presses the
+// button — and it leaves the asset reference, the trims and the effects alone.
+const currentAsset = computed(() => {
+  const src = activeVideoClip.value?.clip?.src
+  if (!src) return null
+  return findAssetBySrc(src) ?? null
+})
+
+const mediaOffline = computed(() => {
+  const clip = activeVideoClip.value?.clip
+  if (!clip || !clip.src) return false
+  return !currentAsset.value || isMediaOffline(currentAsset.value)
+})
+
+// Without an asset record there is nothing to relink (no id), so the plate is
+// text-only; the view still comes from the shared table, not a local guess.
+const offlineView = computed(() => assetStateView(currentAsset.value ?? { status: 'missing' }))
 
 // Track holding the active video clip (for the hide flag)
 const activeVideoTrack = computed(() => {
@@ -1724,9 +1748,42 @@ onUnmounted(() => {
           <span class="text-xs">{{ t('tmcut.player.trackHidden') }}</span>
         </div>
 
+        <!-- Media Offline plate (roadmap Q6(a), slice C2): owned by the asset
+             record, so it is up before a decode is even attempted, and it
+             offers relink without opening anything by itself. -->
+        <div
+          v-if="mediaOffline && !isTrackHidden"
+          class="absolute inset-0 z-40 flex flex-col items-center justify-center gap-2 bg-black/75 p-4 text-center select-none"
+          style="background-image: repeating-linear-gradient(45deg, rgba(251,191,36,0.12) 0 8px, transparent 8px 16px)"
+          data-canvas-hit
+          :title="t('tmcut.media.mediaOfflineHint')"
+        >
+          <UIcon :name="offlineView.icon" class="size-9 text-warning-400" />
+          <p class="text-xs font-semibold text-warning-200">
+            {{ t('tmcut.media.mediaOffline') }}
+          </p>
+          <p class="text-[10px] text-muted max-w-[46ch]">
+            {{ t('tmcut.media.mediaOfflineHint') }}
+          </p>
+          <UButton
+            v-if="currentAsset"
+            icon="i-lucide-folder-search"
+            size="xs"
+            variant="subtle"
+            color="warning"
+            :label="t('tmcut.media.relink')"
+            :aria-label="t('tmcut.media.relink')"
+            :title="t('tmcut.media.relink')"
+            @click.stop="relinkWithPicker(currentAsset)"
+          />
+          <p class="text-[10px] font-mono text-warning-300/70 break-all max-w-full">
+            {{ activeVideoClip?.clip?.src }}
+          </p>
+        </div>
+
         <!-- Media load error overlay (only when a src was actually attempted) -->
         <div
-          v-if="mediaLoadError && currentMediaSrc"
+          v-if="mediaLoadError && currentMediaSrc && !mediaOffline"
           class="absolute inset-0 z-40 flex flex-col items-center justify-center gap-2 bg-error-950/70 backdrop-blur-xs p-4 text-center select-none"
           data-canvas-hit
         >

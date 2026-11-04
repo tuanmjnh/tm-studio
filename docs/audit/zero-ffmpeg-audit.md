@@ -349,7 +349,7 @@ Mỗi slice chạy 5 gate (`tmcut-verify-gate-pipeline`) rồi commit + push, nh
 |---|---|---|---|---|
 | A | Chốt kiến trúc: ADR-028…033, sửa prose FFmpeg của V4 roadmap, lưu baseline — **xong ở slice A2 (§14); con số "6 dòng" ở dòng này là thiếu, đo lại là 14** | `docs/`, ADR mới | typecheck exit 0 và 0 `error TS`; suite ≥90/93 như baseline; bốn doc guards **và** `docs_markdown` xanh (5/5 exit 0) | — |
 | B | `MediaProbeService` + Mediabunny cho **cả hai host**, trả schema §4.1 (undefined + warnings, không sentinel 0) — **đã code `1b57ca1`, nhưng exit gate mới đạt một phần: WAV + file hỏng + ảnh tĩnh trên hai host, fixture video MP4/MOV/WebM/MKV chưa (§13.4)** | `packages/core/src/mediaInfo.mjs` mới, `webProbe.ts`, `useTmcutPlatform.ts` | probe test trên fixture MP4/MOV/WebM/MKV + file hỏng; ffprobe **vẫn còn** cho tới khi D | A |
-| C | Asset cache fingerprint (IndexedDB/OPFS), trạng thái `queued\|probing\|ready\|partial\|unsupported\|error` — **tách hai phần: C1 đã code (audit §16) là sáu trạng thái vào record, fingerprint đúng bằng `cacheKeyForPath`, relink reset mọi thứ probe cũ học và giữ nguyên reference theo Q6; C2 chưa làm là cache bytes phía client (IndexedDB/OPFS) + nhãn màn hình "Media Offline" + i18n cho sáu trạng thái** | `useTmcutMedia.ts` | relink test; không serialize File object — **C1: hai điều này đo được ở `tmcut_asset_import.spec.ts` (16 check)** | B |
+| C | Asset cache fingerprint (IndexedDB/OPFS), trạng thái `queued\|probing\|ready\|partial\|unsupported\|error` — **tách ba phần: C1 (audit §16) dựng tầng dữ liệu — sáu trạng thái vào record, fingerprint đúng bằng `cacheKeyForPath`, relink reset mọi thứ probe cũ học và giữ nguyên reference theo Q6; C2 (audit §17) dựng tầng chữ — bảng nhìn state → chữ/icon/tone, predicate `isMediaOffline`, plate Media Offline trên library + timeline + preview, một dòng relink dùng chung cho ba bề mặt; C2b vẫn mở = cache bytes phía client (IndexedDB/OPFS) thay cho `POST /api/v1/media/upload`, tức chỗ ADR-033 thực sự áp dụng** | `useTmcutMedia.ts`, `assetImport.ts`, `useTmcutRelink.ts` | relink test; không serialize File object — **C1: 16 check ở `tmcut_asset_import.spec.ts`; C2: 13 check ở `tmcut_media_offline.spec.ts` (bảng nhìn + locale hai chiều + truth table offline + hành vi huỷ/relink)** | B |
 | D | Thumbnail + filmstrip bằng `VideoDecoder`/Canvas; bỏ `-ss` IPC | `useTmcutFrames.ts`, `frames.mjs` | thumb test theo timestamp; cancel stale request | B |
 | E | Autocut analysis (scene + silence) phía decoder; retire `analysis.mjs` stderr parse | `analysis.mjs`, `useTmcutAutocut.ts` | parity với kết quả cũ trên fixture, hoặc khai tử tính năng có ADR | D |
 | F | Scene graph + WebGL2 compositor cho **preview** (nâng cấp #96 thành slice đầu của renderer chung, không phải DOM stacking tạm) | `TmcutPreviewPlayer.vue`, `paintStack.mjs`, `renderAt.mjs` | preview composite đủ `rows`, pixel gate DOM↔GPU | B |
@@ -765,4 +765,93 @@ tự mở.
   timeline chuyển sang `probeInfo`, việc của slice D.
 - **Nhãn trên màn hình.** `importStatus` chưa có key nào trong `i18n/locales/en.json` và `vi.json`; chưa có chữ "Media Offline" nào
   được vẽ trên timeline hay preview. Toàn bộ phần C2 còn nguyên.
+   *(C2 ngày 2026-11-04 đã đóng cả hai vế — xem §17. Dòng trên giữ nguyên vì nó là số đo của lượt C1.)*
 
+
+## 17. Slice C2 — chữ trên màn hình cho sáu trạng thái, một bề mặt "Media Offline", một dòng relink duy nhất (đo ngày 2026-11-04)
+
+Nửa còn lại của hàng C trong §8 là **nhãn**, tức thứ mà ảnh chụp màn hình thấy còn lệnh grep thì
+không. C2 dựng ba món: một bảng nhìn (trạng thái → chữ + icon + tone) đặt ngay cạnh bảng chuyển
+trạng thái của C1, một predicate "offline" duy nhất, và một dòng relink dùng chung cho ba bề mặt.
+Nửa "cache bytes phía client" (ADR-033) vẫn còn mở và được tách thành việc riêng ở §17.5, không
+khai là xong ở đây.
+
+### 17.1 Cái đã dựng
+
+| File | Vai | Bằng chứng |
+|---|---|---|
+| [app/utils/tmcut/assetImport.ts:46](file:///D:/Applications/tm-studio/app/utils/tmcut/assetImport.ts#L46) | `TmcutImportTone` + `TmcutImportStateView`: năm tone, một hàng sáu cột | `tmcut_media_offline.spec.ts` check 1: khoá của bảng đúng bằng sáu verdict của core, mỗi hàng có `i-lucide-*` riêng (bảy glyph cho bảy hàng, kể cả `missing`), tone nằm trong union |
+| [app/utils/tmcut/assetImport.ts:63](file:///D:/Applications/tm-studio/app/utils/tmcut/assetImport.ts#L63) | `TMCUT_IMPORT_STATE_VIEWS` — bảng nhìn, và chỉ nó định nghĩa tone | check "one state table": `export const TMCUT_IMPORT_STATE_VIEWS` xuất hiện đúng **1** lần trong cả cây app |
+| [app/utils/tmcut/assetImport.ts:88](file:///D:/Applications/tm-studio/app/utils/tmcut/assetImport.ts#L88) | `assetStateView`: chữ/icon/tone cho một record, kể cả record chưa có `importStatus` | checks 3-5: `missing` thắng mọi verdict; verdict thắng field thô; record tiền-C1 still reads (`analyzing → probing`, rỗng → `queued`) |
+| [app/utils/tmcut/assetImport.ts:100](file:///D:/Applications/tm-studio/app/utils/tmcut/assetImport.ts#L100) | `isMediaOffline`: "clip này không phát được", không phải "file thiếu" | check 6 liệt kê **đúng** 18 tổ hợp (status, importStatus) offline; `ready/partial/queued/probing` với status tử tế đều **không** offline; `null` không offline |
+| [app/composables/useTmcutRelink.ts:21](file:///D:/Applications/tm-studio/app/composables/useTmcutRelink.ts#L21) | một dòng pick → store → relink → cover, hai nhánh host, một entry point | check "no component reaches for the picker": quét **toàn bộ** `app/components/tmcut` + `app/pages/tmcut`, không file nào chứa `relink(` hay `importStatus ===` |
+| [app/composables/useTmcutRelink.ts:76](file:///D:/Applications/tm-studio/app/composables/useTmcutRelink.ts#L76) | `relinkWithPicker`: `true` = probe nhận, `false` = hỏng thật, **null nội bộ** = người dùng huỷ | hai check hành vi: huỷ (web, không có `document`) và huỷ (desktop, dialog trả `null`) đều **0 toast**, asset giữ nguyên path, library giữ nguyên số asset |
+| [app/components/tmcut/TmcutMediaPanel.vue:413](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutMediaPanel.vue#L413) | `importBadge` + chip trên card và trên dòng list; ba chỗ `status === 'missing'` đổi sang `isMediaOffline(asset)` | grid card và list row cùng đọc một hàm; `probing` là hàng duy nhất được phép `animate-spin` |
+| [app/components/tmcut/TmcutTimelineClip.vue:142](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutTimelineClip.vue#L142) | plate "Media Offline" trên clip, sọc chéo vàng, kèm nút Relink khi có record | [`:581`](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutTimelineClip.vue#L581) `v-if="mediaOffline"`, [`:600`](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutTimelineClip.vue#L600) `@click.stop="relinkWithPicker(clipAsset)"` |
+| [app/components/tmcut/TmcutPreviewPlayer.vue:432](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L432) | plate trong canvas, do record quyết chứ không do decode quyết | [`:1755`](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L1755) `v-if="mediaOffline && !isTrackHidden"`, [`:1786`](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L1786) overlay lỗi cũ thành `mediaLoadError && currentMediaSrc && !mediaOffline` — hai plate không bao giờ chồng nhau |
+| `i18n/locales/en.json`, `vi.json` | `tmcut.importStatus.*` (sáu), `tmcut.media.mediaOffline`, `mediaOfflineHint`, dùng lại `missing`/`relink`/`relinked`/`relinkFailed` | check 2 đọc **cả hai** locale: mọi key mà bảng trỏ tới phải có, khác rỗng, không phải echo của chính nó, và sáu nhãn verdict đôi khi khác nhau (không hai verdict cùng một chữ) |
+| [tests/unit/tmcut_media_offline.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_media_offline.spec.ts) | 13 check: bảng, locale, hai chiều ưu tiên, truth table, một implementation, hành vi huỷ/relink desktop | `SPEC_EXIT=0`, `13/13` |
+
+Check "a component asks for a verdict and never reaches for a demuxer (rule 12)" trong
+`tmcut_asset_import.spec.ts` **đổi hướng** chứ không nới: nó từng assert đúng chuỗi
+`relink(asset.id, uploaded.url, { name: file.name, size: uploaded.size })` nằm trong panel; từ C2
+nó nằm trong flow dùng chung, nên check giờ đòi panel **không** còn `relink(` và flow **phải** còn
+nguyên chuỗi đó. Hợp đồng (picker là nơi duy nhất biết tên file) giữ nguyên, chỉ chủ thể đổi chỗ.
+
+### 17.2 Ba quyết định ghi lại
+
+1. **Một bảng nhìn, không ba bảng tự chế.** Ba bề mặt (library, timeline, preview) đều cần nói
+   "trạng thái này trông thế nào". Để mỗi file tự chọn màu và icon thì một verdict mới sẽ được vẽ
+   ba kiểu khác nhau, đúng cái lỗi C1 đã giết ở tầng probe. Vì vậy bảng nhìn sống cùng file với
+   bảng chuyển trạng thái: thêm một verdict vào `TmcutImportStatus` là hai bảng cùng phải thêm,
+   và spec check 1 fail ngay nếu thiếu hàng. `missing` **cố ý** nằm ngoài bảng — nó là sự kiện
+   bytes chứ không phải một verdict, nên nó có một hàng riêng trong `assetStateView`.
+2. **Huỷ thì im, hỏng thì báo.** `relinkWithPicker` phân biệt ba kết quả: probe nhận (`true`),
+   đã chọn file mà editor không dùng được (`false`, một toast warning), và người dùng đóng dialog
+   (`null` nội bộ → không toast). Không phân biệt thì mỗi lần Escape lại sinh một cảnh báo đỏ, và
+   người dùng học cách phớt lờ cảnh báo — thứ Q6 cần để `partial`/`unsupported` còn có nghĩa.
+   Hai check hành vi đo đúng điều này bằng cách đếm toast, không đo bằng mắt.
+3. **Plate do record quyết, không do một decode thất bại quyết.** Preview vốn đã có overlay
+   `mediaLoadError`, nhưng nó chỉ bật sau khi element báo lỗi — với file đã chết thì người dùng
+   thấy khung đen rồi mới thấy chữ, và với asset `unsupported` thì không có decode nào để mà lỗi.
+   Plate C2 đọc asset record nên nó lên trước cả lần thử giải mã, và overlay cũ bị trừ đi trường
+   hợp đó để hai lớp không chồng chữ lên nhau.
+
+### 17.3 Phần Q6 thi hành được ở tầng UI
+
+Q6(a) có ba vế, cả ba giờ đều có test: (i) chữ "Media Offline" xuất hiện ở timeline, preview và
+library — pin bằng check "the three surfaces share the one law"; (ii) **không** tự mở dialog —
+check "nothing opens the picker on its own" đọc từng điểm gọi `relinkWithPicker` trong ba file và
+đoan không đoạn nào nằm sau `watch(`/`onMounted(`; (iii) **không** xoá reference — hai check hành
+vi assert `assets.length` vẫn là 1 sau cả huỷ lẫn relink hỏng, và relink hỏng đích vẫn giữ asset ở
+`status: 'missing'` kèm `usedBy` và clip trỏ path cũ.
+
+### 17.4 Bằng chứng đã đo
+
+| Gate | Lệnh | Kết quả | Số đo |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | `TC_EXIT=0`, `grep -c "error TS"` = **0**; `.nuxt/eslint.config.mjs` sinh lại **28552** byte lúc 10:55, gate 2 chạy sau đó |
+| 2 Lint | `npx eslint` trên đúng 7 file đã chạm | PASS | lần đầu `LINT_EXIT=1` với **3** lỗi: 2 × `@stylistic/multiline-ternary` trong `useTmcutRelink.ts` và 1 × `no-unused-vars` (hằng `LAW` chưa được dùng) trong spec mới; sửa tay — ternary thành if-chain, LAW được dùng thêm vào check "one state table" — không `--fix`, không lint repo-wide → `LINT_EXIT=0` |
+| 3 Unit | `npx tsx tests/unit/run-all.mts` | PASS | `TEST_EXIT=0`, **98/98** specs (97 → 98), 0 hàng FAIL. Spec mới chạy riêng: **13/13**. `tmcut_asset_import.spec.ts` vẫn **16/16** sau khi check rule 12 đổi hướng |
+| 4 Live | 5 route `/tmcut*` trên `:4003`, đọc console sau khi mỗi route ổn định | PASS có điều kiện | **0** dòng `[error]`/`[warn]`/`[issue]` trên `/tmcut`, `/tmcut/autocut`, `/tmcut/templates`, `/tmcut/factory`, `/tmcut/editor`; chỉ có dòng `<Suspense> is an experimental feature`. Route editor bị chặn phiên đăng nhập nên canvas render trang login: chưa một clip thật nào nằm trên timeline ở lượt sweep này |
+| 4b Serve | `GET /_nuxt/@fs/D:/Applications/tm-studio/<path>` — byte size + symbol đã compile | PASS | `useTmcutRelink.ts` **11265**, `assetImport.ts` **16724**, `TmcutMediaPanel.vue` **206057**, `TmcutTimelineClip.vue` **113433**, `TmcutPreviewPlayer.vue` **300418** byte, tất cả **HTTP 200** (template SFC compile lỗi sẽ trả 500 ở đây). Module player có `mediaOffline`, `relinkWithPicker`, `t("tmcut.media.mediaOffline")` và `t("tmcut.media.mediaOfflineHint")` (esbuild đổi nháy đơn thành nháy kép); `en.json` **136796** và `vi.json` **138084** byte đều serve nguyên `tmcut.importStatus` sáu khoá |
+| 5 Docs | bốn guard tài liệu + `docs_markdown`, chạy trên cây docs **sau khi** viết xong §17, hàng C của §8 và ba hàng ADR | PASS | `tmcut_doc_table_shape` **3/3** exit 0 (236 dòng bảng, 0 dòng sai số cột); `tmcut_docs_link_integrity` **4/4** exit 0 (§17 thêm **14** link `file:///` mới, 13 anchor `#L` đối chiếu bằng số dòng thật, không link nào trỏ file bị git-ignore); `tmcut_doc_line_length` **4/4** exit 0 (dòng dài nhất **894** char, ceiling 1356); `tmcut_doc_citations` **5/5** exit 0; `docs_markdown` **12** checks exit 0 |
+
+### 17.5 Chưa chứng minh
+
+- **Chưa thấy plate bằng mắt.** Route editor cần phiên đăng nhập và agent bị cấm đăng nhập, nên
+  C2 chưa có một frame thật nào của "Media Offline" trên timeline hay preview. Chữ, icon và tone
+  được chứng minh bằng bảng + locale + module đã compile, **không** bằng ảnh chụp. Cần: một lượt
+  QA có token (chủ repo mở editor, gắn một file đã đổi chỗ, bấm Relink).
+- **Nhánh web có upload thật chưa đi hết.** Check hành vi web đo đường **huỷ** (`pickWebFiles`
+  không có `document` nên trả `[]`), còn đường "chọn file thật → `uploadWebFile` → relink" vẫn chỉ
+  chạy trong harness với `$fetch` giả. Đó là cùng khoản nợ "đường web có token" của §16.5.
+- **Cache bytes phía client chưa tồn tại.** ADR-033 vẫn **CHỜ**: fingerprint đã là khoá dẫn xuất
+  ổn định từ C1, nhưng web host vẫn lấy bytes từ `/uploads/` phía server. Việc này tách thành
+  slice **C2b** (IndexedDB/OPFS, giới hạn dung lượng, eviction theo revision), không tính vào C2.
+- **`partial` vẫn chưa có nguồn thật.** Bảng nhìn đã có hàng `partial` (warning, tam giác cảnh
+  báo), nhưng chưa một probe thật nào trả `partial` qua hai nhánh `analyzeAsset` — cần file VFR
+  thật, đúng nợ §13.4.
+- **Timeline vẫn tự probe.** `TmcutTimeline.vue:685` và `:882` gọi `media.probe` năm field; plate
+  timeline đọc asset record chứ không đọc verdict của probe đó, nên đổi sang `probeInfo` vẫn là
+  việc của slice D.

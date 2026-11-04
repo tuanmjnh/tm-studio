@@ -1190,8 +1190,18 @@
       "error": "Save failed",
       "staleRevision": "Stale"
     },
+    "importStatus": {
+      "queued": "Queued",
+      "probing": "Reading…",
+      "ready": "Ready",
+      "partial": "Partial",
+      "unsupported": "Unsupported",
+      "error": "Failed"
+    },
     "media": {
       "library": "Media Library",
+      "mediaOffline": "Media offline",
+      "mediaOfflineHint": "This clip's file is not on this machine. Relink it to new bytes — the clip keeps its position, its trims and its effects.",
       "import": "Import Media",
       "importHint": "Video · Audio · Image",
       "search": "Search library…",

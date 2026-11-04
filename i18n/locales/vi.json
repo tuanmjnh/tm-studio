@@ -1190,8 +1190,18 @@
       "error": "Lưu thất bại",
       "staleRevision": "Lỗi bản"
     },
+    "importStatus": {
+      "queued": "Chờ xử lý",
+      "probing": "Đang đọc…",
+      "ready": "Sẵn sàng",
+      "partial": "Một phần",
+      "unsupported": "Không hỗ trợ",
+      "error": "Lỗi"
+    },
     "media": {
       "library": "Thư viện media",
+      "mediaOffline": "Media ngoại tuyến",
+      "mediaOfflineHint": "File của clip này không có trên máy. Hãy gắn lại file để trỏ vào dữ liệu mới — clip vẫn giữ vị trí, các chỗ cắt và hiệu ứng.",
       "import": "Nhập media",
       "importHint": "Video · Audio · Ảnh",
       "search": "Tìm trong thư viện…",

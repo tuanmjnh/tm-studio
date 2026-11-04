@@ -9,7 +9,10 @@
  *
  * The six names are core's (`TmcutImportStatus`): `classifyImportStatus` already
  * hands out ready / partial / unsupported / error, so only the two in-flight
- * states are produced here, plus the one table mapping a verdict onto `status`.
+ * states are produced here, plus the one table mapping a verdict onto `status`,
+ * and the one table mapping a verdict onto a badge. Both surfaces that show a
+ * state read them, so a card and a clip cannot disagree about what `partial`
+ * means.
  */
 import { cacheKeyForPath } from 'tmcut-core'
 import type { TmcutAssetKind, TmcutImportStatus } from 'tmcut-core'
@@ -37,6 +40,67 @@ export function assetStatusForImport(importStatus: TmcutImportStatus): TmcutAsse
   if (importStatus === 'queued' || importStatus === 'probing') return 'analyzing'
   if (importStatus === 'ready' || importStatus === 'partial') return 'ready'
   return 'error'
+}
+
+/** Badge colours the app already uses; a new name here would be an unused token. */
+export type TmcutImportTone = 'neutral' | 'primary' | 'success' | 'warning' | 'error'
+
+export interface TmcutImportStateView {
+  /** The verdict the badge stands for. `missing` is the byte axis, not a verdict. */
+  state: TmcutImportStatus | 'missing'
+  /** i18n leaf key. `tmcut_i18n_keys.spec.ts` fails if a locale is missing it. */
+  key: string
+  icon: string
+  tone: TmcutImportTone
+}
+
+/**
+ * The one place a verdict becomes pixels. Kept here rather than in a component
+ * because three surfaces read it — the library card, the timeline clip and the
+ * preview plate — and a fourth would have to add a state to this table to
+ * disagree with them.
+ */
+export const TMCUT_IMPORT_STATE_VIEWS: Record<TmcutImportStatus, TmcutImportStateView> = {
+  queued: { state: 'queued', key: 'tmcut.importStatus.queued', icon: 'i-lucide-clock', tone: 'neutral' },
+  probing: { state: 'probing', key: 'tmcut.importStatus.probing', icon: 'i-lucide-loader-circle', tone: 'primary' },
+  ready: { state: 'ready', key: 'tmcut.importStatus.ready', icon: 'i-lucide-circle-check', tone: 'success' },
+  partial: { state: 'partial', key: 'tmcut.importStatus.partial', icon: 'i-lucide-triangle-alert', tone: 'warning' },
+  unsupported: { state: 'unsupported', key: 'tmcut.importStatus.unsupported', icon: 'i-lucide-circle-slash', tone: 'error' },
+  error: { state: 'error', key: 'tmcut.importStatus.error', icon: 'i-lucide-circle-x', tone: 'error' }
+}
+
+/** The byte axis has its own word: a file that is not there was never judged. */
+const MISSING_VIEW: TmcutImportStateView = {
+  state: 'missing',
+  key: 'tmcut.media.missing',
+  icon: 'i-lucide-file-question',
+  tone: 'warning'
+}
+
+/** Records written before slice C carry no verdict, so `status` is the answer. */
+const STATUS_AS_IMPORT: Record<TmcutAssetStatus, TmcutImportStatus> = {
+  analyzing: 'probing',
+  ready: 'ready',
+  missing: 'error',
+  error: 'error'
+}
+
+export function assetStateView(asset: { status?: TmcutAssetStatus, importStatus?: TmcutImportStatus }): TmcutImportStateView {
+  if (asset.status === 'missing') return MISSING_VIEW
+  const state = asset.importStatus ?? (asset.status ? STATUS_AS_IMPORT[asset.status] : 'queued')
+  return TMCUT_IMPORT_STATE_VIEWS[state]
+}
+
+/**
+ * A clip is offline when the editor cannot show it: the bytes are gone, or the
+ * last read refused them. `queued`/`probing` are deliberately not offline — the
+ * import is still running, and calling that "offline" would be a lie about work
+ * in progress.
+ */
+export function isMediaOffline(asset: { status?: TmcutAssetStatus, importStatus?: TmcutImportStatus } | null | undefined): boolean {
+  if (!asset) return false
+  if (asset.status === 'missing' || asset.status === 'error') return true
+  return asset.importStatus === 'unsupported' || asset.importStatus === 'error'
 }
 
 /**

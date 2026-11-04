@@ -474,9 +474,14 @@ async function main() {
   await check('a component asks for a verdict and never reaches for a demuxer (rule 12)', () => {
     const panel = read('app/components/tmcut/TmcutMediaPanel.vue')
     assert.doesNotMatch(panel, /webProbe|mediaProbe|probeWebMetadata/, 'the panel does not probe the relink target')
+    // Slice C2 moved the pick → store → relink → cover flow into one composable,
+    // because the offline surface now exists on three screens. The panel is one of
+    // them, so it must not own the call any more.
+    assert.doesNotMatch(panel, /\brelink\(/, 'the panel asks the relink flow instead of calling the store')
+    const flow = read('app/composables/useTmcutRelink.ts')
     assert.ok(
-      panel.includes('relink(asset.id, uploaded.url, { name: file.name, size: uploaded.size })'),
-      'it hands the composable what only the picker knows'
+      flow.includes('relink(asset.id, uploaded.url, { name: file.name, size: uploaded.size })'),
+      'the flow hands the composable what only the picker knows'
     )
     // The bug this replaces: relink() saved its snapshot before the panel
     // mutated the record, so the name and thumbnail vanished on the next reload.
