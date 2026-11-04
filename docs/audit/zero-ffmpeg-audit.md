@@ -349,7 +349,7 @@ Mỗi slice chạy 5 gate (`tmcut-verify-gate-pipeline`) rồi commit + push, nh
 |---|---|---|---|---|
 | A | Chốt kiến trúc: ADR-028…033, sửa prose FFmpeg của V4 roadmap, lưu baseline — **xong ở slice A2 (§14); con số "6 dòng" ở dòng này là thiếu, đo lại là 14** | `docs/`, ADR mới | typecheck exit 0 và 0 `error TS`; suite ≥90/93 như baseline; bốn doc guards **và** `docs_markdown` xanh (5/5 exit 0) | — |
 | B | `MediaProbeService` + Mediabunny cho **cả hai host**, trả schema §4.1 (undefined + warnings, không sentinel 0) — **đã code `1b57ca1`, nhưng exit gate mới đạt một phần: WAV + file hỏng + ảnh tĩnh trên hai host, fixture video MP4/MOV/WebM/MKV chưa (§13.4)** | `packages/core/src/mediaInfo.mjs` mới, `webProbe.ts`, `useTmcutPlatform.ts` | probe test trên fixture MP4/MOV/WebM/MKV + file hỏng; ffprobe **vẫn còn** cho tới khi D | A |
-| C | Asset cache fingerprint (IndexedDB/OPFS), trạng thái `queued\|probing\|ready\|partial\|unsupported\|error` | `useTmcutMedia.ts` | relink test; không serialize File object | B |
+| C | Asset cache fingerprint (IndexedDB/OPFS), trạng thái `queued\|probing\|ready\|partial\|unsupported\|error` — **tách hai phần: C1 đã code (audit §16) là sáu trạng thái vào record, fingerprint đúng bằng `cacheKeyForPath`, relink reset mọi thứ probe cũ học và giữ nguyên reference theo Q6; C2 chưa làm là cache bytes phía client (IndexedDB/OPFS) + nhãn màn hình "Media Offline" + i18n cho sáu trạng thái** | `useTmcutMedia.ts` | relink test; không serialize File object — **C1: hai điều này đo được ở `tmcut_asset_import.spec.ts` (16 check)** | B |
 | D | Thumbnail + filmstrip bằng `VideoDecoder`/Canvas; bỏ `-ss` IPC | `useTmcutFrames.ts`, `frames.mjs` | thumb test theo timestamp; cancel stale request | B |
 | E | Autocut analysis (scene + silence) phía decoder; retire `analysis.mjs` stderr parse | `analysis.mjs`, `useTmcutAutocut.ts` | parity với kết quả cũ trên fixture, hoặc khai tử tính năng có ADR | D |
 | F | Scene graph + WebGL2 compositor cho **preview** (nâng cấp #96 thành slice đầu của renderer chung, không phải DOM stacking tạm) | `TmcutPreviewPlayer.vue`, `paintStack.mjs`, `renderAt.mjs` | preview composite đủ `rows`, pixel gate DOM↔GPU | B |
@@ -686,4 +686,83 @@ Guard **không** làm hai việc, ghi rõ để slice sau khỏi hiểu sai:
 - Phép đo 15.3 chạy trên mirror `localStorage` của harness Node. Project desktop ghi qua `tmcut:writeProject` dùng cùng một object,
   nhưng **chưa** mở lại một file `.json` thật do app Electron sinh ra để đối chiếu key-by-key.
 - Slice I vẫn là chỗ duy nhất xoá route và binary; ba slice ở đây không xoá gì.
+
+---
+
+## 16. Slice C1 — hai trục trạng thái của một asset và một khoá cache duy nhất (đo ngày 2026-11-04)
+
+Hàng C của §8 có hai phần. C1 là phần dữ liệu và luật: sáu trạng thái import đi vào record, khoá cache của core trở thành chìa
+khoá dẫn xuất duy nhất, và relink reset mọi thứ probe cũ đã học. C2 là phần màn hình (Q6 "Media Offline" + nhãn i18n cho sáu trạng
+thái + cache bytes phía client) và **chưa** làm. Phần này trả đúng khoản nợ §13.4 ghi — "`probeInfo` chưa có consumer UI nào":
+từ slice này answer của MediaProbeService là thứ quyết định trạng thái của asset trong library, không còn là một hàm chưa ai gọi.
+
+Không có gì bị xoá, theo rule 9: `webProbe.ts` vẫn còn và vẫn là đường trả lời cho `media.probe` cũ (ADR-020), mà
+[TmcutTimeline.vue:685](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutTimeline.vue#L685) và
+[TmcutTimeline.vue:882](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutTimeline.vue#L882) vẫn đang dùng. Cái đổi là
+**ai gọi cái gì**, không phải có bao nhiêu đường probe.
+
+### 16.1 Cái đã dựng
+
+| Lớp | File | Vai |
+|---|---|---|
+| Bảng trạng thái | `app/utils/tmcut/assetImport.ts` (mới) | `TMCUT_IMPORT_STATES` (đúng sáu tên core, theo thứ tự pipeline đi qua), `assetStatusForImport` verdict → coarse status ở [assetImport.ts:36](file:///D:/Applications/tm-studio/app/utils/tmcut/assetImport.ts#L36), `assetFingerprint` ở [assetImport.ts:48](file:///D:/Applications/tm-studio/app/utils/tmcut/assetImport.ts#L48), `buildAssetRecord` = record khởi đầu của một lần import |
+| Hai field | `app/types/tmcut.ts` | `importStatus?` và `fingerprint?` — **optional**, nên record ghi trước slice C vẫn đọc được; test 15 đo đúng đường đó |
+| Thu thập | `app/composables/useTmcutMedia.ts` | `probeAssetInfo` probe file **đã lưu** qua URL; `probePickedFile` probe **bytes** picker vừa đưa, lúc chưa tồn tại URL nào; `applyMediaInfo` ([useTmcutMedia.ts:332](file:///D:/Applications/tm-studio/app/composables/useTmcutMedia.ts#L332)) MediaInfo → meta + fingerprint; `applyVerdict` ([useTmcutMedia.ts:348](file:///D:/Applications/tm-studio/app/composables/useTmcutMedia.ts#L348)) verdict → `importStatus` + `status` + `probedAt` |
+| Consumer | `useTmcutMedia.ts` | `analyzeAsset` cả hai nhánh đều đi qua verdict ([useTmcutMedia.ts:354](file:///D:/Applications/tm-studio/app/composables/useTmcutMedia.ts#L354)); `importFiles` xếp hàng **đủ** rồi mới probe từng cái; `importWebFiles` chạy upload và demux **song song** trên cùng một file; `checkMissing` bỏ `fnv1aHex` tự nối, gọi `cacheKeyForPath` và backfill fingerprint |
+| Panel | `app/components/tmcut/TmcutMediaPanel.vue` | bỏ `probeWebMetadata` và `findAssetBySrc`: relink là một lần `relink(asset.id, uploaded.url, { name: file.name, size: uploaded.size })`, không còn sửa record "hộ" sau khi composable đã persist |
+| Test | `tests/unit/tmcut_asset_import.spec.ts` (mới) | 16 check: demuxer thật trên PCM tự viết, một HTTP server trả 206 thật, một IPC fake hình controller desktop, và một `localStorage` đọc lại bằng JSON.parse |
+
+### 16.2 Ba quyết định đáng ghi lại
+
+1. **Hai trục, không gộp.** `status` trả lời "bytes có ở đây không", chủ là `checkMissing`; `importStatus` trả lời "lần đọc cuối
+   học được gì", chủ là `analyzeAsset`. `partial` đứng cùng phía `ready` vì nó là clip dùng được kèm cảnh báo (duration ước lượng,
+   VFR); `unsupported` và `error` về `error`. Lý do thật là nhánh desktop: khi host trả `ok: false`, một asset mang
+   `status: 'missing'` + `importStatus: 'error'` + `fingerprint: null` **cùng lúc**. Gộp lại thành một trục thì hoặc một file trở về
+   từ thư mục đã đổi chỗ bị probe lại từ đầu, hoặc một file chưa từng đọc được sẽ trông như "ready".
+2. **Một khoá cache, không hai bản tự chế.** Test pin cả giá trị lẫn hình dạng source: `assetFingerprint(path, meta)` bằng
+   `cacheKeyForPath` bằng `fnv1aHex("v2:" + mediaFileKey(path) + ":" + mtimeMs + ":" + size)`; trong source của `assetImport.ts` phải
+   có `cacheKeyForPath(` và **không** được có `fnv1aHex(`. `mediaFileKey` hạ chữ và đổi slash nên khoá không phân biệt hoa/thường, và
+   web có `mtimeMs = 0` nên khoá của một asset web là path + size. Vì thế dedup của `importWebFiles` tách thành `dedupeKey` riêng
+   (`web:<name>:<size>`, tính trên file được chọn) chứ không dùng fingerprint của URL `/uploads/` mới — hai lần upload cùng một file
+   ra hai URL khác nhau, nếu dùng fingerprint làm khoá dedup thì library sẽ nhận cả hai.
+3. **Mirror không chứa File.** `buildAssetRecord` chỉ trả đúng 16 field mà một vòng JSON tái tạo được; `nonJsonValues()` đi đệ quy
+   qua record và phải trả `[]` (nó bắt `Blob`, `File`, `Function`, `undefined` lurking trong object); xâu `blob:` không được xuất hiện
+   trong `localStorage['tmcut_assets_v1']` sau một lần import; và số `createObjectURL` phải bằng số `revokeObjectURL`. Đó là phần
+   "không serialize File object" của hàng C trong §8, đo được thay vì cam kết.
+
+### 16.3 Phần Q6 thi hành được ở tầng dữ liệu
+
+`relink` ([useTmcutMedia.ts:817](file:///D:/Applications/tm-studio/app/composables/useTmcutMedia.ts#L817)) xoá **mọi** thứ probe cũ
+học được về file trước — `meta` rỗng, `thumbPath`/`filmstripPath`/`waveformPath`/`proxyPath` về null, `fingerprint` về null — vì giữ
+lại nghĩa là phát (và đo) bằng chính bytes mà asset không còn trỏ tới. Nhưng nó **không** xoá asset. Check "an unreadable relink
+target leaves the asset missing but intact" đo đúng ba điều chủ repo chốt ở Q6: đường dẫn hỏng để nguyên reference (asset vẫn trong
+library, `usedBy` còn, clip vẫn trỏ src cũ), trạng thái hỏng báo qua `missingAssets()`, và hàm chỉ trả `false` — không một dialog nào
+tự mở.
+
+### 16.4 Bằng chứng đã đo
+
+| Gate | Lệnh | Kết quả | Số đo |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | `TC_EXIT=0`, `grep -c "error TS"` = **0**; `.nuxt/eslint.config.mjs` sinh lại **28535** byte lúc 10:11 (gate 2 chạy sau đó) |
+| 2 Lint | `npx eslint` trên đúng 5 file đã chạm | PASS | lần đầu `LINT_EXIT=1` với **6** lỗi, **cả 6 nằm trong file test mới** (operator-linebreak, max-statements-per-line ×3, no-useless-assignment, no-unused-vars); sửa tay từng lỗi, không `--fix`, không lint repo-wide → `LINT_EXIT=0` |
+| 3 Unit | `npx tsx tests/unit/run-all.mts` | PASS | `TEST_EXIT=0`, **97/97** specs, 0 hàng FAIL (smoke vẫn opt-in, runner nói rõ ở dòng chót). `tmcut_asset_import.spec.ts` chạy riêng: **16/16**, `SPEC_EXIT=0` |
+| 4 Live | 5 route `/tmcut*` qua CDP, đọc console sau khi mỗi route ổn định | PASS có điều kiện | `/tmcut`, `/tmcut/autocut`, `/tmcut/templates`: **0** `[error]`/`[warn]`/`[issue]`, chỉ dòng `<Suspense>` experimental. `/tmcut/editor` 4× `[error] … 401 (error.unauthorized)` và `/tmcut/factory` 1×: `list_network_requests` quy gán **cả 5** cho `GET /api/v1/ai/relay/catalog` (AI endpoint cần token), **0** request nào thuộc đường media |
+| 4b Serve | `/_nuxt/@fs/D:/Applications/tm-studio/<path>` — byte size + nội dung symbol | PASS | `assetImport.ts` **9172**, `useTmcutMedia.ts` **111464**, `TmcutMediaPanel.vue` **205993** byte. Module đã serve có `assetStatusForImport`/`buildAssetRecord`/`cacheKeyForPath`, có `asset.importStatus = "probing"` và **không** có `fnv1aHex`; panel không còn `webProbe` và có `size: uploaded.size` |
+| 5 Docs | bốn guard tài liệu + spec mới, chạy trên cây docs cuối cùng | PASS | `tmcut_doc_table_shape` **3/3** exit 0; `tmcut_docs_link_integrity` **4/4** exit 0 (6 link `file:///` mới trong §16, mọi anchor đối chiếu số dòng thật); `tmcut_doc_line_length` **4/4** exit 0; `tmcut_doc_citations` **5/5** exit 0; `docs_markdown` **12** checks exit 0. Chạy lại lần cuối sau khi hàng C của §8 và bốn hàng ADR-029…033 được viết. |
+
+### 16.5 Chưa chứng minh
+
+- **Đường web có token.** `POST /api/v1/media/upload` đo được trả **401 `error.tokenMissing`** khi không có phiên, và agent bị cấm
+  đăng nhập, nên golden path import-web mới chỉ chứng minh bằng harness Node (demuxer thật + HTTP 206 thật + mirror thật) và bằng
+  module đã serve — chưa phải một cú chuột trên trình duyệt đã sign-in.
+- **Cache vật lý phía client chưa tồn tại.** `fingerprint` hôm nay mới là tên dẫn xuất cho slice D và điều kiện cho C2; bytes của web
+  host vẫn nằm ở `/uploads/` phía server, nên ADR-033 vẫn **CHỜ** và hàng C của §8 chỉ đóng một nửa.
+- **`partial` chưa có nguồn thật.** Bảng chuyển và test core pin ý nghĩa của nó, nhưng chưa một probe thật nào trả `partial` qua hai
+  nhánh của `analyzeAsset` — cần file VFR thật hoặc container có duration ước lượng, đúng khoản nợ §13.4 đã ghi.
+- **Video container trên desktop.** Hai nhánh `ok: false` và `result.stat` đo bằng IPC fake hình controller; chưa mở một fixture
+  MP4/MOV/MKV thật (slice D là chỗ fixture được dùng vì thumbnail cần frame).
+- **Timeline chưa nhận verdict.** `TmcutTimeline.vue:685` và `:882` vẫn gọi `media.probe` năm field; element probe chỉ mất khi
+  timeline chuyển sang `probeInfo`, việc của slice D.
+- **Nhãn trên màn hình.** `importStatus` chưa có key nào trong `i18n/locales/en.json` và `vi.json`; chưa có chữ "Media Offline" nào
+  được vẽ trên timeline hay preview. Toàn bộ phần C2 còn nguyên.
 

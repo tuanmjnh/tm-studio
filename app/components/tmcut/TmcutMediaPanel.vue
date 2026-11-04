@@ -14,7 +14,6 @@ import { filterAssetsByFolder, secToTicks, TICKS_PER_SECOND } from 'tmcut-core'
 import { clipDurationSec } from '~/utils/tmcut/clipTime'
 import { effectiveAssetKind } from '~/utils/tmcut/assetKind'
 import { tmcutHostBridge } from '~/utils/tmcut/hostBridge'
-import { probeWebMetadata } from '~/utils/tmcut/webProbe'
 
 /**
  * Left media dock: category tabs, asset bin (list/grid), folders, voiceover,
@@ -49,7 +48,6 @@ const {
   loadWaveform,
   getThumbUrl,
   timelineSrcSet,
-  findAssetBySrc,
   projectFolders,
   selectedFolderId,
   folderCounts,
@@ -406,31 +404,20 @@ async function handleRelink(asset: TmcutAsset) {
     const file = files[0]
     if (!file) return
     // R152: the replacement file is uploaded to the local server like a
-    // fresh import — the blob: URL below only drives probing/thumbnails
-    // and is revoked when done.
+    // fresh import — relink() re-probes the stored bytes, so the blob: URL
+    // below only drives the cover frame and is revoked when done.
     let ok = false
     const blobUrl = URL.createObjectURL(file)
     try {
       const uploaded = await uploadWebFile(file, file.name)
-      ok = await relink(asset.id, uploaded.url)
-      if (ok) {
-        const updated = findAssetBySrc(uploaded.url)
-        if (updated) {
-          updated.name = file.name
-          updated.meta.fileSize = uploaded.size
-          if (updated.kind !== 'image') {
-            const probed = await probeWebMetadata(blobUrl, updated.kind)
-            if (probed) updated.meta.durationSec = Math.round(probed.durationSec * 100) / 100
-          }
-          if (updated.kind === 'video') {
-            const thumb = await captureVideoThumb(blobUrl)
-            if (thumb) updated.thumbPath = await uploadVideoThumb(file, thumb)
-          }
+      ok = await relink(asset.id, uploaded.url, { name: file.name, size: uploaded.size })
+      if (ok && asset.kind === 'video') {
+        const thumb = await captureVideoThumb(blobUrl)
+        if (thumb) {
+          asset.thumbPath = await uploadVideoThumb(file, thumb)
+          // relink() persisted its own snapshot before the cover landed.
+          persistLibrary()
         }
-        // relink() persists its own snapshot BEFORE these mutations land,
-        // so re-save here — otherwise the friendly name and the new
-        // /uploads/ thumbnail are lost on the next reload.
-        persistLibrary()
       }
     } catch (error) {
       console.error('Web relink upload failed:', error)

@@ -48,11 +48,11 @@ Vì vậy register này dùng số tiếp theo của dãy đang chạy (028…03
 | ADR | Quyết định | Trạng thái code | Bị chặn bởi |
 |---|---|---|---|
 | ADR-028 | FFmpeg/FFprobe bị loại khỏi repo, build và dependency tree | **CHỜ** — engine vẫn là đường render duy nhất | slice I, và slice I chờ H có output đầu tiên |
-| ADR-029 | Mediabunny đảm nhận demux + mux, không phải "FFprobe clone" | **MỘT PHẦN** — leg probe đã code ở slice B, commit `1b57ca1` | leg mux thuộc slice H |
+| ADR-029 | Mediabunny đảm nhận demux + mux, không phải "FFprobe clone" | **MỘT PHẦN** — leg probe đã code ở slice B, commit `1b57ca1`, và **đã có consumer** từ slice C1: verdict của nó là thứ quyết định `importStatus`/`status` của asset trong library (audit §16) | leg mux thuộc slice H |
 | ADR-030 | decode/encode qua WebCodecs, hỏi capability trước khi dùng | **MỘT PHẦN** — probe đã đọc `isConfigSupported`/codec table; chưa có encoder nào | slice H |
 | ADR-031 | một timeline evaluator + một composition model cho hai host | **ĐÃ ÁP DỤNG** — `evaluateTimeline`, `renderAt`, `createFrameScheduler`, `paintStack` | slice J phải trả nốt phần core đang in văn bản FFmpeg |
-| ADR-032 | Electron là shell, không sở hữu media engine thứ hai | **MỘT PHẦN** — engine HTML-video thứ hai đã xoá (ADR-023); engine FFmpeg desktop còn tới slice I | slice I |
-| ADR-033 | media đi trong máy mặc định; rời máy là một lựa chọn hiển thị | **CHỜ** — web host vẫn stream file đã chọn lên server (`server/api/v1/media/upload.post.ts`) | slice C/H quyết đường đi của bytes |
+| ADR-032 | Electron là shell, không sở hữu media engine thứ hai | **MỘT PHẦN** — engine HTML-video thứ hai đã xoá (ADR-023); engine FFmpeg desktop còn tới slice I. Slice C1 cộng thêm một bằng chứng "một service cho hai host": nhánh desktop và nhánh web của `analyzeAsset` cùng đi qua một verdict table (audit §16.2) | slice I |
+| ADR-033 | media đi trong máy mặc định; rời máy là một lựa chọn hiển thị | **CHỜ** — web host vẫn stream file đã chọn lên server (`server/api/v1/media/upload.post.ts`). Slice C1 dựng xong **điều kiện** cho nó: fingerprint dẫn xuất từ path + revision, không từ vị trí lưu (audit §16.2) — cache vật lý phía client vẫn chưa có dòng code nào | slice C2/H quyết đường đi của bytes |
 
 ---
 
@@ -176,6 +176,11 @@ tự khai là cloud ở UI. Route `/api/v1/media/upload` tồn tại tới slice
 **Hệ quả.** Slice C phải thay chỗ upload đó bằng fingerprint + cache phía client, và `importStatus` phải phân biệt được
 "đang xử lý trong máy" với "đang gửi lên server". Đây là lý do C đứng ngay sau B.
 
+**Trạng thái.** Slice C1 làm xong nửa đầu của "fingerprint": `assetFingerprint` gọi đúng `cacheKeyForPath` của core và record mang
+sáu trạng thái import (audit §16). Nửa sau — cache vật lý phía client thay cho `POST /api/v1/media/upload`, và một trạng thái nói
+được bytes đang ở đâu — **chưa** có dòng code nào: bytes web hôm nay vẫn đi lên server, còn `queued`/`probing` chỉ mô tả tiến trình
+probe chứ không mô tả vị trí bytes. ADR-033 vì vậy vẫn **CHỜ**, C2 mới là chỗ nó bắt đầu áp dụng.
+
 **Điều kiện mở lại.** Cloud render (plan §Phase 10) là tính năng tùy chọn, bật per-job, có consent, và không được âm thầm thay đường local.
 
 ---
@@ -229,7 +234,7 @@ bảng dưới ghi lại đủ bộ, kèm việc mỗi câu mở ra ở slice n�
 | 3 | Binary FFmpeg trong package | **Gỡ khỏi package ở slice I**, nhưng giữ file trên máy dev cho tới khi slice H xong và parity đã đo thật. | Không xoá binary hay bản backup nào trước mốc đó. |
 | 4 | FFmpeg phía server | **Server chỉ là storage.** Bỏ render, analyze, proxy phía server; render = WebCodecs + TMCut Core, analyze = MediaProbeService + Mediabunny + Web API, proxy và thumbnail = pipeline local trong browser. | `upload.post.ts` **không mất** khả năng Web upload: nó là Storage Upload API thuần, không FFmpeg, không binary xử lý media. Media ở local mặc định, chỉ upload khi user yêu cầu rõ (Cloud Library, Stock Library). Không cloud render ở bản này. Luật này đã có guard: `tests/unit/tmcut_server_media_boundary.spec.ts`. |
 | 5 | Project schema | **Khoá schema v3 thật**: `version: 3` với `timeline.tracks`; sửa roadmap và interface mẫu cho khớp repo. | Không migrate sang `tracks` và `sequences` khi chưa có yêu cầu chức năng thật; migration cũ phải tiếp tục chạy. **Đã khoá 2026-11-04** bằng `tests/unit/tmcut_project_schema_v3.spec.ts`: shape app file (12 key top-level, `timeline` 4 key, `schemaVersion: 3`, `timeline.version: 1` chỉ là nhãn), shape core (`version: 3`, `timeline.version: 3`, `validateTimeline` nhận), `sequences` **0** hit trong toàn bộ code shipped, và `timeline.version` đúng **một** chỗ đọc. Hai chỗ đã khớp sẵn: `docs/v4-phase-0-audit.md` §4.1 mô tả đúng cả hai model. Sample `sequences` chỉ tồn tại ở `docs/tmcut-zero-ffmpeg-zero-ffprobe-browser-first-roadmap.md:339-347` — file plan **untracked của chủ repo**, không commit, không tự sửa; bản đó đang sai và chủ repo quyết định xoá hay ghi chú. |
-| 6 | Đường dẫn media chết | **Media Offline / Missing Media kèm nút Relink.** | Không tự mở dialog, không xoá asset reference khỏi project khi đường dẫn hỏng. Slice C. |
+| 6 | Đường dẫn media chết | **Media Offline / Missing Media kèm nút Relink.** | Không tự mở dialog, không xoá asset reference khỏi project khi đường dẫn hỏng. Slice C — tầng dữ liệu đã có ở C1 (audit §16.3): relink hỏng đích vẫn giữ asset, `usedBy` và clip reference, chỉ trả `false`; phần UI "Media Offline" vẫn thuộc C2. |
 | 7 | Font | **Chỉ font đi cùng app** tới slice J; không quảng bá import font khi chưa làm. | Đánh giá FontFace + OPFS ở slice J, rồi mới nói tới ADR-025. |
 | 8 | `backup/ffmpeg-engine-2026-11-03/` | **Giữ untracked tới hết slice I**, không vào build, không xoá bằng `git clean`. | Chỉ xoá sau khi parity xác nhận không cần tới nó nữa. Xác nhận hàng 6 của §8. |
 | 9 | Hai lỗi làm đỏ test suite | **Sửa đúng hai chỗ**: `app/pages/login.vue` không bao giờ lưu password trong localStorage (chỉ username, và dọn password bản cũ), `package.json` thêm `imports` map cho `#shared/utils/*` đã kiểm chứng bằng Node, TypeScript và bundler thật. | Xong ở commit `44f70c6`. Giữ nguyên dependency `tm-hub-client 1.0.9`, không đổi cách synthetic blob, không ghi đè thay đổi khác trong working tree. |

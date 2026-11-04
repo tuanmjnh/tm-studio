@@ -1,3 +1,5 @@
+import type { TmcutImportStatus } from 'tmcut-core'
+
 export type TmcutAssetKind = 'video' | 'audio' | 'image'
 
 export type TmcutAssetStatus = 'ready' | 'analyzing' | 'missing' | 'error'
@@ -57,6 +59,10 @@ export interface TmcutAsset {
   path: string
   usedBy: string[]
   status: TmcutAssetStatus
+  /** What the last probe learned. Absent on records written before slice C. */
+  importStatus?: TmcutImportStatus
+  /** Core cache key for this path revision; null until the first probe answers. */
+  fingerprint?: string | null
   meta: TmcutAssetMeta
   /** Single-frame cover (library grid). Desktop: cache file; web: source/dataURL. */
   thumbPath: string | null

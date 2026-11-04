@@ -11,12 +11,13 @@ import {
   normalizeMediaPath
 } from '~/utils/tmcut/media'
 import { clampWaveformPoints } from '~/utils/tmcut/waveform'
-import { probeWebMetadata } from '~/utils/tmcut/webProbe'
+import { assetFingerprint, assetStatusForImport, buildAssetRecord } from '~/utils/tmcut/assetImport'
 import { readStoredFlag, writeStored } from '~/utils/tmcut/localStore'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { toURL } from '~/utils/ffmpegHelper'
 import {
-  fnv1aHex,
+  cacheKeyForPath,
+  mediaInfoToMetadata,
   normalizeProbe,
   createFolder as coreCreateFolder,
   renameFolder as coreRenameFolder,
@@ -29,6 +30,7 @@ import {
   FOLDER_TAG_COLORS
 
 } from 'tmcut-core'
+import type { TmcutImportStatus, TmcutMediaInfo } from 'tmcut-core'
 
 const ASSET_STORAGE_KEY = 'tmcut_assets_v1'
 const FOLDER_STORAGE_KEY = 'tmcut_folders_v1'
@@ -296,47 +298,70 @@ export function useTmcutMedia() {
   }
 
   function buildAsset(inputPath: string, kind: TmcutAssetKind): TmcutAsset {
-    const path = normalizeMediaPath(inputPath)
     const pid = currentProject.value?.id
     const activeFolder = selectedFolderId.value && selectedFolderId.value !== '__unassigned__'
       ? selectedFolderId.value
       : null
-    const asset: TmcutAsset = {
-      id: `asset_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      kind,
-      name: mediaFileName(path),
-      path,
-      usedBy: currentProject.value ? [currentProject.value.id] : [],
-      status: 'analyzing',
-      meta: createEmptyTmcutAssetMeta(),
-      thumbPath: null,
-      filmstripPath: null,
-      waveformPath: null,
-      proxyPath: null,
-      proxyStatus: 'none',
-      folderId: activeFolder,
-      addedAt: new Date().toISOString()
+    return buildAssetRecord({ path: inputPath, kind, projectId: pid, folderId: activeFolder })
+  }
+
+  /**
+   * The web answer: one demuxer probe over the stored file, core's verdict on
+   * top of it. A still has no container to take apart, so it is not probed
+   * here — the durable upload is the whole answer, and whether this runtime can
+   * paint it is a slice-D question.
+   */
+  async function probeAssetInfo(asset: TmcutAsset): Promise<TmcutMediaInfo | null> {
+    if (asset.kind === 'image') return null
+    const { probeMedia } = await import('~/utils/tmcut/mediaProbe')
+    return probeMedia({
+      name: asset.name,
+      url: mediaUrl(asset.path),
+      size: asset.meta.fileSize || undefined,
+      kind: asset.kind
+    })
+  }
+
+  /** The same collector over bytes a picker just handed over, before any URL exists. */
+  async function probePickedFile(file: Blob, name: string, kind: TmcutAssetKind): Promise<TmcutMediaInfo> {
+    const { probeMedia } = await import('~/utils/tmcut/mediaProbe')
+    return probeMedia({ blob: file, name, size: file.size, kind })
+  }
+
+  /** MediaInfo is what both hosts will answer with after slice I. */
+  function applyMediaInfo(asset: TmcutAsset, info: TmcutMediaInfo | null) {
+    if (info) {
+      const meta = mediaInfoToMetadata(info)
+      if (meta) {
+        if (meta.durationSec > 0) asset.meta.durationSec = Math.round(meta.durationSec * 100) / 100
+        if (meta.width > 0) {
+          asset.meta.width = meta.width
+          asset.meta.height = meta.height
+        }
+        if (meta.fps > 0) asset.meta.fps = meta.fps
+        if (info.compatibility.canDemux) asset.meta.hasVideo = meta.width > 0
+      }
     }
-    if (activeFolder && pid) {
-      asset.folderByProject = { [pid]: activeFolder }
-    }
-    return asset
+    asset.fingerprint = assetFingerprint(asset.path, asset.meta)
+  }
+
+  function applyVerdict(asset: TmcutAsset, importStatus: TmcutImportStatus) {
+    asset.importStatus = importStatus
+    asset.status = assetStatusForImport(importStatus)
+    asset.meta.probedAt = new Date().toISOString()
   }
 
   async function analyzeAsset(asset: TmcutAsset) {
     const ipc = tmcutHostIpc()
+    asset.importStatus = 'probing'
     try {
       if (!ipc || typeof ipc.analyzeAsset !== 'function') {
-        // No ffprobe in the browser: everything that reaches this path is a
-        // /uploads/ URL the page can load itself, so probe it with a media
-        // element. Without this a web-imported clip lands on the timeline at
-        // the 5s/10s default length instead of its real duration.
-        if (asset.kind !== 'image') {
-          const probed = await probeWebMetadata(mediaUrl(asset.path), asset.kind)
-          if (probed) asset.meta.durationSec = Math.round(probed.durationSec * 100) / 100
-        }
-        asset.status = 'ready'
-        asset.meta.probedAt = new Date().toISOString()
+        const info = await probeAssetInfo(asset)
+        applyMediaInfo(asset, info)
+        // A still's cover is the source itself, the same answer the desktop
+        // branch gives; the library streams it from the durable upload.
+        if (asset.kind === 'image') asset.thumbPath = asset.path
+        applyVerdict(asset, info ? info.importStatus : 'ready')
         return
       }
 
@@ -344,16 +369,22 @@ export function useTmcutMedia() {
       // probe normalization stays renderer-side via tmcut-core.
       const result = await ipc.analyzeAsset({ filePath: asset.path, kind: asset.kind })
       if (!result?.ok) {
+        // Nothing to read: the byte axis owns "missing", the probe axis only
+        // records that this attempt learned nothing.
+        asset.importStatus = 'error'
         asset.status = 'missing'
+        asset.fingerprint = null
         return
       }
       asset.meta.fileSize = result.stat?.size ?? 0
       asset.meta.mtimeMs = result.stat?.mtimeMs ?? 0
 
+      let learned = asset.kind === 'image'
       if (asset.kind === 'image') {
         asset.thumbPath = asset.path
       } else {
         const meta = normalizeProbe(result.probe)
+        learned = !!meta && (meta.durationSec > 0 || meta.width > 0)
         if (meta && (meta.durationSec > 0 || meta.width > 0)) {
           asset.meta.durationSec = meta.durationSec
           asset.meta.width = meta.width
@@ -378,10 +409,11 @@ export function useTmcutMedia() {
         }
       }
 
-      asset.status = 'ready'
-      asset.meta.probedAt = new Date().toISOString()
+      asset.fingerprint = assetFingerprint(asset.path, asset.meta)
+      applyVerdict(asset, learned ? 'ready' : 'error')
     } catch (error) {
       console.error('Media analysis failed:', asset.path, error)
+      asset.importStatus = 'error'
       asset.status = 'error'
     }
   }
@@ -427,11 +459,17 @@ export function useTmcutMedia() {
     let failed = 0
     if (fresh.length > 0) {
       importing.value = true
+      // The whole queue lands before the first probe starts, so a 40-file
+      // batch reads as 40 queued cards instead of appearing one at a time.
+      const queue: TmcutAsset[] = []
       for (const p of fresh) {
         const kind = classifyAssetKind(p)
         if (!kind) continue
         const asset = buildAsset(p, kind)
         assets.value.unshift(asset)
+        queue.push(asset)
+      }
+      for (const asset of queue) {
         await analyzeAsset(asset)
         // 'error' (analysis threw) must not count as
         // success — surface it as a failed import.
@@ -553,27 +591,29 @@ export function useTmcutMedia() {
       for (const file of files) {
         const kind = classifyAssetKind(file.name)
         if (!kind) continue
-        const fingerprint = `web:${file.name.toLowerCase()}:${file.size}`
-        if (seen.has(fingerprint)) continue
-        seen.add(fingerprint)
+        // Dedup key, not the cache fingerprint: a re-upload lands on a fresh
+        // /uploads/ name, so only the picked file's own identity repeats.
+        const dedupeKey = `web:${file.name.toLowerCase()}:${file.size}`
+        if (seen.has(dedupeKey)) continue
+        seen.add(dedupeKey)
         work.push({ file, kind })
       }
       webUpload.value = { done: 0, total: work.length }
       for (const { file, kind } of work) {
         const blobUrl = URL.createObjectURL(file)
         try {
-          // Upload and duration probe run in parallel so a large video does
-          // not pay for the transfer and the probe one after the other.
-          const [uploaded, probed] = await Promise.all([
+          // Upload and probe run in parallel so a large video does not pay for
+          // the transfer and the demux one after the other. The probe reads the
+          // picked bytes: a File has no playable location until the upload
+          // lands, and the demuxer does not need one.
+          const [uploaded, info] = await Promise.all([
             uploadWebFile(file, file.name),
-            kind === 'image' ? Promise.resolve(null) : probeWebMetadata(blobUrl, kind)
+            kind === 'image' ? Promise.resolve(null) : probePickedFile(file, file.name, kind)
           ])
           const asset = buildAsset(uploaded.url, kind)
           asset.name = file.name
           asset.meta.fileSize = uploaded.size
-          if (probed) {
-            asset.meta.durationSec = Math.round(probed.durationSec * 100) / 100
-          }
+          applyMediaInfo(asset, info)
           if (kind === 'video') {
             // Push the captured cover frame to the server too so the
             // thumbnail survives reloads (the desktop pipeline keeps its
@@ -587,8 +627,7 @@ export function useTmcutMedia() {
             // desktop pipeline so the grid shows pixels, not the placeholder.
             asset.thumbPath = uploaded.url
           }
-          asset.status = 'ready'
-          asset.meta.probedAt = new Date().toISOString()
+          applyVerdict(asset, info ? info.importStatus : 'ready')
           assets.value.unshift(asset)
           created.push(asset)
         } catch (error) {
@@ -739,7 +778,11 @@ export function useTmcutMedia() {
         if (asset.status !== 'ready') continue
         const stat = stats[asset.path]
         if (!stat || !stat.exists) continue
-        const key = fnv1aHex(`v2:${mediaFileKey(asset.path)}:${stat.mtimeMs}:${stat.size}`)
+        const key = cacheKeyForPath(asset.path, { mtimeMs: stat.mtimeMs, size: stat.size })
+        if (asset.fingerprint !== key) {
+          asset.fingerprint = key
+          changed = true
+        }
         if (asset.kind === 'video') {
           const coverName = asset.thumbPath?.split(/[\\/]/).pop()
           const stripName = asset.filmstripPath?.split(/[\\/]/).pop()
@@ -766,20 +809,35 @@ export function useTmcutMedia() {
     }
   }
 
-  async function relink(assetId: string, newPath: string): Promise<boolean> {
+  /**
+   * Point a dead asset at new bytes and re-learn everything. `source` carries
+   * what only the picker knows on the web runtime — the friendly file name and
+   * the byte size the probe and the cache key are built from.
+   */
+  async function relink(
+    assetId: string,
+    newPath: string,
+    source: { name?: string, size?: number } = {}
+  ): Promise<boolean> {
     const asset = assets.value.find(a => a.id === assetId)
     if (!asset || typeof newPath !== 'string' || !newPath.trim()) return false
     const oldPath = asset.path
     const oldWaveformPath = asset.waveformPath
     const kind = classifyAssetKind(newPath)
-    if (kind && kind !== asset.kind) {
-      asset.kind = kind
-      asset.thumbPath = null
-      asset.filmstripPath = null
-      asset.waveformPath = null
-    }
+    if (kind) asset.kind = kind
+    // New bytes: everything the last probe learned about the old file goes with
+    // it — derived pointers included, or a relinked clip would keep playing
+    // (and measuring) the file it no longer points at.
+    asset.meta = createEmptyTmcutAssetMeta()
+    asset.thumbPath = null
+    asset.filmstripPath = null
+    asset.waveformPath = null
+    asset.proxyPath = null
+    asset.proxyStatus = 'none'
+    asset.fingerprint = null
     asset.path = normalizeMediaPath(newPath)
-    asset.name = mediaFileName(asset.path)
+    asset.name = typeof source.name === 'string' && source.name ? source.name : mediaFileName(asset.path)
+    if (typeof source.size === 'number' && source.size > 0) asset.meta.fileSize = source.size
     if (oldWaveformPath) {
       waveformCache.delete(oldWaveformPath)
     }
