@@ -3,7 +3,7 @@ import { TICKS_PER_SECOND, compositePlan, createFrameScheduler, renderAt, speedA
 import type { CoreEvaluatedLayer } from 'tmcut-core'
 import { useTmcutProject } from './useTmcutProject'
 import type { TmcutTimelineItem } from './useTmcutProject'
-import { clipMediaTimeSec, clipStartSec } from '~/utils/tmcut/clipTime'
+import { clipStartSec } from '~/utils/tmcut/clipTime'
 
 // One surface the canvas paints at this tick, straight from core's plan.
 export type PaintSurface = {
@@ -69,13 +69,6 @@ export function useTmcutPlayback() {
     return `${m}:${s}.${f}`
   }
 
-  // Source-media time of a clip at a timeline position. Reverse clips
-  // (roadmap B2) run from the source end backwards — core C4 retime
-  // semantics. Shared by the main element and the crossfade layer.
-  function mediaTimeAt(clip: TmcutTimelineItem, at: number): number {
-    return clipMediaTimeSec(clip, at)
-  }
-
   // ADR-018: one boundary rule for every timeline consumer, and since V4
   // Phase 2 item (1) one CALL that owns it. `renderAt` answers "where does
   // this timestamp actually render": half-open clip windows `[start, end)`,
@@ -121,6 +114,16 @@ export function useTmcutPlayback() {
   // exporter answered them a second way, and that pair of answers is the drift
   // F1 retired the single-row law for.
   //
+  // A re-read of the clip is a THIRD answer, which is why a surface's media time
+  // has exactly one source here: `layer.sourceTicks`. Core answers `null` when a
+  // live clip carries no source range at all — the DSL shape (`timeline.start` /
+  // `timeline.duration`, no `source`, no numeric `in`) is live to `clipSpan` but
+  // has nothing for `sourceRangeOf` to read. The app used to fall back to its own
+  // map in that case, and that map is `clip.in + local * speed`: with no `in` the
+  // arithmetic is NaN and `ticksToSec` folds NaN to 0, so the element sat parked
+  // at the first source frame while the drift check re-seeked it every frame. No
+  // position means no picture, so such a slot contributes no surface.
+  //
   // A surface joins back to the authored clip through `trackIndex`, the row's
   // position in `evaluateTimeline`'s own track list, and carries the evaluator's
   // layer BY REFERENCE: opacity, transform and source position must be the ones
@@ -138,6 +141,7 @@ export function useTmcutPlayback() {
     let audioClaimed = false
     for (const slot of paintPlan.value.slots) {
       if (slot.kind !== 'footage') continue
+      if (slot.layer.sourceTicks === null) continue
       const clip = tracks[slot.trackIndex]?.items?.find(item => item.id === slot.clipId)
       if (!clip) continue
       const ownsAudio = slot.role === 'paint' && !audioClaimed
@@ -149,9 +153,7 @@ export function useTmcutPlayback() {
         trackIndex: slot.trackIndex,
         clip,
         layer: slot.layer,
-        mediaTimeSec: slot.layer.sourceTicks === null
-          ? mediaTimeAt(clip, playhead.value)
-          : ticksToSec(slot.layer.sourceTicks),
+        mediaTimeSec: ticksToSec(slot.layer.sourceTicks),
         ownsAudio,
         crossfades: false
       })
@@ -193,7 +195,7 @@ export function useTmcutPlayback() {
     if (!paint || !partner) return null
     if (partner.role !== 'outgoing' || partner.trackIndex !== paint.trackIndex) return null
     const spec = paint.layer.transition
-    if (!spec?.type || partner.layer.sourceTicks === null) return null
+    if (!spec?.type) return null
     return {
       incoming: paint.clip,
       outgoing: partner.clip,

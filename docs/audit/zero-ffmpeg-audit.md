@@ -3025,3 +3025,135 @@ file docs) còn `app/utils/tmcut/mediaElement.ts` cùng `tests/unit/tmcut_media_
 `git diff --name-only` vì thế giảm từ **42** xuống **36** sau stage: sáu đường sang index thì không còn là diff unstaged;
 `git status --porcelain` vẫn **64** dòng vì chúng chỉ đổi cột trạng thái. Sau commit, `git diff --cached` phải đọc
 **0** dòng.
+
+---
+
+## 34. Slice F6a — vì trí nguồn của một surface chỉ core được phép trả lời (2026-11-05)
+
+### 34.1 Hai bản copy của cùng một luật, và cái giá của nhánh fallback
+
+`compositePlan` trao cho preview cái layer mà core đã tính cho tick đó, và layer ấy
+đã trả lời câu "bức tranh này nằm ở đâu trong file nguồn": `sourceTicks` — tốc độ,
+ramp và reverse đều đã gộp vào, kết quả đã kẹp trong `[in, out]` của chính clip
+([evaluate.mjs:67](file:///D:/Applications/tm-studio/packages/core/src/evaluate.mjs#L67)).
+Nhưng [useTmcutPlayback.ts](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts)
+còn giữ một câu trả lời thứ hai cho đúng một case: khi core nói "clip này sống
+nhưng ta không có khoảng nguồn nào cho nó", surface rơi vào `clipMediaTimeSec`
+của app — tức `clip.in + local * speed`
+([clipTime.ts:92](file:///D:/Applications/tm-studio/app/utils/tmcut/clipTime.ts#L92)).
+
+Case đó không phải tưởng tượng. `clipSpan` ưu tiên hình dạng DSL và chỉ cần
+`timeline.{start,duration}` là clip sống ([timeline.mjs:55](file:///D:/Applications/tm-studio/packages/core/src/timeline.mjs#L55)),
+còn `sourceRangeOf` cần `source.{in,out}` hoặc một `in` dạng số
+([evaluate.mjs:55](file:///D:/Applications/tm-studio/packages/core/src/evaluate.mjs#L55)). Một project đi vào
+app theo đúng hình v3 (template, AI plan, file mở từ DSL) thỏa mãn vế đầu và vi phạm
+vế sau: nó sống trên canvas và core trả `null`.
+
+Giá của nhánh đó đã **đo**, không suy ra: với `clip.in = undefined`, phép tính thành
+`NaN`, và `ticksToSec` gấp mọi giá trị không hữu hạn về `0`
+([time.mjs:18](file:///D:/Applications/tm-studio/packages/core/src/time.mjs#L18)). Số đo ở playhead 1 s là
+`mediaTimeSec = 0`. Element vì thế bị đỗ ở khung hình đầu tiên của nguồn và bị kiểm
+tra drift xin seek lại — biểu hiện là một clip đứng hình chứ không phải một crash,
+nên nó lọt qua mắt người dùng và lọt qua cả console.
+
+### 34.2 Luật mới
+
+Một surface có vị trí nguồn, hoặc nó không nằm trên canvas:
+
+| Neo | Trước | Sau |
+| --- | --- | --- |
+| [useTmcutPlayback.ts:144](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L144) | slot đi thẳng vào danh sách | `if (slot.layer.sourceTicks === null) continue` |
+| [useTmcutPlayback.ts:156](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L156) | `sourceTicks === null ? mediaTimeAt(clip, playhead) : ticksToSec(...)` | `mediaTimeSec: ticksToSec(slot.layer.sourceTicks)` — một nguồn |
+| [useTmcutPlayback.ts:6](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L6) | import `clipMediaTimeSec` | chỉ còn `clipStartSec` (dùng cho `mediaRate`) |
+| [useTmcutPlayback.ts:198](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L198) | `if (!spec?.type \|\| partner.layer.sourceTicks === null) return null` | `if (!spec?.type) return null` — điều kiện partner giờ do chính danh sách surface bảo đảm |
+
+Đường DOM không đổi một dòng nào, và đó là điểm chính: nó đã luôn đọc
+`surface.mediaTimeSec` ([TmcutPreviewPlayer.vue:867](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L867)),
+nên khi composable thôi bịa ra một con số thì `el.currentTime` không còn nhận con số bịa đó nữa.
+
+**Không đụng:** hàng audio vẫn tự tính media time bằng `clipMediaTimeSec`
+([TmcutPreviewPlayer.vue:579](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L579)). Clip audio
+không nằm trong plan footage nên không có `sourceTicks` để đọc; đó là việc của slice G
+(Web Audio + `audioOrchestration`), không phải việc của lượt này.
+
+### 34.3 RED rồi GREEN
+
+Spec mới [tmcut_surface_media_time.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_surface_media_time.spec.ts)
+(156 dòng, **5** check) dựng đúng hình v3 bằng store thật: thêm clip qua
+`addClipToTrack`, rồi đặt `timeline = { start, duration }` và bỏ `in`/`out` — tức đi
+qua cửa của evaluator chứ không qua một fixture tự bịa.
+
+- **RED**: exit 1, fail ngay check 2 với `actual ['a.mp4']` vs `expected []` — log
+  `node_modules/.cache/tmcut-gates/f6a-red.txt`. Check 1 (đường phẳng, surface lấy
+  `sourceTicks / TICKS`) đã xanh trước khi sửa, nên failure không đến từ harness.
+- **GREEN**: **5/5**, exit 0. Năm check là: surface phẳng lấy số của core; clip v3
+  sống không còn surface nào; surface bị bỏ không cướp quyền audio của hàng dưới;
+  crossfade mà partner không có vị trí nguồn thì render thành cut thường; và pin
+  nguồn — composable không còn `clipMediaTimeSec` hay `function mediaTimeAt`.
+- Spec hàng xóm chạy lại, không đổi assertion: `tmcut_preview_paint_plan` **6/6**,
+  `tmcut_surface_plate` **7/7**, `tmcut_speed_clock` **5/5**, `tmcut_paint_stack` **9/9**.
+
+### 34.4 Live, và một con số suýt bị đọc sai
+
+`:4003`, route `/tmcut/editor`, project hiện có (2 clip `f4b-probe.mp4`, 0.6 s mỗi
+clip, nội dung 1.05 s). Bấm *Jump to start* rồi *Play*, sampler `setInterval` 100 ms
+ghi `performance.now()`, timecode program monitor và `currentTime` của element:
+**51** mẫu, và **51/51** `Number.isFinite(el.currentTime)`.
+
+Element chạy đúng nhịp nguồn: `0.098 → 0.597` trong clip thứ nhất, rồi một seek sửa
+drift đưa nó về `0.11` ở clip thứ hai và chạy tiếp tới `0.6`; playhead bám đồng hồ
+đến khi dừng ở `00:01.05`. Không có giá trị nào bằng `0` một cách giả mạo — tức
+đúng cái mà nhánh fallback từng tạo ra — và không có mẫu nào NaN.
+
+Lượt đo đầu suýt ghi một "bug" không tồn tại: bảng thời gian của program monitor là
+`MM:SS.ff`, trong đó `ff` là **chỉ số khung hình theo rate của canvas** (30 fps ở
+project này), không phải phần trăm giây. Đọc `00:01.03` như 1.03 s rồi so với
+`00:00.29` cho một bước nhảy 0.74 s chỉ trong 105 ms. Đo lại có `performance.now()`
+kèm từng mẫu: `00:00.29` là 29/30 = **0.967 s**, `00:01.03` là **1.1 s**, tức 0.13 s
+trong 105 ms đồng hồ — playhead bám đúng, rAF không tích phân một delta khổng lồ nào
+cả. Con số sai nằm ở người đọc, không nằm ở loop, và nó được ghi lại ở đây vì nó là
+bằng chứng cho một điều khác: **chưa có** số đo nào về hiện tượng rAF bị đói trên
+lượt này, nên mục "playhead theo core clock" (F6e) vẫn chưa có án lệ, chứ không phải
+đã được minh oan.
+
+Console: `info <Suspense>` (1) + `error 401` (×4) — đúng `GET /api/v1/ai/relay/catalog`,
+hub hết phiên, đã ghi ở §31.5. Baseline không đổi sau lượt này.
+
+### 34.5 Gates
+
+| Gate | Lệnh | Kết quả | Bằng chứng |
+| --- | --- | --- | --- |
+| 1 Types | `npx nuxt typecheck` | **PASS** | exit 0, `grep -c "error TS"` = **0**; `.nuxt/eslint.config.mjs` regenerate **08:53**, 28567 byte |
+| 2 Lint | `npx eslint` trên **2** file đã chạm, chạy **sau** gate 1 | **PASS** | exit 0, log **0 byte**. Lượt đầu FAIL 1 lỗi — `@stylistic/arrow-parens` ở `oneClip(clip => {…})` trong spec — sửa code, không tắt rule |
+| 3 Tests | `npx tsx tests/unit/run-all.mts` | **PASS** | **112/112**, exit 0 (111 của F5 + spec mới) |
+| 3b Smoke | `run-all.mts --smoke` | **PASS** | **115/115**, exit 0 |
+| 3c Core | `npx tsc -p packages/core --noEmit` | **PASS** | exit 0, log **0 byte** — lượt này không sửa `packages/core` |
+| 3d Spec mới | `node node_modules/tsx/dist/cli.mjs … tmcut_surface_media_time.spec.ts` | **PASS** | RED fail ở check 2 (exit 1) → GREEN **5/5** (exit 0) |
+| 4 Live | `/tmcut/editor` + 51 mẫu phát trên Chromium, :4003 | **PASS** | §34.4 |
+| 5 Docs | §34 + bullet roadmap + 5 guard markdown | xem §34.7 | — |
+
+### 34.6 Chưa chứng minh
+
+- **Chưa có project thật nào ở hình v3 đi qua cửa này.** Spec dựng hình đó vì core
+  nhận cả hai hình; số lượng file `.json` của người dùng thật đang mang
+  `timeline.{start,duration}` mà thiếu `source` là **chưa đo**.
+- **Electron host chưa chạy lượt này.** Law nằm trong `app/composables`, desktop
+  dùng cùng composable, nhưng chưa có số đo CDP trên Electron cho F6a.
+- **Hàng audio vẫn còn bản copy thứ hai** — hữu ý để lại cho slice G, không phải
+  đã chứng minh là vô hại.
+- **F6e (playhead theo core clock thay vì tích phân delta rAF) vẫn mở.** §34.4 chỉ
+  nói lượt này không tạo ra bằng chứng mới cho nó.
+- **Không có pixel.** F6a đổi danh sách surface, không đổi đường vẽ, nên không có
+  khung hình nào để so.
+
+### 34.7 Bảo vệ working tree
+
+Lượt này chạm **2** file code/spec — [useTmcutPlayback.ts](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts)
+(686 dòng, `git diff --stat`: **14** thêm / **12** bớt) và
+[tmcut_surface_media_time.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_surface_media_time.spec.ts)
+(mới, 156 dòng) — cùng **2** file docs: chính file này và
+[roadmap](file:///D:/Applications/tm-studio/docs/tmcut-v4-universal-rendering-multiplatform-roadmap.md).
+`packages/core`, `TmcutPreviewPlayer.vue`, `clipTime.ts` và đường export không đổi một
+dòng nào. File đo tạm `tests/unit/tmp_f6a_measure.mts` đã xóa sau khi lấy số; scratch
+`f6a-measure.mts` đặt nhầm chỗ cũng vậy. Không binary mới, không đụng
+`backup/ffmpeg-engine-2026-11-03`, không đổi Project Schema v3, không tắt rule lint nào.
