@@ -245,6 +245,28 @@ export function decideRecovery(input: CoreRecoveryInput): CoreRecoveryDecision
 
 export function int16ToPeaks(samples: ArrayLike<number> | null | undefined, buckets?: number): number[]
 export function clampWaveformPoints(points: unknown): number[]
+/** What the bars in a stored waveform mean; a reader that does not recognise it re-decodes. */
+export const TMCUT_WAVEFORM_ALGORITHM: string
+/** How many decimals the stored bars keep. */
+export const TMCUT_WAVEFORM_PEAK_PRECISION: number
+/**
+ * Full-scale (0..1) peak buckets from PCM on the Float32 −1..1 scale `decodePcm`
+ * returns. Channels fold by the loudest one; an undelivered channel is skipped.
+ */
+export function floatPeakBuckets(channels: ArrayLike<ArrayLike<number> | null | undefined> | null | undefined, buckets?: number): number[]
+/** The compact record a waveform is cached as. */
+export interface TmcutWaveformPayload {
+  algorithm: string
+  durationSec: number
+  sampleRate: number
+  channelCount: number
+  bucketCount: number
+  peaks: number[]
+}
+/** Stamp a waveform, or null when the input is not one — a failed decode stores nothing. */
+export function buildWaveformPayload(input: unknown): TmcutWaveformPayload | null
+/** Read a cached waveform back, or null when it is not one this version can draw. */
+export function readWaveformPayload(value: unknown): TmcutWaveformPayload | null
 
 export function fnv1aHex(text: string): string
 export function cacheKeyForPath(path: string, revision?: { mtimeMs?: number, size?: number }): string
@@ -2166,7 +2188,7 @@ export function evaluateClip(
 export const TMCUT_BYTE_CACHE_MAX_BYTES: number
 /** Share of the device quota the cache may claim. */
 export const TMCUT_BYTE_CACHE_QUOTA_SHARE: number
-/** One revision the browser holds: its key, its size, the last time it was read. */
+/** One thing the browser holds: its key (a revision or an artifact of one), its size, the last time it was read. */
 export interface TmcutByteCacheEntry {
   key: string
   bytes: number
@@ -2187,6 +2209,22 @@ export interface TmcutByteCachePlan {
 export function byteCacheBudgetBytes(quotaBytes: number): number
 /** A cache key is exactly one revision fingerprint — nothing else may name a file. */
 export function isByteCacheKey(key: unknown): boolean
+/** One artifact cut from a revision: the source, what kind of answer, which version measured it. */
+export interface TmcutDerivedCacheKey {
+  fingerprint: string
+  kind: string
+  version: number
+}
+/** The key for one derived artifact of one revision, or null when no part of it is nameable. */
+export function derivedByteCacheKey(fingerprint: unknown, kind: unknown, version: unknown): string | null
+/** The parts of a derived key, or null when the key names no artifact. */
+export function parseDerivedByteCacheKey(key: unknown): TmcutDerivedCacheKey | null
+/** Whether this key names an artifact computed FROM a revision, not the revision. */
+export function isDerivedByteCacheKey(key: unknown): boolean
+/** Whether this key may name a file in the store at all: a source revision or an artifact. */
+export function isStoredByteCacheKey(key: unknown): boolean
+/** The revision an entry came from — itself for a source row, the embedded fingerprint for an artifact. */
+export function byteCacheFingerprint(key: unknown): string | null
 /** Whether one file can live in the cache at all, before eviction is asked. */
 export function byteCacheFits(sizeBytes: number, budgetBytes: number): boolean
 /** Which cached revisions to delete so the store fits `budgetBytes`. */

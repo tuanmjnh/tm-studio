@@ -4400,3 +4400,149 @@ tên** thay vì được gọi là xong, và đó là lý do bảng trên có c�
 
 Với hai phần đó ghi rõ, #103 exit và G (#104) bắt đầu. Không tiêu chí nào ở trên được đóng bằng một
 câu mô tả: mỗi ô "bằng chứng" là một section có số đo hoặc một spec chạy trong gate 3.
+
+---
+
+## 43. Slice G1 — waveform đo trên thang nào, và một artifact được gọi tên ra sao trong cache (đo ngày 2026-11-05)
+
+### 43.1 Hai câu hỏi brief G mở ra, và hiện trạng đo được
+
+Brief của slice G ([execution brief, "Slice G — Audio & waveform"](file:///D:/Applications/tm-studio/docs/tmcut-zero-ffmpeg-next-slices-agent-execution-brief.md#L152))
+nêu mục 3 ("waveform bucketed — min/max hoặc RMS — kèm metadata gọn") và mục 4 ("cache key mang
+fingerprint + track + resolution + algorithm/version"). Luật waveform đã tồn tại từ thời FFmpeg, và
+nó **sai thang** cho đường không-FFmpeg. Đo trước lượt này:
+
+| Nơi | Dòng | Hiện trạng đo được |
+| --- | --- | --- |
+| [tmcut.controller.cjs](file:///D:/Applications/tm-studio/electron/tools/tmcut.controller.cjs#L429) | 429-443 | `int16ToPeaks` được **nhân bản trong controller** — một bản chia 32768 đứng cạnh bản core |
+| [tmcut.controller.cjs](file:///D:/Applications/tm-studio/electron/tools/tmcut.controller.cjs#L402) | 402-406 | guard đọc cache chỉ là `Array.isArray(cached.buckets)`; artifact không có algorithm, không có sampleRate |
+| [tmcut.controller.cjs](file:///D:/Applications/tm-studio/electron/tools/tmcut.controller.cjs#L420) | 420-427 | FFmpeg chết → ghi **toàn zeros** rồi trả `ok:true`; lần đọc sau coi đó là thành công |
+| [waveform.mjs](file:///D:/Applications/tm-studio/packages/core/src/waveform.mjs#L22) | 22 | `max / 32768` — đúng với `-f s16le`, sai với cái mà [decodePcm](file:///D:/Applications/tm-studio/app/utils/tmcut/audioDecode.ts#L52) trả |
+
+Phép đo thang, chạy bằng chính hai hàm: một sine biên độ **0.35** (mức tiếng nói thật) dài 8000 mẫu ở
+8 kHz — reducer cũ trả peak lớn nhất **1.068e-5**, reducer mới trả **0.35**. Sai số không phải "nhỏ
+hơn một chút": nó là một đường phẳng. Đây là lỗi một port naive sẽ mang sang browser nếu chỉ sửa caller
+mà không sửa luật.
+
+### 43.2 Luật float — `floatPeakBuckets`
+
+[waveform.mjs:69](file:///D:/Applications/tm-studio/packages/core/src/waveform.mjs#L69). Cùng một phép
+chia bucket với `int16ToPeaks` (tỉ lệ, cửa cuối ngắn được giữ, bucket không mẫu thì 0), khác đúng một
+điều: peak là magnitude trên thang full-scale, không phải `max / 32768`. Ba luật được pin bằng test:
+
+- **fold theo kênh to nhất**, không trung bình, không RMS — cùng luật mà
+  [detection.mjs:280 `loudestPeakSeries`](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L280)
+  đã áp cho dBFS từ slice E4. Kênh im lặng không được kéo biên độ xuống; test đo bằng cặp
+  `[1.0, 0.0] → 1.0`, tức trung bình (0.5) và RMS (0.707) đều sập.
+- **mẫu không phải số bị bỏ**, không bị đọc thành im lặng: một NaN đứng đầu cửa không xoá được click
+  phía sau; cả cửa toàn NaN thì 0 — "không có gì đo được" khác "đo được số 0", nhưng trên timeline cả
+  hai vẽ một vạch đáy.
+- **kênh không được giao bị bỏ hẳn** (`length === 0` hoặc `null`), không tính là một kênh im; nếu tất
+  cả các kênh đều vậy thì trả dãy 0 đúng độ dài bucket, không crash, không `undefined`.
+
+`int16ToPeaks` **không bị sửa và không bị xoá**: nó vẫn đúng với input int16, và test chứng minh hai
+hàm cho **cùng một dãy** khi cùng một biên độ vật lý — `[0, 16384, -32768, 8192]` int16 so với
+`[0, 0.5, -1, 0.25]` float, cả hai trả `[0.5, 1]`.
+
+### 43.3 Envelope có đóng dấu — và ba trạng thái của "không có waveform"
+
+`buildWaveformPayload` ([waveform.mjs:114](file:///D:/Applications/tm-studio/packages/core/src/waveform.mjs#L114))
+và `readWaveformPayload` ([`:142`](file:///D:/Applications/tm-studio/packages/core/src/waveform.mjs#L142)).
+Một file không nói ai đo thì không thể đọc một cách an toàn sau khi app đổi phiên bản — đó chính xác là
+chỗ dòng thứ hai của bảng §43.1 đã hỏng. Envelope mang sáu trường: `algorithm` (`'peak-v1'`),
+`durationSec`, `sampleRate`, `channelCount`, `bucketCount`, `peaks` (làm tròn ba chữ số thập phân, và
+độ chính xác đó là `TMCUT_WAVEFORM_PEAK_PRECISION` — một khai báo, không phải một con số nằm chết trong
+hàm). Object và mảng đều `freeze`: một câu trả lời đã cache không phải chỗ để app sửa.
+
+Ba trạng thái, và cái giá của việc gộp hai trạng thái đầu:
+
+| Trạng thái | Envelope | Vì sao phải tách |
+| --- | --- | --- |
+| có track audio, giải mã ra im lặng | `peaks` toàn 0, `channelCount` ≥ 1 | đó **là** một phép đo, nên được cache |
+| file không có track audio | `channelCount: 0`, `sampleRate: 0` | panel nên nói "không có tiếng", không phải "tiếng rất nhỏ" |
+| giải mã thất bại | **không có gì được ghi** | `buildWaveformPayload` trả `null`; zeros kèm `ok:true` chính là bug ở controller |
+
+`readWaveformPayload` từ chối `algorithm` lạ (một phép đo `rms-v2` không phải cùng những vạch này), từ
+chối `peaks` rỗng (rỗng không đồng nghĩa với im lặng), từ chối `bucketCount` không khớp số vạch nó chở,
+và **clamp** một vạch hữu hạn vượt 1 thay vì vứt cả dòng: một con số hỏng không phải lý do để giải mã
+lại cả file. Không có timestamp trong envelope — chỉ số dùng `accessedAt` của index, còn bản thân
+artifact phải xác định (cùng một PCM luôn ra cùng một nội dung), đúng luật determinism của slice #86.
+
+### 43.4 Trục key mới cho artifact — và cái bẫy nếu nới `isByteCacheKey`
+
+[byteCache.mjs:24](file:///D:/Applications/tm-studio/packages/core/src/byteCache.mjs#L24) là
+`/^([0-9a-f]{8})-([a-z][a-z0-9]{0,15})-v([1-9][0-9]*)$/`: fingerprint của bản gốc, kind, phiên bản luật
+— `a1b2c3d4-wave-v1`. API mới: `derivedByteCacheKey` ([`:63`](file:///D:/Applications/tm-studio/packages/core/src/byteCache.mjs#L63),
+từ chối fingerprint không hợp lệ, kind viết hoa / có gạch dưới / có dấu chéo, version `0`, `1.5`,
+`'v1'`), `parseDerivedByteCacheKey` (`:71`), `isDerivedByteCacheKey` (`:79`), `isStoredByteCacheKey`
+(`:84`, **union**), `byteCacheFingerprint` (`:93`, hoặc chính nó hoặc nguồn của nó).
+
+Cái bẫy, và đó là lý do `isByteCacheKey` giữ nguyên nghĩa:
+[frames.mjs:165](file:///D:/Applications/tm-studio/packages/core/src/frames.mjs#L165) là
+`if (!isByteCacheKey(fingerprint)) return null` — nó hỏi "đây có phải một bản ghi hình không" trước khi
+đặt tên cho một frame. Một key dẫn xuất **chứa** một fingerprint hợp lệ, nên nới predicate đó lên thành
+union sẽ cho phép `a1b2c3d4-wave-v1` đóng vai một revision. Vì vậy predicate nguồn đứng nguyên, union
+là một tên khác, và tầng lưu trữ phải gọi union một cách có chủ đích. Test pin cả hai chiều:
+`isByteCacheKey('a1b2c3d4-wave-v1') === false` **và** `frameRequestKey('a1b2c3d4-wave-v1', 1.5, 320) === null`,
+kèm `frameRequestKey('a1b2c3d4', 1.5, 320) === 'a1b2c3d4-f1500-w320'` để chứng minh cái không bị hỏng
+vẫn chạy.
+
+### 43.5 Eviction: artifact sống nhờ nguồn của nó
+
+[byteCache.mjs:147](file:///D:/Applications/tm-studio/packages/core/src/byteCache.mjs#L147) thêm
+`isLive = key => live.has(key) || live.has(byteCacheFingerprint(key))`. Thư viện kê tên **revision**,
+không kê tên artifact; nếu eviction chỉ hỏi `live.has(entry.key)` thì mỗi lần mở lại dự án là một lần
+xoá sạch waveform vừa tạo. Chiều ngược cũng được pin: artifact của một revision đã rời thư viện bị bỏ
+đi cùng nguồn — đúng chỗ relink/delete từng để rác lại mà không ai dọn. Thứ tự drop (invalid →
+không-sống-hoặc-quá-budget → LRU) giữ nguyên và chạy **trên cả hai loại dòng**: test đòi `drop` là
+`[wave-v1]` khi ba dòng (hai nguồn, một artifact) vượt budget và artifact đó có `accessedAt` cũ nhất.
+`invalid` vẫn chỉ là những key không tên được file nào — một key dẫn xuất hợp lệ có nguồn chết **không**
+phải rác index, và test phân biệt hai chuyện đó.
+
+### 43.6 Test trước production, và falsification bốn mutation
+
+Luật mới viết sau khi hai file test đã chạy đỏ: `pass 0 / fail 2` với
+`SyntaxError: The requested module '../src/waveform.mjs' does not provide an export named 'TMCUT_WAVEFORM_ALGORITHM'`.
+
+| File | Check | Đo gì |
+| --- | --- | --- |
+| [waveform-float-peaks.test.mjs](file:///D:/Applications/tm-studio/packages/core/test/waveform-float-peaks.test.mjs#L41) | 17 | thang float, fold theo kênh to nhất, NaN, clamp, round-trip int16↔float, envelope, ba trạng thái, `readWaveformPayload` từ chối |
+| [byte-cache-derived-key.test.mjs](file:///D:/Applications/tm-studio/packages/core/test/byte-cache-derived-key.test.mjs#L31) | 18 | build/parse key, kind và version bị từ chối, nguồn tinh, eviction theo nguồn, thứ tự LRU hỗn hợp, hành vi cũ còn nguyên |
+| [tmcut_waveform_law.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_waveform_law.spec.ts#L42) | 6 | luật đi qua alias `tmcut-core` và qua barrel app, `index.d.ts` khai đủ tên, sai thang bị đo **từ alias**, `frames.mjs` không được dùng union |
+
+Bốn mutation, mỗi cái một run, tất cả đã revert (md5 đầu và cuối khớp —
+`7651a0a82c1e638c990222975279f9d3` cho byteCache, `34bdb6ab9fe2fdccfed6bf76501801b7` cho waveform):
+
+| Mutation | Sập ở đâu |
+| --- | --- |
+| nới `isByteCacheKey` thành union (đúng cái bẫy §43.4) | core `fail 4`, trong đó có "a waveform is not a media revision"; app spec fail |
+| eviction bỏ vế nguồn, chỉ `live.has(key)` | core `fail 2`, app spec fail `the artifact of a gone revision goes with it` |
+| `floatPeakBuckets` chia 32768 (bê luật cũ sang thang mới) | core `fail 7`, app spec fail ở check đo **từ alias** |
+| `buildWaveformPayload` chấp nhận `peaks: []` (bug controller ở lại trong luật) | core `fail 1`, app spec fail `a failed decode stores nothing` |
+
+### 43.7 Gate
+
+| Gate | Lệnh | Kết quả |
+| --- | --- | --- |
+| 1 Typecheck | `npx nuxt typecheck` | exit **0**, `0` × `error TS`; `.nuxt/eslint.config.mjs` regenerate 15:25 |
+| 2 Lint | `npx eslint` trên **7** file chạm, chạy **sau** 15:25 | exit **0**, 0 problem. Run đầu FAIL 5 (`import/no-duplicates` ×2 vì tách import cũ/mới, `@stylistic/arrow-parens` ×1) — sửa file, không sửa rule |
+| 3 Unit | `npx tsx tests/unit/run-all.mts --smoke` | **125/125** specs exit **0**, `0` dòng `SKIP`/`PARTIAL`/`FAIL`; spec mới `tmcut_waveform_law` PASS |
+| 3 Core | `node --test packages/core/test/*.test.mjs` | **714/714** (`679` cũ + `35` mới), exit 0 |
+| 3 Core types | `npx tsc -p packages/core --noEmit` | exit **0**, `0` × `error TS` |
+| 3 Boundaries | `node packages/core/tools/check-boundaries.mjs` | PASS — core không import gì platform-specific |
+| 4 Live | `:4003`, năm route TMCut qua Chromium | `0` `[error]`/`[warn]`/`[issue]` trên `/tmcut`, `/tmcut/autocut`, `/tmcut/editor`, `/tmcut/templates`, `/tmcut/factory`; noise duy nhất là `[info] <Suspense>`. Bundle đang serve: barrel `/_nuxt/utils/tmcut/waveform.ts` re-export **bảy** tên từ core, `waveform.mjs` served khớp **7** tên mới, `byteCache.mjs` served khớp **5** |
+
+### 43.8 Chưa chứng minh / nợ
+
+- **Chưa có ai gọi luật mới.** `floatPeakBuckets` và `buildWaveformPayload` chưa có call-site nào
+  trong `app/**` ngoài barrel re-export, và `readCachedBytes` vẫn chưa đọc một artifact nào. Đó là việc
+  của G2 (#138): lượt này chỉ dựng luật, nên chưa có bằng chứng nào cho ADR-033.
+- `TMCUT_WAVEFORM_ALGORITHM` là `'peak-v1'`: **peak**, không phải min/max cũng không phải RMS — hai lựa
+  chọn brief nêu như ngang nhau. Quyết định ghi ở đây để G2 không phải đoán lại; nếu một lượt sau muốn
+  RMS thì đó là `rms-v1`, tức một key mới, tức artifact cũ tự hết hiệu lực — đúng cơ chế §43.4 tạo ra.
+- Route `/tmcut/editor` trên Chromium sạch console nhưng **dừng ở màn boot** (trình duyệt MCP không có
+  phiên, và không nhập credentials của user): chưa có ảnh nào của media panel hay timeline clip vẽ
+  waveform. Không có gì sai — lượt này chưa có UI để vẽ.
+- Envelope chưa được ghi xuống OPFS/IndexedDB; `controller.mjs:420-427` (zeros kèm `ok:true`) và
+  `:402-406` (guard không algorithm) vẫn còn nguyên. Gỡ chúng là việc của G2/G4, vì phải có đường đọc
+  mới rồi mới retire đường cũ được.

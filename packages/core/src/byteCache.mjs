@@ -14,6 +14,15 @@ export const TMCUT_BYTE_CACHE_QUOTA_SHARE = 0.4
 
 const KEY_PATTERN = /^[0-9a-f]{8}$/
 
+/**
+ * A derived artifact — the waveform of a revision, a future filmstrip of it — is
+ * not the revision. Its key carries the fingerprint it was cut from, what kind of
+ * answer it is, and the version of the law that measured it:
+ * `a1b2c3d4-wave-v1`. Kind is a name segment, never a path: no separator, no dot,
+ * no character a filesystem or a URL could re-read as one.
+ */
+const DERIVED_KEY_PATTERN = /^([0-9a-f]{8})-([a-z][a-z0-9]{0,15})-v([1-9][0-9]*)$/
+
 function positiveNumber(value) {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0
 }
@@ -33,9 +42,58 @@ export function byteCacheBudgetBytes(quotaBytes) {
  * A cache key is exactly one revision fingerprint (`cacheKeyForPath`).
  * Anything else — a path, an uppercase digest, a truncated or padded digest —
  * must never be allowed to name a file.
+ *
+ * This is the SOURCE-only answer, and callers that ask "is this a media revision"
+ * (frame requests do) must use it, not the union below: a waveform key contains a
+ * legal fingerprint and would otherwise be accepted as one.
  */
 export function isByteCacheKey(key) {
   return typeof key === 'string' && KEY_PATTERN.test(key)
+}
+
+/** The name segment of a derived key: a lowercase word, digits allowed inside. */
+function isByteCacheKind(kind) {
+  return typeof kind === 'string' && /^[a-z][a-z0-9]{0,15}$/.test(kind)
+}
+
+/**
+ * The cache key for one derived artifact of one revision, or null when any part of
+ * it is not something the store may name.
+ */
+export function derivedByteCacheKey(fingerprint, kind, version) {
+  if (!isByteCacheKey(fingerprint)) return null
+  if (!isByteCacheKind(kind)) return null
+  if (!Number.isInteger(version) || version < 1) return null
+  return `${fingerprint}-${kind}-v${version}`
+}
+
+/** The parts of a derived key, or null when the key names no artifact. */
+export function parseDerivedByteCacheKey(key) {
+  if (typeof key !== 'string') return null
+  const match = DERIVED_KEY_PATTERN.exec(key)
+  if (!match) return null
+  return { fingerprint: match[1], kind: match[2], version: Number(match[3]) }
+}
+
+/** Whether this key names an artifact computed FROM a revision, not the revision. */
+export function isDerivedByteCacheKey(key) {
+  return parseDerivedByteCacheKey(key) !== null
+}
+
+/** Whether this key may name a file in the store at all: a source or an artifact. */
+export function isStoredByteCacheKey(key) {
+  return isByteCacheKey(key) || isDerivedByteCacheKey(key)
+}
+
+/**
+ * The revision an entry came from — itself for a source row, the embedded
+ * fingerprint for a derived one, null for anything that names nothing.
+ * Liveness of an artifact is the liveness of this.
+ */
+export function byteCacheFingerprint(key) {
+  if (isByteCacheKey(key)) return key
+  const parsed = parseDerivedByteCacheKey(key)
+  return parsed === null ? null : parsed.fingerprint
 }
 
 /** Whether one file can live in the cache at all, before eviction is asked. */
@@ -58,8 +116,13 @@ function byAgeThenKey(a, b) {
  * the whole point: bytes no asset names are freed first (a relink or a delete
  * leaves them behind and nothing else cleans them), then an entry that cannot
  * fit the budget even alone, then the least recently used until the total fits.
- * An entry whose key is not a fingerprint is reported as `invalid` and removed:
+ * An entry whose key is not a legal cache key is reported as `invalid` and removed:
  * it can name no file, so it is only noise in the index.
+ *
+ * A derived row (a waveform, a filmstrip) is live when its SOURCE is live — the
+ * library names revisions, not artifacts, so asking only "is this key in the
+ * library" would delete every waveform on the next import. When a revision leaves
+ * the library its artifacts leave with it; they are never kept by their own name.
  *
  * @param {Array<{key: string, bytes: number, accessedAt: number}>} entries
  * @param {number} budgetBytes
@@ -73,7 +136,7 @@ export function planByteCacheEviction(entries, budgetBytes, liveKeys = []) {
   const invalid = []
   const candidates = []
   for (const entry of rows) {
-    if (!entry || !isByteCacheKey(entry.key)) {
+    if (!entry || !isStoredByteCacheKey(entry.key)) {
       if (entry && typeof entry.key === 'string') invalid.push(entry.key)
       continue
     }
@@ -81,11 +144,13 @@ export function planByteCacheEviction(entries, budgetBytes, liveKeys = []) {
     candidates.push({ key: entry.key, bytes: positiveNumber(entry.bytes), accessedAt: positiveNumber(entry.accessedAt) })
   }
 
+  const isLive = key => live.has(key) || live.has(byteCacheFingerprint(key))
+
   const drop = [...invalid]
   const keep = []
   const doomed = []
   for (const entry of candidates) {
-    if (!usableBudget || !live.has(entry.key) || entry.bytes > usableBudget) doomed.push(entry)
+    if (!usableBudget || !isLive(entry.key) || entry.bytes > usableBudget) doomed.push(entry)
     else keep.push(entry)
   }
   drop.push(...doomed.sort(byAgeThenKey).map(entry => entry.key))
