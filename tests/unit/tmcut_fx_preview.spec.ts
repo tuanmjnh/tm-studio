@@ -121,7 +121,7 @@ check('the fade family is exact, geometry is approximate, keying is illustrative
   assert.equal(anim('circleopen', true, {}, 'transition').status.fidelity, 'approximate')
   assert.equal(anim('chromakey').status.fidelity, 'illustrative')
   assert.equal(anim('stabilize').status.fidelity, 'illustrative')
-  assert.equal(anim('negate').status.fidelity, 'exact')
+  assert.equal(anim('negate').status.fidelity, 'approximate')
 })
 
 check('the squeeze and band cards animate on the axis core measured', () => {

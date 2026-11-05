@@ -194,7 +194,10 @@ export const EFFECT_REGISTRY = {
     label: 'Negate',
     category: 'color',
     renderReady: true,
-    preview: { strategy: 'css', fidelity: 'exact' },
+    // NOT `exact`: `alpha` switches the bake to negate_alpha=1 and CSS invert()
+    // has no alpha face, so one reachable param makes the tile a different
+    // picture. Policed by tests/unit/tmcut_fx_exact.spec.ts.
+    preview: { strategy: 'css', fidelity: 'approximate' },
     params: [
       { name: 'alpha', kind: 'bool', default: false }
     ]

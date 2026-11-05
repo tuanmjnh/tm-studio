@@ -311,8 +311,12 @@ const EFFECT_BUILDERS: Record<string, EffectBuilder> = {
     }
   },
   'sepia': (p) => {
+    // `colorchannelmixer` interpolates identity -> the W3C sepia matrix, which
+    // is the literal definition of CSS `sepia(t)` — so the face is that one
+    // function. A second grade here (a saturation lift, say) is a look the
+    // export never bakes, and the tile would claim `exact` for it.
     const t = unit('sepia', 'intensity', p.intensity)
-    return { filter: `sepia(${r3(t)}) saturate(${r3(1 + t * 0.25)})` }
+    return { filter: `sepia(${r3(t)})` }
   },
   'mono': (p) => {
     const t = unit('mono', 'intensity', p.intensity)

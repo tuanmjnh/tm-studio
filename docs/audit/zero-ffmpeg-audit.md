@@ -4049,3 +4049,148 @@ phải sửa cách chép.
 Guard ở [tmcut_doc_charset.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_doc_charset.spec.ts); nó cũng
 kiểm các con số của chính nó («scope còn thật») và trình bày bằng ba cụm từ tiếng Việt đã thay,
 nên một lần revert lại chữ Hán làm nó cháy.
+
+## 41. Slice F9 — một tuyên bố `exact` phải được đo bằng filter file thật chạy (đo ngày 2026-11-05)
+
+§40.7 để lại hai dòng mở: *yêu cầu 4 (`TmcutFxThumb` chưa được đo lại theo Effect Definition) và
+yêu cầu 8 (resource lifecycle)*. Lượt này đóng yêu cầu 4; yêu cầu 8 là F10 (#136).
+
+### 41.1 Câu hỏi mà chưa gate nào hỏi
+
+`preview.fidelity` trong registry không phải trang trí: [TmcutFxThumb.vue:119](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutFxThumb.vue#L119)
+biến nó thành badge, và `exact` là cái badge nói với người dựng phim «cái bạn thấy là cái file
+render». Trước lượt này tuyên bố đó là **một từ tự viết**: mặt CSS sống ở
+[fxPreview.ts:818](file:///D:/Applications/tm-studio/app/utils/tmcut/fxPreview.ts#L818), mặt export sống ở
+`buildFfmpegEffectFilters` ([effects.mjs:521](file:///D:/Applications/tm-studio/packages/core/src/effects.mjs#L521)),
+và **không một spec nào đặt hai cái cạnh nhau**. Đây đúng là lớp lỗi review từng file không thấy,
+vì mỗi nửa tự đọc rất hợp lý: `sepia(0.6) saturate(1.15)` trông như một cú sepia,
+`colorchannelmixer=rr=0.636:…` trông như một cú sepia — chỉ phép so mới nói được rằng một trong
+hai cái đang cộng thêm grades mà file không hề có.
+
+### 41.2 Con số: năm tuyên bố, hai tuyên bố không đúng
+
+Registry có **29** effect; **5** cái claim `exact` (letterbox, negate, mirror-h, mirror-v, sepia).
+Đo trực tiếp hai mặt trên cùng một param (lệnh đọc thẳng `effectCss` và
+`buildFfmpegEffectFilters`, vì check 1 chặn tiến trình trước khi tới vòng sepia):
+
+| `intensity` | mặt CSS phát ra (trước) | filter file thật chạy | đọc được gì |
+| --- | --- | --- | --- |
+| 0 | `sepia(0) saturate(1)` | `rr=1:rg=0:rb=0:gr=0:gg=1:gb=0:br=0:bg=0:bb=1` | identity, nhưng CSS vẫn kèm một hàm thừa |
+| 25 | `sepia(0.25) saturate(1.063)` | `rr=0.848:rg=0.192:rb=0.047:gr=0.087:gg=0.921:gb=0.042:br=0.068:bg=0.134:bb=0.783` | hệ số = `1 − 0.607·0.25`, `0.769·0.25`, … — **đúng** nội suy identity → W3C sepia |
+| 60 | `sepia(0.6) saturate(1.15)` | `rr=0.636:rg=0.461:rb=0.113:gr=0.209:gg=0.812:gb=0.101:br=0.163:bg=0.32:bb=0.479` | file chạy sepia thuần; `saturate(1.15)` là **15 % bão hòa bịa thêm** |
+| 100 | `sepia(1) saturate(1.25)` | `rr=0.393:rg=0.769:rb=0.189:gr=0.349:gg=0.686:gb=0.168:br=0.272:bg=0.534:bb=0.131` | chính xác bảng W3C — tức `sepia(t)` tự nó đã là export |
+
+`negate` thì sai theo cách khác: param `alpha` làm file đổi hẳn ([effects.mjs:661](file:///D:/Applications/tm-studio/packages/core/src/effects.mjs#L661))
+thành `negate=negate_alpha=1`, và `invert()` trong CSS **không có mặt alpha** để mà nói. Một claim
+cấp type không được phép nhân danh giá trị mặc định của param. Ba cái còn lại (letterbox,
+mirror-h, mirror-v) đo thì **đúng thật** — nên chúng ở lại.
+
+### 41.3 Test trước production
+
+Spec mới: [tmcut_fx_exact.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_fx_exact.spec.ts),
+**7** check, viết và chạy trước khi sửa một dòng production. RED đầu tiên, đúng như luật:
+
+| Cái | Kết quả RED |
+| --- | --- |
+| check 1 «tập claim `exact` == tập rule đã chứng minh» | `an exact claim moved without a rule here`, actual 5 phần tử so với expected 4, `diff` chỉ đích danh `+ 'negate'` |
+| check 2 sepia | không tới nơi trong lần chạy đó (check 1 bail), nên divergence của nó lấy từ phép đo ở §41.2; sau khi sửa claim và bỏ `saturate` thì in `sepia: the matrix in the file IS the CSS interpolation … PASSED` |
+
+Nói thẳng phần yếu: chỉ một assertion được **nhìn thấy** sập trong run gốc; assertion sepia được
+chứng minh là sẽ sập bằng mutation ở §41.5, không bằng một lần RED trước sửa. Ghi lại điều đó vì
+nó là khác biệt thật giữa «test này fail» và «test này đã được thấy fail».
+
+### 41.4 Sửa production — đúng hai chỗ
+
+| Chỗ | Thay đổi |
+| --- | --- |
+| [fxPreview.ts:313](file:///D:/Applications/tm-studio/app/utils/tmcut/fxPreview.ts#L313) | bỏ `saturate(1 + 0.25t)`; mặt sepia còn đúng `sepia(t)`, kèm comment nêu vì sao hàm thứ hai là hàng giả |
+| [effects.mjs:200](file:///D:/Applications/tm-studio/packages/core/src/effects.mjs#L200) | negate `exact` → `approximate`, comment nêu đích danh `alpha` |
+
+Hai test cũ nêu claim cũ cũng phải sửa theo, và sửa **vì claim sai**, không vì code đổi:
+[packages/core/test/effects.test.mjs:255](file:///D:/Applications/tm-studio/packages/core/test/effects.test.mjs#L255)
+và [tmcut_fx_preview.spec.ts:124](file:///D:/Applications/tm-studio/tests/unit/tmcut_fx_preview.spec.ts#L124).
+Không có assertion nào được nới để chiều production.
+
+### 41.5 Guard mới đo gì, và nó cắn thật
+
+Kỳ vọng của mọi check lấy từ **chuỗi filter đã ship** (`exportFilter`:44), không từ mô tả — một
+rule chỉ chép lại builder sẽ còn xanh sau khi hai bên lệch nhau.
+
+| Check | Cái nó khóa |
+| --- | --- |
+| 1 tập claim | `exact` trong registry phải **bằng đúng** tập rule ở đây (sàn ≥ 4 để bảng không rỗng); `NOT_EXACT` nêu negate kèm lý do, nên ai gắn lại `exact` là fail ngay dòng đó |
+| 2 sepia | quét 8 giá trị intensity (0, 10, 25, 60, 100, ngoài biên −20/140, default); **chín** hệ số của `colorchannelmixer` phải giải ra **cùng một** `t` (sai số lớn nhất đo được < 0.002) rồi mới so `effectCss` == `sepia(t)` và đếm số hàm = 1 |
+| 3 negate | `negate` ↔ `invert(1)`, `negate_alpha=1` ↔ CSS vẫn chỉ `invert(1)`: chứng minh param là thật trước khi kết luận nhãn |
+| 4 mirror | axis ↔ `hflip`/`vflip`/`hflip,vflip` và `scaleX(-1)`/`scaleY(-1)`/`scale(-1, -1)`; giá trị ngoài enum rơi về **default đọc từ registry** (mirror-h `horizontal`, mirror-v `vertical`) chứ không hardcode |
+| 5 letterbox | `h=ih*bar` ↔ các stop `%` của plate, trên 9 giá trị size gồm cả ngoài biên; và plate của tile **chính là** plate của monitor |
+| 6 một cây cầu | quét **154** file trong `app/components/tmcut`, `app/utils/tmcut`, `app/composables` tìm từ vựng CSS của effect (`saturate(`, `invert(`, `scaleX(-1)`, …); `fxPreview.ts` là file duy nhất được phép chứa |
+| 7 tile | `TmcutFxThumb.vue` không được chứa tên type nào có dấu ngoặc kép — một `switch` quay lại là hai mặt tự quyết với nhau mà không file nào trông sai |
+
+Ba mutation làm guard cháy, mỗi cái một lần chạy:
+
+| Mutation | Kết quả |
+| --- | --- |
+| A: gắn lại `saturate(1 + 0.25t)` | check 2 FAIL `intensity (default): CSS face vs the shipped matrix` |
+| B: `scale(-1, -1)` → `scale(-1, 1)` | check 4 FAIL `mirror-h axis both: CSS` |
+| C: **sửa phía export** `size / 100` → `size / 90` | check 5 FAIL `bars at 12,12,88,88% vs export … h=ih*0.13` |
+
+C là cái quan trọng nhất: nó chứng minh rule đọc file, chứ không đọc builder. Cả ba đã revert;
+`git diff --stat` trên hai file production chỉ còn đúng hai thay đổi của §41.4
+(9 insertions / 2 deletions).
+
+### 41.6 Gate
+
+| Gate | Lệnh | Kết quả | Bằng chứng |
+| --- | --- | --- | --- |
+| 1 Types | `npx nuxt typecheck` | PASS | exit 0, 0 × `error TS`; `.nuxt/eslint.config.mjs` regenerate 28581 B lúc 13:40 |
+| 2 Lint | `npx eslint` trên **5** file chạm, chạy sau gate 1 | PASS | exit 0; lần đầu báo 1 lỗi `@stylistic/quote-props` ở `NOT_EXACT` — sửa file, không sửa rule |
+| 3 Tests | `npx tsx tests/unit/run-all.mts --smoke`, `npx tsc -p packages/core --noEmit`, `node --test packages/core/test/*.test.mjs` | PASS | **123/123** specs exit 0 và **0** dòng `SKIP`/`PARTIAL`/`FAIL`; core tsc exit 0; core tests **679/679** |
+| 4 Live | 5 route TMCut trên `:4003`, đọc console sau mỗi route | PASS có ghi nợ cũ | xem §41.6b: **0** `[warn]`/`[issue]`; `401` ×4/×2/×1 trên editor/templates/factory, `list_network_requests` quy toàn bộ cho `GET /api/v1/ai/relay/catalog` — đúng baseline §31.5. Tile `Sepia` computed `sepia(1)`, tile `Negate` hover ra badge "Approximate preview" |
+| 5 Docs | §41 + §41.6b + bullets roadmap, staging đúng đường dẫn | PASS | — |
+
+### 41.6b Live — hai mặt của một hiệu ứng, đo trên Chromium thật
+
+Lượt này đổi một chuỗi CSS mà tile thật render, nên gate 4 không được xin miễn. Đo trên
+`http://localhost:4003`, tab Chromium mới cùng profile (`list_pages` trước khi điều khiển),
+`list_console_messages` sau mỗi route khi trang đã ổn định (`/tmcut` 1068 ký tự body,
+`/tmcut/autocut` 451, `/tmcut/templates` 6889, `/tmcut/factory` 489):
+
+| Route | Dòng console | Quy gán |
+| --- | --- | --- |
+| `/tmcut` | chỉ `[info] <Suspense>` | — |
+| `/tmcut/autocut` | chỉ `[info] <Suspense>` | — |
+| `/tmcut/editor` (đã mở tab Effects) | `[info] <Suspense>` + `[error] 401 (error.unauthorized)` ×4 | `list_network_requests` in đúng 4 request 401, tất cả là `GET /api/v1/ai/relay/catalog` |
+| `/tmcut/templates` | `[info] <Suspense>` + `401` ×2 | cùng `relay/catalog` |
+| `/tmcut/factory` | `[info] <Suspense>` + `401` ×1 | cùng `relay/catalog` |
+
+**0** `[warn]` và **0** `[issue]` trên cả năm route. Ba hàng `401` là đúng baseline đã ghi ở §31.5
+và được đo lại ở hơn mười lượt sau đó: một endpoint AI cần phiên, tab QA này chưa đăng nhập;
+không request nào thuộc đường media/frame, và bridge không import gì phía server.
+
+Phần render — thư viện Effects trên `/tmcut/editor`, mở bằng nút "Effects":
+
+| Cái | Đo được |
+| --- | --- |
+| Tile trong thư viện | **27**, **16** trong số đó có một lớp con với `filter` khác `none` |
+| Tile `Sepia` | computed filter **đúng** `sepia(1)` — không còn `saturate(1.25)` thừa như trước lượt này |
+| Tile `Negate` | computed filter `invert(1)`; hover vào tile hiện badge **"Approximate preview"** |
+| Tile `Sepia`, hover | **không** badge nào hiện |
+| Tile `Chromatic Aberration` | `sepia(1) hue-rotate(-40deg) saturate(4)` — sepia ở đây là một phần của look khác, không phải claim của effect `sepia` |
+
+Hai dòng badge đo cùng một cơ chế từ hai phía: [TmcutFxThumb.vue:119](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutFxThumb.vue#L119)
+chỉ gán badge cho `illustrative` và `approximate`, còn `exact` thì `info` ở null — nên "Sepia hover
+không ra badge" là hệ quả của claim vẫn đúng, còn "Negate hover ra *Approximate preview*" là hệ quả
+của claim vừa bị gỡ. Đó là toàn bộ ý nghĩa của lượt này tính bằng UI: một tile không còn tự thêm
+grade, và một tile không còn hứa WYSIWYG mà file không giữ được.
+
+### 41.7 Yêu cầu 4 đóng tới đâu, và gì vẫn mở
+
+- **Đóng**: tile và monitor lấy cùng một mặt từ một cây cầu (check 6 khóa tính «một» đó), và mọi
+  tuyên bố `exact` — thứ người dùng nhìn thấy như lời hứa WYSIWYG — giờ có phép đo chống lại
+  chính filter file chạy. Hai lời hứa rỗng đã bị gỡ.
+- **Mở, có chủ đích**: các claim `approximate`/`illustrative` (blur sigma, vibrance, họ temporal)
+  không được pin 1-1. Chúng **tự nhận** là gần đúng nên không có tuyên bố nào để phá; muốn chứng
+  minh mức gần đúng thì cần fixture pixel cho từng effect, và F8 (§40) đã có hạ tầng đó nếu một
+  lượt sau quyết định đo.
+- **Mở**: yêu cầu 8 — resource lifecycle và hủy request preview cũ — là F10 (#136). F (#103) chưa
+  exit cho tới khi nó xong.

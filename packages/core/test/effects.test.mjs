@@ -248,10 +248,11 @@ describe('fx capabilities contract (roadmap v1 §5-6)', () => {
   })
 
   it('fidelity is a documented stance, not a default', () => {
-    // Only where CSS runs the identical maths may a tile claim exact: negate /
-    // mirror / letterbox / sepia. Blur sigma, colorbalance and the temporal
-    // families are approximations and must say so (roadmap v1 §5.6).
-    assert.equal(fxCapabilities('negate').fidelity, 'exact')
+    // Only where CSS runs the identical maths may a tile claim exact: mirror /
+    // letterbox / sepia. negate's `alpha` param bakes a channel CSS invert()
+    // cannot touch, blur's sigma, colorbalance and the temporal families are
+    // approximations and must say so (roadmap v1 §5.6, F9).
+    assert.equal(fxCapabilities('negate').fidelity, 'approximate')
     assert.equal(fxCapabilities('letterbox').fidelity, 'exact')
     assert.equal(fxCapabilities('blur').fidelity, 'approximate')
     assert.equal(fxCapabilities('eq-grade').fidelity, 'approximate')
