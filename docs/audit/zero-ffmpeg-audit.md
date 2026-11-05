@@ -4372,4 +4372,31 @@ với lần vào sau.
 - **Đóng có điều kiện**: hai leg "WebGL texture" và "`VideoFrame`" được chứng minh là rỗng trong
   kiến trúc hiện tại (§42.9), chứ không phải được giải quyết.
 - **Còn mở của slice F**: không có gì mới. §41.7 để lại đúng một dòng, và dòng đó đóng ở đây — nên
-  #103 exit được.
+  #103 exit được, theo phép đo ở §42.11.
+
+### 42.11 Exit review của slice F (#103) — năm tiêu chí, từng cái một bằng chứng
+
+Brief của slice F ([execution brief, "Slice F — Composite Preview"](file:///D:/Applications/tm-studio/docs/tmcut-zero-ffmpeg-next-slices-agent-execution-brief.md#L127)
+định nghĩa exit bằng **5 tiêu chí và 8 yêu cầu**, không phải bằng một tên công nghệ. Tiêu chí của
+#103 cũng không đòi WebGL2 — compositor GPU là một dòng của Phase 5 trong roadmap, và §42.9 đã ghi
+leg đó là **rỗng** trong kiến trúc hiện tại chứ không phải đã xử lý.
+
+| Tiêu chí | Bằng chứng đã đo | Phần còn lại |
+| --- | --- | --- |
+| "Không còn hai luồng composite preview cạnh tranh" | §27 (F1: `paintStack` vào core, luật "một hàng" nghỉ hưu), §30 (F3: `selectExportTracks` bị xóa, file đọc plan của core), §32 (F4b: plate đi **theo layer**), [tmcut_paint_stack.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_paint_stack.spec.ts) + [tmcut_export_paint_stack.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_export_paint_stack.spec.ts) | không có |
+| "Nhiều track/layer hiển thị đúng thứ tự" | §29 (F2b: DOM vẽ **đủ** số phần tử core gọi tên), [tmcut_preview_paint_plan.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_preview_paint_plan.spec.ts), [tmcut_surface_plate.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_surface_plate.spec.ts); thứ tự được **đo** chứ không chỉ nêu — §40.3: đảo `slots` làm check 2 sập còn 2 màu distinct | không có |
+| "Preview và export dùng cùng evaluator/composition rules" | §30 (F3), §34 (F6a: một nguồn media-time), §38 (F6d: blend đi **qua** plan), §39 (F7: chữ vẽ từ layer), [tmcut_export_track_parity.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_export_track_parity.spec.ts) đi từng frame của `createFrameScheduler` | không có |
+| "Có visual regression fixtures" | §40 (F8: fixture nhiều layer, plan dự đoán pixel của file), §91 trong roadmap (golden-frame bằng FFmpeg thật, hai still giải mã đúng từng byte), [tmcut_golden_frame.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_golden_frame.spec.ts) | kỳ vọng là màu phẳng 4 góc + ink, **không** phải cả khung (transform/crop/mask/effect nhiều layer mới có spec graph) |
+| "UI responsive khi scrub và đổi effect" | §36 (F6b: scrub trên lưới khung hình), §42.8 (nhịp rAF đo trong Chromium: 0/giây ambient, **82/giây** khi phát, **0** sau khi rời) | chưa có phép đo **khung rơi** cho một scrub dài — số đo hiện tại là nhịp, không phải budget |
+
+Tám yêu cầu: **cả tám** có spec, và yêu cầu 8 đóng ở lượt này (§42.10). Hai phần còn lại được **kể
+tên** thay vì được gọi là xong, và đó là lý do bảng trên có cột cuối:
+
+- **`shape`**: yêu cầu 2 kê trục "shape", nhưng layer type đó **chưa tồn tại** — chủ của nó là gap
+  (d) của #90 trong roadmap, không phải một đường chưa làm của slice F.
+- **frame budget khi scrub**: tiêu chí 5 nói "responsive"; cái đo được là nhịp callback và console
+  sạch. Muốn đóng thành phép đo thì cần đếm khung rơi trong một scrub dài, thuộc về lượt nào chạm
+  lại transport.
+
+Với hai phần đó ghi rõ, #103 exit và G (#104) bắt đầu. Không tiêu chí nào ở trên được đóng bằng một
+câu mô tả: mỗi ô "bằng chứng" là một section có số đo hoặc một spec chạy trong gate 3.
