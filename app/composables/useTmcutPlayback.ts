@@ -265,6 +265,9 @@ export function useTmcutPlayback() {
   function seek(timeInSec: number) {
     const clamped = Math.max(0, Math.min(totalDuration.value, timeInSec))
     playhead.value = clamped
+    // The pace anchor is a (wall clock, frame) pair. A position the pace did
+    // not produce invalidates it, so the next frame measures from HERE.
+    needsRearm = true
 
     if (videoRef.value && activeVideoClip.value) {
       try {
@@ -379,8 +382,38 @@ export function useTmcutPlayback() {
   }
 
   // Playback animation loop
-  let lastTimestamp = 0
   let animId: number | null = null
+
+  // The pace anchor (Zero-FFmpeg slice F6e): the wall-clock timestamp the loop
+  // was armed at, and the FRAME the playhead stood on then. Every position is
+  // derived from that pair through core's clock, so elapsed time only ever
+  // becomes a WHOLE number of frames — the same sequence `seekToFrame`, a
+  // WebCodecs loop and an offline golden-frame dump walk — instead of a running
+  // float sum of whatever intervals the machine delivered. Anything the pace
+  // did not produce (a scrub, play, pause, a shuttle-rate change) re-arms the
+  // anchor, so an interval already spent at 1x is never re-spent at 8x.
+  let anchorMs = 0
+  let anchorFrame = 0
+  let anchorRate = 0
+  let needsRearm = true
+
+  function armPace(timestamp: number) {
+    anchorMs = timestamp
+    anchorFrame = currentFrameIndex.value
+    anchorRate = shuttleRate.value
+    needsRearm = false
+  }
+
+  // Where the playhead stands at `timestamp`: the anchor frame plus the frames
+  // the shuttle rate covers in the elapsed wall time, counted and placed by
+  // core's clock in both directions.
+  function pacedTime(timestamp: number): number {
+    const clock = frameScheduler.value.clock
+    const rate = shuttleRate.value
+    const elapsedTicks = Math.max(0, Math.round((timestamp - anchorMs) * (TICKS_PER_SECOND / 1000)))
+    const advanced = clock.frameIndexAt(elapsedTicks * Math.abs(rate))
+    return ticksToSec(clock.frameStartAt(anchorFrame + (rate < 0 ? -advanced : advanced)))
+  }
 
   // Loop wrap bounds: the In/Out zone when valid, else the full timeline.
   function loopBounds(): { start: number, end: number } {
@@ -397,17 +430,13 @@ export function useTmcutPlayback() {
       return
     }
 
-    if (lastTimestamp === 0) {
-      lastTimestamp = timestamp
-    }
+    if (needsRearm || shuttleRate.value !== anchorRate) armPace(timestamp)
 
-    const delta = (timestamp - lastTimestamp) / 1000 // seconds
-    lastTimestamp = timestamp
+    const newTime = pacedTime(timestamp)
 
     // Reverse shuttle: rewind the playhead and seek the video frame whenever
     // it drifts too far behind (the element stays paused in this mode).
     if (shuttleRate.value < 0) {
-      const newTime = playhead.value + delta * shuttleRate.value
       if (loopPlayback.value) {
         const { start, end } = loopBounds()
         if (newTime <= start) {
@@ -445,7 +474,6 @@ export function useTmcutPlayback() {
       return
     }
 
-    const newTime = playhead.value + delta * shuttleRate.value
     if (loopPlayback.value) {
       const { start, end } = loopBounds()
       if (newTime >= end) {
@@ -522,7 +550,7 @@ export function useTmcutPlayback() {
       playhead.value = loopBounds().start
     }
     isPlaying.value = true
-    lastTimestamp = 0
+    needsRearm = true
     if (videoRef.value) {
       videoRef.value.playbackRate = mediaRate(activeVideoClip.value?.clip)
       videoRef.value.play().catch(() => {})
@@ -534,7 +562,7 @@ export function useTmcutPlayback() {
 
   function pause() {
     isPlaying.value = false
-    lastTimestamp = 0
+    needsRearm = true
     shuttleRate.value = 1 // K / pause always returns to normal speed
     if (animId) {
       cancelAnimationFrame(animId)
@@ -587,7 +615,7 @@ export function useTmcutPlayback() {
       }
       if (!isPlaying.value) {
         isPlaying.value = true
-        lastTimestamp = 0
+        needsRearm = true
         animId = requestAnimationFrame(step)
       }
       return

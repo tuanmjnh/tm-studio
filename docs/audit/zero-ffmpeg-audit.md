@@ -3157,3 +3157,149 @@ Lượt này chạm **2** file code/spec — [useTmcutPlayback.ts](file:///D:/Ap
 dòng nào. File đo tạm `tests/unit/tmp_f6a_measure.mts` đã xóa sau khi lấy số; scratch
 `f6a-measure.mts` đặt nhầm chỗ cũng vậy. Không binary mới, không đụng
 `backup/ffmpeg-engine-2026-11-03`, không đổi Project Schema v3, không tắt rule lint nào.
+
+## 35. Slice F6e — nhịp playhead do khung hình của core đếm, không do delta rAF cộng dồn (2026-11-05)
+
+### 35.1 Luật nhịp sống trong app, và sống hai lần
+
+Từ #86, mọi câu hỏi **vị trí** của preview đã đi qua core: `createFrameScheduler`
+đếm frame, `clock.frameStartAt(i)` đặt frame, `seekToFrame` đậu đúng răng của grid.
+Riêng câu "khung tiếp theo playhead đứng đâu" thì loop tự trả lời, bằng cách cộng
+dồn khoảng thời gian mà rAF giao cho nó:
+
+```
+const delta = (timestamp - lastTimestamp) / 1000        // giây wall clock
+playhead.value = playhead.value + delta * shuttleRate.value
+```
+
+Và đó là **hai** bản copy của cùng một phép: một ở nhánh forward, một ở nhánh reverse
+của `shuttleBackward()` (J). `lastTimestamp = 0` là hiệu cờ "chưa armed" ở play,
+pause và shuttleBackward.
+
+Giá của nó không phải lý thuyết. `scheduler.mjs` nói host chỉ được sở hữu **WHEN** —
+"it can never own WHAT that index contains" — còn ở đây host sở hữu cả hai: vị trí là
+một float cộng dồn của mọi khoảng máy giao (đo live: 14–20 ms, ~68 Hz, tức ~2.37 mẫu
+cho mỗi khung 30 fps). Preview vì thế xem những vị trí mà **không khung hình nào của
+file export từng ngồi ở đó**: cùng một tick, `frameAt(i)` và `playhead` là hai chỗ
+khác nhau. Slice F yêu cầu 6 ("không dùng wall-clock timer làm timeline source of
+truth") vẫn chưa đóng ở vế này, dù §34 đã đóng vế vị trí nguồn.
+
+### 35.2 Luật mới
+
+Nhịp là một **anchor** `(timestamp, frame, rate)`, và mỗi frame là một phép quy đổi
+qua clock của core — không còn cộng dồn nào cả:
+
+| Neo | Nội dung |
+| --- | --- |
+| [useTmcutPlayback.ts:395](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L395) | `anchorMs` / `anchorFrame` / `anchorRate` / `needsRearm` — thay `lastTimestamp` |
+| [useTmcutPlayback.ts:400](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L400) | `armPace(timestamp)` chụp `(now, currentFrameIndex.value, shuttleRate.value)` |
+| [useTmcutPlayback.ts:410](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L410) | `pacedTime(timestamp)`: elapsed → ticks → `clock.frameIndexAt(elapsedTicks * abs(rate))` → `clock.frameStartAt(anchorFrame ± advanced)` → `ticksToSec` |
+| [useTmcutPlayback.ts:433](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L433) | `if (needsRearm \|\| shuttleRate.value !== anchorRate) armPace(timestamp)` |
+| [useTmcutPlayback.ts:435](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L435) | `const newTime = pacedTime(timestamp)` — **một** phép tính, nhánh reverse và nhánh forward cùng đọc |
+
+`clock.frameStartAt` tự kẹp số học lùi (`Math.max(0, Math.floor(index))` ở
+[clock.mjs:42](file:///D:/Applications/tm-studio/packages/core/src/clock.mjs#L42)), nên J không cần một
+phép cộng delta riêng nữa: hai chiều đi trên **cùng một grid**, chỉ khác dấu của số
+frame đã chạy.
+
+Re-arm thay cho "set 0". Một vị trí mà nhịp **không tự sinh ra** làm anchor cũ vô
+nghĩa, nên `seek()` ([:270](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L270)),
+`play()` ([:553](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L553)), `pause()`
+([:565](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L565)) và
+`shuttleBackward()` ([:618](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L618)) đều đặt
+`needsRearm = true`. Hệ quả đo được ở check 3 của spec: một interval đã đi ở 1x
+không bị **đi lại** ở 8x — đổi tốc độ giữa chừng tính từ frame hiện tại, không từ
+điểm neo cũ.
+
+Không đổi: `TICKS_PER_SECOND` là hằng core nên phép quy đổi ms → ticks dùng đúng
+timebase 120 000 mà mọi module khác dùng ([time.mjs:9](file:///D:/Applications/tm-studio/packages/core/src/time.mjs#L9)).
+`renderPosition` và đường scrub không liên quan tới nhịp nên đứng nguyên.
+
+### 35.3 RED rồi GREEN
+
+Spec mới [tmcut_playback_pace.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_playback_pace.spec.ts)
+(197 dòng, **6** check) thay rAF bằng một đồng hồ giả một slot (`tick(ms)` đúng như
+mô hình `tmcut_playback_duration` đang dùng), rồi đo playhead **bằng ticks**:
+
+- **RED**: exit 1 ở check 1 — `86/90 forward samples sat between frames (first: 1920
+  ticks, grid 4000)`. Đây chính là bằng chứng trực tiếp của §35.1: loop cũ trả về
+  những vị trí mà `frameAt(i)` không bao giờ sinh ra.
+- **GREEN**: **6/6**, exit 0. Sáu check: (1) mọi vị trí khi phát là một **frame start**;
+  (2) một giây wall clock nhịp một giây timeline ở 1x, và hai giây sau `shuttleForward()`
+  ×3 ở 8x; (3) đổi rate giữa chừng tính từ frame hiện tại (0.5 s @1x + 0.125 s @8x = 1.5 s);
+  (4) J đi **ngược trên cùng grid** và lùi đúng 0.6 s; (5) scrub khi đang phát re-arm
+  (seek 4 s rồi 0.2 s nhịp = 4.2 s); (6) pin nguồn — không còn `const delta = (timestamp -
+  lastTimestamp) / 1000`, không còn `playhead.value + delta`, và có `clock.frameIndexAt`
+  cùng `clock.frameStartAt`.
+- Dung sai là **một frame cho mỗi segment nhịp**: grid chỉ giải được số frame nguyên,
+  còn anchor là timestamp đầu tiên loop được đưa, nên mỗi segment giữ lại tối đa một
+  frame chưa tiêu. Check 2 và 3 đi hai segment nên dung sai `2 * perFrame` — ghi thẳng
+  trong spec, không phải con số nới cho qua.
+- Hàng xóm chạy lại, không đổi assertion: `tmcut_playback_duration` **9/9**,
+  `tmcut_speed_clock` **5/5**, `tmcut_frame_scheduler` **10/10**,
+  `tmcut_surface_media_time` **5/5**, `tmcut_preview_paint_plan` **6/6**.
+
+### 35.4 Live
+
+`:4003`, `/tmcut/editor`, project hiện có (nội dung 1.1667 s = 35 khung @30 fps). Sampler
+đọc timecode program monitor (`MM:SS.ff`, `ff` là **chỉ số khung hình theo rate canvas**
+— bài học §34.4, lượt này đọc đúng ngay từ đầu) kèm `performance.now()`:
+
+| Phép đo | Số |
+| --- | --- |
+| Forward | 64 mẫu / 902 ms, `00:00.00 → 00:00.26` = 27 timecode khác nhau, **paceRatio 1.0244** |
+| Frame skip | **0** vi phạm trên toàn lượt — không mẫu nào nhảy qua một răng grid |
+| Reverse (J) | 39 mẫu, `00:01.05 → 00:00.21` = 0.4667 s timeline trong 440 ms wall, **ratio 1.0606**, 0 violation |
+| Loop | 213 mẫu / 3001 ms, max 1.1667 s, **2 lần wrap** |
+| Nhịp máy | 2.37 mẫu cho mỗi lần timecode đổi — đúng ~68 Hz rAF trên 30 fps |
+
+`firstMoveMs 56`: frame đầu sau khi bấm Play đến sau một nhịp rAF, không phải 0 — đó
+là anchor được arm ở timestamp mà loop **được đưa**, không phải lúc bấm nút.
+Số đo lấy **trên module đã sửa**: trang được reload trước khi đo vì module đang serve
+mang một lỗi parse từ lượt phát triển (`const newTime` khai báo hai lần), và mọi mẫu
+trước đó bị bỏ.
+
+Console: `info <Suspense>` (1) + `error 401` (×4, `GET /api/v1/ai/relay/catalog` — hub hết
+phiên, §31.5). Baseline không đổi.
+
+### 35.5 Gates
+
+| Gate | Lệnh | Kết quả | Bằng chứng |
+| --- | --- | --- | --- |
+| 1 Types | `npx nuxt typecheck` | **PASS** | exit 0, `grep -c "error TS"` = **0**; `.nuxt/eslint.config.mjs` regenerate **09:44**, 28567 byte |
+| 2 Lint | `npx eslint` trên **2** file đã chạm, chạy **sau** gate 1 | **PASS** | exit 0, log **0 byte** (`f6e-eslint-final.txt`). Lượt đầu FAIL 2 lỗi — `@stylistic/max-statements-per-line` và `@typescript-eslint/no-unused-vars` trong spec — sửa code, không tắt rule |
+| 3 Tests | `npx tsx tests/unit/run-all.mts` | **PASS** | **113/113**, exit 0, 0 dòng FAIL (112 của F6a + spec nhịp mới) |
+| 3b Smoke | `run-all.mts --smoke` | **PASS** | **116/116**, exit 0, 0 dòng FAIL — chạy trên **chính tree commit** |
+| 3c Core | `npx tsc -p packages/core --noEmit` | **PASS** | exit 0, log **0 byte** — lượt này không sửa `packages/core` |
+| 3d Spec mới | `npx tsx --tsconfig tsconfig.test.json tests/unit/tmcut_playback_pace.spec.ts` | **PASS** | RED exit 1 (check 1) → GREEN **6/6** exit 0 |
+| 4 Live | `/tmcut/editor` trên Chromium, :4003 | **PASS** | §35.4 |
+| 5 Docs | §35 + bullet roadmap + 5 guard markdown | **PASS** | guards chạy trong gate 3 (`run-all` glob cả `tmcut_docs_*`/`docs_*`) |
+
+### 35.6 Chưa chứng minh
+
+- **Độ chính xác dưới một frame là hữu ý, không phải đã đo.** Grid không cho phép một
+  vị trí giữa hai frame; mỗi segment nhịp giữ lại tối đa một frame chưa tiêu, nên
+  playhead có thể trễ một khung so với đồng hồ wall. paceRatio 1.02 (forward) và 1.06
+  (reverse) là số của hiệu đó, không phải của một lỗi drift.
+- **Vị trí wrap của loop không nằm trên grid** — khi wrap, `seek()` re-arm từ một vị
+  trí đã bọc, nên frame tiếp theo tính từ đó. Đã đo 2 lần wrap hợp lệ, chưa đo độ lệch
+  của răng đầu tiên sau wrap.
+- **Electron host chưa chạy lượt này.** Luật nằm trong `app/composables`, desktop dùng
+  cùng composable, nhưng chưa có số đo CDP trên Electron cho F6e.
+- **Không đọc được playhead từ DOM**, nên live chỉ chứng minh được **0 khung bị bỏ**
+  và paceRatio; tính "đúng là frame start" chỉ được chứng minh bởi spec unit với rAF giả.
+- **rAF riêng của html-video vẫn còn đó** (`TmcutHtmlVideoStudio.vue` tự tích phân
+  delta của nó) — việc của **F6b**, không phải lượt này.
+- **F6c/F6d vẫn mở**: ba bộ lọc `type ===` trong UI, blend lấy từ plan, và grain
+  `overlayAnimation` trên plate live.
+
+### 35.7 Bảo vệ working tree
+
+Lượt này chạm **2** file code/spec — [useTmcutPlayback.ts](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts)
+(714 dòng, `git diff --stat`: **39** thêm / **11** bớt) và
+[tmcut_playback_pace.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_playback_pace.spec.ts)
+(mới, 197 dòng) — cùng **2** file docs: chính file này và
+[roadmap](file:///D:/Applications/tm-studio/docs/tmcut-v4-universal-rendering-multiplatform-roadmap.md).
+`packages/core`, `TmcutPreviewPlayer.vue`, `TmcutHtmlVideoStudio.vue` và đường export
+không đổi một dòng nào; Project Schema v3 không đổi; không binary mới, không đụng
+`backup/ffmpeg-engine-2026-11-03`, không tắt rule lint nào.
