@@ -10,7 +10,8 @@
     "confirm": "Confirm",
     "success": "Success",
     "copied": "Copied to clipboard",
-    "showingCount": "Showing {count} of {total} items"
+    "showingCount": "Showing {count} of {total} items",
+    "retry": "Retry"
   },
   "error": {
     "validation": "Please check your input",
@@ -124,7 +125,7 @@
     "permissions": "Permissions",
     "routes": "Menu Routes",
     "profile": "Profile",
-    "docs": "API Docs",
+    "docs": "Documentation",
     "queues": "Queues",
     "overview": "Overview",
     "apps": "Applications",
@@ -1772,7 +1773,7 @@
       "captionsFromTimeline": "Use timeline captions",
       "captionsHint": "{n} cues in the variable. AutoCaptions writes one text clip per segment — the button copies them here.",
       "captionsNoProject": "Open a project to pull its caption cues.",
-      "captionsFilled": "{n} caption cues copied from the text track",
+      "captionsFilled": "{n} caption cues copied from the caption rows",
       "captionsEmpty": "No captions on the timeline",
       "captionsEmptyHint": "Run AutoCaptions in Voice Studio (desktop) or add text clips first.",
       "frames": "frames",
@@ -2286,6 +2287,9 @@
   },
   "auth": {
     "welcomeBack": "Welcome back",
+    "heroTitle": "Cut, grade and ship in one studio surface",
+    "heroSubtitle": "Frame-accurate timeline, AI assistance and provider connections behind a single identity.",
+    "controlPlane": "Creative Studio",
     "signInToAccount": "Sign in to your account",
     "emailOrUsername": "Email or Username",
     "emailPlaceholder": "email{'@'}example.com or username",
@@ -2334,6 +2338,9 @@
   },
   "home": {
     "description": "Your video editing and AI production workspace",
+    "heroEyebrow": "TMCut Studio",
+    "heroTitle": "One surface from first cut to final export",
+    "heroSubtitle": "Timeline, AI tools and provider connections share one shell — no context switching.",
     "cards": {
       "tmcut": "Projects, editor, AutoCut and AI tools in one workspace",
       "connections": "Connect the AI providers and services the studio can use",
@@ -2479,7 +2486,15 @@
     "primaryDatabase": "Primary database",
     "uptime": "Uptime",
     "defaultPort": "Default port",
-    "systemDesc": "Runtime health of the local server and its shared database."
+    "systemDesc": "Runtime health of the local server and its shared database.",
+    "authProvider": "Auth provider",
+    "configured": "Configured",
+    "notConfigured": "Not configured",
+    "systemHealth": "System health",
+    "healthy": "Healthy",
+    "unhealthy": "Unhealthy",
+    "healthUnavailable": "Could not reach the local health endpoint.",
+    "supabase": "Database"
   },
   "aiProviders": {
     "title": "AI Providers & Models",

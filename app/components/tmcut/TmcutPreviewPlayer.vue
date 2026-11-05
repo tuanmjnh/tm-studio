@@ -15,12 +15,17 @@ import type { TmcutMixGraph } from '~/utils/tmcut/audioMixer'
 import { assetStateView, isMediaOffline } from '~/utils/tmcut/assetImport'
 import { useTmcutFrames } from '~/composables/useTmcutFrames'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
+import { useTmcutPlaybackBytes } from '~/composables/useTmcutPlaybackBytes'
 import { useTmcutRelink } from '~/composables/useTmcutRelink'
 
 const { t } = useI18n()
 const toast = useToast()
 const { available: canExtractFrames, extractFrame } = useTmcutFrames()
-const { proxyPreview, findAssetBySrc } = useTmcutMedia()
+const { proxyPreview, findAssetBySrc, resolvePlayPath } = useTmcutMedia()
+// Zero-FFmpeg slice G4b (ADR-033): the byte cache already holds this revision, so
+// the preview asks it for a `blob:` source instead of the server. Both legs —
+// footage plate and `<audio>` element — go through this one answer.
+const playbackBytes = useTmcutPlaybackBytes()
 const { relinkWithPicker } = useTmcutRelink()
 // Phase 5 (R90): runtime media decisions live behind one engine seam —
 // every playable URL and every desktop-only capability question goes
@@ -317,14 +322,22 @@ const monitorBoxStyle = computed(() => {
 // monitor now points as many elements at as many clips as core stacks: three
 // copies of the stabilize/proxy ladder (main, crossfade, stacked) was a drift
 // waiting to happen.
-function playableSrc(clip: TmcutTimelineItem | null | undefined): string {
+//
+// G4b puts the FILE question in one function too, and the wanted-list below
+// reads it: a stabilized clip plays a rendered file the byte cache has never
+// seen, and a proxy clip plays a 960px copy that is not the revision the clip
+// names. Asking the cache with `clip.src` for either would mount a url nothing
+// uses while the plate streams the one that matters.
+function sourcePathOf(clip: TmcutTimelineItem | null | undefined): string {
   if (!clip) return ''
-  if (clip.stabilize && clip.stabilizedPath) {
-    return previewEngine.resolveSrc(clip.stabilizedPath)
-  }
-  const src = clip.src
-  if (!src) return ''
-  return previewEngine.resolveSrc(src)
+  if (clip.stabilize && clip.stabilizedPath) return clip.stabilizedPath
+  return resolvePlayPath(clip.src)
+}
+
+function playableSrc(clip: TmcutTimelineItem | null | undefined): string {
+  const path = sourcePathOf(clip)
+  if (!path) return ''
+  return playbackBytes.srcFor(path, previewEngine.resolveSrc(path))
 }
 
 const currentMediaSrc = computed(() => playableSrc(activeVideoClip.value?.clip))
@@ -611,14 +624,19 @@ const audioClipsById = computed(() => {
 })
 
 const activeAudioSrcs = computed(() => {
-  const out: { id: string, src: string, mediaTime: number, rate: number }[] = []
+  const out: { id: string, path: string, src: string, mediaTime: number, rate: number }[] = []
   for (const source of audioMix.value.sources) {
     if (source.role !== 'audio' || !source.plays || source.mediaTicks === null) continue
     const clip = audioClipsById.value.get(source.clipId)
-    const src = clip?.src ? previewEngine.resolveSrc(clip.src) : ''
+    const path = sourcePathOf(clip)
+    const stream = path ? previewEngine.resolveSrc(path) : ''
+    // The same answer the footage plate gets, from the same ledger: an audio
+    // track's file and a video clip's file are both revisions the cache holds.
+    const src = playbackBytes.srcFor(path, stream)
     if (!src) continue
     out.push({
       id: source.clipId,
+      path,
       src,
       mediaTime: ticksToSec(source.mediaTicks),
       rate: source.rate
@@ -626,6 +644,37 @@ const activeAudioSrcs = computed(() => {
   }
   return out
 })
+
+// Every file the DOM has an element for right now (G4b). The stack and the mix
+// are asked together: a clip's plate and its `<audio>` element are one file, so
+// one read answers both, and a set that leaves out either leg would revoke a url
+// the other leg is still playing.
+const mountedMediaPaths = computed(() => {
+  const seen = new Set<string>()
+  const out: string[] = []
+  const push = (path?: string | null) => {
+    if (!path || seen.has(path)) return
+    seen.add(path)
+    out.push(path)
+  }
+  push(sourcePathOf(mainSurface.value?.clip))
+  push(sourcePathOf(crossfadeSurface.value?.clip))
+  for (const surface of stackedSurfaces.value) push(sourcePathOf(surface.clip))
+  for (const audio of activeAudioSrcs.value) push(audio.path)
+  return out
+})
+
+// The fingerprint rides the watch key on purpose. The media library finishes
+// loading after the first clip is on screen, so a key of paths alone would be
+// settled and empty of revisions — the clip would keep its stream url until the
+// playhead moved, and the cache would stay unread for the whole session.
+const mountedMediaKey = computed(() => mountedMediaPaths.value
+  .map(path => `${path}=${findAssetBySrc(path)?.fingerprint ?? ''}`)
+  .join('|'))
+
+watch(mountedMediaKey, () => {
+  playbackBytes.sync(mountedMediaPaths.value)
+}, { flush: 'post', immediate: true })
 
 function seekAudioElement(el: HTMLAudioElement, time: number) {
   try {
@@ -1476,6 +1525,10 @@ onUnmounted(() => {
   mixer.dispose()
   mixContext?.close().catch(() => { })
   mixContext = null
+  // Every `blob:` this preview made belongs to this component's lifetime: the
+  // ledger is module state, so urls that outlive the player would be both a leak
+  // and a stale source for the next preview (slice G4b, ADR-033).
+  playbackBytes.releaseAll()
 })
 </script>
 

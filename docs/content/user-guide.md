@@ -17,9 +17,9 @@ TMCut Studio là studio dựng video chạy trên nền TM Hub. Ứng dụng nà
 
 Phiên làm việc:
 
-- **Hồ sơ → Bảo mật** (`/system/profile/security`): đổi mật khẩu, xem các phiên đang đăng nhập và thu hồi phiên lạ.
-- **Hồ sơ → Phiên** (`/system/profile/sessions`): danh sách phiên chi tiết.
-- **Hồ sơ → Thông báo đẩy** (`/system/profile/push`): bật/tắt thông báo trình duyệt trên thiết bị này.
+- **Hồ sơ → Bảo mật** (`/system/settings/security`): đổi mật khẩu, xem các phiên đang đăng nhập và thu hồi phiên lạ.
+- **Hồ sơ → Phiên** (`/system/settings/sessions`): danh sách phiên chi tiết.
+- **Hồ sơ → Thông báo đẩy** (`/system/settings/push`): bật/tắt thông báo trình duyệt trên thiết bị này.
 
 ## 3. Điều hướng
 
@@ -114,7 +114,11 @@ Theo dõi các tác vụ nền (render, phân tích media, tách âm thanh). M�
 
 ## 8. Cài đặt hệ thống
 
-- `/system/settings` — tuỳ chọn chung của app: giao diện, ngôn ngữ, hiển thị.
+- `/system/settings/appearance` (hoặc `/system/settings`) — tuỳ chọn giao diện, theme sáng/tối, màu nhấn và ngôn ngữ hiển thị.
+- `/system/settings/profile` — thông tin cá nhân tài khoản.
+- `/system/settings/security` — quản lý đổi mật khẩu, 2FA, Passkeys và thiết bị đăng nhập.
+- `/system/settings/sessions` — quản lý các phiên làm việc hiện thời.
+- `/system/settings/push` — quản lý đăng ký thông báo đẩy trình duyệt.
 - `/system/settings/system` — thông tin môi trường, phiên bản, chẩn đoán.
 - `/system/settings/production` — cấu hình dành cho môi trường chạy thật; chỉ đổi khi biết rõ ảnh hưởng.
 

@@ -5,6 +5,9 @@
 .nitro
 .cache
 .playwright-mcp
+.tmp-design
+.superpowers
+scratch
 dist
 
 # Electron build outputs

@@ -1,6 +1,9 @@
 // =============================================================================
 //  tmcut-core — client byte cache law (zero-FFmpeg slice C2b, ADR-033)
-//  Pure decisions about a second copy of a media file kept in the browser.
+//  Pure decisions about a second copy of a media file kept in the browser:
+//  keys, budget, eviction — and since G4b, whether PLAYBACK runs off that copy
+//  instead of asking the server for the file again, plus which blob URLs the
+//  host still needs and which it must hand back.
 //  The storage side (OPFS / IndexedDB) lives in app/utils/tmcut/byteStore.ts;
 //  nothing here touches a browser API, so both hosts and plain node can run
 //  the same budget, key and eviction rules.
@@ -164,4 +167,66 @@ export function planByteCacheEviction(entries, budgetBytes, liveKeys = []) {
   }
 
   return { drop, keep, keptBytes, invalid }
+}
+
+/**
+ * Where one clip's playback bytes come from: the second copy the browser already
+ * holds, the server's copy, or neither.
+ *
+ * The cache holds a waveform under a derived key, and `cached` can be true for it.
+ * Only a SOURCE fingerprint may name media bytes to play, so this reads
+ * `isByteCacheKey` and not the storage union — the same reason `frames.mjs` refuses
+ * to name a frame from a waveform key.
+ *
+ * `cached` is a fact the caller measured, never something inferred here: this law
+ * cannot see OPFS. Anything other than a literal `true` means "not in the cache".
+ *
+ * @param {{fingerprint?: string|null, cached?: boolean, streamUrl?: string|null}} revision
+ * @returns {{kind: 'cache', key: string}
+ *   | {kind: 'stream', url: string, reason: string}
+ *   | {kind: 'unresolved', reason: string}}
+ */
+export function planPlaybackByteSource(revision) {
+  const { fingerprint, cached, streamUrl } = revision || {}
+  const hasRevision = isByteCacheKey(fingerprint)
+  if (hasRevision && cached === true) return { kind: 'cache', key: fingerprint }
+  const reason = hasRevision ? 'not-cached' : 'no-revision'
+  const hasStream = typeof streamUrl === 'string' && streamUrl !== ''
+  if (!hasStream) return { kind: 'unresolved', reason }
+  return { kind: 'stream', url: streamUrl, reason }
+}
+
+function byKey(a, b) {
+  return a.key < b.key ? -1 : a.key > b.key ? 1 : 0
+}
+
+function hasUrl(url) {
+  return typeof url === 'string' && url !== ''
+}
+
+/**
+ * What the host must do to its blob URLs when the set of live revisions changes.
+ *
+ * `held` maps a revision key to the URL created for it; `wanted` is every revision
+ * a surface is mounting right now — the footage plate and the audio element of one
+ * clip name the same revision, so the same key arrives many times and still gets
+ * one URL. A URL is revoked only when NO surface wants its revision, which is what
+ * keeps a shared file from going silent while another element is still playing it.
+ *
+ * Rows with no URL in them are dropped rather than revoked: a failed create leaves
+ * nothing to hand back, and inventing a URL to revoke is a crash.
+ *
+ * @param {Record<string, string|null>} held
+ * @param {Iterable<string>} wanted
+ * @returns {{keep: Array<{key: string, url: string}>, create: string[], revoke: Array<{key: string, url: string}>}}
+ */
+export function planBlobUrlLifecycle(held, wanted) {
+  const rows = Object.entries(held || {}).filter(([, url]) => hasUrl(url))
+  const need = new Set(Array.from(wanted || []).filter(isByteCacheKey))
+
+  const keep = rows.filter(([key]) => need.has(key)).map(([key, url]) => ({ key, url })).sort(byKey)
+  const revoke = rows.filter(([key]) => !need.has(key)).map(([key, url]) => ({ key, url })).sort(byKey)
+  const create = [...need].filter(key => !(key in (held || {}))).sort()
+
+  return { keep, create, revoke }
 }

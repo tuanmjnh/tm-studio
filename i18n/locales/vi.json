@@ -10,7 +10,8 @@
     "confirm": "Xác nhận",
     "success": "Thành công",
     "copied": "Đã sao chép",
-    "showingCount": "Hiển thị {count} trên {total} mục"
+    "showingCount": "Hiển thị {count} trên {total} mục",
+    "retry": "Thử lại"
   },
   "error": {
     "validation": "Vui lòng kiểm tra lại dữ liệu nhập",
@@ -124,7 +125,7 @@
     "permissions": "Phân quyền",
     "routes": "Menu Routes",
     "profile": "Hồ sơ",
-    "docs": "Tài liệu API",
+    "docs": "Tài liệu",
     "queues": "Hàng đợi",
     "overview": "Tổng quan",
     "apps": "Quản lý Ứng dụng",
@@ -1772,7 +1773,7 @@
       "captionsFromTimeline": "Lấy phụ đề từ timeline",
       "captionsHint": "Biến đang có {n} đoạn cues. AutoCaptions ghi mỗi đoạn thành một text clip — nút này chép chúng vào đây.",
       "captionsNoProject": "Mở một dự án để lấy cues phụ đề.",
-      "captionsFilled": "Đã chép {n} đoạn phụ đề từ track text",
+      "captionsFilled": "Đã chép {n} đoạn phụ đề từ các track phụ đề",
       "captionsEmpty": "Timeline chưa có phụ đề",
       "captionsEmptyHint": "Chạy AutoCaptions trong Voice Studio (bản desktop) hoặc thêm text clip trước.",
       "frames": "khung hình",
@@ -2286,6 +2287,9 @@
   },
   "auth": {
     "welcomeBack": "Chào mừng trở lại",
+    "heroTitle": "Cắt, chỉnh màu và xuất bản trong một bề mặt studio",
+    "heroSubtitle": "Timeline frame-accurate, trợ lý AI và kết nối nhà cung cấp sau một danh tính duy nhất.",
+    "controlPlane": "Creative Studio",
     "signInToAccount": "Đăng nhập vào tài khoản của bạn",
     "emailOrUsername": "Email hoặc tên đăng nhập",
     "emailPlaceholder": "email{'@'}example.com hoặc tên đăng nhập",
@@ -2334,6 +2338,9 @@
   },
   "home": {
     "description": "Không gian biên tập video và sản xuất bằng AI của bạn",
+    "heroEyebrow": "TMCut Studio",
+    "heroTitle": "Một bề mặt từ cú cắt đầu tiên đến bản xuất cuối",
+    "heroSubtitle": "Timeline, công cụ AI và kết nối nhà cung cấp dùng chung một vỏ — không phải chuyển ngữ cảnh.",
     "cards": {
       "tmcut": "Dự án, editor, AutoCut và công cụ AI trong một workspace",
       "connections": "Kết nối nhà cung cấp AI và dịch vụ cho studio sử dụng",
@@ -2479,7 +2486,15 @@
     "primaryDatabase": "Cơ sở dữ liệu chính",
     "uptime": "Thời gian hoạt động",
     "defaultPort": "Cổng mặc định",
-    "systemDesc": "Tình trạng máy chủ cục bộ và cơ sở dữ liệu dùng chung."
+    "systemDesc": "Tình trạng máy chủ cục bộ và cơ sở dữ liệu dùng chung.",
+    "authProvider": "Nhà cung cấp xác thực",
+    "configured": "Đã cấu hình",
+    "notConfigured": "Chưa cấu hình",
+    "systemHealth": "Tình trạng hệ thống",
+    "healthy": "Hoạt động bình thường",
+    "unhealthy": "Có sự cố",
+    "healthUnavailable": "Không gọi được endpoint health cục bộ.",
+    "supabase": "Database"
   },
   "aiProviders": {
     "title": "Nhà cung cấp & Mô hình AI",

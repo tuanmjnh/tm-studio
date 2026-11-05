@@ -1,10 +1,13 @@
 <div class="spa-loading-overlay" role="status" aria-live="polite" aria-label="Loading TMCut Studio">
+  <div class="spa-aurora" aria-hidden="true"></div>
+  <div class="spa-orb spa-orb-1" aria-hidden="true"></div>
+  <div class="spa-orb spa-orb-2" aria-hidden="true"></div>
+  <div class="spa-iso" aria-hidden="true"></div>
+
   <div class="spa-loading-content">
-    <div class="spa-logo-wrap">
-      <div class="spa-logo-glow"></div>
-      <div class="spa-logo-box">
-        <img src="/logo.svg" alt="" width="44" height="44" decoding="async">
-      </div>
+    <div class="spa-logo-box">
+      <span class="spa-logo-sheen" aria-hidden="true"></span>
+      <img src="/logo.svg" alt="" width="36" height="36" decoding="async">
     </div>
 
     <div class="spa-brand">
@@ -13,82 +16,181 @@
     </div>
 
     <div class="spa-loader">
-      <div class="spa-dots" aria-hidden="true">
-        <span></span>
-        <span></span>
-        <span></span>
-      </div>
-      <div class="spa-bar" aria-hidden="true"></div>
+      <div class="spa-bar" aria-hidden="true"><span></span></div>
       <span class="spa-status">Initializing<span class="spa-status-dots"><span>.</span><span>.</span><span>.</span></span></span>
     </div>
   </div>
 </div>
 
 <style>
+  /* Same token language as app/assets/css/{glass,decor}.css — this file boots
+     before any stylesheet, so the values are inlined here. */
+  html {
+    --spa-bg: #ffffff;
+    --spa-fg: #0f172a;
+    --spa-muted: #64748b;
+    --spa-line: rgba(15, 23, 42, 0.08);
+    --spa-panel: rgba(255, 255, 255, 0.72);
+    --spa-sheen: rgba(255, 255, 255, 0.9);
+    --spa-primary: #8e51ff;
+    --spa-primary-soft: rgba(142, 81, 255, 0.16);
+    --spa-aurora-1: rgba(142, 81, 255, 0.1);
+    --spa-aurora-2: rgba(99, 102, 241, 0.08);
+    --spa-aurora-3: rgba(45, 212, 191, 0.07);
+    --spa-orb-1: rgba(142, 81, 255, 0.2);
+    --spa-orb-2: rgba(99, 102, 241, 0.14);
+    --spa-specular: rgba(255, 255, 255, 0.6);
+    --spa-grid: rgba(15, 23, 42, 0.05);
+    --spa-track: rgba(15, 23, 42, 0.07);
+  }
+
+  html.dark {
+    --spa-bg: #0f172a;
+    --spa-fg: #f1f5f9;
+    --spa-muted: #94a3b8;
+    --spa-line: rgba(148, 163, 184, 0.16);
+    --spa-panel: rgba(30, 41, 59, 0.55);
+    --spa-sheen: rgba(255, 255, 255, 0.1);
+    --spa-primary: #a78bfa;
+    --spa-primary-soft: rgba(167, 139, 250, 0.22);
+    --spa-aurora-1: rgba(142, 81, 255, 0.24);
+    --spa-aurora-2: rgba(99, 102, 241, 0.2);
+    --spa-aurora-3: rgba(45, 212, 191, 0.13);
+    --spa-orb-1: rgba(142, 81, 255, 0.3);
+    --spa-orb-2: rgba(99, 102, 241, 0.2);
+    --spa-specular: rgba(255, 255, 255, 0.26);
+    --spa-grid: rgba(148, 163, 184, 0.09);
+    --spa-track: rgba(148, 163, 184, 0.14);
+  }
+
+  /* System preference wins until the color-mode class is applied. */
+  @media (prefers-color-scheme: dark) {
+    html:not(.light) {
+      --spa-bg: #0f172a;
+      --spa-fg: #f1f5f9;
+      --spa-muted: #94a3b8;
+      --spa-line: rgba(148, 163, 184, 0.16);
+      --spa-panel: rgba(30, 41, 59, 0.55);
+      --spa-sheen: rgba(255, 255, 255, 0.1);
+      --spa-primary: #a78bfa;
+      --spa-aurora-1: rgba(142, 81, 255, 0.24);
+      --spa-aurora-2: rgba(99, 102, 241, 0.2);
+      --spa-aurora-3: rgba(45, 212, 191, 0.13);
+      --spa-orb-1: rgba(142, 81, 255, 0.3);
+      --spa-orb-2: rgba(99, 102, 241, 0.2);
+      --spa-specular: rgba(255, 255, 255, 0.26);
+      --spa-grid: rgba(148, 163, 184, 0.09);
+      --spa-track: rgba(148, 163, 184, 0.14);
+    }
+  }
+
   .spa-loading-overlay {
     position: fixed;
     inset: 0;
     z-index: 99999;
+    overflow: hidden;
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
-    background: #f8fafc;
-    background-image:
-      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59, 130, 246, 0.12), transparent),
-      radial-gradient(ellipse 60% 40% at 80% 100%, rgba(99, 102, 241, 0.08), transparent);
-    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background-color: var(--spa-bg);
+    color: var(--spa-fg);
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    color: #0f172a;
   }
 
-  @media (prefers-color-scheme: dark) {
-    .spa-loading-overlay {
-      background: #0f172a;
-      background-image:
-        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59, 130, 246, 0.15), transparent),
-        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(99, 102, 241, 0.1), transparent);
-      color: #f1f5f9;
-    }
+  /* ---- decor: aurora mesh, two glowing orbs, isometric grid ---- */
+
+  .spa-aurora {
+    position: absolute;
+    inset: -20%;
+    pointer-events: none;
+    background-image:
+      radial-gradient(42% 38% at 16% 10%, var(--spa-aurora-1) 0%, transparent 62%),
+      radial-gradient(38% 42% at 84% 6%, var(--spa-aurora-2) 0%, transparent 64%),
+      radial-gradient(46% 40% at 70% 78%, var(--spa-aurora-3) 0%, transparent 66%),
+      radial-gradient(36% 36% at 28% 92%, var(--spa-aurora-1) 0%, transparent 68%);
+    background-repeat: no-repeat;
+    background-size: 140% 140%;
   }
+
+  .spa-orb {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+  }
+
+  .spa-orb-1 {
+    top: -24vmin;
+    right: -16vmin;
+    width: min(52rem, 76vw);
+    aspect-ratio: 1;
+    background-image:
+      radial-gradient(circle at 34% 28%, var(--spa-specular) 0%, transparent 34%),
+      radial-gradient(circle at 48% 46%, var(--spa-orb-1) 0%, transparent 68%);
+  }
+
+  .spa-orb-2 {
+    bottom: -28vmin;
+    left: -20vmin;
+    width: min(44rem, 68vw);
+    aspect-ratio: 1;
+    background-image:
+      radial-gradient(circle at 38% 30%, var(--spa-specular) 0%, transparent 36%),
+      radial-gradient(circle at 50% 50%, var(--spa-orb-2) 0%, transparent 70%);
+  }
+
+  .spa-iso {
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 460px;
+    pointer-events: none;
+    background-image:
+      repeating-linear-gradient(to right, var(--spa-grid) 0 1px, transparent 1px 48px),
+      repeating-linear-gradient(to bottom, var(--spa-grid) 0 1px, transparent 1px 48px);
+    transform: perspective(700px) rotateX(58deg) scale(1.4);
+    transform-origin: top center;
+    -webkit-mask-image: linear-gradient(to bottom, black 0%, transparent 62%);
+    mask-image: linear-gradient(to bottom, black 0%, transparent 62%);
+  }
+
+  /* ---------------------------------------------- centered boot content */
 
   .spa-loading-content {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 1.75rem;
+    gap: 1.5rem;
     padding: 2rem;
-    animation: spa-fade-in 0.4s ease-out;
-  }
-
-  .spa-logo-wrap {
-    position: relative;
-    width: 4.5rem;
-    height: 4.5rem;
-  }
-
-  .spa-logo-glow {
-    position: absolute;
-    inset: -0.75rem;
-    border-radius: 1.5rem;
-    background: rgba(124, 58, 237, 0.35);
-    filter: blur(20px);
-    animation: spa-glow-pulse 2.5s ease-in-out infinite;
   }
 
   .spa-logo-box {
     position: relative;
-    width: 4.5rem;
-    height: 4.5rem;
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 3.5rem;
+    height: 3.5rem;
+    border-radius: 6px;
+    overflow: hidden;
+    background-color: var(--spa-panel);
+    border: 1px solid var(--spa-line);
+    box-shadow:
+      inset 0 1px 0 var(--spa-sheen),
+      0 18px 40px -30px rgba(2, 6, 23, 0.6);
+  }
+
+  .spa-logo-sheen {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: linear-gradient(118deg, var(--spa-sheen) 0%, rgba(255, 255, 255, 0.03) 30%, transparent 42%);
   }
 
   .spa-logo-box img {
-    width: 4.5rem;
-    height: 4.5rem;
+    width: 2.25rem;
+    height: 2.25rem;
     display: block;
     object-fit: contain;
   }
@@ -97,132 +199,62 @@
     text-align: center;
     display: flex;
     flex-direction: column;
-    gap: 0.375rem;
+    gap: 0.25rem;
   }
 
   .spa-brand h1 {
-    font-size: 1.25rem;
-    font-weight: 700;
-    letter-spacing: -0.03em;
-    line-height: 1.2;
-    color: #0f172a;
     margin: 0;
-  }
-
-  @media (prefers-color-scheme: dark) {
-    .spa-brand h1 {
-      color: #f8fafc;
-    }
+    font-size: 1.0625rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    color: var(--spa-fg);
   }
 
   .spa-brand p {
-    font-size: 0.75rem;
-    font-weight: 400;
-    line-height: 1.5;
-    color: #64748b;
-    max-width: 16rem;
     margin: 0;
-  }
-
-  @media (prefers-color-scheme: dark) {
-    .spa-brand p {
-      color: #94a3b8;
-    }
+    font-size: 0.75rem;
+    line-height: 1.5;
+    color: var(--spa-muted);
+    max-width: 18rem;
   }
 
   .spa-loader {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.875rem;
-    margin-top: 0.5rem;
+    gap: 0.75rem;
   }
 
-  /* 3 dots wave animation */
-  .spa-dots {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.4375rem;
-    height: 1.25rem;
-  }
-
-  .spa-dots span {
-    width: 0.5rem;
-    height: 0.5rem;
-    border-radius: 50%;
-    display: inline-block;
-    animation: spa-dot-wave 1.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
-    -webkit-animation: spa-dot-wave 1.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
-    will-change: transform, opacity;
-  }
-
-  .spa-dots span:nth-child(1) {
-    background: #3b82f6;
-    animation-delay: 0s;
-    -webkit-animation-delay: 0s;
-  }
-
-  .spa-dots span:nth-child(2) {
-    background: #6366f1;
-    animation-delay: 0.18s;
-    -webkit-animation-delay: 0.18s;
-  }
-
-  .spa-dots span:nth-child(3) {
-    background: #8b5cf6;
-    animation-delay: 0.36s;
-    -webkit-animation-delay: 0.36s;
-  }
-
-  /* Progress bar with flowing glow */
   .spa-bar {
-    width: 8rem;
-    height: 3px;
-    border-radius: 9999px;
-    background: rgba(148, 163, 184, 0.2);
-    overflow: hidden;
     position: relative;
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
+    width: 10rem;
+    height: 3px;
+    border-radius: 2px;
+    overflow: hidden;
+    background-color: var(--spa-track);
   }
 
-  @media (prefers-color-scheme: dark) {
-    .spa-bar {
-      background: rgba(148, 163, 184, 0.12);
-      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
-    }
-  }
-
-  .spa-bar::after {
-    content: '';
+  .spa-bar span {
     position: absolute;
     top: 0;
     bottom: 0;
     left: 0;
-    width: 45%;
-    border-radius: 9999px;
-    background: linear-gradient(90deg, rgba(59, 130, 246, 0) 0%, #3b82f6 30%, #6366f1 70%, #8b5cf6 100%);
-    box-shadow: 0 0 12px rgba(99, 102, 241, 0.75), 0 0 4px rgba(59, 130, 246, 0.5);
+    width: 42%;
+    border-radius: 2px;
+    background-image: linear-gradient(90deg, transparent 0%, var(--spa-primary) 60%, var(--spa-primary) 100%);
+    box-shadow: 0 0 10px var(--spa-primary-soft);
     animation: spa-bar-slide 1.5s cubic-bezier(0.65, 0, 0.35, 1) infinite;
-    -webkit-animation: spa-bar-slide 1.5s cubic-bezier(0.65, 0, 0.35, 1) infinite;
-    will-change: transform;
   }
 
-  /* Status text with animated ellipsis */
   .spa-status {
     display: inline-flex;
     align-items: center;
-    font-size: 0.6875rem;
+    font-size: 0.625rem;
     font-weight: 600;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.16em;
     text-transform: uppercase;
-    color: #64748b;
-  }
-
-  @media (prefers-color-scheme: dark) {
-    .spa-status {
-      color: #94a3b8;
-    }
+    color: var(--spa-muted);
   }
 
   .spa-status-dots {
@@ -234,99 +266,31 @@
     display: inline-block;
     opacity: 0;
     animation: spa-dot-step 1.4s infinite;
-    -webkit-animation: spa-dot-step 1.4s infinite;
   }
 
-  .spa-status-dots span:nth-child(1) {
-    animation-delay: 0s;
-    -webkit-animation-delay: 0s;
-  }
-
-  .spa-status-dots span:nth-child(2) {
-    animation-delay: 0.22s;
-    -webkit-animation-delay: 0.22s;
-  }
-
-  .spa-status-dots span:nth-child(3) {
-    animation-delay: 0.44s;
-    -webkit-animation-delay: 0.44s;
-  }
-
-  @keyframes spa-fade-in {
-    from {
-      opacity: 0;
-      transform: translateY(8px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  @keyframes spa-glow-pulse {
-    0%, 100% {
-      opacity: 0.6;
-      transform: scale(1);
-    }
-    50% {
-      opacity: 1;
-      transform: scale(1.05);
-    }
-  }
-
-  @keyframes spa-dot-wave {
-    0%, 100% {
-      transform: translateY(0) scale(0.9);
-      opacity: 0.4;
-    }
-    50% {
-      transform: translateY(-8px) scale(1.15);
-      opacity: 1;
-      box-shadow: 0 4px 10px rgba(99, 102, 241, 0.45);
-    }
-  }
+  .spa-status-dots span:nth-child(1) { animation-delay: 0s; }
+  .spa-status-dots span:nth-child(2) { animation-delay: 0.22s; }
+  .spa-status-dots span:nth-child(3) { animation-delay: 0.44s; }
 
   @keyframes spa-bar-slide {
-    0% {
-      transform: translateX(-120%) scaleX(0.7);
-    }
-    50% {
-      transform: translateX(90%) scaleX(1.3);
-    }
-    100% {
-      transform: translateX(310%) scaleX(0.7);
-    }
+    0% { transform: translateX(-120%) scaleX(0.7); }
+    50% { transform: translateX(90%) scaleX(1.2); }
+    100% { transform: translateX(310%) scaleX(0.7); }
   }
 
   @keyframes spa-dot-step {
-    0%, 20% {
-      opacity: 0;
-      transform: translateY(0);
-    }
-    40%, 80% {
-      opacity: 1;
-      transform: translateY(-0.5px);
-    }
-    90%, 100% {
-      opacity: 0;
-      transform: translateY(0);
-    }
+    0%, 20% { opacity: 0; }
+    40%, 80% { opacity: 1; }
+    90%, 100% { opacity: 0; }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .spa-loading-content,
-    .spa-logo-glow,
-    .spa-dots span,
-    .spa-bar::after,
+    .spa-bar span,
     .spa-status-dots span {
       animation: none;
     }
 
-    .spa-dots span {
-      opacity: 0.7;
-    }
-
-    .spa-bar::after {
+    .spa-bar span {
       width: 100%;
       transform: none;
     }

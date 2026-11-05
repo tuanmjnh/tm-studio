@@ -1,4 +1,4 @@
-import { checkStockSearchUrl, sanitizeStockHeaders } from '../../../../shared/utils/stockGuards'
+import { checkStockSearchUrl, sanitizeStockHeaders } from '#shared/utils/stockGuards'
 
 /**
  * Stock search proxy for the WEB runtime (kho tài nguyên).

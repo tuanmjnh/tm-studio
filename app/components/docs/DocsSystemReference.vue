@@ -44,7 +44,7 @@ async function copyCode(key: string, code: string) {
   copiedKey.value = key
   setTimeout(() => {
     if (copiedKey.value === key) copiedKey.value = ''
-  }, 1500)
+  }, POLLING.uiResetMs)
 }
 
 function getMethodBadgeColor(method: string) {

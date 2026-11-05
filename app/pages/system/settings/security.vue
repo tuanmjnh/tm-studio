@@ -1,12 +1,7 @@
 <script setup lang="ts">
 import * as z from 'zod'
-import type { NavigationMenuItem } from '@nuxt/ui'
 import type { PasskeyInfo } from '#shared/types/webauthn'
 import { getErrorMessage } from '~/shared/utils/errors'
-
-definePageMeta({
-  alias: ['/profile/security', '/system/security', '/settings/security']
-})
 
 const { t } = useI18n()
 const notify = useNotify()
@@ -113,7 +108,7 @@ const confirmDeletePasskey = async () => {
   try {
     await passkeyApi.remove(passkeyDeleteTarget.value.credentialId)
     notify.success(t('profile.passkeyDeleted'))
-    passkeys.value = passkeys.value.filter(p => p.id !== passkeyDeleteTarget.value?.id)
+    passkeys.value = passkeys.value.filter((p: PasskeyInfo) => p.id !== passkeyDeleteTarget.value?.id)
   } catch (err) {
     notify.error(getErrorMessage(err, key => t(key)))
   } finally {
@@ -203,13 +198,6 @@ const disableTotp = async () => {
   }
 }
 
-const navItems = computed<NavigationMenuItem[]>(() => [
-  { label: t('profile.info'), icon: 'i-lucide-user', to: '/system/profile' },
-  { label: t('profile.security'), icon: 'i-lucide-shield', to: '/system/profile/security' },
-  { label: t('profile.sessions'), icon: 'i-lucide-monitor-smartphone', to: '/system/profile/sessions' },
-  { label: t('notifications.pushTitle'), icon: 'i-lucide-radio-tower', to: '/system/profile/push' }
-])
-
 const mobileBar = useMobileBar()
 mobileBar.registerActions(computed(() => [
   {
@@ -225,8 +213,8 @@ useHead({ title: computed(() => t('profile.security')) })
 </script>
 
 <template>
-  <BasePage id="profile" :title="t('profile.security')" :description="t('settings.passwordDesc')">
-    <template #right>
+  <div class="flex flex-col gap-4">
+    <div class="flex flex-wrap items-center justify-end gap-2">
       <UButton
         type="submit"
         form="security-form"
@@ -234,139 +222,136 @@ useHead({ title: computed(() => t('profile.security')) })
         :label="t('profile.changePassword')"
         color="primary"
         variant="soft"
-        :ui="{ label: 'hidden md:block' }"
         :loading="passwordLoading"
       />
-    </template>
+    </div>
 
-    <BaseSectionNav :items="navItems">
-      <UCard>
-        <template #header>
+    <UCard>
+      <template #header>
+        <div class="flex items-center gap-2">
+          <UIcon name="i-lucide-key-round" class="size-5 text-primary" />
+          <h3 class="font-semibold">
+            {{ t('profile.changePassword') }}
+          </h3>
+        </div>
+      </template>
+      <UForm
+        id="security-form"
+        :schema="schema"
+        :state="passwordForm"
+        class="space-y-5"
+        @submit="changePassword"
+      >
+        <UFormField name="currentPassword" :label="t('profile.currentPassword')" required>
+          <BasePasswordInput v-model="passwordForm.currentPassword" size="lg" class="w-full" />
+        </UFormField>
+        <div class="grid gap-5 sm:grid-cols-2">
+          <UFormField name="newPassword" :label="t('profile.newPassword')" required>
+            <BasePasswordInput v-model="passwordForm.newPassword" size="lg" class="w-full" />
+          </UFormField>
+          <UFormField name="confirmPassword" :label="t('profile.confirmPassword')" required>
+            <BasePasswordInput v-model="passwordForm.confirmPassword" size="lg" class="w-full" />
+          </UFormField>
+        </div>
+      </UForm>
+    </UCard>
+
+    <UCard v-if="passkeyEnabled && meLoaded">
+      <template #header>
+        <div class="flex items-center justify-between gap-2">
           <div class="flex items-center gap-2">
-            <UIcon name="i-lucide-key-round" class="size-5 text-primary" />
+            <UIcon name="i-lucide-fingerprint" class="size-5 text-primary" />
             <h3 class="font-semibold">
-              {{ t('profile.changePassword') }}
+              {{ t('profile.passkeysTitle') }}
             </h3>
           </div>
-        </template>
-        <UForm
-          id="security-form"
-          :schema="schema"
-          :state="passwordForm"
-          class="space-y-5"
-          @submit="changePassword"
-        >
-          <UFormField name="currentPassword" :label="t('profile.currentPassword')" required>
-            <BasePasswordInput v-model="passwordForm.currentPassword" size="lg" class="w-full" />
-          </UFormField>
-          <div class="grid gap-5 sm:grid-cols-2">
-            <UFormField name="newPassword" :label="t('profile.newPassword')" required>
-              <BasePasswordInput v-model="passwordForm.newPassword" size="lg" class="w-full" />
-            </UFormField>
-            <UFormField name="confirmPassword" :label="t('profile.confirmPassword')" required>
-              <BasePasswordInput v-model="passwordForm.confirmPassword" size="lg" class="w-full" />
-            </UFormField>
-          </div>
-        </UForm>
-      </UCard>
-
-      <UCard v-if="passkeyEnabled && meLoaded">
-        <template #header>
-          <div class="flex items-center justify-between gap-2">
-            <div class="flex items-center gap-2">
-              <UIcon name="i-lucide-fingerprint" class="size-5 text-primary" />
-              <h3 class="font-semibold">
-                {{ t('profile.passkeysTitle') }}
-              </h3>
-            </div>
-            <UButton
-              icon="i-lucide-plus"
-              size="sm"
-              color="neutral"
-              variant="soft"
-              :label="t('profile.passkeyAdd')"
-              :loading="passkeyAddLoading"
-              @click="addPasskey"
-            />
-          </div>
-        </template>
-
-        <p class="text-sm text-muted mb-4">
-          {{ t('profile.passkeysDesc') }}
-        </p>
-
-        <div v-if="passkeyLoading" class="flex justify-center py-6">
-          <UIcon name="i-lucide-loader-circle" class="size-5 animate-spin text-muted" />
+          <UButton
+            icon="i-lucide-plus"
+            size="sm"
+            color="neutral"
+            variant="soft"
+            :label="t('profile.passkeyAdd')"
+            :loading="passkeyAddLoading"
+            @click="addPasskey"
+          />
         </div>
+      </template>
 
-        <div v-else-if="!passkeys.length" class="text-sm text-muted py-4">
-          {{ t('profile.noPasskeys') }}
-        </div>
+      <p class="text-sm text-muted mb-4">
+        {{ t('profile.passkeysDesc') }}
+      </p>
 
-        <ul v-else class="divide-y divide-default">
-          <li v-for="pk in passkeys" :key="pk.id" class="flex items-center justify-between gap-3 py-3">
-            <div class="min-w-0">
-              <p class="text-sm font-medium truncate">
-                {{ pk.deviceName || t('profile.passkeyDefaultName') }}
-              </p>
-              <p class="text-xs text-muted">
-                {{ t('profile.passkeyCreated') }}: {{ new Date(pk.createdAt).toLocaleDateString() }}
-                <template v-if="pk.lastUsedAt">
-                  · {{ t('profile.passkeyLastUsed') }}: {{ new Date(pk.lastUsedAt).toLocaleDateString() }}
-                </template>
-              </p>
-            </div>
-            <UButton
-              icon="i-lucide-trash-2"
-              size="xs"
-              color="error"
-              variant="ghost"
-              :aria-label="t('profile.passkeyDelete')"
-              @click="passkeyDeleteTarget = pk; passkeyDeleteOpen = true"
-            />
-          </li>
-        </ul>
-      </UCard>
+      <div v-if="passkeyLoading" class="flex justify-center py-6">
+        <UIcon name="i-lucide-loader-circle" class="size-5 animate-spin text-muted" />
+      </div>
 
-      <UCard v-if="totpFeatureEnabled && meLoaded">
-        <template #header>
-          <div class="flex items-center justify-between gap-2">
-            <div class="flex items-center gap-2">
-              <UIcon name="i-lucide-shield-check" class="size-5 text-primary" />
-              <h3 class="font-semibold">
-                {{ t('profile.totpTitle') }}
-              </h3>
-              <UBadge :color="totpEnabled ? 'success' : 'neutral'" variant="subtle" size="sm">
-                {{ totpEnabled ? t('profile.totpOn') : t('profile.totpOff') }}
-              </UBadge>
-            </div>
-            <UButton
-              v-if="!totpEnabled"
-              icon="i-lucide-shield"
-              size="sm"
-              color="primary"
-              variant="soft"
-              :label="t('profile.totpEnable')"
-              :loading="totpSetupLoading"
-              @click="openTotpSetup"
-            />
-            <UButton
-              v-else
-              icon="i-lucide-shield-off"
-              size="sm"
-              color="error"
-              variant="soft"
-              :label="t('profile.totpDisable')"
-              @click="totpDisableOpen = true"
-            />
+      <div v-else-if="!passkeys.length" class="text-sm text-muted py-4">
+        {{ t('profile.noPasskeys') }}
+      </div>
+
+      <ul v-else class="divide-y divide-default">
+        <li v-for="pk in passkeys" :key="pk.id" class="flex items-center justify-between gap-3 py-3">
+          <div class="min-w-0">
+            <p class="text-sm font-medium truncate">
+              {{ pk.deviceName || t('profile.passkeyDefaultName') }}
+            </p>
+            <p class="text-xs text-muted">
+              {{ t('profile.passkeyCreated') }}: {{ new Date(pk.createdAt).toLocaleDateString() }}
+              <template v-if="pk.lastUsedAt">
+                · {{ t('profile.passkeyLastUsed') }}: {{ new Date(pk.lastUsedAt).toLocaleDateString() }}
+              </template>
+            </p>
           </div>
-        </template>
+          <UButton
+            icon="i-lucide-trash-2"
+            size="xs"
+            color="error"
+            variant="ghost"
+            :aria-label="t('profile.passkeyDelete')"
+            @click="passkeyDeleteTarget = pk; passkeyDeleteOpen = true"
+          />
+        </li>
+      </ul>
+    </UCard>
 
-        <p class="text-sm text-muted">
-          {{ t('profile.totpDesc') }}
-        </p>
-      </UCard>
-    </BaseSectionNav>
+    <UCard v-if="totpFeatureEnabled && meLoaded">
+      <template #header>
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <UIcon name="i-lucide-shield-check" class="size-5 text-primary" />
+            <h3 class="font-semibold">
+              {{ t('profile.totpTitle') }}
+            </h3>
+            <UBadge :color="totpEnabled ? 'success' : 'neutral'" variant="subtle" size="sm">
+              {{ totpEnabled ? t('profile.totpOn') : t('profile.totpOff') }}
+            </UBadge>
+          </div>
+          <UButton
+            v-if="!totpEnabled"
+            icon="i-lucide-shield"
+            size="sm"
+            color="primary"
+            variant="soft"
+            :label="t('profile.totpEnable')"
+            :loading="totpSetupLoading"
+            @click="openTotpSetup"
+          />
+          <UButton
+            v-else
+            icon="i-lucide-shield-off"
+            size="sm"
+            color="error"
+            variant="soft"
+            :label="t('profile.totpDisable')"
+            @click="totpDisableOpen = true"
+          />
+        </div>
+      </template>
+
+      <p class="text-sm text-muted">
+        {{ t('profile.totpDesc') }}
+      </p>
+    </UCard>
 
     <UModal v-model:open="passkeyDeleteOpen" :title="t('profile.passkeyDelete')" icon="i-lucide-trash-2">
       <template #body>
@@ -499,5 +484,5 @@ useHead({ title: computed(() => t('profile.security')) })
         </div>
       </template>
     </UModal>
-  </BasePage>
+  </div>
 </template>

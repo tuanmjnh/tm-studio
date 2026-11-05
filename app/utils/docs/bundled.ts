@@ -1,5 +1,5 @@
 import { HUB_DOCS_CONTENT } from '#shared/docs/content'
-import userGuideMarkdown from '../../../docs/user-guide.md?raw'
+import userGuideMarkdown from '../../../docs/content/user-guide.md?raw'
 import type { DocsArticle } from '~/types/docs'
 
 /**

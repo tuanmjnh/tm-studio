@@ -44,8 +44,8 @@ const groups = computed<CommandPaletteGroup[]>(() => [{
       v-model:open="open"
       collapsible
       resizable
-      class="bg-elevated/60 backdrop-blur-md border-e border-default"
-      :ui="{ footer: 'lg:border-t lg:border-default' }"
+      class="tm-chrome border-e border-default/70"
+      :ui="{ footer: 'lg:border-t lg:border-default/70' }"
     >
       <template #header="{ collapsed }">
         <LazyDashboardTeamsMenu :collapsed="collapsed" />
@@ -65,6 +65,10 @@ const groups = computed<CommandPaletteGroup[]>(() => [{
           orientation="vertical"
           tooltip
           popover
+          :ui="{
+            link: 'data-[active]:text-highlighted! data-[active]:before:bg-primary/10 data-[active]:before:ring-1 data-[active]:before:ring-inset data-[active]:before:ring-primary/25 data-[state=open]:text-highlighted! data-[state=open]:before:bg-primary/10 data-[state=open]:before:ring-1 data-[state=open]:before:ring-inset data-[state=open]:before:ring-primary/25',
+            childLink: 'data-[active]:text-highlighted! data-[active]:before:bg-primary/10 data-[active]:before:ring-1 data-[active]:before:ring-inset data-[active]:before:ring-primary/25'
+          }"
         />
       </template>
 

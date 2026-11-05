@@ -25,7 +25,7 @@ import {
   isWithinLimit,
   resolveInside,
   runRelativePath
-} from '../../shared/utils/processStore'
+} from '#shared/utils/processStore'
 
 export interface ProcessRunSummary {
   runId: string

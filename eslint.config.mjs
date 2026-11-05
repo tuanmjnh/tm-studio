@@ -12,6 +12,7 @@ export default withNuxt({
   // callbacks that have no ambient types — `any` is intentional there.
   files: ['tests/**/*.mts', 'tests/e2e/**/*.cjs'],
   rules: {
-    '@typescript-eslint/no-explicit-any': 'off'
+    '@typescript-eslint/no-explicit-any': 'off',
+    '@ts-expect-error': 'off'
   }
 })

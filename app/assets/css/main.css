@@ -4,6 +4,8 @@
 @import "@nuxt/ui";
 @import "./self.css";
 @import "./scroll-bar.css";
+@import "./glass.css";
+@import "./decor.css";
 @import "./tmcut-fx.css";
 
 @theme static {
@@ -217,6 +219,16 @@
 @keyframes slide-out-bottom {
   from { transform: translateY(0); }
   to { transform: translateY(100%); }
+}
+
+/* The decor layer is a fixed, negative-z element behind the app. Body stays
+   transparent so it can show through; the base colour lives on <html>. */
+html {
+  background-color: var(--ui-bg);
+}
+
+html body {
+  background-color: transparent;
 }
 
 /* Motion budget: decorative motion is opt-in by user preference. Spinners stay

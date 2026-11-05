@@ -60,33 +60,25 @@ const downloadSupportBundle = () => {
 const fmtBytes = (gb: number) => `${gb} GB`
 const fmtUsd = (usd: number) => `$${usd.toFixed(2)}`
 
-const navItems = computed<NavigationMenuItem[]>(() => [
-  { label: t('settings.appearance'), icon: 'i-lucide-palette', to: '/system/settings' },
-  { label: t('settings.production'), icon: 'i-lucide-shield-check', to: '/system/settings/production' },
-  { label: t('nav.system'), icon: 'i-lucide-cpu', to: '/system/settings/system' }
-])
-
 useHead({ title: computed(() => t('settings.production')) })
 </script>
 
 <template>
-  <BasePage id="settings-production" :title="t('settings.production')" :description="t('settings.usageDesc')">
-    <BaseSectionNav :items="navItems">
-      <div class="space-y-6">
-        <!-- ===== Usage & Limits ===== -->
-        <UCard>
-          <template #header>
-            <div class="flex items-center gap-2">
-              <UIcon name="i-lucide-gauge" class="size-5 text-primary" />
-              <span>{{ t('settings.usage') }}</span>
-            </div>
-          </template>
+  <div class="space-y-6">
+    <!-- ===== Usage & Limits ===== -->
+    <UCard>
+      <template #header>
+        <div class="flex items-center gap-2">
+          <UIcon name="i-lucide-gauge" class="size-5 text-primary" />
+          <span>{{ t('settings.usage') }}</span>
+        </div>
+      </template>
 
-          <p class="text-sm text-muted mb-4">
-            {{ t('settings.usageDesc') }}
-          </p>
+      <p class="text-sm text-muted mb-4">
+        {{ t('settings.usageDesc') }}
+      </p>
 
-          <div v-if="usage.summary" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div v-if="usage.summary" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <!-- AI Tokens -->
             <div class="rounded-xl border border-default bg-elevated/40 p-4">
               <div class="flex items-center justify-between mb-1">
@@ -414,6 +406,4 @@ useHead({ title: computed(() => t('settings.production')) })
           </template>
         </UCard>
       </div>
-    </BaseSectionNav>
-  </BasePage>
 </template>

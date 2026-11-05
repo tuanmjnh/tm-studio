@@ -149,26 +149,10 @@ mobileBar.registerInfo(computed(() => ({
   <BasePage id="docs" :title="title" :description="description">
     <template #right>
       <div class="flex items-center gap-2">
-        <UButton
-          :to="hubContentUrl"
-          target="_blank"
-          rel="noopener noreferrer"
-          icon="i-lucide-settings-2"
-          variant="soft"
-          color="neutral"
-          size="sm"
-          class="hidden sm:inline-flex"
-          :label="t('docs.openInHub')"
-        />
-        <UButton
-          icon="i-lucide-refresh-cw"
-          variant="soft"
-          color="neutral"
-          size="sm"
-          :aria-label="t('common.refresh')"
-          :loading="loading"
-          @click="fetchArticles"
-        />
+        <UButton :to="hubContentUrl" target="_blank" rel="noopener noreferrer" icon="i-lucide-settings-2" variant="soft"
+          color="neutral" size="sm" class="hidden sm:inline-flex" :label="t('docs.openInHub')" />
+        <UButton icon="i-lucide-refresh-cw" variant="soft" color="neutral" size="sm" :aria-label="t('common.refresh')"
+          :loading="loading" @click="fetchArticles" />
       </div>
     </template>
 
@@ -176,29 +160,15 @@ mobileBar.registerInfo(computed(() => ({
       <UDashboardToolbar>
         <template #left>
           <div class="flex items-center gap-2 w-full min-w-0 sm:w-auto">
-            <UInput
-              v-model="search"
-              icon="i-lucide-search"
-              :aria-label="t('docs.searchArticles')"
-              :placeholder="t('docs.searchArticles')"
-              size="sm"
-              class="flex-1 min-w-0 sm:w-64"
-            />
-            <USelect
-              v-model="category"
-              :items="categoryOptions"
-              size="sm"
-              class="w-32 shrink-0 sm:w-40"
-              :aria-label="t('docs.allCategories')"
-            />
+            <UInput v-model="search" icon="i-lucide-search" :aria-label="t('docs.searchArticles')"
+              :placeholder="t('docs.searchArticles')" size="sm" class="flex-1 min-w-0 sm:w-64" />
+            <USelect v-model="category" :items="categoryOptions" size="sm" class="w-32 shrink-0 sm:w-40"
+              :aria-label="t('docs.allCategories')" />
           </div>
         </template>
         <template #right>
-          <UBadge
-            :label="t('docs.articlesCount', { filtered: filtered.length, total: articles.length })"
-            variant="subtle"
-            size="sm"
-          />
+          <UBadge :label="t('docs.articlesCount', { filtered: filtered.length, total: articles.length })"
+            variant="subtle" size="sm" />
         </template>
       </UDashboardToolbar>
     </template>
@@ -207,40 +177,23 @@ mobileBar.registerInfo(computed(() => ({
       <SharedListFooter :count="filtered.length" :has-more="false" :loading="loading" />
     </template>
 
-    <div class="flex flex-col gap-4 w-full h-full min-h-0 pb-24 lg:pb-6">
-      <UAlert
-        v-if="loadError"
-        color="warning"
-        variant="subtle"
-        icon="i-lucide-wifi-off"
-        :title="t('docs.offlineTitle')"
-        :description="loadError"
-      />
+    <div class="flex flex-col min-h-0 gap-4 w-full h-full">
+      <UAlert v-if="loadError" color="warning" variant="subtle" icon="i-lucide-wifi-off" :title="t('docs.offlineTitle')"
+        :description="loadError" />
 
       <div v-if="articleOptions.length" class="lg:hidden">
-        <USelect
-          v-model="selectedId"
-          :items="articleOptions"
-          :placeholder="activeArticle?.title || t('docs.selectArticle')"
-          :aria-label="t('docs.selectArticle')"
-          size="sm"
-          class="w-full"
-        />
+        <USelect v-model="selectedId" :items="articleOptions"
+          :placeholder="activeArticle?.title || t('docs.selectArticle')" :aria-label="t('docs.selectArticle')" size="sm"
+          class="w-full" />
       </div>
 
-      <div class="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(240px,300px)_1fr]">
-        <aside class="hidden lg:flex lg:flex-col lg:sticky lg:top-4 gap-1.5">
-          <button
-            v-for="article in filtered"
-            :key="article.id"
-            type="button"
-            class="w-full rounded-lg border px-3 py-2.5 text-left transition-colors"
-            :class="activeArticle?.id === article.id
+      <div class="flex-1 min-h-0 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(240px,300px)_1fr]">
+        <aside class="hidden lg:flex lg:flex-col gap-1.5 min-h-0 overflow-y-auto pr-1">
+          <button v-for="article in filtered" :key="article.id" type="button"
+            class="w-full rounded-lg border px-3 py-2.5 text-left transition-colors" :class="activeArticle?.id === article.id
               ? 'border-primary/40 bg-primary/5'
               : 'border-default hover:bg-muted/50'"
-            :aria-current="activeArticle?.id === article.id ? 'page' : undefined"
-            @click="selectedId = article.id"
-          >
+            :aria-current="activeArticle?.id === article.id ? 'page' : undefined" @click="selectedId = article.id">
             <div class="flex items-center justify-between gap-2">
               <span class="truncate text-xs font-semibold text-highlighted">{{ article.title }}</span>
               <UIcon :name="categoryIcon(article.category)" class="size-3.5 shrink-0 text-muted" />
@@ -249,62 +202,41 @@ mobileBar.registerInfo(computed(() => ({
               {{ article.description }}
             </p>
             <div class="mt-1.5 flex items-center gap-2">
-              <UBadge
-                :label="formatLabel(article.contentType)"
-                variant="subtle"
-                color="neutral"
-                size="xs"
-              />
+              <UBadge :label="formatLabel(article.contentType)" variant="subtle" color="neutral" size="xs" />
               <span class="text-[10px] text-dimmed">{{ updatedLabel(article) }}</span>
             </div>
           </button>
         </aside>
 
-        <section class="min-w-0">
-          <UCard v-if="activeArticle">
-            <template #header>
-              <div class="flex flex-col gap-2">
-                <div class="flex flex-wrap items-center gap-2">
-                  <h2 class="text-sm font-semibold text-highlighted">
-                    {{ activeArticle.title }}
-                  </h2>
-                  <UBadge
-                    :label="formatLabel(activeArticle.contentType)"
-                    variant="subtle"
-                    color="neutral"
-                    size="xs"
-                  />
-                  <UBadge
-                    :label="activeArticle.source === 'hub' ? t('docs.sourceHub') : t('docs.sourceLocal')"
-                    :color="activeArticle.source === 'hub' ? 'success' : 'neutral'"
-                    variant="subtle"
-                    size="xs"
-                  />
-                  <span v-if="activeArticle.updatedAt" class="text-[11px] text-dimmed">
-                    {{ t('docs.updatedAt', { date: formatTimeAgo(new Date(activeArticle.updatedAt)) }) }}
-                  </span>
+        <section class="min-w-0 h-full min-h-0 flex flex-col overflow-hidden">
+          <UScrollArea class="flex-1 min-h-0 overflow-y-auto" :ui="{ viewport: 'w-full flex-col gap-6 p-1' }">
+            <UCard v-if="activeArticle">
+              <template #header>
+                <div class="flex flex-col gap-2">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <h2 class="text-sm font-semibold text-highlighted">
+                      {{ activeArticle.title }}
+                    </h2>
+                    <UBadge :label="formatLabel(activeArticle.contentType)" variant="subtle" color="neutral"
+                      size="xs" />
+                    <UBadge :label="activeArticle.source === 'hub' ? t('docs.sourceHub') : t('docs.sourceLocal')"
+                      :color="activeArticle.source === 'hub' ? 'success' : 'neutral'" variant="subtle" size="xs" />
+                    <span v-if="activeArticle.updatedAt" class="text-[11px] text-dimmed">
+                      {{ t('docs.updatedAt', { date: formatTimeAgo(new Date(activeArticle.updatedAt)) }) }}
+                    </span>
+                  </div>
+                  <p v-if="activeArticle.description" class="text-xs leading-relaxed text-muted">
+                    {{ activeArticle.description }}
+                  </p>
                 </div>
-                <p v-if="activeArticle.description" class="text-xs leading-relaxed text-muted">
-                  {{ activeArticle.description }}
-                </p>
-              </div>
-            </template>
+              </template>
 
-            <DocsArticleView
-              :article="activeArticle"
-              :app-base-name="appBaseName"
-              :app-display-id="appDisplayId"
-            />
-          </UCard>
-
-          <UEmpty
-            v-else
-            size="xl"
-            icon="i-lucide-library-big"
-            :title="t('docs.noArticlesTitle')"
-            :description="t('docs.noArticlesDesc')"
-            :actions="[{ label: t('common.refresh'), onClick: fetchArticles, variant: 'soft' }]"
-          />
+              <DocsArticleView :article="activeArticle" :app-base-name="appBaseName" :app-display-id="appDisplayId" />
+            </UCard>
+            <UEmpty v-else size="xl" icon="i-lucide-library-big" :title="t('docs.noArticlesTitle')"
+              :description="t('docs.noArticlesDesc')"
+              :actions="[{ label: t('common.refresh'), onClick: fetchArticles, variant: 'soft' }]" />
+          </UScrollArea>
         </section>
       </div>
     </div>

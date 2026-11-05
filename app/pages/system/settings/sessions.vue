@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DropdownMenuItem, NavigationMenuItem } from '@nuxt/ui'
+import type { DropdownMenuItem } from '@nuxt/ui'
 import type { UserSession } from '#shared/types/auth'
 import { getErrorMessage } from '~/shared/utils/errors'
 import { formatDate } from '~/shared/utils/helper'
@@ -9,7 +9,7 @@ const notify = useNotify()
 const { hubFetch } = useHub()
 
 const sessionPager = useCursorPagination<UserSession>({
-  limit: 12,
+  limit: PAGE_SIZE.sessions,
   fetch: async (cursor, limit) => {
     const res = await hubFetch<{ success: boolean, data: UserSession[], nextCursor: string | number | null }>(
       '/api/v1/auth/sessions',
@@ -77,13 +77,6 @@ const sessionActions = (session: UserSession): DropdownMenuItem[] => [
   }
 ]
 
-const navItems = computed<NavigationMenuItem[]>(() => [
-  { label: t('profile.info'), icon: 'i-lucide-user', to: '/system/profile' },
-  { label: t('profile.security'), icon: 'i-lucide-shield', to: '/system/profile/security' },
-  { label: t('profile.sessions'), icon: 'i-lucide-monitor-smartphone', to: '/system/profile/sessions' },
-  { label: t('notifications.pushTitle'), icon: 'i-lucide-radio-tower', to: '/system/profile/push' }
-])
-
 const mobileBar = useMobileBar()
 mobileBar.registerActions(computed(() => [
   ...(sessionPager.hasMore.value
@@ -116,15 +109,14 @@ useHead({ title: computed(() => t('profile.sessions')) })
 </script>
 
 <template>
-  <BasePage id="profile" :title="t('profile.sessions')" :description="t('profile.sessionsDesc')">
-    <template #right>
+  <div class="flex flex-col gap-4">
+    <div class="flex flex-wrap items-center justify-end gap-2">
       <UButton
         color="error"
         variant="soft"
         size="sm"
         icon="i-lucide-log-out"
         :label="t('profile.revokeAll')"
-        :ui="{ label: 'hidden md:block' }"
         @click="isRevokeAllOpen = true"
       />
       <UButton
@@ -137,82 +129,78 @@ useHead({ title: computed(() => t('profile.sessions')) })
         :aria-label="t('common.refresh')"
         @click="sessionPager.refresh()"
       />
-    </template>
+    </div>
 
-    <template #footer>
-      <SharedListFooter :count="sessions.length" :has-more="sessionPager.hasMore.value" :loading="sessionsLoading">
-        <template #right>
-          <UButton
-            v-if="sessionPager.hasMore.value"
-            size="xs"
-            variant="soft"
-            color="neutral"
-            icon="i-lucide-chevron-down"
-            :label="t('common.loadMore')"
-            :loading="sessionsLoading"
-            @click="sessionPager.loadMore()"
-          />
-        </template>
-      </SharedListFooter>
-    </template>
-
-    <BaseSectionNav :items="navItems">
-      <UCard class="mb-24 lg:mb-0">
-        <div v-if="sessionsLoading && sessions.length === 0" class="space-y-3">
-          <USkeleton v-for="i in 3" :key="i" class="h-14 w-full rounded-lg" />
-        </div>
-
-        <UEmpty
-          v-else-if="sessions.length === 0"
-          icon="i-lucide-monitor-x"
-          size="sm"
-          :title="t('profile.noSessions')"
+    <SharedListFooter :count="sessions.length" :has-more="sessionPager.hasMore.value" :loading="sessionsLoading">
+      <template #right>
+        <UButton
+          v-if="sessionPager.hasMore.value"
+          size="xs"
+          variant="soft"
+          color="neutral"
+          icon="i-lucide-chevron-down"
+          :label="t('common.loadMore')"
+          :loading="sessionsLoading"
+          @click="sessionPager.loadMore()"
         />
+      </template>
+    </SharedListFooter>
 
-        <ul v-else class="divide-y divide-default">
-          <li v-for="session in sessions" :key="session.id" class="flex items-center gap-3 py-3.5 first:pt-0 last:pb-0">
-            <span
-              class="inline-flex shrink-0 items-center justify-center rounded-lg p-2"
-              :class="session.isCurrent ? 'bg-primary/10 text-primary' : 'bg-elevated text-muted'"
-            >
-              <UIcon
-                :name="session.platform === 'mobile' ? 'i-lucide-smartphone' : 'i-lucide-monitor'"
-                class="size-5"
-              />
-            </span>
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2">
-                <span class="text-sm font-medium text-highlighted truncate">
-                  {{ session.platform }}
-                </span>
-                <UBadge
-                  v-if="session.isCurrent"
-                  :label="t('profile.current')"
-                  color="success"
-                  variant="subtle"
-                  size="xs"
-                />
-              </div>
-              <p class="text-xs text-muted truncate">
-                {{ session.userAgent || '—' }}
-              </p>
-              <p class="text-[11px] text-dimmed font-mono truncate">
-                {{ session.lastIp }} · {{ formatDate(session.createdAt) }}
-              </p>
-            </div>
-            <UDropdownMenu :items="sessionActions(session)" :content="{ align: 'end' }">
-              <UButton
-                icon="i-lucide-ellipsis-vertical"
-                color="neutral"
-                variant="ghost"
+    <UCard class="mb-24 lg:mb-0">
+      <div v-if="sessionsLoading && sessions.length === 0" class="space-y-3">
+        <USkeleton v-for="i in 3" :key="i" class="h-14 w-full rounded-lg" />
+      </div>
+
+      <UEmpty
+        v-else-if="sessions.length === 0"
+        icon="i-lucide-monitor-x"
+        size="sm"
+        :title="t('profile.noSessions')"
+      />
+
+      <ul v-else class="divide-y divide-default">
+        <li v-for="session in sessions" :key="session.id" class="flex items-center gap-3 py-3.5 first:pt-0 last:pb-0">
+          <span
+            class="inline-flex shrink-0 items-center justify-center rounded-lg p-2"
+            :class="session.isCurrent ? 'bg-primary/10 text-primary' : 'bg-elevated text-muted'"
+          >
+            <UIcon
+              :name="session.platform === 'mobile' ? 'i-lucide-smartphone' : 'i-lucide-monitor'"
+              class="size-5"
+            />
+          </span>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-medium text-highlighted truncate">
+                {{ session.platform }}
+              </span>
+              <UBadge
+                v-if="session.isCurrent"
+                :label="t('profile.current')"
+                color="success"
+                variant="subtle"
                 size="xs"
-                :aria-label="t('common.actions')"
               />
-            </UDropdownMenu>
-          </li>
-        </ul>
-      </UCard>
-    </BaseSectionNav>
+            </div>
+            <p class="text-xs text-muted truncate">
+              {{ session.userAgent || '—' }}
+            </p>
+            <p class="text-[11px] text-dimmed font-mono truncate">
+              {{ session.lastIp }} · {{ formatDate(session.createdAt) }}
+            </p>
+          </div>
+          <UDropdownMenu :items="sessionActions(session)" :content="{ align: 'end' }">
+            <UButton
+              icon="i-lucide-ellipsis-vertical"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              :aria-label="t('common.actions')"
+            />
+          </UDropdownMenu>
+        </li>
+      </ul>
+    </UCard>
 
     <BaseConfirmModal
       v-model:open="isRevokeOpen"
@@ -237,5 +225,5 @@ useHead({ title: computed(() => t('profile.sessions')) })
       :loading="revokeLoading"
       @confirm="confirmRevokeAll"
     />
-  </BasePage>
+  </div>
 </template>

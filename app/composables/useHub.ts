@@ -48,10 +48,7 @@ export const useHub = () => {
     }
 
     try {
-      return (await $fetch(fullUrl, {
-        ...options,
-        headers
-      })) as T
+      return (await ($fetch as (url: string, opts?: unknown) => Promise<T>)(fullUrl, { ...options, headers }))
     } catch (err: unknown) {
       const status = (err as { statusCode?: number, response?: { status?: number } })?.statusCode
         || (err as { response?: { status?: number } })?.response?.status
@@ -62,10 +59,7 @@ export const useHub = () => {
         if (refreshed) {
           const newToken = auth.accessToken.value || tokenCookie.value
           if (newToken) headers.set('Authorization', `Bearer ${newToken}`)
-          return (await $fetch(fullUrl, {
-            ...options,
-            headers
-          })) as T
+          return (await ($fetch as (url: string, opts?: unknown) => Promise<T>)(fullUrl, { ...options, headers }))
         } else {
           await auth.handleSessionExpired()
         }

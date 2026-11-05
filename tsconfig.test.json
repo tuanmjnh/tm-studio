@@ -6,6 +6,7 @@
     "paths": {
       "~/*": ["./app/*"],
       "tmcut-core": ["./packages/core/src/index.mjs"]
-    }
+    },
+    "noEmit": true
   }
 }

@@ -2278,3 +2278,28 @@ export function planByteCacheEviction(
   budgetBytes: number,
   liveKeys?: Iterable<string>
 ): TmcutByteCachePlan
+/** Where one clip's playback bytes come from: the cached revision, the stream, or neither. */
+export type TmcutPlaybackByteSource
+  = | { kind: 'cache', key: string }
+    | { kind: 'stream', url: string, reason: string }
+    | { kind: 'unresolved', reason: string }
+export function planPlaybackByteSource(revision: {
+  fingerprint?: string | null
+  cached?: boolean
+  streamUrl?: string | null
+} | null): TmcutPlaybackByteSource
+/** One revision's blob URL, as the host holds it. */
+export interface TmcutBlobUrlRow {
+  key: string
+  url: string
+}
+/** What the host creates, keeps and revokes when the live set of revisions changes. */
+export interface TmcutBlobUrlLifecycle {
+  keep: TmcutBlobUrlRow[]
+  create: string[]
+  revoke: TmcutBlobUrlRow[]
+}
+export function planBlobUrlLifecycle(
+  held: Record<string, string | null>,
+  wanted: Iterable<string>
+): TmcutBlobUrlLifecycle

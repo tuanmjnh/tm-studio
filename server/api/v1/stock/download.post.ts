@@ -1,4 +1,4 @@
-import { checkStockDownloadUrl, isStockMediaContentType } from '../../../../shared/utils/stockGuards'
+import { checkStockDownloadUrl, isStockMediaContentType } from '#shared/utils/stockGuards'
 
 /**
  * Stock media download proxy for the WEB runtime (kho tài nguyên).

@@ -1,6 +1,18 @@
+<script setup lang="ts">
+withDefaults(defineProps<{
+  /** Render the isometric floor grid (dashboard hero + login only). */
+  grid?: boolean
+}>(), {
+  grid: false
+})
+</script>
+
 <template>
-  <div
-    aria-hidden="true"
-    class="studio-ambient-glow pointer-events-none absolute inset-0 -z-10 select-none"
-  />
+  <div class="tm-backdrop" aria-hidden="true">
+    <div class="tm-aurora" />
+    <div class="tm-streak" />
+    <div class="tm-orb tm-orb-1" />
+    <div class="tm-orb tm-orb-2" />
+    <div v-if="grid" class="tm-iso-grid" />
+  </div>
 </template>

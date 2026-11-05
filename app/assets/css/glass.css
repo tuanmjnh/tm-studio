@@ -1,0 +1,139 @@
+/* ============================================================================
+   TMCut Studio — bento glass surfaces
+   Companion to main.css: the flat utilities there stay as they are; this file
+   adds the panes, tiles and chrome used by the bento dashboard and the login
+   showcase. Accent colours come from the app palette (violet).
+   Guardrails: no backdrop-filter on scrolling containers, dense data uses
+   .surface-solid, refraction only on hero/bento cards.
+   ========================================================================= */
+
+:root {
+  --tm-radius-panel: 6px;
+  --tm-radius-tile: 4px;
+
+  --tm-surface: rgba(255, 255, 255, 0.72);
+  --tm-surface-sheen: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.7) 0%,
+    rgba(255, 255, 255, 0.16) 44%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  --tm-hairline: rgba(9, 9, 11, 0.09);
+  --tm-inset-highlight: rgba(255, 255, 255, 0.9);
+  --tm-panel-shadow:
+    0 1px 1px rgba(9, 9, 11, 0.03),
+    0 18px 40px -30px rgba(9, 9, 11, 0.35);
+  --tm-tile-bg: rgba(9, 9, 11, 0.03);
+  --tm-tile-bg-hover: rgba(9, 9, 11, 0.055);
+  --tm-refract-sheen: rgba(255, 255, 255, 0.45);
+  --tm-chrome: rgba(255, 255, 255, 0.55);
+  --tm-chrome-overlay: rgba(255, 255, 255, 0.98);
+}
+
+.dark {
+  --tm-surface: rgba(24, 24, 27, 0.55);
+  --tm-surface-sheen: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.07) 0%,
+    rgba(255, 255, 255, 0.02) 42%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  --tm-hairline: rgba(161, 161, 170, 0.14);
+  --tm-inset-highlight: rgba(255, 255, 255, 0.1);
+  --tm-panel-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.3),
+    0 24px 50px -32px rgba(0, 0, 0, 0.8);
+  --tm-tile-bg: rgba(255, 255, 255, 0.035);
+  --tm-tile-bg-hover: rgba(255, 255, 255, 0.065);
+  --tm-refract-sheen: rgba(255, 255, 255, 0.14);
+  --tm-chrome: rgba(9, 9, 11, 0.55);
+  --tm-chrome-overlay: rgba(9, 9, 11, 0.98);
+}
+
+.glass-panel {
+  position: relative;
+  border-radius: var(--tm-radius-panel);
+  border: 1px solid var(--tm-hairline);
+  background-color: var(--tm-surface);
+  background-image: var(--tm-surface-sheen);
+  box-shadow:
+    inset 0 1px 0 var(--tm-inset-highlight),
+    var(--tm-panel-shadow);
+}
+
+.glass-panel.surface-solid,
+.surface-solid {
+  background-color: var(--ui-bg);
+  background-image: none;
+}
+
+.glass-blur {
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  backdrop-filter: blur(16px) saturate(150%);
+}
+
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .glass-blur {
+    background-color: var(--ui-bg);
+  }
+}
+
+.refract::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background-image: linear-gradient(
+    118deg,
+    var(--tm-refract-sheen) 0%,
+    rgba(255, 255, 255, 0.03) 30%,
+    transparent 42%
+  );
+  mix-blend-mode: screen;
+  opacity: 0.7;
+}
+
+:root:not(.dark) .refract::after {
+  mix-blend-mode: overlay;
+  opacity: 0.9;
+}
+
+.glass-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+.tm-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--tm-hairline);
+  border-radius: var(--tm-radius-tile);
+  background-color: var(--tm-tile-bg);
+  color: var(--ui-text);
+  text-align: start;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease;
+}
+
+.tm-tile:hover {
+  border-color: color-mix(in oklab, var(--ui-primary) 42%, transparent);
+  background-color: var(--tm-tile-bg-hover);
+}
+
+.tm-tile:focus-visible {
+  outline: 2px solid var(--ui-primary);
+  outline-offset: 2px;
+}
+
+.tm-chrome {
+  background-color: var(--tm-chrome);
+}
+
+.tm-chrome-overlay {
+  background-color: var(--tm-chrome-overlay);
+}

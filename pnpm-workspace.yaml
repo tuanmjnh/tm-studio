@@ -13,4 +13,5 @@ allowBuilds:
   vue-demi: true
 
 minimumReleaseAgeExclude:
+  - tm-hub-client@1.0.9
   - mediabunny@1.65.1

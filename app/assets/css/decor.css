@@ -1,0 +1,169 @@
+/* ============================================================================
+   TMCut Studio — ambient decor layer ("sound stage")
+   Flavour: two spotlights entering from the top corners, a mint floor bounce,
+   a horizontal lens streak across the upper third, one soft orb behind the
+   brand and a steep studio floor grid.
+   Static by design: no animation, no will-change, pointer-events: none.
+   Colours are mixed from the app palette so the decor follows the violet
+   primary (with studio mint as the secondary light).
+   ========================================================================= */
+
+:root {
+  --tm-decor-opacity: 0.95;
+
+  /* Spotlights */
+  --tm-aurora-1: color-mix(in oklab, var(--ui-primary) 13%, transparent);
+  --tm-aurora-2: color-mix(in oklab, var(--ui-secondary) 11%, transparent);
+  --tm-aurora-3: color-mix(in oklab, var(--color-studio-mint) 7%, transparent);
+
+  /* Orbs */
+  --tm-orb-1: color-mix(in oklab, var(--ui-primary) 18%, transparent);
+  --tm-orb-2: color-mix(in oklab, var(--ui-secondary) 14%, transparent);
+  --tm-orb-specular: rgba(255, 255, 255, 0.58);
+
+  /* Floor grid */
+  --tm-grid-line: rgba(9, 9, 11, 0.055);
+  --tm-grid-cell: 64px;
+}
+
+.dark {
+  --tm-decor-opacity: 1;
+
+  --tm-aurora-1: color-mix(in oklab, var(--ui-primary) 28%, transparent);
+  --tm-aurora-2: color-mix(in oklab, var(--ui-secondary) 22%, transparent);
+  --tm-aurora-3: color-mix(in oklab, var(--color-studio-mint) 12%, transparent);
+
+  --tm-orb-1: color-mix(in oklab, var(--ui-primary) 28%, transparent);
+  --tm-orb-2: color-mix(in oklab, var(--ui-secondary) 20%, transparent);
+  --tm-orb-specular: rgba(255, 255, 255, 0.24);
+
+  --tm-grid-line: rgba(161, 161, 170, 0.09);
+}
+
+/* ------------------------------------------------------------------ layer */
+
+.tm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -10;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: var(--tm-decor-opacity);
+}
+
+/* Two narrow spotlights from the top corners plus a wide mint bounce off the
+   bottom edge — reads as a stage, not as a generic corner mesh. */
+.tm-aurora {
+  position: absolute;
+  inset: -12%;
+  background-image:
+    radial-gradient(30% 44% at 4% -8%, var(--tm-aurora-1) 0%, transparent 64%),
+    radial-gradient(30% 44% at 96% -8%, var(--tm-aurora-2) 0%, transparent 64%),
+    radial-gradient(52% 26% at 50% 104%, var(--tm-aurora-3) 0%, transparent 72%),
+    radial-gradient(40% 34% at 50% 42%, var(--tm-aurora-1) 0%, transparent 76%);
+  background-repeat: no-repeat;
+  background-size: 150% 150%;
+}
+
+/* --------------------------------------------------------- glowing 3D orbs */
+
+.tm-orb {
+  position: absolute;
+  border-radius: 50%;
+}
+
+/* Centre-top, sitting behind the brand block like a soft key light. */
+.tm-orb-1 {
+  top: -30vmin;
+  left: 50%;
+  translate: -50% 0;
+  width: min(58rem, 86vw);
+  aspect-ratio: 1;
+  background-image:
+    radial-gradient(circle at 50% 30%, var(--tm-orb-specular) 0%, transparent 28%),
+    radial-gradient(circle at 50% 52%, var(--tm-orb-1) 0%, transparent 66%);
+}
+
+/* Small rim light, low-right. */
+.tm-orb-2 {
+  right: -12vmin;
+  bottom: -20vmin;
+  width: min(34rem, 58vw);
+  aspect-ratio: 1;
+  background-image:
+    radial-gradient(circle at 40% 34%, var(--tm-orb-specular) 0%, transparent 26%),
+    radial-gradient(circle at 52% 52%, var(--tm-orb-2) 0%, transparent 68%);
+}
+
+/* Lens streak: one wide, soft horizontal band of refracted light. */
+.tm-streak {
+  position: absolute;
+  top: 20%;
+  left: -12%;
+  right: -12%;
+  height: 120px;
+  pointer-events: none;
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--tm-aurora-2) 30%,
+    var(--tm-aurora-1) 50%,
+    var(--tm-aurora-3) 68%,
+    transparent 100%
+  );
+  -webkit-mask-image: radial-gradient(58% 50% at 50% 50%, black 0%, transparent 76%);
+  mask-image: radial-gradient(58% 50% at 50% 50%, black 0%, transparent 76%);
+  opacity: 0.6;
+}
+
+/* Small in-panel accent orb (bento cards). */
+.tm-orb-soft {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 50%;
+  background-image: radial-gradient(
+    circle at 34% 30%,
+    var(--tm-orb-1) 0%,
+    transparent 68%
+  );
+  opacity: 0.8;
+}
+
+:root:not(.dark) .tm-orb-soft {
+  opacity: 0.4;
+}
+
+/* ------------------------------------------------ isometric floor perspective
+   Steeper and wider-celled than the other apps, so the studio reads as a sound
+   stage: the floor recedes from the bottom edge and fades out early. */
+.tm-iso-grid {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 520px;
+  pointer-events: none;
+  background-image:
+    repeating-linear-gradient(
+      to right,
+      var(--tm-grid-line) 0 1px,
+      transparent 1px var(--tm-grid-cell)
+    ),
+    repeating-linear-gradient(
+      to bottom,
+      var(--tm-grid-line) 0 1px,
+      transparent 1px var(--tm-grid-cell)
+    );
+  transform: perspective(820px) rotateX(-70deg) scale(1.3);
+  transform-origin: bottom center;
+  -webkit-mask-image: linear-gradient(to top, black 0%, transparent 58%);
+  mask-image: linear-gradient(to top, black 0%, transparent 58%);
+}
+
+/* In-page region wrapper for the floor grid (clips the transformed layer). */
+.tm-iso-region {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 380px;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: -1;
+}

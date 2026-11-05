@@ -982,15 +982,24 @@ export function useTmcutMedia() {
     return asset.thumbPath ? mediaUrl(asset.thumbPath) : ''
   }
 
-  function resolveMediaSrc(src?: string | null): string {
+  /**
+   * Which FILE a surface plays: the ready proxy when the toggle is on, the stored
+   * src otherwise. `resolveMediaSrc` builds its URL from this answer, and slice
+   * G4b asks the byte cache with it — so a proxy swap can never be keyed as the
+   * original revision it stands in for.
+   */
+  function resolvePlayPath(src?: string | null): string {
     if (!src) return ''
     if (proxyPreview.value) {
       const asset = findAssetBySrc(src)
-      if (asset?.proxyPath && asset.proxyStatus === 'ready') {
-        return mediaUrl(asset.proxyPath)
-      }
+      if (asset?.proxyPath && asset.proxyStatus === 'ready') return asset.proxyPath
     }
-    return mediaUrl(src)
+    return src
+  }
+
+  function resolveMediaSrc(src?: string | null): string {
+    const path = resolvePlayPath(src)
+    return path ? mediaUrl(path) : ''
   }
 
   async function generateProxy(asset: TmcutAsset, width = 960): Promise<boolean> {
@@ -1059,6 +1068,7 @@ export function useTmcutMedia() {
     webUpload,
     isDesktop,
     proxyPreview,
+    resolvePlayPath,
     resolveMediaSrc,
     generateProxy,
     removeProxy,

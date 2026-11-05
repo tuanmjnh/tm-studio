@@ -218,7 +218,8 @@ async function createWindow() {
       contextIsolation: true,
       // Same-origin policy is ON. Local media runs through the privileged
       // media:// scheme, which answers CORS for appOrigins() only.
-      webSecurity: true
+      webSecurity: true,
+      devTools: isDev
     }
   })
 
@@ -248,7 +249,7 @@ async function createWindow() {
   })
 
   win.webContents.on('before-input-event', (event, input) => {
-    if (input.control && input.shift && input.key.toLowerCase() === 'i') {
+    if (isDev && input.control && input.shift && input.key.toLowerCase() === 'i') {
       win.webContents.toggleDevTools()
       return
     }
