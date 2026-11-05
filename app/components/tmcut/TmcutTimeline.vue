@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { TICKS_PER_SECOND, parseSrt, serializeSrt, cuesToCaptionClips, secToTicks, ticksToSec } from 'tmcut-core'
+import { TICKS_PER_SECOND, parseSrt, paintStackAt, selectFileRows, serializeSrt, cuesToCaptionClips, secToTicks, ticksToSec } from 'tmcut-core'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import type { TmcutTrack } from '~/composables/useTmcutProject'
 import { useTmcutContextMenu } from '~/composables/useTmcutContextMenu'
@@ -748,7 +748,13 @@ async function handleImportSrt() {
 }
 
 async function handleExportSrt() {
-  const textItems = currentProject.value?.timeline?.tracks.find(tr => tr.type === 'text')?.items || []
+  // Every caption row the file paints, not the first text track: a project with
+  // two text rows used to export one of them, and a hidden row still leaked its
+  // cues into the .srt even though nothing renders it.
+  const allTracks = currentProject.value?.timeline?.tracks || []
+  const textItems = selectFileRows(currentProject.value)
+    .overlays
+    .flatMap(row => allTracks[row.trackIndex]?.items || [])
   const cues = textItems
     .filter(item => (item.text || '').trim().length > 0)
     .map(item => ({
@@ -792,12 +798,17 @@ const captionBusy = ref(false)
 async function handleAutoCaptions() {
   if (captionBusy.value || !isDesktop.value) return
   const tracks = currentProject.value?.timeline?.tracks || []
+  // Core names the footage rows that paint at the playhead — visible, holding a
+  // layer, in track order. The clip transcribed is one of those layers, so the
+  // row that owns the canvas is the row whose audio becomes captions.
+  const painted = new Set(
+    paintStackAt(currentProject.value, secToTicks(playhead.value))
+      .rows
+      .flatMap(row => row.layers.map(layer => layer.clipId))
+  )
   const clip = tracks
-    .filter(track => track.type === 'video' && !track.hidden)
     .flatMap(track => track.items || [])
-    .find(item => item.src
-      && playhead.value >= clipStartSec(item)
-      && playhead.value < clipEndSec(item))
+    .find(item => item.src && painted.has(item.id))
   if (!clip?.src) {
     toast.add({ title: t('tmcut.timelineActions.captionNoClip'), color: 'warning' })
     return

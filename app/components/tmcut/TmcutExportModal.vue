@@ -528,10 +528,12 @@ function validateExportPreconditions(): boolean {
     return false
   }
 
-  // Rotated text needs center alignment (roadmap R12)
-  const rotatedConflict = (currentProject.value.timeline?.tracks ?? []).some(
-    track => track.type === 'text'
-      && (track.items ?? []).some(item => (item.rotation || 0) !== 0 && (item.align || 'center') !== 'center')
+  // Rotated text needs center alignment (roadmap R12). The lanes this checks are
+  // the lanes the file paints as captions — core's row law joined back to the
+  // authored tracks — so a hidden caption row or a row of zero-length clips no
+  // longer blocks an export it will not appear in.
+  const rotatedConflict = selectExportTracks(currentProject.value).textTracks.some(
+    track => (track.items ?? []).some(item => (item.rotation || 0) !== 0 && (item.align || 'center') !== 'center')
   )
   if (rotatedConflict) {
     toast.add({

@@ -26,6 +26,11 @@
  *     paints, layout by layout — footage AND captions. What is left between the
  *     surfaces is no longer a row question but a layer question (per-layer
  *     crop, blend and vignette: F4).
+ *  5. THE SURFACES BESIDE THE TWO HOSTS — an export validation, the clip the
+ *     auto-caption transcribes, the cues an SRT file is built from and the cues
+ *     the html-video studio fills each asked the lane question their own way
+ *     until F6c; all four read the same core answer now, and check 10 keeps a
+ *     lane predicate from coming back.
  *
  * Run: node node_modules/tsx/dist/cli.mjs --tsconfig tsconfig.test.json \
  *        tests/unit/tmcut_paint_stack.spec.ts
@@ -318,6 +323,32 @@ async function main() {
     assert.match(source, /selectFileRows/, 'the exporter asks core which rows the file has')
     assert.doesNotMatch(source, /\.filter\([^)]*\.type ===/, 'no row filter survives in the app')
     assert.doesNotMatch(source, /videoRows\[0\]|\.slice\(1\)/, 'and no bottom-of-stack arithmetic')
+  })
+
+  // 10. F6c: three components outside the two hosts asked the lane question a
+  //     third, fourth and fifth time — the export's rotation validation, the
+  //     clip the auto-caption transcribes, the cues an SRT file is built from
+  //     and the cues the html-video studio fills. Each now reads core's answer
+  //     (the file-wide lanes, or the rows that paint at the playhead) and joins
+  //     its own authored tracks back. The pin is the SOURCE: an arrow predicate
+  //     over `track.type` creeping back is exactly the regression this retires,
+  //     and the icon ternaries in the same files are chrome, not a lane rule —
+  //     so only the predicate form is banned.
+  await check('no component re-derives the lane question', () => {
+    const lanes: Record<string, RegExp[]> = {
+      'app/components/tmcut/TmcutExportModal.vue': [/selectExportTracks\([^)]*\)\.textTracks/],
+      'app/components/tmcut/TmcutTimeline.vue': [/paintStackAt\(/, /selectFileRows\(/],
+      'app/components/tmcut/TmcutHtmlVideoStudio.vue': [/selectFileRows\(/]
+    }
+    for (const [rel, pins] of Object.entries(lanes)) {
+      const source = readFileSync(join(ROOT, rel), 'utf8')
+      for (const pin of pins) assert.match(source, pin, `${rel} must read core's lane answer (${pin})`)
+      assert.doesNotMatch(
+        source,
+        /\w+ => \w+\.type === ['"](?:video|text|audio)['"]/,
+        `${rel} may not carry a lane predicate of its own`
+      )
+    }
   })
 
   console.log(`=== All ${passed} paint-stack checks passed ===`)

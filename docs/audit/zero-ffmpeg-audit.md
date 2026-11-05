@@ -2549,11 +2549,12 @@ module '../src/paintStack.mjs' does not provide an export named 'selectFileRows'
   minh khung hình thật của project đó. `--smoke` render 7 project thật nhưng **không** project nào có
   `videoBase` rỗng `src` — thêm fixture vào `tmcut_render_smoke` là việc của F6.
 - **Electron host không chạy lượt này.** Cùng compiler, cùng core, nhưng desktop chưa đo trên đường F3.
-- **Ba bộ lọc `type ===` còn lại ở UI** không phải luật paint-row, nhưng là câu hỏi "hàng nào" lần thứ hai ở
-  surface khác: [TmcutExportModal.vue:532](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutExportModal.vue#L532)
-  (validation rotation), [TmcutTimeline.vue:796](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutTimeline.vue#L796)
-  (clip làm nguồn STT cho auto-caption), [TmcutHtmlVideoStudio.vue:311](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutHtmlVideoStudio.vue#L311)
-  (cue cho renderer riêng của nó). F3 **cố ý** không đụng: chúng không quyết định vẽ gì. Ghi nợ để F4/F5 quyết.
+- **Đã đóng ở §37 (F6c, 2026-11-05) — và số đúng là bốn, không phải ba.** Ghi ở
+  đây để nợ không thành lời đồn: [TmcutExportModal.vue](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutExportModal.vue),
+  [TmcutTimeline.vue](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutTimeline.vue) (hai chỗ: nguồn clip AutoCaption
+  **và** danh sách cue của file `.srt`) và [TmcutHtmlVideoStudio.vue](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutHtmlVideoStudio.vue).
+  Chúng không phải luật paint-row, nhưng là câu hỏi "hàng nào" lần thứ hai ở surface khác;
+  F3 **cố ý** không đụng vì chúng không quyết định vẽ gì.
 - **`speedAt` trên hàng stacked và plate effect theo layer** vẫn là nợ F4 (ghi ở §29.8); F3 không đụng.
 - **Luật per-file chưa biết transition.** `selectFileRows` nói hàng nào hợp lệ; cửa crossfade của hàng đó vẫn
   do app tính — đúng ranh giới §27 đã vẽ, F3 không dịch chuyển nó.
@@ -3290,7 +3291,7 @@ phiên, §31.5). Baseline không đổi.
   và paceRatio; tính "đúng là frame start" chỉ được chứng minh bởi spec unit với rAF giả.
 - **rAF riêng của html-video vẫn còn đó** (`TmcutHtmlVideoStudio.vue` tự tích phân
   delta của nó) — việc của **F6b**, không phải lượt này.
-- **F6c/F6d vẫn mở**: ba bộ lọc `type ===` trong UI, blend lấy từ plan, và grain
+- **F6c đã đóng (§37, 2026-11-05), F6d vẫn mở**: blend lấy từ plan, và grain
   `overlayAnimation` trên plate live.
 
 ### 35.7 Bảo vệ working tree
@@ -3448,3 +3449,147 @@ và **2** file docs (file này + [roadmap](file:///D:/Applications/tm-studio/doc
 `TmcutPreviewPlayer.vue`, đường export, Project Schema v3 và Storage Upload API
 không đổi một dòng nào; không binary mới, không đụng `backup/ffmpeg-engine-2026-11-03`,
 không tắt rule lint nào, ADR-033 vẫn Pending.
+
+## 37. Slice F6c — bốn surface tự hỏi "hàng nào" ngoài hai host (2026-11-05)
+
+F3 ghi nợ **ba** bộ lọc `type ===` trong UI (§30.7). Mở đầu lượt này, grep lại
+toàn bộ `app/` với mẫu predicate (`=> \w+\.type ===`) ra **bốn** chỗ, không phải
+ba — và chỗ thứ tư là chỗ duy nhất mang lỗi thật.
+
+### 37.1 Bốn chỗ, mỗi chỗ hỏi một kiểu
+
+| Chỗ | Câu hỏi nó tự trả lời | Trước F6c |
+| --- | --- | --- |
+| [TmcutExportModal.vue:535](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutExportModal.vue#L535) | lane text nào bị kiểm rotation (R12) | quét **mọi** track `type === 'text'`, kể cả lane đã ẩn và lane chỉ có clip zero-length |
+| [TmcutTimeline.vue:750](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutTimeline.vue#L750) | cue nào đi vào file `.srt` | `.find(tr => tr.type === 'text')` — lane text **đầu tiên**, mọi lane phía sau biến mất, `hidden` không được hỏi |
+| [TmcutTimeline.vue:804](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutTimeline.vue#L804) | clip nào AutoCaptions giải âm | tự vòng qua track `video` không ẩn rồi tự so `playhead` vào `[clipStartSec, clipEndSec)` |
+| [TmcutHtmlVideoStudio.vue:348](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutHtmlVideoStudio.vue#L348) | cue nào đổ vào biến `cues` của composition | `.filter(track => track.type === 'text')` — gồm cả lane đã ẩn |
+
+### 37.2 Lỗi đo được của chân SRT
+
+`.find(tr => tr.type === 'text')?.items` chỉ trả về items của **một** lane. Hai
+lane phụ đề (nói cách khác: một project có caption tiếng Việt và một lane karaoke)
+xuất ra `.srt` chỉ chứa lane tác giả gặp đầu tiên trong danh sách track — và một
+lane đã bấm ẩn vẫn góp cue vào file, dù không khung hình nào vẽ nó. Đây là cùng
+hình dạng lỗi mà G18 ghi cho hàng footage: surface thứ ba trả lời câu hỏi của
+surface đầu tiên bằng cách riêng.
+
+### 37.3 Luật: không thêm luật nào cả
+
+Bốn chỗ này đọc lại ba câu trả lời **đã tồn tại** trong core, không module mới:
+
+- `selectFileRows(project).overlays` — mọi lane phụ đề của cả file, đã trừ lane ẩn
+  và lane không có clip nào sống được ([paintStack.mjs:140](file:///D:/Applications/tm-studio/packages/core/src/paintStack.mjs#L140));
+- `selectExportTracks(project).textTracks` — chính câu trả lời đó sau chỗ join mà
+  compiler export đang dùng ([clip.ts:160](file:///D:/Applications/tm-studio/app/utils/tmcut/render/clip.ts#L160)),
+  nên validation rotation giờ kiểm **đúng những lane file sẽ paint**, không kiểm
+  danh sách track do UI tự đoán;
+- `paintStackAt(project, atTicks).rows` — hàng footage **đang vẽ tại tick này**
+  ([paintStack.mjs:92](file:///D:/Applications/tm-studio/packages/core/src/paintStack.mjs#L92)),
+  tức clip được transcribe là clip mà người dùng đang thực sự nhìn thấy.
+
+Host vẫn chỉ làm việc của host: cầm `trackIndex`/`clipId` nối về object mình authored.
+
+### 37.4 Ba thay đổi hành vi, một chỗ chỉ đổi nguồn
+
+| Chân | Hành vi đổi? | Nội dung |
+| --- | --- | --- |
+| SRT export | **Có, sửa lỗi** | lấy **mọi** lane overlay đang bật, theo đúng thứ tự track; lane ẩn không góp cue |
+| Studio cue fill | **Có, cùng luật** | hết cảnh cue của lane đã ẩn bị đổ vào composition |
+| Export rotation validation | **Có, hẹp hơn** | một lane text bị ẩn (hoặc toàn clip zero-length) không còn chặn một export mà nó không xuất hiện |
+| AutoCaption nguồn clip | **Không** | code cũ đòi `playhead ∈ [clipStartSec, clipEndSec)` của một track video không ẩn — điều kiện **trùng** luật per-tick, nên đáp án cùng; F6c chỉ đổi *ai trả lời*, không đổi câu trả lời |
+
+Chỗ cuối ghi rõ để không ai tưởng F6c sửa bug ở AutoCaption. Nó sửa một thứ khác:
+khi project có **hai** hàng footage và hàng đáy đang ở khoảng trống, luật per-tick
+giao hàng đang vẽ cho UI, còn vòng lặp cũ chỉ tình cờ đúng vì nó quét items của
+mọi hàng không ẩn.
+
+### 37.5 Test: check 10 của `tmcut_paint_stack.spec.ts`
+
+Spec không thêm file; [check 10:337](file:///D:/Applications/tm-studio/tests/unit/tmcut_paint_stack.spec.ts#L337)
+pin **cả hai chiều** trên ba component: phải gọi selector core
+(`selectExportTracks(...).textTracks`, `paintStackAt(`, `selectFileRows(`) và
+**không** được còn một predicate dạng `x => x.type === 'video|text|audio'`.
+Template ternaries (`track.type === 'video' ? icon`) **không** bị cấm, vì chúng là
+chrome chứ không phải luật hàng — đó là lý do mẫu pin là dạng arrow, không phải
+chuỗi `track.type ===`.
+
+RED chạy thật: `EXIT=1`, fail ngay pin đầu tiên (`TmcutExportModal.vue must read
+core's lane answer`), **9** check trước đã xanh (`f6c-red.txt`) — failure đến từ
+chỗ chưa sửa, không từ harness. GREEN: **10/10**, `EXIT=0` (`f6c-green.txt`).
+
+### 37.6 Copy tiến hóa theo luật — và vì sao nó không vào commit
+
+`tmcut.htmlVideo.captionsFilled` nói "from the text track" (số ít) trong khi từ
+lượt này nó chép từ **mọi** lane phụ đề: đổi thành "from the caption rows" / "từ
+các track phụ đề" cho cả hai locale
+([en.json:1776](file:///D:/Applications/tm-studio/i18n/locales/en.json#L1776),
+[vi.json:1776](file:///D:/Applications/tm-studio/i18n/locales/vi.json#L1776)).
+
+Hai file locale **không được stage** trong commit F6c: `git diff --stat` cho thấy
+chúng đang mang WIP của chủ repo (key `retry`, sửa `docs` → "Documentation",
+`heroTitle`/`heroSubtitle` của hai surface, cụm `systemHealth`/`authProvider`…):
+`git diff --numstat` đo **19 thêm / 4 bớt** cho mỗi file, trong đó lượt này chỉ là
+**một** dòng mỗi bên. Luật làm việc của repo là không commit WIP của người khác, nên
+phần copy ở lại working tree và đi theo commit của chủ repo. Code đã merge vẫn đúng
+với cả hai phiên bản chuỗi vì key không đổi.
+
+### 37.7 Live, và một chỗ không đo được
+
+`:4003`. Console **sạch** trên cả hai route đã chạm: `/tmcut/editor` giữ đúng
+baseline đã ghi ở §31.5 (`[info] <Suspense>` + `401 ×4` hub hết hạn),
+`/tmcut/html-video` chỉ có `[info] <Suspense>`.
+
+Đo được: mở *Export Video* → step *Configure* render đủ duration/extent của project
+thật (`00:01.05`, `1920×1080`) — tức đường `selectExportTracks` đã sửa chạy trong
+renderer thật, không chỉ trong spec.
+
+**Không** đo được trên Chromium, và không giả vờ đã đo:
+- route `/tmcut/html-video` mở fresh có `currentProject === null` nên nút *Use
+  timeline captions* bị disabled (`Open a project to pull its caption cues.`) —
+  hành vi **có trước**, không phải regression F6c, nhưng nó chặn phép thử positive;
+- SRT export và AutoCaption là đường **desktop-only** (`selectSaveFile`, `extractAudio`
+  qua IPC), Chromium không chạy được;
+- validation rotation cần một project có text đã xoay lệch tâm; project dev
+  (`tmcut_project_default`: `text:0 items, video:2, audio:0`) không có, và lượt này
+  **không** sửa dữ liệu project của người dùng để tạo tình huống.
+
+### 37.8 Gate
+
+| Gate | Lệnh | Kết quả |
+| --- | --- | --- |
+| 1 Types | `npx nuxt typecheck` | exit **0**, `grep -c "error TS"` = **0**; `.nuxt/eslint.config.mjs` sinh lại **10:42**, 28567 byte — gate 2 chạy **sau** mốc này |
+| 2 Lint | `npx eslint` trên **4** file đã chạm (sau gate 1) | exit **0**, log **0 byte** (`f6c-eslint2.txt`); config **không** đổi mtime sau đó nên kết quả không stale |
+| 3 Tests | `npx tsx tests/unit/run-all.mts --smoke` | **117/117 specs passed**, exit **0** (`f6c-smoke2.txt`) — lượt chạy **cuối**, sau mọi sửa docs và i18n, nên `doc_line_length`, `docs_link_integrity`, `i18n_keys` và `paint_stack` (10 check) đều thuộc số 117 |
+| 3b Core | `npx tsc -p packages/core --noEmit` | exit **0**, log 0 byte — lượt này không sửa `packages/core` |
+| 3c Spec mới | `npx tsx --tsconfig tsconfig.test.json tests/unit/tmcut_paint_stack.spec.ts` | RED exit 1 (check 10) → GREEN **10/10** exit 0 |
+| 4 Live | Chromium, `/tmcut/editor` + `/tmcut/html-video` | mục 37.7 |
+
+### 37.9 Chưa chứng minh
+
+- **Ba chân đổi hành vi chỉ được chứng minh ở tầng spec + nguồn**, không bằng một
+  lần bấm thật (37.7). Đặc biệt SRT: chưa có file `.srt` thật xuất ra từ project
+  hai lane phụ đề.
+- **Electron host** chưa chạy lượt này; AutoCaption/SRT là đường desktop nên chính
+  chúng là thứ cần một phép đo CDP, và phép đo đó chưa có.
+- **`handleAutoCaptions` trong cửa transition**: `painted` sẽ chứa **hai** clipId
+  và `.find` lấy clip đầu tiên có `src` — chọn clip **đi ra** hay clip **đi vào** là
+  quyết định chưa có test; ghi nợ, không đoán.
+- **Route html-video không hydrate `currentProject`**: hoặc studio tự load, hoặc
+  route phải mở project — việc của lượt khác, được ghi lại ở đây vì nó chặn một
+  phép thử.
+
+### 37.10 Bảo vệ working tree
+
+Lượt này chạm **3** component ([TmcutExportModal.vue](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutExportModal.vue),
+[TmcutTimeline.vue](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutTimeline.vue),
+[TmcutHtmlVideoStudio.vue](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutHtmlVideoStudio.vue)),
+**1** spec ([tmcut_paint_stack.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_paint_stack.spec.ts),
+9 → 10 check, 360 dòng), **2** file docs (file này +
+[roadmap](file:///D:/Applications/tm-studio/docs/tmcut-v4-universal-rendering-multiplatform-roadmap.md))
+và **2** file i18n **chạm nhưng không stage** (mục 37.6). Commit F6c staged **6**
+đường dẫn: ba component, một spec, hai docs.
+`packages/core` không đổi một dòng; Project Schema v3 không đổi; Storage Upload API
+không đổi; không binary mới, không đụng `backup/ffmpeg-engine-2026-11-03`, không tắt
+rule lint nào, ADR-033 vẫn Pending.
+

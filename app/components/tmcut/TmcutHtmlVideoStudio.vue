@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { collectHtmlTokens, createClock, createFramePace, fpsToRational, lintHtmlVideo, replaceHtmlTokens, secToTicks, ticksToSec } from 'tmcut-core'
+import { collectHtmlTokens, createClock, createFramePace, fpsToRational, lintHtmlVideo, replaceHtmlTokens, secToTicks, selectFileRows, ticksToSec } from 'tmcut-core'
 import { HTML_VIDEO_STARTERS, buildHtmlVideoPreviewDocument } from '~/utils/tmcut/htmlVideoStarters'
 import type { HtmlVideoStarter } from '~/utils/tmcut/htmlVideoStarters'
 import { useFileSystem } from '~/composables/useFileSystem'
@@ -343,8 +343,12 @@ function downloadResult(): void {
 
 function fillCuesFromTimeline(): void {
   const tracks = currentProject.value?.timeline?.tracks || []
-  const sources = tracks
-    .filter(track => track.type === 'text')
+  // The caption rows of the composition are core's, not a type filter: the same
+  // lanes the file overlays, so a hidden or empty text row never becomes a cue.
+  const textTracks = selectFileRows(currentProject.value).overlays
+    .map(row => tracks[row.trackIndex])
+    .filter((track): track is NonNullable<typeof track> => !!track)
+  const sources = textTracks
     .flatMap(track => (track.items || [])
       .filter(item => String(item.text || '').trim())
       .map(item => ({
