@@ -10,8 +10,9 @@ import {
   mediaFileKey,
   normalizeMediaPath
 } from '~/utils/tmcut/media'
-import { clampWaveformPoints } from '~/utils/tmcut/waveform'
 import { assetFingerprint, assetStatusForImport, buildAssetRecord } from '~/utils/tmcut/assetImport'
+import { decodePcm } from '~/utils/tmcut/audioDecode'
+import { createWaveformService } from '~/utils/tmcut/waveformService'
 import {
   byteCacheInfo,
   clearCachedBytes,
@@ -64,6 +65,8 @@ if (import.meta.client && typeof window !== 'undefined') {
   })
 }
 
+// The bars this page already drew, keyed by the revision they describe. A relink
+// changes the revision, so the row for the old one is not the answer anymore.
 const waveformCache = new Map<string, number[]>()
 
 // Keyed index of the asset list. findAssetBySrc used to scan every asset with
@@ -94,18 +97,23 @@ function isDurableAssetPath(path: string): boolean {
 }
 
 // ===== Client byte cache (slice C2b, ADR-033) =====
-// On the web runtime the server copy is the only place the editor has read
+// On the web runtime the server copy was the only place the editor had read
 // bytes from so far, and a dev-server restart or a cleared uploads folder takes
 // it away. So an import also keeps a copy in the browser, under the revision the
-// asset record already carries. Nothing reads it back yet: thumbnails (slice D),
-// waveforms (slice G) and export (slice H) are the first consumers, and the
-// byte axis stays owned by checkMissing until a reader makes the copy
-// authoritative.
+// asset record already carries. It is read back now: thumbnails (slice D2),
+// silence (E4) and the waveform bars below (G2) each ask the cache before they
+// ask a decoder or a URL, which is the evidence ADR-033 waits for. The byte
+// axis stays owned by checkMissing until a reader makes the copy authoritative.
 function liveByteKeys(): Set<string> {
   // A fingerprint names one revision of one file, so the library's own records
   // are the only proof the cache has that a copy is still wanted.
   return new Set(assets.value.map(a => a.fingerprint).filter((key): key is string => !!key))
 }
+
+// The one waveform service the app shares, handed the library it must keep alive:
+// writing bars runs the eviction law, and a narrower set would delete the cache
+// it is writing into (slice G2).
+const waveformService = createWaveformService(decodePcm, liveByteKeys)
 
 async function refreshByteCache() {
   byteCache.value = await byteCacheInfo()
@@ -120,6 +128,9 @@ async function cacheAssetBytes(asset: TmcutAsset, bytes: Blob): Promise<void> {
 
 async function clearMediaByteCache() {
   await clearCachedBytes()
+  // The in-memory rows are a convenience over the store, so they die with it —
+  // otherwise a cleared cache would still draw the bars it just forgot.
+  waveformCache.clear()
   await refreshByteCache()
 }
 
@@ -815,6 +826,10 @@ export function useTmcutMedia() {
         if (!stat || !stat.exists) continue
         const key = cacheKeyForPath(asset.path, { mtimeMs: stat.mtimeMs, size: stat.size })
         if (asset.fingerprint !== key) {
+          // New bytes: every answer measured on the old revision is a
+          // description of a file that is no longer here — the in-memory bars
+          // included, since they are keyed by that revision (slice G2).
+          waveformCache.delete(String(asset.fingerprint ?? ''))
           asset.fingerprint = key
           changed = true
         }
@@ -829,12 +844,15 @@ export function useTmcutMedia() {
             changed = true
             void analyzeAsset(asset).then(() => persistLibrary())
           }
-        } else if (asset.kind === 'audio') {
-          const waveName = asset.waveformPath?.split(/[\\/]/).pop()
-          if (asset.waveformPath && waveName !== `${key}.json`) {
+        } else if (asset.kind === 'audio' && asset.waveformPath) {
+          // The strip is the browser's answer now, read from the client cache
+          // under the revision's own artifact key, so this pointer to a file the
+          // FFmpeg controller wrote is only a stale path. Dropping it loses
+          // nothing: no re-analysis is queued for audio.
+          const waveName = asset.waveformPath.split(/[\\/]/).pop()
+          if (waveName !== `${key}.json`) {
             asset.waveformPath = null
             changed = true
-            void analyzeAsset(asset).then(() => persistLibrary())
           }
         }
       }
@@ -857,7 +875,7 @@ export function useTmcutMedia() {
     const asset = assets.value.find(a => a.id === assetId)
     if (!asset || typeof newPath !== 'string' || !newPath.trim()) return false
     const oldPath = asset.path
-    const oldWaveformPath = asset.waveformPath
+    const oldFingerprint = asset.fingerprint
     const kind = classifyAssetKind(newPath)
     if (kind) asset.kind = kind
     // New bytes: everything the last probe learned about the old file goes with
@@ -873,8 +891,11 @@ export function useTmcutMedia() {
     asset.path = normalizeMediaPath(newPath)
     asset.name = typeof source.name === 'string' && source.name ? source.name : mediaFileName(asset.path)
     if (typeof source.size === 'number' && source.size > 0) asset.meta.fileSize = source.size
-    if (oldWaveformPath) {
-      waveformCache.delete(oldWaveformPath)
+    if (oldFingerprint) {
+      // The revision changed, so the bars measured on the old bytes describe a
+      // file this asset no longer points at. The cached artifact under the old
+      // fingerprint is freed by the next prune: the library stopped naming it.
+      waveformCache.delete(oldFingerprint)
     }
     if (currentProject.value) {
       updateClipsSrc(oldPath, asset.path)
@@ -934,20 +955,27 @@ export function useTmcutMedia() {
     return !!clip
   }
 
+  /**
+   * The bars of one asset, from the browser: the client cache is asked first and
+   * the PCM decoder only answers when it has nothing (slice G2). `[]` means there
+   * is nothing to draw — a file with no audio track, a host with no decoder, a
+   * revision with no fingerprint — and the caller keeps its placeholder.
+   */
   async function loadWaveform(asset: TmcutAsset): Promise<number[]> {
-    if (!asset.waveformPath) return []
-    const cached = waveformCache.get(asset.waveformPath)
-    if (cached) return cached
-    try {
-      const res = await fetch(mediaUrl(asset.waveformPath))
-      if (!res.ok) return []
-      const data = (await res.json()) as { buckets?: unknown }
-      const points = clampWaveformPoints(Array.isArray(data.buckets) ? (data.buckets as number[]) : [])
-      waveformCache.set(asset.waveformPath, points)
-      return points
-    } catch {
-      return []
-    }
+    const remembered = waveformCache.get(asset.fingerprint ?? '')
+    if (remembered) return remembered
+    const peaks = await waveformService.load({
+      fingerprint: asset.fingerprint,
+      src: asset.fingerprint ? mediaUrl(asset.path) : null,
+      durationSec: asset.meta.durationSec
+    })
+    if (peaks === null) return []
+    waveformCache.set(String(asset.fingerprint), peaks)
+    // A first-time load writes an artifact into the store, and this service is
+    // the only writer that does — so the panel's "what the browser holds" row
+    // is told about it here rather than waiting for the next library open.
+    await refreshByteCache()
+    return peaks
   }
 
   function getThumbUrl(asset: TmcutAsset): string {

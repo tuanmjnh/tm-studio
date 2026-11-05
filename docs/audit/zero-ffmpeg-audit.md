@@ -353,11 +353,21 @@ Mỗi slice chạy 5 gate (`tmcut-verify-gate-pipeline`) rồi commit + push, nh
 | D | Thumbnail + filmstrip bằng `VideoDecoder`/Canvas; bỏ `-ss` IPC — **tách ba phần: D1 (audit §19) dựng danh tính và luật đua trong core (`frameRequestKey`/`frameTimeWithinMedia`/`createFrameSlotLedger`/`planFrameCacheEviction`), pin cả parity với template key của desktop bằng cách đọc file controller; D2 dựng **xong** service giải frame một cho hai host (`app/utils/tmcut/frameStore.ts`) + seam pixel duy nhất (`frameDecode.ts`, Mediabunny `CanvasSink`), pool trần 3 lấy từ core, và là chỗ **đường đọc đầu tiên** của byte cache xuất hiện; D3 nối `useTmcutFrames.ts` + ba consumer và trả nợ fixture video §13.4. IPC `-ss` vẫn còn cho tới slice I (build-then-cut, rule 11)** | `useTmcutFrames.ts`, `frames.mjs`, `app/utils/tmcut/frameStore.ts` + `frameDecode.ts` mới | thumb test theo timestamp; cancel stale request — **D1: 11 check ở `tmcut_frame_cache.spec.ts` (danh tính theo ms, clamp, ledger thắng-thua, cache bound); D2: 19 check ở `tmcut_frame_service.spec.ts` (peak decoder = 3, đọc cache trước khi mở decoder, one-flight theo key, ask thua bị abort mà vẫn giữ bytes, bound + `revokeObjectURL`) — "cancel" đã là hành vi đo được, nhưng vẫn chưa hủy một decode thật nào vì chưa có fixture video: nợ đó thuộc D3** | B |
 | E | Autocut analysis (scene + silence) phía decoder; retire `analysis.mjs` stderr parse | `analysis.mjs`, `useTmcutAutocut.ts` | parity với kết quả cũ trên fixture, hoặc khai tử tính năng có ADR | D |
 | F | Scene graph + WebGL2 compositor cho **preview** (nâng cấp #96 thành slice đầu của renderer chung, không phải DOM stacking tạm) | `TmcutPreviewPlayer.vue`, `paintStack.mjs`, `renderAt.mjs` | preview composite đủ `rows`, pixel gate DOM↔GPU | B |
-| G | Web Audio engine: mixer, gain/mute/solo, waveform PCM, volume keyframe | mới trong `app/composables` | gap/overlap/crossfade test; 0 hit `extractAudio` | F |
+| G | Web Audio engine: mixer, gain/mute/solo, waveform PCM, volume keyframe — **đang chạy, đo từng phần**: G1 (audit §43) dựng luật peak + envelope + key artifact; G2 (audit §44, 2026-11-05) dựng **service** và có bằng chứng **artifact đọc lại từ cache client sau reload mà không chạm file**; mixer/gain keyframe, gap/overlap/crossfade và số đo "0 hit `extractAudio`" **chưa có** (#139, #140) | mới trong `app/composables` | gap/overlap/crossfade test; 0 hit `extractAudio` | F |
 | H | Export MVP: capability matrix, frame scheduler → `VideoEncoder` → `Mp4OutputFormat` finalize, backpressure, cancel | `packages/core/src/export/*` mới | output play được, A/V sync, 0 spawn | F, G |
 | I | **Cut FFmpeg**: xóa `app/utils/tmcut/render/`, `ffmpegHelper.ts`, `ffmpeg.controller.cjs`, 3 route media, namespace IPC, 3 bảng DB, binary, updater — kèm **hai site subtitle burn-in** (§2.4) | 2.2 + 2.3 | DoD §25 pass; witness group A đã chuyển thành behavior test ở H; quyết định 9 đã chốt | H |
 | J | Cú pháp FFmpeg trong core: **8 emitter + 2 parser** (§5.1) → semantics + shader/canvas instruction | `canvas/mask/audio/keyframes/retime/effects/stabilize/cache` + `probe/analysis`; `textStyle`/`transitions` chỉ sửa comment | group B vẫn xanh; group A đã thay; **11** file core test phải **tách assertion** (§2.3: + `analysis`, − `platform`/`transitions` thuộc hai mức việc khác), không xóa cả file | I |
 | K | Web/Electron parity + packaging không binary; docs consolidation (archive V4 pack, một nguồn sự thật) | `electron/`, `docs/` | cùng project mở ở hai host trong phạm vi capability | I, J |
+
+*(**đọc lại bảng này ngày 2026-11-05, §44**: ô "Bị chặn bởi" và cột DoD của dòng **C** mang số đo của
+ngày viết bảng. Hôm nay đường đọc byte cache có **ba leg** — pixels (D2, §20), silence (E4, §33),
+waveform (G2, §44) — `readCachedBytes` có **4** call-site thật trong `app/**`, và §44.5 là lần đầu một
+**artifact** được đọc lại sau reload mà không phát request `.wav` nào. Hai vế khiến ADR-033 còn **CHỜ**
+vẫn đúng như bảng ghi: **playback + export** còn đi `/uploads/` (desktop: từ đĩa), và **upload vẫn bắt
+buộc**. Dòng **G** cũng đã tách: G1 §43 (luật), G2 §44 (service + bằng chứng đọc lại), #139 mixer và
+#140 gap/overlap/sync/trim/rate chưa chạy. Cột evidence của dòng C ghi **26** check ở
+`tmcut_byte_cache.spec.ts`; từ G2 spec đó có **28** (§44.3) và suite có thêm
+`tmcut_waveform_service.spec.ts` **11** check.)*
 
 Slice #96 đang mở (preview composite stack — G18 screen leg) nên **gộp vào F**: làm DOM-stacking tạm rồi viết lại sang GPU là trả nợ hai lần
 cho cùng một luật đã có trong `paintStack.mjs`.
@@ -942,6 +952,11 @@ chưa phải đã xong; nói cách khác C2b chứng minh phần **ghi** của A
   playback, probe, thumbnail, waveform và export vẫn đọc từ `/uploads/` (desktop: từ đĩa). Bytes nằm
   trong máy hôm nay là bytes **được giữ**, chưa phải bytes **được dùng**, nên local-first chưa thật
   sự có nghĩa ở mặt hành vi. Việc này thuộc D (thumb/filmstrip), G (waveform) và H (export).
+- *(**đo lại ở §44, ngày 2026-11-05**: dòng trên là số đo của **hôm 2026-11-04**, và nó đã lỗi về ba leg —
+  pixels (D2, §20), silence (E4, §33), waveform (G2, §44). `readCachedBytes` hôm nay có **4** call-site
+  trong `app/**`, và §44.5 có bằng chứng một **artifact** được đọc lại sau reload mà không phát request
+  `.wav` nào. Phần dòng trên còn đúng: **playback** và **export** vẫn đọc từ `/uploads/` (desktop: từ đĩa),
+  nên ADR-033 vẫn **CHỜ**.)*
 - **Ba backend mới chạy trên trình duyệt giả.** `installOpfs(...)` và IndexedDB fake đo được **luật**
   (đọc lại đúng byte, reconcile hai chiều, eviction LRU) nhưng chưa phải Chrome/Edge thật: chưa có
   `navigator.storage.estimate()` thật, chưa có `QuotaExceededError` thật khi đĩa gần đầy, chưa có
@@ -1053,6 +1068,10 @@ Số đo quan trọng nhất của lượt này không thuộc về frame, mà t
 Tức là cache bytes **đã được viết nhưng chưa lần nào được đọc**. Hôm nay nó có **1** call-site thật, ở
 `frameStore.ts:141`, và đó là **đường đọc đầu tiên** mà ADR-033 còn chờ — bốn đường kia (playback,
 probe, waveform, export) vẫn chưa có.
+
+*(**đo lại ở §44, ngày 2026-11-05**: "bốn đường kia" hôm nay còn **hai**. Silence (E4) và waveform (G2)
+đã đọc cache, và G2 là lần đầu một **artifact** chứ không chỉ một revision được đọc lại; playback và
+export vẫn đi `/uploads/` như dòng trên nói.)*
 
 ### 20.1 Cái đã dựng
 
@@ -4546,3 +4565,162 @@ Bốn mutation, mỗi cái một run, tất cả đã revert (md5 đầu và cu�
 - Envelope chưa được ghi xuống OPFS/IndexedDB; `controller.mjs:420-427` (zeros kèm `ok:true`) và
   `:402-406` (guard không algorithm) vẫn còn nguyên. Gỡ chúng là việc của G2/G4, vì phải có đường đọc
   mới rồi mới retire đường cũ được.
+- *(**đo lại ở §44, 2026-11-05**: hai vế đầu của dòng này đã đổi — `floatPeakBuckets` có call-site
+  trong [waveformService.ts:85](file:///D:/Applications/tm-studio/app/utils/tmcut/waveformService.ts#L85) và
+  `readCachedBytes` đọc một **artifact** ở
+  [:63](file:///D:/Applications/tm-studio/app/utils/tmcut/waveformService.ts#L63); envelope đã ghi xuống OPFS và đã được
+  đọc lại sau reload (§44.5). Vế còn nguyên là `controller.mjs:420-427` / `:402-406`: đường đọc mới chưa cho phép retire
+  đường cũ trên desktop, nên nợ đó vẫn thuộc I/J.)*
+
+---
+
+## 44. Slice G2 — bar của một file audio sinh ra trong browser, và lần đầu một artifact được đọc lại (đo ngày 2026-11-05)
+
+### 44.1 Việc của lượt này, và hiện trạng đo được ở HEAD `a33d745`
+
+G1 dựng luật waveform và key cho artifact, nhưng chính §43.8 đã ghi là **chưa ai gọi**. G2 là lượt nối dây: một service
+trả lời câu "file này có dạng bar thế nào" bằng cách hỏi cache client **trước**, và chỉ mở decoder khi cache không có gì —
+đúng hình hài D2 dựng cho pixel ([frameStore.ts](file:///D:/Applications/tm-studio/app/utils/tmcut/frameStore.ts)) và E4 dựng cho
+silence ([autocutDetect.ts](file:///D:/Applications/tm-studio/app/utils/tmcut/autocutDetect.ts)). Đo trước lượt này:
+
+| Chỗ | Dòng (HEAD) | Hiện trạng đo được |
+| --- | --- | --- |
+| [useTmcutMedia.ts](file:///D:/Applications/tm-studio/app/composables/useTmcutMedia.ts#L938) | 938-946 | `loadWaveform` gọi `fetch(mediaUrl(asset.waveformPath))` rồi `clampWaveformPoints` — tức đọc một **file JSON do controller FFmpeg viết xuống server**, không phải bytes trong máy |
+| [useTmcutMedia.ts](file:///D:/Applications/tm-studio/app/composables/useTmcutMedia.ts#L97) | 97-103 | comment ghi thẳng "Nothing reads it back yet: thumbnails (slice D), waveforms (slice G) and export (slice H) are the first consumers" |
+| [TmcutMediaPanel.vue](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutMediaPanel.vue#L542) | 542 | `asset.waveformPath &&` — một asset audio **không có** đường dẫn server thì vĩnh viễn không có bar |
+| [TmcutTimelineClip.vue](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutTimelineClip.vue#L207) | 207-211 | `if (!asset?.waveformPath) return` — cùng một cổng thứ hai |
+| `git grep -n "asset.waveformPath" HEAD -- app` | — | **7** kết quả: 6 trong composable (`452`, `833-835`, `860`, `869`, `938-946`) + 1 ở panel, mà `waveformPath` chỉ do **desktop IPC** điền (`analyzeAsset` → `result.waveCachePath`). Nghĩa là **web host chưa từng vẽ nổi một dải bar nào** |
+| `git grep -n readCachedBytes HEAD -- app` | — | **2** call-site thật (`frameStore.ts:196`, `autocutDetect.ts:106`) và **0** chỗ nào đọc một **artifact**: cả hai xin revision của file, không chỗ nào xin `<fp>-wave-v1` |
+| `git grep -n waveformCacheKey HEAD` | — | **0** kết quả toàn repo — G1 khai kind + version trong core nhưng chưa ai mint key |
+| [byteStore.ts](file:///D:/Applications/tm-studio/app/utils/tmcut/byteStore.ts#L299) | 299-311 | reader làm `index.set(...)` rồi `writeIndex(index)` trên **snapshot nó mở ra trước khi await** — seed của defect ở §44.3 |
+
+### 44.2 Service: một câu hỏi, một đường trả lời, bốn lời từ chối
+
+[waveformService.ts](file:///D:/Applications/tm-studio/app/utils/tmcut/waveformService.ts) là file mới duy nhất của lượt này
+(117 dòng). `createWaveformService(decode, liveKeys)` (:56) đi theo đúng thứ tự: đọc artifact theo key của G1 (:63) → nếu
+không có thì đọc **bytes của revision** từ cache (:73) → giao bytes đó cho decoder, chỉ xin `src` khi máy không giữ bản nào
+(:75) → reduction ở core (:85) → ghi artifact xuống cache (:96) → trả bar. Bốn chỗ từ chối, mỗi chỗ một dòng riêng:
+
+| Từ chối | Dòng | Lý do đo được |
+| --- | --- | --- |
+| Không có fingerprint (hoặc fingerprint không phải 8 hex) | :101-103 | `waveformCacheKey` trả `null`: không có tên thì không có chỗ cất câu trả lời, nên cũng không có lý do để mở decoder |
+| `durationSec` không finite hoặc ≤ 0 | :104 | một file không có độ dài thì không có bucket nào đúng; luật G1 đã từ chối payload loại này |
+| Decoder trả `null` **hoặc** trả không kênh nào | :82 | đây chính là bug controller (`:420-427`): FFmpeg chết thì ghi **toàn zeros kèm `ok:true`**, lần đọc sau coi là thành công. Ở đây không có gì được ghi, nên lần hỏi sau hỏi lại thật |
+| `buildWaveformPayload` trả `null` | :90 | luật core đã từ chối `peaks: []`; service không được phép tự nới luật của core |
+
+Hai quyết định thiết kế có chủ đích:
+
+- **`decode` là tham số, không phải import trong lòng luật** (:27, :57). PCM cần WebCodecs, Node không có, nên muốn đo
+  "cái gì được cache, cái gì bị gộp, cái gì bị từ chối" thì phải dựng được service không có decoder. Chỉ 5 dòng cuối của
+  [useTmcutMedia.ts:116](file:///D:/Applications/tm-studio/app/composables/useTmcutMedia.ts#L116) nối `decodePcm` thật.
+- **`liveKeys` là bắt buộc và là câu trả lời của cả thư viện** (:92, và
+  [useTmcutMedia.ts:107](file:///D:/Applications/tm-studio/app/composables/useTmcutMedia.ts#L107)). Một lần ghi chạy luôn luật
+  eviction; một service đưa tập hẹp hơn sẽ **xóa chính cache nó đang viết**. Service còn tự thêm fingerprint của revision nó
+  đang phục vụ vào tập đó (:95) — có ai đang hỏi file này, đó là bằng chứng nó còn được muốn.
+
+Việc gộp người hỏi (:106-113) tồn tại vì một phép đo thật: panel và clip cùng hỏi **trong một tick** (`ensureWaveforms` duyệt
+danh sách, `refreshWaveform` chạy lúc mount). Không có `jobs` map thì mỗi người hỏi mở một decoder cho cùng một file.
+
+### 44.3 Hai defect của byte store mà chính đường đọc mới lộ ra
+
+Cache client tồn tại từ C2b nhưng **chưa từng có hai caller chồng nhau** — mỗi leg cũ chỉ đọc một mình nó. Leg waveform là
+leg đầu tiên vừa **đọc artifact** vừa **ghi revision** trong cùng một lượt, và nó lộ ra hai lỗi có thật, cả hai đều đo được
+trên máy trước khi có spec:
+
+| Defect | Triệu chứng đo live | Cơ chế | Sửa |
+| --- | --- | --- | --- |
+| A — index ghi theo **snapshot** | một file OPFS nằm trên máy mà index **không kê tên**: không ai đọc được, và lần reconcile kế tiếp giải phóng nó | `readCachedBytes` mở `index = readIndex()` **trước** khi `await getFile()`, rồi `writeIndex(index)` **sau**. Writer xen giữa cũng mở snapshot của nó và ghi cả snapshot đè lên: row của người kia biến mất, bytes ở lại thành mồ côi | `touchIndexRow` (:165) và `forgetIndexRow` (:172) — mỗi lần sửa **một row**, đọc index lại ngay lúc sửa. Không hàm nào trả về snapshot để caller mang theo |
+| B — OPFS **cắt ngắn file ngay khi mở writable** | hàng cache trong panel báo `bytes: 0` cho một asset thật 48 KB | `handle.createWritable()` làm file rỗng ngay; một reader xen vào thấy row **có** mà file **rỗng**, trả về `Blob` 0 byte và ghi row `bytes: 0` — tức cache tự xác nhận một thứ không có | row chỉ được **kê sau khi bytes đã nằm xuống** (:310, comment :306-309), và reader **từ chối file rỗng** (:336) thay vì vẽ nó như hàng có sẵn |
+
+Vế thứ hai của defect B đáng nói ở chỗ nó chọn sai một cách có hệ thống: trước sửa, `readCachedBytes` còn `deleteStored` một
+file không đọc được. Trong thế giới có write đang bay, đó là **xóa bytes của người khác**, nên đường đọc giờ chỉ *quên row*
+(:342) và để riêng một lần reconcile (`pruneByteCache`) quyết định giải phóng bytes.
+
+Phía test, [tmcut_browser_storage.ts](file:///D:/Applications/tm-studio/tests/unit/helpers/tmcut_browser_storage.ts) được
+làm cho **giống browser thật** thay vì dễ kiểm soát: fake OPFS cắt ngắn file ngay khi `createWritable()` (:54) đúng như OPFS,
+và `installOpfs(quota, { holdReadsFor, holdWritesFor })` (:135) cho phép một check **xếp lịch** cuộc chồng nhau — reader
+đậu lại trong `getFile()` trong khi writer hoàn tất — chứ không trông chờ timing. Check 'the index is written one row at a
+time, never as a snapshot' ([tmcut_byte_cache.spec.ts:213](file:///D:/Applications/tm-studio/tests/unit/tmcut_byte_cache.spec.ts#L213))
+đã chạy **đỏ** (`undefined !== 600`) trước khi có `touchIndexRow`; check 'a row never claims bytes the file does not have'
+(:238) đỏ với `actual: [Blob], expected: null`.
+
+### 44.4 Nối dây: năm chỗ sửa, một đường cũ retire
+
+| Chỗ | Dòng hiện tại | Thay đổi |
+| --- | --- | --- |
+| [useTmcutMedia.ts:964](file:///D:/Applications/tm-studio/app/composables/useTmcutMedia.ts#L964) | 964-979 | `loadWaveform` đi qua service; `waveformCache` giờ **key theo fingerprint** chứ không theo tên file trên server |
+| [useTmcutMedia.ts:133](file:///D:/Applications/tm-studio/app/composables/useTmcutMedia.ts#L133) | 130-135 | "Clear cache" xóa luôn hàng nhớ trong memory — hàng đó chỉ là convenience over store, để lại là vẽ bar của thứ vừa bỏ |
+| [useTmcutMedia.ts:832](file:///D:/Applications/tm-studio/app/composables/useTmcutMedia.ts#L832) | 826-835 | re-check thấy revision đổi → quên hàng nhớ của revision cũ |
+| [useTmcutMedia.ts:898](file:///D:/Applications/tm-studio/app/composables/useTmcutMedia.ts#L898) | 891-900 | relink quên theo **fingerprint cũ**, không theo `oldWaveformPath`; artifact cất dưới tên fingerprint cũ do `pruneByteCache` giải phóng, vì thư viện không còn kê nó |
+| [TmcutMediaPanel.vue:545](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutMediaPanel.vue#L545) và [TmcutTimelineClip.vue:210](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutTimelineClip.vue#L210) | 545 / 210 | bỏ cổng `asset.waveformPath` — một asset audio **không cần** file server nào để có bar |
+
+Đường retire nằm ở nhánh audio của re-check (:844-858): trước đây nó null pointer **và xếp hàng `analyzeAsset`** — một vòng
+IPC/server để FFmpeg viết lại JSON. Giờ bar là câu trả lời của browser nên pointer cũ chỉ còn là một đường dẫn chết, bỏ nó
+không mất gì vì audio không cần phân tích lại. `asset.waveformPath` vẫn còn trong schema và desktop IPC vẫn ghi nó
+(:463): lượt này retire **đường đọc**, chưa retire **trường**.
+
+### 44.5 Bằng chứng live — đúng phần ADR-033 chờ từ C2b
+
+Chromium, web runtime trên `:4003`, import một file WAV tự tổng hợp (duy nhất để không dính dedupe của
+`importWebFiles`), rồi tải lại trang:
+
+| Đo | Trước reload | Sau reload |
+| --- | --- | --- |
+| `tmcut_byte_index_v1` | `{ adfcda50: 48044, adfcda50-wave-v1: 1302 }` | **đúng hai row đó**, row artifact vẫn 1302 byte |
+| `accessedAt` của `adfcda50-wave-v1` | 1793871451863 | **1793871506846** — tiến, tức trang này **đã đọc** artifact |
+| `accessedAt` của `adfcda50` (revision) | 1793871451762 | **1793871451762** — đứng nguyên, tức nó **không** bị mở ra |
+| Resource entries kết thúc `.wav` | — | **0** — không một request nào tới `/uploads/` cho audio |
+| Số shape của dải bar trên card | 200 | **200** — bar vẽ ra thật, không phải placeholder |
+| Hàng cache trong media panel | `48.2 KB · 2 file` | `48.2 KB · 2 file` |
+
+Hàng thứ hai và thứ ba là cả luận điểm: reload đọc **artifact** mà không đọc **file**. §18 của audit (đo 2026-11-04) còn ghi
+"bytes nằm trong máy hôm nay là bytes **được giữ**, chưa phải bytes **được dùng**" — với leg waveform, vế sau đã đổi.
+
+### 44.6 Falsification
+
+Bốn mutation, bốn run, mỗi cái restore byte-identical (`md5sum`: `waveformService.ts` `af66537f…`, `byteStore.ts`
+`75789f38…`), và hai spec chạy lại xanh sau restore (28/28 và 11/11).
+
+| Mutation | Kết quả |
+| --- | --- |
+| Service bỏ đường đọc artifact (`readCachedBytes(key)` → `null`) | waveform service spec **FAILED** ở `a cached waveform is read instead of decoded` (`deepStrictEqual` hai dãy bar) |
+| Service bỏ gộp job (`if (running) return running` vô hiệu) | **FAILED** ở `a panel and a timeline clip cost one decode` — `2 !== 1` |
+| Reader ghi **cả snapshot** index (đúng hình hài code HEAD) | byte cache spec **FAILED** ở `and the index still names them` — `undefined !== 600`, tức đúng số đo mồ côi lấy ngoài máy |
+| Writer kê row **trước** khi bytes landing + reader tin file rỗng (đúng cặp hình hài code gây triệu chứng `bytes: 0`) | **FAILED** ở `and an empty file answers nothing` |
+
+Một sai số trung thực phải ghi lại: **từng vế một của mutation cuối thì không sập**. Kê row sớm một mình vẫn xanh vì guard
+`blob.size === 0` đỡ nó; bỏ guard size một mình vẫn xanh vì row chưa kịp tồn tại. Hai guard **che lẫn nhau**, và check chỉ
+sập khi thiếu **cả hai** — tức đúng cái đã ship. Check đó pin *tổ hợp*, không pin từng guard, và docs này không được phép
+nói nó chứng minh từng guard một là cần thiết.
+
+### 44.7 Gate
+
+| Gate | Lệnh | Kết quả |
+| --- | --- | --- |
+| 1 Typecheck | `npx nuxt typecheck` | exit **0**, `0` × `error TS`; `.nuxt/eslint.config.mjs` regenerate lúc 16:34, 28581 B |
+| 2 Lint | `npx eslint` trên **7** file chạm, chạy **sau** 16:34 | exit **0**, 0 problem |
+| 3 Unit | `npx tsx tests/unit/run-all.mts --smoke` | **126/126** specs, exit **0** (125 của G1 + `tmcut_waveform_service` mới); `tmcut_byte_cache` **28/28**, `tmcut_waveform_service` **11/11** |
+| 3 Core | `node --test packages/core/test/*.test.mjs` | **717/717** exit 0 (714 của G1 + 3 check `waveformCacheKey`); `npx tsc -p packages/core --noEmit` exit **0** |
+| 4 Live | `:4003`, Chromium | phép đo §44.5, cộng số đo console ở §44.8 |
+| 5 Dọn dẹp | file scratch + `/uploads/` của chúng | **0** bản `g2-` còn lại trong `.data/uploads`; library/index/OPFS của trình duyệt đã xóa |
+
+### 44.8 Chưa chứng minh / nợ
+
+- **Desktop controller còn nguyên.** [tmcut.controller.cjs:420-427](file:///D:/Applications/tm-studio/electron/tools/tmcut.controller.cjs#L420)
+  vẫn ghi zeros kèm `ok:true`, `:402-406` vẫn guard bằng `Array.isArray(cached.buckets)`. Đường đọc mới chưa cho phép gỡ
+  đường cũ trên host đó — việc của I/J.
+- **`asset.waveformPath` chưa retire.** Trường vẫn ở trong schema và IPC desktop vẫn ghi nó
+  ([useTmcutMedia.ts:463](file:///D:/Applications/tm-studio/app/composables/useTmcutMedia.ts#L463)). Đã retire **đường đọc**,
+  chưa retire **trường**, và chưa có quyết định migrate.
+- **`clampWaveformPoints` không còn call-site nào** trong `app/**` — `git grep -c` trả **1** kết quả, và đó là dòng re-export ở
+  [waveform.ts:9](file:///D:/Applications/tm-studio/app/utils/tmcut/waveform.ts#L9). Để lại vì core vẫn là chỗ khai báo luật
+  clamp; nếu một lượt sau xác nhận không ai cần thì đó là một dòng re-export bị gỡ, không phải một loss.
+- **Chỉ web runtime.** §44.5 đo trên Chromium/web. Electron host (OPFS trong packaged app), IndexedDB fallback, và quota thật
+  của thiết bị chưa đo lại lượt này; defect B là OPFS-specific nên đường IDB không có số đo concurrent.
+- **Playhead audio chưa có gì.** G2 giao **bar**, không giao **tiếng**: mixer, gain per-layer và đồng bộ thuộc G3 (#139);
+  gap/overlap/sync/trim/rate và close-out ADR-033 thuộc G4 (#140).
+- **Console live còn một `[error]` môi trường:** `401` của `GET /api/v1/ai/relay/catalog` trên editor/templates/factory.
+  Nguồn ở [catalog.get.ts:11](file:///D:/Applications/tm-studio/server/api/v1/ai/relay/catalog.get.ts#L11) — route tự chặn khi
+  `event.context.auth` vắng, `/api/v1/auth/me` vẫn trả 200. Pre-existing, không phải của lượt này, và không được tính là
+  PASS im lặng.
+

@@ -4,6 +4,8 @@
 //  normalized 0..1 peak buckets for timeline rendering.
 // =============================================================================
 
+import { derivedByteCacheKey } from './byteCache.mjs'
+
 /** Reduce a sample array to `buckets` normalized peaks. */
 export function int16ToPeaks(samples, buckets = 200) {
   const count = Math.max(1, Math.floor(buckets))
@@ -146,4 +148,25 @@ export function readWaveformPayload(value) {
   if (payload === null) return null
   if (Number(value.bucketCount) !== payload.bucketCount) return null
   return payload
+}
+
+/**
+ * What the cached bars are called, and which generation of the law wrote them.
+ *
+ * The name is the byte cache's derived-key form (`fingerprint-wave-v1`), so one
+ * revision owns several artifacts without any of them being mistaken for a media
+ * revision, and eviction keeps the waveform as long as the file it describes is
+ * in the library. The version is in the name because two generations of bars must
+ * not overwrite each other into an ambiguous file: a reader that asks
+ * `waveformCacheKey` gets the bars the current algorithm means, and the old
+ * generation is what the eviction law frees.
+ */
+export const TMCUT_WAVEFORM_CACHE_KIND = 'wave'
+
+/** Bump when the reducer or the envelope changes shape, not when the app restarts. */
+export const TMCUT_WAVEFORM_CACHE_VERSION = 1
+
+/** The cache key for one revision's waveform, or null when it has no revision. */
+export function waveformCacheKey(fingerprint) {
+  return derivedByteCacheKey(fingerprint, TMCUT_WAVEFORM_CACHE_KIND, TMCUT_WAVEFORM_CACHE_VERSION)
 }

@@ -537,9 +537,12 @@ function assetMetaLabel(asset: TmcutAsset): string {
   return parts.join(' · ')
 }
 
+// The bars come from the browser: the client cache is asked first, the PCM
+// decoder only answers when it holds nothing (slice G2). A revision with no
+// fingerprint cannot be asked about, so a dead asset costs nothing here.
 async function ensureWaveforms() {
   for (const asset of projectAssets.value) {
-    if (effectiveAssetKind(asset) === 'audio' && asset.waveformPath && !waveformMap.value[asset.id]) {
+    if (effectiveAssetKind(asset) === 'audio' && !waveformMap.value[asset.id]) {
       const points = await loadWaveform(asset)
       if (points.length > 0) {
         waveformMap.value[asset.id] = points

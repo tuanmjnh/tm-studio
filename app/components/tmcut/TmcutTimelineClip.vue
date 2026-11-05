@@ -207,7 +207,7 @@ async function refreshWaveform() {
   wavePoints.value = []
   if (props.trackType !== 'audio' || !props.clip.src) return
   const asset = findAssetBySrc(props.clip.src)
-  if (!asset?.waveformPath) return
+  if (!asset) return
   wavePoints.value = await loadWaveform(asset)
 }
 onMounted(() => {

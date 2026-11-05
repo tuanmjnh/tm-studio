@@ -37,17 +37,25 @@ function fakeDirectory(name: string): FakeDir {
   return { kind: 'directory', name, children: new Map<string, FakeNode>() }
 }
 
-function fileHandleOf(node: FakeFile) {
+function fileHandleOf(node: FakeFile, reads?: () => Promise<void>, writes?: () => Promise<void>) {
   return {
     kind: 'file' as const,
     name: node.name,
     async getFile() {
+      // A read the check controls: the browser takes a moment to hand the file
+      // over, and anything the caller read from the index before that moment is
+      // already history by the time it lands.
+      if (reads) await reads()
       return node.blob
     },
     async createWritable() {
+      // OPFS truncates the file the moment the writable opens, so a reader that
+      // looks while a write is in flight really does see zero bytes.
+      node.blob = new Blob([])
       let pending = node.blob
       return {
         async write(value: Blob | ArrayBuffer) {
+          if (writes) await writes()
           pending = value instanceof Blob ? value : new Blob([value])
         },
         async close() {
@@ -58,7 +66,7 @@ function fileHandleOf(node: FakeFile) {
   }
 }
 
-function directoryHandleOf(dir: FakeDir) {
+function directoryHandleOf(dir: FakeDir, reads?: () => Promise<void>, writes?: () => Promise<void>) {
   // A directory the browser reclaimed keeps no files: a handle to it must fail,
   // exactly as a detached OPFS handle does.
   const live = <T>(run: () => T): T => {
@@ -71,11 +79,11 @@ function directoryHandleOf(dir: FakeDir) {
     async getDirectoryHandle(childName: string, options: { create?: boolean } = {}) {
       return live(() => {
         const existing = dir.children.get(childName)
-        if (existing && existing.kind === 'directory') return directoryHandleOf(existing)
+        if (existing && existing.kind === 'directory') return directoryHandleOf(existing, reads, writes)
         if (options.create) {
           const created = fakeDirectory(childName)
           dir.children.set(childName, created)
-          return directoryHandleOf(created)
+          return directoryHandleOf(created, reads, writes)
         }
         throw notFound(childName)
       })
@@ -83,11 +91,11 @@ function directoryHandleOf(dir: FakeDir) {
     async getFileHandle(fileName: string, options: { create?: boolean } = {}) {
       return live(() => {
         const existing = dir.children.get(fileName)
-        if (existing && existing.kind === 'file') return fileHandleOf(existing)
+        if (existing && existing.kind === 'file') return fileHandleOf(existing, reads, writes)
         if (options.create) {
           const created: FakeFile = { kind: 'file', name: fileName, blob: new Blob([]) }
           dir.children.set(fileName, created)
-          return fileHandleOf(created)
+          return fileHandleOf(created, reads, writes)
         }
         throw notFound(fileName)
       })
@@ -98,7 +106,9 @@ function directoryHandleOf(dir: FakeDir) {
     async* entries() {
       if (dir.detached) return
       for (const [key, value] of [...dir.children]) {
-        yield [key, value.kind === 'directory' ? directoryHandleOf(value) : fileHandleOf(value)] as [string, unknown]
+        yield [key, value.kind === 'directory'
+          ? directoryHandleOf(value, reads, writes)
+          : fileHandleOf(value, reads, writes)] as [string, unknown]
       }
     }
   }
@@ -117,10 +127,17 @@ export type OpfsHandle = {
 
 let lastOpfs: OpfsHandle | undefined
 
-export function installOpfs(quotaBytes: number): OpfsHandle {
+/**
+ * `holdReadsFor` is awaited before the browser hands a file over and
+ * `holdWritesFor` before a write lands, which is how a check makes two callers
+ * really overlap instead of hoping the microtask queue happens to interleave them.
+ */
+export function installOpfs(quotaBytes: number, options: { holdReadsFor?: () => Promise<void>, holdWritesFor?: () => Promise<void> } = {}): OpfsHandle {
   const g = globalThis as Record<string, unknown>
   const rootDir = fakeDirectory('')
   const quota = quotaBytes
+  const reads = options.holdReadsFor
+  const writes = options.holdWritesFor
 
   const cacheDir = (): FakeDir | undefined => {
     const cache = rootDir.children.get(CACHE_DIR_NAME)
@@ -131,7 +148,7 @@ export function installOpfs(quotaBytes: number): OpfsHandle {
     userAgent: 'node',
     storage: {
       async getDirectory() {
-        return directoryHandleOf(rootDir)
+        return directoryHandleOf(rootDir, reads, writes)
       },
       async estimate() {
         const files = cacheDir()?.children.values() ?? []
@@ -154,7 +171,7 @@ export function installOpfs(quotaBytes: number): OpfsHandle {
       rootDir.children.delete(CACHE_DIR_NAME)
     },
     writeOrphan: async (name: string, size: number) => {
-      const dir = await directoryHandleOf(rootDir)
+      const dir = await directoryHandleOf(rootDir, reads, writes)
         .getDirectoryHandle(CACHE_DIR_NAME, { create: true })
       const file = await dir.getFileHandle(name, { create: true })
       const writable = await file.createWritable()

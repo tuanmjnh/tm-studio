@@ -52,7 +52,7 @@ Vì vậy register này dùng số tiếp theo của dãy đang chạy (028…03
 | ADR-030 | decode/encode qua WebCodecs, hỏi capability trước khi dùng | **MỘT PHẦN** — probe đã đọc `isConfigSupported`/codec table; chưa có encoder nào | slice H |
 | ADR-031 | một timeline evaluator + một composition model cho hai host | **ĐÃ ÁP DỤNG** — `evaluateTimeline`, `renderAt`, `createFrameScheduler`, `paintStack` | slice J phải trả nốt phần core đang in văn bản FFmpeg |
 | ADR-032 | Electron là shell, không sở hữu media engine thứ hai | **MỘT PHẦN** — engine HTML-video thứ hai đã xoá (ADR-023); engine FFmpeg desktop còn tới slice I. Slice C1 cộng thêm một bằng chứng "một service cho hai host": nhánh desktop và nhánh web của `analyzeAsset` cùng đi qua một verdict table (audit §16.2) | slice I |
-| ADR-033 | media đi trong máy mặc định; rời máy là một lựa chọn hiển thị | **CHỜ** — web host vẫn stream file đã chọn lên server (`server/api/v1/media/upload.post.ts`). Slice C1 dựng **điều kiện** (fingerprint dẫn xuất từ path + revision, audit §16.2); C2 dựng **chữ** cho cùng điều kiện đó: `isMediaOffline` + bảng nhìn + plate Media Offline trên ba bề mặt, người dùng biết bytes đang ở đâu (audit §17); C2b dựng **cache vật lý** — `byteCache.mjs` (luật) + `byteStore.ts` (OPFS/IndexedDB/index), ghi khi import và relink, reconcile khi mở library, panel nói đang giữ bao nhiêu (audit §18). Chưa dựng: **đường đọc** — playback/probe/thumb/waveform/export vẫn đi `/uploads/`, và upload vẫn bắt buộc | D / G / H |
+| ADR-033 | media đi trong máy mặc định; rời máy là một lựa chọn hiển thị | **CHỜ** — web host vẫn stream file đã chọn lên server (`server/api/v1/media/upload.post.ts`). Slice C1 dựng **điều kiện** (fingerprint dẫn xuất từ path + revision, audit §16.2); C2 dựng **chữ** cho cùng điều kiện đó: `isMediaOffline` + bảng nhìn + plate Media Offline trên ba bề mặt, người dùng biết bytes đang ở đâu (audit §17); C2b dựng **cache vật lý** — `byteCache.mjs` (luật) + `byteStore.ts` (OPFS/IndexedDB/index), ghi khi import và relink, reconcile khi mở library, panel nói đang giữ bao nhiêu (audit §18). **Đường đọc đã có ba leg** (audit §20/D2 pixels, §33/E4 silence, §44/G2 waveform) và G2 có bằng chứng **artifact đọc lại sau reload mà không chạm file** (audit §44.5). Còn mở: **playback + export** vẫn đi `/uploads/` (desktop: từ đĩa), và **upload vẫn bắt buộc** — nên ADR-033 vẫn **CHỜ**, nhưng vì vế "bytes được dùng" đã đúng với ba leg, không còn đúng với hai leg | G #139 / H |
 
 ---
 
@@ -183,11 +183,17 @@ C2b (đo cùng ngày, audit §18) dựng **cache vật lý phía client**: luậ
 quota thiết bị với trần 2 GiB, key phải là một fingerprint tám hex, thứ tự eviction), storage ở `app/utils/tmcut/byteStore.ts`
 (OPFS → IndexedDB → `none`, một index localStorage là authority và được đối chiếu hai chiều mỗi lần mở library), đường ghi nối
 vào đúng hai chỗ — import web và relink thành công — cùng một dòng trong panel media nói đang giữ bao nhiêu file, bao nhiêu byte,
-kèm nút trả lại hết. Hai vế vẫn còn mở, và đó là lý do ADR-033 còn **CHỜ**: (1) **đường đọc** chưa có — playback, probe, thumbnail,
-waveform và export vẫn lấy bytes từ `/uploads/` (desktop: từ đĩa), `readCachedBytes` chưa có một call-site nào ngoài test;
-(2) **upload vẫn bắt buộc** — cache ghi *sau* bước store thành công, nên web host hôm nay vẫn gửi file lên server.
-Vì vậy C2b chứng minh phần **giữ** của ADR-033, chưa chứng minh phần **local-first**: nói cách khác, bytes nằm trong máy là bytes
-**được giữ**, chưa phải bytes **được dùng**. Hai vế đó thuộc slice D (thumb/filmstrip), G (waveform) và H (export).
+kèm nút trả lại hết. Tính đến lượt G2 (audit §44, đo ngày 2026-11-05), vế (1) **đã có ba leg** và không còn là "chưa có call-site":
+`readCachedBytes` có **4** chỗ gọi thật — [frameStore.ts:196](file:///D:/Applications/tm-studio/app/utils/tmcut/frameStore.ts#L196)
+(pixels, slice D2), [autocutDetect.ts:106](file:///D:/Applications/tm-studio/app/utils/tmcut/autocutDetect.ts#L106) (silence, E4), và hai
+dòng trong [waveformService.ts](file:///D:/Applications/tm-studio/app/utils/tmcut/waveformService.ts#L63) — `:63` đọc **artifact**
+`<fp>-wave-v1`, `:73` đọc **revision**. Bằng chứng mạnh nhất là của G2 và nó đúng cái ADR này cần: sau một lần reload, `accessedAt`
+của artifact **tiến** trong khi `accessedAt` của revision **đứng nguyên**, và page **không** phát request `.wav` nào — tức trang đã đọc
+bản trong máy chứ không đọc bản trên server (audit §44.5). Hai vế vẫn còn mở, và đó là lý do ADR-033 còn **CHỜ**: (1') **playback và
+export** vẫn lấy bytes từ `/uploads/` (desktop: từ đĩa) — probe đã đọc metadata từ record chứ không xin bytes, nên nó không nằm trong
+danh sách này; (2) **upload vẫn bắt buộc** — cache ghi *sau* bước store thành công, nên web host hôm nay vẫn gửi file lên server.
+Vì vậy tính đến hôm nay: bytes nằm trong máy **đã là bytes được dùng** cho thumbnail/filmstrip, silence và waveform, và vẫn mới chỉ
+**được giữ** cho playback và export. Hai vế còn lại thuộc slice G (mixer/playhead, #139) và H (export).
 
 **Điều kiện mở lại.** Cloud render (plan §Phase 10) là tính năng tùy chọn, bật per-job, có consent, và không được âm thầm thay đường local.
 
@@ -256,4 +262,4 @@ biên giới server Q4 (commit `521d050`) và khoá schema Q5. Sáu file `server
 và guard `tmcut_project_schema_v3.spec.ts` đóng băng hình dạng project. **Không** route nào bị xoá, **không** field nào bị đổi tên.
 Xoá route, xoá binary và đổi UI là chuyện của slice I, chưa xảy ra.
 Bằng chứng đo từng phần nằm ở [docs/audit/zero-ffmpeg-audit.md §15](file:///D:/Applications/tm-studio/docs/audit/zero-ffmpeg-audit.md#L619).
-Lượt C1 (audit §16, commit `6d3e825`), lượt C2 (audit §17) và lượt C2b (audit §18, đo ngày 2026-11-04) nối tiếp ba phần trên theo đúng thứ tự chủ repo chọn: Q6 giờ có đủ **cả hai tầng** — dữ liệu ở C1, chữ trên màn hình ở C2. ADR-033 vẫn **CHỜ** sau C2b, nhưng vì một lý do hẹp hơn trước: cache vật lý phía client **đã tồn tại và đã ghi** (luật ở core, storage ở app, ghi khi import/relink, đối chiếu khi mở library, một dòng trong panel), còn thứ chưa có là **đường đọc** — playback/probe/thumb/waveform/export vẫn đi `/uploads/` — và **thôi bắt buộc upload**. Hai việc đó thuộc D/G/H, không thuộc C2b.
+Lượt C1 (audit §16, commit `6d3e825`), lượt C2 (audit §17) và lượt C2b (audit §18, đo ngày 2026-11-04) nối tiếp ba phần trên theo đúng thứ tự chủ repo chọn: Q6 giờ có đủ **cả hai tầng** — dữ liệu ở C1, chữ trên màn hình ở C2. ADR-033 vẫn **CHỜ** sau C2b, nhưng vì một lý do hẹp hơn trước: cache vật lý phía client **đã tồn tại và đã ghi** (luật ở core, storage ở app, ghi khi import/relink, đối chiếu khi mở library, một dòng trong panel), còn thứ chưa có là **đường đọc** — playback/probe/thumb/waveform/export vẫn đi `/uploads/` — và **thôi bắt buộc upload**. Hai việc đó thuộc D/G/H, không thuộc C2b. *(**đo lại ngày 2026-11-05, audit §44**: vế "chưa có đường đọc" đã lỗi về ba leg — pixels (D2), silence (E4), waveform (G2) — và G2 có bằng chứng artifact được đọc lại sau reload mà không chạm file trên server. Phần còn nguyên của câu này là **playback + export** vẫn đi `/uploads/` và **upload vẫn bắt buộc**; ADR-033 vì thế vẫn **CHỜ**, và việc còn lại thuộc #139 (mixer) và slice H.)*

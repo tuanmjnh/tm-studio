@@ -1,19 +1,23 @@
-// Where a second copy of an asset's bytes is kept in the browser.
+// Where a second copy of an asset's bytes is kept in the browser, together with
+// the artifacts derived from them.
 //
 // On the web host the durable copy of a media file is a server upload, so every
 // re-open asks a machine that may not have it. Keeping our own copy — under the
 // revision fingerprint slice C1 defined — makes playback, probing and liveness
-// local questions (ADR-033). This module is deliberately the only place in
-// `app/` that opens OPFS or IndexedDB: one backend choice, one index, one
-// eviction rule. Every decision (budget, key legality, what to free) is asked
-// from `tmcut-core`, so the same law runs in plain node tests.
+// local questions (ADR-033). A derived artifact (a waveform, slice G2) is kept
+// under its own name, `fingerprint-kind-vN`, which core says is storable but
+// never a revision: a frame request cannot be answered from an artifact and an
+// artifact dies with the revision it describes. This module is deliberately the
+// only place in `app/` that opens OPFS or IndexedDB: one backend choice, one
+// index, one eviction rule. Every decision (budget, key legality, what to free)
+// is asked from `tmcut-core`, so the same law runs in plain node tests.
 //
 // The localStorage index is the authority on what the cache holds, and it is
 // reconciled in both directions on every library load: an entry whose bytes are
 // gone is forgotten, and bytes the index does not name are deleted. That is why
 // reads self-heal instead of trusting a row that may be stale.
 
-import { byteCacheBudgetBytes, byteCacheFits, isByteCacheKey, planByteCacheEviction } from 'tmcut-core'
+import { byteCacheBudgetBytes, byteCacheFits, isStoredByteCacheKey, planByteCacheEviction } from 'tmcut-core'
 import { readStored, writeStored } from './localStore'
 
 const INDEX_STORAGE_KEY = 'tmcut_byte_index_v1'
@@ -133,7 +137,7 @@ function readIndex(): ByteIndex {
   try {
     const parsed = JSON.parse(raw) as Record<string, Partial<TmcutByteIndexRow>>
     for (const [key, row] of Object.entries(parsed ?? {})) {
-      if (!isByteCacheKey(key) || !row) continue
+      if (!isStoredByteCacheKey(key) || !row) continue
       index.set(key, {
         bytes: Number.isFinite(row.bytes) && Number(row.bytes) > 0 ? Number(row.bytes) : 0,
         accessedAt: Number.isFinite(row.accessedAt) ? Number(row.accessedAt) : 0
@@ -149,17 +153,31 @@ function writeIndex(index: ByteIndex): void {
   writeStored(INDEX_STORAGE_KEY, JSON.stringify(Object.fromEntries(index)))
 }
 
-function indexEntries(index: ByteIndex) {
-  return [...index].map(([key, row]) => ({ key, bytes: row.bytes, accessedAt: row.accessedAt }))
+/**
+ * One row, written against whatever the index holds at this moment.
+ *
+ * A caller never hands back a whole snapshot. Two of them do overlap in a real
+ * session — the media panel reads a revision while an import stores the one it
+ * just took — and a snapshot carries the state of the moment it opened: the
+ * later write forgets the earlier row and leaves its bytes behind as a file no
+ * index names, which nothing can read and the next reconcile then frees.
+ */
+function touchIndexRow(key: string, row: TmcutByteIndexRow): void {
+  const index = readIndex()
+  index.set(key, row)
+  writeIndex(index)
 }
 
-/** Keep only the rows the plan named, in the plan's order. */
-function keptIndex(plan: { keep: Array<{ key: string, bytes: number, accessedAt: number }> }, index: ByteIndex): ByteIndex {
-  const kept: ByteIndex = new Map()
-  for (const entry of plan.keep) {
-    kept.set(entry.key, index.get(entry.key) ?? { bytes: entry.bytes, accessedAt: entry.accessedAt })
-  }
-  return kept
+/** Stop naming one row; a row the index already does not name needs no write. */
+function forgetIndexRow(key: string): void {
+  const index = readIndex()
+  if (!index.has(key)) return
+  index.delete(key)
+  writeIndex(index)
+}
+
+function indexEntries(index: ByteIndex) {
+  return [...index].map(([key, row]) => ({ key, bytes: row.bytes, accessedAt: row.accessedAt }))
 }
 
 /** Every revision the index says is cached. Cheap: the index is the authority. */
@@ -258,20 +276,18 @@ async function deleteStored(backend: TmcutByteCacheBackend, key: string): Promis
 }
 
 /**
- * Copy one revision into the browser store.
- * Returns false — never throws — when the cache is off, the key is not a
- * fingerprint, or the file is bigger than the whole budget. An import that
- * cannot be cached is still an import that worked.
+ * Copy one revision — or one artifact of a revision — into the browser store.
+ * Returns false — never throws — when the cache is off, the key names neither,
+ * or the bytes are bigger than the whole budget. An import that cannot be cached
+ * is still an import that worked.
  */
 export async function putCachedBytes(key: string, blob: Blob, liveKeys: Set<string>): Promise<boolean> {
-  if (!isByteCacheKey(key) || !blob || blob.size <= 0) return false
+  if (!isStoredByteCacheKey(key) || !blob || blob.size <= 0) return false
   const backend = await byteStoreBackend()
   if (backend === 'none') return false
   const budget = await byteCacheBudget()
   if (!byteCacheFits(blob.size, budget)) return false
 
-  const index = readIndex()
-  index.set(key, { bytes: blob.size, accessedAt: Date.now() })
   try {
     if (backend === 'opfs') {
       await opfsRun(async (dir) => {
@@ -284,35 +300,46 @@ export async function putCachedBytes(key: string, blob: Blob, liveKeys: Set<stri
       await idbRequest((await idbStore()).put({ key, blob }))
     }
   } catch {
-    index.delete(key)
-    writeIndex(index)
+    forgetIndexRow(key)
     return false
   }
+  // The row is written from what the browser took, after it took it: OPFS
+  // truncates the file the moment the writable opens, so a row named before the
+  // copy would advertise bytes the reader finds missing — and an empty read is
+  // a worse answer than no row at all.
+  touchIndexRow(key, { bytes: blob.size, accessedAt: Date.now() })
 
-  const plan = planByteCacheEviction(indexEntries(index), budget, liveKeys)
-  for (const doomed of [...plan.drop, ...plan.invalid]) await deleteStored(backend, doomed)
-  writeIndex(keptIndex(plan, index))
+  const plan = planByteCacheEviction(indexEntries(readIndex()), budget, liveKeys)
+  for (const doomed of [...plan.drop, ...plan.invalid]) {
+    await deleteStored(backend, doomed)
+    forgetIndexRow(doomed)
+  }
   return true
 }
 
-/** The cached copy of one revision, or null. A row that cannot be served is dropped. */
+/** The cached bytes one revision or one of its artifacts, or null. A row that cannot be served is dropped. */
 export async function readCachedBytes(key: string): Promise<Blob | null> {
-  if (!isByteCacheKey(key)) return null
+  if (!isStoredByteCacheKey(key)) return null
   const backend = await byteStoreBackend()
   if (backend === 'none') return null
   const index = readIndex()
+  // A row the index does not name answers no reader, but the bytes may still be
+  // on their way: only the reconcile pass decides to free them.
   if (!index.has(key)) return null
   try {
     const blob = backend === 'opfs'
       ? await opfsRun(async dir => (await dir.getFileHandle(key)).getFile())
       : await idbStore().then(store => idbRequest(store.get(key))).then(record => record?.blob)
-    if (!blob) throw new Error('no bytes behind the index row')
-    index.set(key, { bytes: blob.size, accessedAt: Date.now() })
-    writeIndex(index)
+    // Empty bytes are not a revision, however the row was written: a copy that
+    // died halfway leaves a file of nothing, and drawing it as cached is how a
+    // broken cache becomes permanent.
+    if (!blob || blob.size === 0) throw new Error('no bytes behind the index row')
+    // The index row is written from the browser's answer, not from the size the
+    // caller handed over, so what the panel reports is what the file really is.
+    touchIndexRow(key, { bytes: blob.size, accessedAt: Date.now() })
     return blob
   } catch {
-    index.delete(key)
-    writeIndex(index)
+    forgetIndexRow(key)
     return null
   }
 }
@@ -341,6 +368,7 @@ export async function pruneByteCache(liveKeys: Set<string>): Promise<{ dropped: 
   for (const key of [...index.keys()]) {
     if (stored.has(key)) continue
     index.delete(key)
+    forgetIndexRow(key)
     dropped += 1
   }
   for (const key of stored) {
@@ -354,9 +382,9 @@ export async function pruneByteCache(liveKeys: Set<string>): Promise<{ dropped: 
   for (const key of plan.drop) {
     await deleteStored(backend, key)
     index.delete(key)
+    forgetIndexRow(key)
     dropped += 1
   }
-  writeIndex(keptIndex(plan, index))
   return { dropped, kept: plan.keep.length }
 }
 

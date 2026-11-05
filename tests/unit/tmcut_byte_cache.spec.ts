@@ -209,6 +209,53 @@ async function main() {
     assert.equal((await byteCacheInfo()).usedBytes, blob.size)
   })
 
+  await check('the index is written one row at a time, never as a snapshot', async () => {
+    clearByteIndex()
+    // The browser is slow to hand the file over, so the reader's view of the
+    // index is taken before the writer's row exists and lands after it.
+    let releaseReads: () => void = () => undefined
+    const held = new Promise<void>((resolve) => {
+      releaseReads = resolve
+    })
+    const opfs = installOpfs(1024 * 1024, { holdReadsFor: () => held })
+    resetByteStoreProbe()
+    await putCachedBytes(KEYS[0], blobOf(500, 'a'), live([KEYS[0]]))
+    // A panel reads the revision it already holds while the library stores the
+    // one it just took — the waveform ask and the import copy do exactly this in
+    // the same tick. A writer that rebuilds the whole index from the snapshot it
+    // opened forgets the other's row: an OPFS file no index row names, unreadable
+    // and freed by the next reconcile.
+    const reading = readCachedBytes(KEYS[0])
+    await slow(0)
+    assert.equal(await putCachedBytes(KEYS[1], blobOf(600, 'b'), live([KEYS[0], KEYS[1]])), true)
+    assert.equal(readByteIndex()[KEYS[1]]?.bytes, 600, 'the write indexed its own row')
+    releaseReads()
+    assert.ok(await reading, 'and the read still answers')
+    assert.equal(opfs.bytes(KEYS[1]), 600, 'the bytes are on the machine')
+    assert.equal(readByteIndex()[KEYS[1]]?.bytes, 600, 'and the index still names them')
+    assert.equal(readByteIndex()[KEYS[0]]?.bytes, 500, 'including the row the read touched')
+  })
+
+  await check('a row never claims bytes the file does not have', async () => {
+    clearByteIndex()
+    // OPFS truncates the file the moment the writable opens, so a panel that asks
+    // for this revision while an import is still copying it reads an empty file.
+    let releaseWrite: () => void = () => undefined
+    const heldWrite = new Promise<void>((resolve) => {
+      releaseWrite = resolve
+    })
+    const opfs = installOpfs(1024 * 1024, { holdWritesFor: () => heldWrite })
+    resetByteStoreProbe()
+    const writing = putCachedBytes(KEYS[1], blobOf(600, 'b'), live([KEYS[1]]))
+    await slow(0)
+    assert.equal(opfs.bytes(KEYS[1]), 0, 'the file is open and empty')
+    assert.equal(await readCachedBytes(KEYS[1]), null, 'and an empty file answers nothing')
+    releaseWrite()
+    assert.equal(await writing, true)
+    assert.equal(opfs.bytes(KEYS[1]), 600)
+    assert.equal(readByteIndex()[KEYS[1]]?.bytes, 600, 'the row says what the file really is')
+  })
+
   await check('a read the cache cannot serve is forgotten, not trusted', async () => {
     clearByteIndex()
     const opfs = installOpfs(1024 * 1024)
@@ -323,7 +370,10 @@ async function main() {
   await check('the storage layer asks core for every decision', () => {
     const source = read('app/utils/tmcut/byteStore.ts')
     assert.match(source, /from 'tmcut-core'/, 'budget, keys and eviction come from core')
-    for (const name of ['byteCacheBudgetBytes', 'isByteCacheKey', 'byteCacheFits', 'planByteCacheEviction']) {
+    // `isStoredByteCacheKey` is core's union of a revision fingerprint and an
+    // artifact of one (slice G1/G2): the store keeps both, so it asks that, and
+    // the revision-only predicate stays a question for the library.
+    for (const name of ['byteCacheBudgetBytes', 'isStoredByteCacheKey', 'byteCacheFits', 'planByteCacheEviction']) {
       assert.ok(source.includes(name), `${name} is used, not re-implemented`)
     }
     assert.doesNotMatch(source, /fnv1aHex\(/, 'the storage layer does not re-hash')

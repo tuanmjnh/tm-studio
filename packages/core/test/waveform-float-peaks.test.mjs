@@ -19,13 +19,17 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   TMCUT_WAVEFORM_ALGORITHM,
+  TMCUT_WAVEFORM_CACHE_KIND,
+  TMCUT_WAVEFORM_CACHE_VERSION,
   TMCUT_WAVEFORM_PEAK_PRECISION,
   buildWaveformPayload,
   clampWaveformPoints,
   floatPeakBuckets,
   int16ToPeaks,
-  readWaveformPayload
+  readWaveformPayload,
+  waveformCacheKey
 } from '../src/waveform.mjs'
+import { derivedByteCacheKey } from '../src/byteCache.mjs'
 
 const rate = 100
 
@@ -181,5 +185,31 @@ describe('readWaveformPayload', () => {
 
   it('keeps the reducer honest about the clamp it already applies', () => {
     assert.deepEqual(clampWaveformPoints([1.8, -0.2, 0.4]), [1, 0, 0.4])
+  })
+})
+
+describe('waveformCacheKey', () => {
+  it('names the waveform of one revision with the version that made it', () => {
+    assert.equal(waveformCacheKey('a1b2c3d4'), 'a1b2c3d4-wave-v1')
+    assert.equal(TMCUT_WAVEFORM_CACHE_KIND, 'wave')
+    assert.equal(TMCUT_WAVEFORM_CACHE_VERSION, 1)
+    assert.equal(waveformCacheKey('a1b2c3d4'),
+      derivedByteCacheKey('a1b2c3d4', TMCUT_WAVEFORM_CACHE_KIND, TMCUT_WAVEFORM_CACHE_VERSION),
+      'the name the app writes is the name the eviction law reads')
+  })
+
+  it('refuses to name a waveform for a revision it cannot identify', () => {
+    for (const bad of [null, undefined, '', 'DEADBEEF', 'a1b2c3d', 'a1b2c3d4e', '../x', 42]) {
+      assert.equal(waveformCacheKey(bad), null, `${String(bad)} is not a revision`)
+    }
+  })
+
+  it('puts the version in the name, so a new algorithm cannot be read as the old one', () => {
+    // The algorithm also lives inside the payload, and the reader refuses a
+    // mismatch. The key is the other half: it is what a writer replaces, so two
+    // generations of bars never overwrite each other into an ambiguous file.
+    assert.match(String(waveformCacheKey('a1b2c3d4')), /-v\d+$/)
+    assert.equal(derivedByteCacheKey('a1b2c3d4', 'wave', 2), 'a1b2c3d4-wave-v2')
+    assert.equal(waveformCacheKey('a1b2c3d4'), 'a1b2c3d4-wave-v1', 'and the current name is the current version')
   })
 })

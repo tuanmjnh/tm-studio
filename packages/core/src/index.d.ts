@@ -267,6 +267,12 @@ export interface TmcutWaveformPayload {
 export function buildWaveformPayload(input: unknown): TmcutWaveformPayload | null
 /** Read a cached waveform back, or null when it is not one this version can draw. */
 export function readWaveformPayload(value: unknown): TmcutWaveformPayload | null
+/** The artifact kind a stored waveform names itself by in the byte cache. */
+export const TMCUT_WAVEFORM_CACHE_KIND: string
+/** Bump when the reducer or the envelope changes shape, not when the app restarts. */
+export const TMCUT_WAVEFORM_CACHE_VERSION: number
+/** The byte-cache key of one revision's waveform, or null when it has no revision. */
+export function waveformCacheKey(fingerprint: unknown): string | null
 
 export function fnv1aHex(text: string): string
 export function cacheKeyForPath(path: string, revision?: { mtimeMs?: number, size?: number }): string
