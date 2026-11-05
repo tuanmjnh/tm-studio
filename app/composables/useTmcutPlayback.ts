@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import { TICKS_PER_SECOND, compositePlan, createFramePace, createFrameScheduler, renderAt, speedAt, ticksToSec } from 'tmcut-core'
+import { TICKS_PER_SECOND, audioMixAt, compositePlan, createFramePace, createFrameScheduler, renderAt, speedAt, ticksToSec } from 'tmcut-core'
 import type { CoreEvaluatedLayer, CoreFramePace, TmcutClock } from 'tmcut-core'
 import { useTmcutProject } from './useTmcutProject'
 import type { TmcutTimelineItem } from './useTmcutProject'
@@ -182,6 +182,12 @@ export function useTmcutPlayback() {
     }
     return surfaces
   })
+
+  // Which layers sound at the playhead, and how loudly — core's answer, read
+  // from the same evaluation the picture is painted from (`evaluateTimeline`
+  // already folds track volume, mute, fades and keyframes into `layer.volume`).
+  // The player drives its mixer from this and never recomputes a gain.
+  const audioMix = computed(() => audioMixAt(playheadEvaluation.value))
 
   // Transition crossfade state (roadmap B3 / core C5): while the playhead sits
   // inside a transition window core gives that row TWO surfaces — the outgoing
@@ -715,6 +721,7 @@ export function useTmcutPlayback() {
     loopPlayback,
     previewVolume,
     previewMuted,
+    audioMix,
     zoomIn,
     zoomOut
   }

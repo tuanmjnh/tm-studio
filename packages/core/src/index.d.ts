@@ -347,6 +347,20 @@ export function volumeExpr(clip: CoreFadeClip): string
 export function panFilter(pan: number): string
 export function isTrackMuted(track: { muted?: boolean } | null | undefined): boolean
 
+// --- Zero-FFmpeg G3: which layers make sound at one tick ---
+export interface CoreAudioMixSource {
+  role: 'footage' | 'audio'
+  clipId: string
+  trackId: string | null
+  trackIndex: number
+  /** Linear gain 0..1 — core's layer volume, with the track's mute folded in. */
+  gain: number
+}
+export function audioMixAt(evaluation: CoreTimelineEvaluation | null | undefined): {
+  at: number
+  sources: CoreAudioMixSource[]
+}
+
 // --- Frame plan: filmstrip / thumbnail timestamps (Roadmap C14) ---
 // Core maths tick lists; since slice D it also owns the identity of one frame
 // request, so no host can name a frame its own way.

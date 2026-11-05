@@ -4724,3 +4724,173 @@ nói nó chứng minh từng guard một là cần thiết.
   `event.context.auth` vắng, `/api/v1/auth/me` vẫn trả 200. Pre-existing, không phải của lượt này, và không được tính là
   PASS im lặng.
 
+## 45. Slice G3 — mixer Web Audio đọc luật gain của core; hai mutation sống, và lý do chúng sống (đo ngày 2026-11-05)
+
+### 45.1 Việc của lượt này, và hiện trạng đo được ở HEAD `83fb02c`
+
+§44.8 để lại một món nợ đúng một dòng: "G2 giao **bar**, không giao **tiếng**". G3 trả món đó: một graph Web Audio mà tập
+nguồn đang kêu là **câu trả lời của core**, không phải một phép tính nữa ở app. Đo trước lượt này — và đo ra là preview
+đang có **hai** bản sao của một luật, export có bản thứ ba:
+
+| Chỗ | Dòng (HEAD) | Hiện trạng đo được |
+| --- | --- | --- |
+| `git grep -n "createMediaElementSource\\|AudioContext" HEAD -- app electron` | — | **1** kết quả, ở [mediaProbe.ts:59](file:///D:/Applications/tm-studio/app/utils/tmcut/mediaProbe.ts#L59) — một capability sniff. Toàn app **không có** một node audio nào |
+| `git grep -n audioMixAt HEAD` | — | **0** kết quả — core chưa từng được hỏi "tick này ai kêu" |
+| [TmcutPreviewPlayer.vue:1665-1666](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue) | 1665-1666 | footage: `:muted="isVideoMuted \|\| previewMuted"` + `:volume="videoVolume * previewVolume"` |
+| `…/TmcutPreviewPlayer.vue:478-499` | 478-499 | **bản sao thứ nhất**: player tự dựng `shaped = { fade, volume: v * (trackVol / 100), timeline }` rồi gọi `gainAt` của core — đúng luật, nhưng **một lần tính riêng cho preview** |
+| `…/TmcutPreviewPlayer.vue:570-586` | 570-586 | **bản sao thứ hai**: `((clip.volume ?? 100) * trackVol / 10000) * previewVolume.value` — và **không có fade envelope**. Một bed fade-in chạy full-level trên màn hình trong khi export fade nó |
+| `…/TmcutPreviewPlayer.vue:1766-1767` | 1766-1767 | audio: `:muted="a.muted"` + `:volume="a.volume"` — binding thứ ba và thứ tư của cùng một con số |
+| [render/audio.ts:13-18](file:///D:/Applications/tm-studio/app/utils/tmcut/render/audio.ts#L13) và [render/video.ts:393-401](file:///D:/Applications/tm-studio/app/utils/tmcut/render/video.ts#L393) | 13-18 / 393-401 | **bản sao thứ ba**, viết ra chuỗi `volume=…`: preview và export là hai chương trình khác nhau đọc cùng một project |
+| mute | 1665 / 1766 | đường duy nhất để im lặng là `:muted=` trên element — không có chỗ nào cho một mức master dùng chung |
+
+Ba binding `:volume`/`:muted` và hai công thức riêng là thứ mà ADR-033 gọi là drift tiềm tàng: thêm một loại layer nữa là
+thêm một chỗ phải nhớ nhân đúng các thừa số.
+
+### 45.2 Luật chọn: `audioMixAt` là một SELECTION, không phải công thức thứ hai
+
+[audioMix.mjs](file:///D:/Applications/tm-studio/packages/core/src/audioMix.mjs) (86 dòng) không có một phép nhân nào.
+Nó đọc `compositePlan` rồi **chọn**: [gainOf :33-35](file:///D:/Applications/tm-studio/packages/core/src/audioMix.mjs#L33)
+trả `layer.volume`, và trả `0` khi `layer.audible === false` — tức mute đã được evaluator fold một lần duy nhất.
+
+| Nhánh | Dòng | Luật |
+| --- | --- | --- |
+| footage | [:52-63](file:///D:/Applications/tm-studio/packages/core/src/audioMix.mjs#L52) | duyệt slot, bỏ overlay, **chỉ nhận `role: 'paint'`** (`:54`), và chỉ **một** lần (`footageClaimed`). Tiếng của file thuộc hàng dưới cùng đang sơn — cùng hàng mà export concat |
+| audio | [:65-80](file:///D:/Applications/tm-studio/packages/core/src/audioMix.mjs#L65) | **mọi** hàng audio đang sống, theo thứ tự track; `hidden` không chặn tiếng, `muted` thì có |
+| trả về | [:82-85](file:///D:/Applications/tm-studio/packages/core/src/audioMix.mjs#L82) | `{ at, sources }` — một tick không có gì live trả tập rỗng, không trả `null` |
+
+`role: 'outgoing'` bị bỏ ở `:54` là một quyết định có tên: trong một crossfade, **clip đến** là thứ đang kêu, không phải clip
+đang rời đi. Check 'a transition window leaves the sound with the layer that paints'
+([audio-mix-plan.test.mjs:96](file:///D:/Applications/tm-studio/packages/core/test/audio-mix-plan.test.mjs#L96)) pin cả hai
+chiều: `deepEqual(roles, ['outgoing/out', 'paint/in'])` (:116) chứng minh plan **thật sự** có hai slot, rồi
+`gainOf(mix,'in') === 0.6` / `gainOf(mix,'out') === null` (:120-121) chứng minh chỉ một slot được chọn. Tổng core cho file
+này: **11** check.
+
+### 45.3 Graph: một node cho một nguồn, một đường viết, năm lời từ chối
+
+[audioMixer.ts](file:///D:/Applications/tm-studio/app/utils/tmcut/audioMixer.ts) (225 dòng) giữ **graph**, không giữ **luật**.
+`createAudioMixer(openGraph)` (:119) nhận graph như tham số — vì browser cần một gesture trước khi context chạy, và mọi lời
+từ chối dưới đây phải đo được trong Node, nơi không có AudioContext.
+
+| Từ chối | Dòng | Lý do |
+| --- | --- | --- |
+| Route một element hai lần | [:131-168](file:///D:/Applications/tm-studio/app/utils/tmcut/audioMixer.ts#L131) | `createMediaElementSource` **ném** ở lần thứ hai; re-attach cùng element cùng key trả đúng node cũ |
+| Nguồn cross-origin | [isRoutableMediaSrc :98-110](file:///D:/Applications/tm-studio/app/utils/tmcut/audioMixer.ts#L98) | CORS làm **tainted** element im lặng ngay khi vào graph — một stock clip đang kêu sẽ thành câm. `blob:`/`data:`/đường dẫn tương đối được, `media://local` của desktop **không** |
+| Graph chưa mở khóa | `attach` (:134-140) | context dựng trước gesture ở trạng thái `suspended`; route vào đó = silence. Trước click đầu tiên, mix đi trên element |
+| Viết cả hai đường một lúc | [:165](file:///D:/Applications/tm-studio/app/utils/tmcut/audioMixer.ts#L165) và [:179-194](file:///D:/Applications/tm-studio/app/utils/tmcut/audioMixer.ts#L179) | element vừa vào graph được set `volume = 1` **một lần** rồi không bị viết nữa; node và element cùng giảm âm sẽ **bình phương** mọi gain |
+| Graph chết | [:204-210](file:///D:/Applications/tm-studio/app/utils/tmcut/audioMixer.ts#L204) | `dispose` trả node về và để đường element còn chạy — mất graph không mất tiếng |
+
+Hai luật còn lại là lý do mix không bao giờ tự bịa số: một nguồn **không có trong plan** thì bằng 0
+([applyPlan :196-202](file:///D:/Applications/tm-studio/app/utils/tmcut/audioMixer.ts#L196), dòng `:200`), và master nằm trên
+**bus** chứ không nhân vào từng layer (:179-194). `decode`/`openGraph` là tham số, không phải import trong lòng luật —
+giống hệt quyết định G2 đã ghi ở §44.2.
+
+### 45.4 Nối dây: hai bản sao luật nghỉ việc, bốn binding biến mất
+
+| Chỗ | Dòng hiện tại | Thay đổi |
+| --- | --- | --- |
+| [useTmcutPlayback.ts:190](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L190) | 190, export ở :724 | `audioMix = computed(() => audioMixAt(playheadEvaluation.value))` — đọc **đúng evaluation mà picture đã sơn**, nên không có lần đánh giá thứ hai mỗi frame |
+| [TmcutPreviewPlayer.vue:499-580](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L499) | 499-580 | khối mix: `ensureMixGraph` (:515), `createAudioMixer` (:546), `mixGains` theo key (:551), `mixMaster` (:561), `syncMix` (:563) và `mixSignature` + watch `flush: 'post'` (:573-580) |
+| `…/TmcutPreviewPlayer.vue:478-499` (HEAD) | — | **xóa** `videoVolume` + `isVideoMuted` + `localTicks` — bản sao thứ nhất nghỉ việc |
+| `…/TmcutPreviewPlayer.vue:570-586` (HEAD) | — | **xóa** `muted`/`volume` trong `activeAudioSrcs` — list giờ chỉ còn vật liệu mount (`id`, `src`, `mediaTime`, `rate`); fade của bed lần đầu có đường về preview |
+| template | 1711-1733 / 1820-1835 | bỏ **bốn** binding `:muted`/`:volume`; số binding `:volume` trong file: HEAD **2** → nay **0** (`grep -c ":volume="` = 0) |
+| [:599](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L599) và [:1479](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L1479) | 599 / 1479 | clip bị xóa thì `mixer.detach(clipId)` trả node (luật F10 áp cho audio); unmount thì `dispose()` + `context.close()` |
+| [TmcutInspector.vue:500](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutInspector.vue#L500) và :1911 | 500 / 1911 | hai dòng chú thích còn nói "the preview ramps video.volume through core gainAt" — viết lại thành "core's mix gain", vì đường đó đã nghỉ việc ở lượt này |
+
+Guard mới ở [tmcut_audio_mixer.spec.ts:271](file:///D:/Applications/tm-studio/tests/unit/tmcut_audio_mixer.spec.ts#L271) và
+:288 đọc **nguồn** của hai file để pin phần này: player phải gọi mixer, và player **không được** còn tính gain riêng.
+Tổng: **15** check (bản đầu là 14; check :163-174 được thêm vì một mutation sống — xem §45.6).
+
+### 45.5 Bằng chứng live — footage leg lần đầu có số đo non-zero
+
+Tab Chromium thật (chrome-devtools, :4003, `/tmcut/editor`), project "Untitled Project" với một clip video trên `t-video-1`.
+Số đo lấy bằng cách đọc chính instance của player (`__vueParentComponent.setupState` → `mixer.gainOf`, `mixer.masterGain`,
+`audioMix.sources`) rồi **ghi vào store** cùng một level mà người dùng would drag slider — mutate `clip.volume`,
+`track.volume`, `track.muted` của `currentProject`, chờ một tick, đọc lại node. Ghi chú phương pháp: `setupState` là
+proxyRefs đã unwrap nên phải viết `st.previewVolume = 0.6`, **không** phải `.value =`.
+
+| Thao tác | Plan của core | Node trong graph | `video.volume` |
+| --- | --- | --- | --- |
+| trạng thái đầu (clip 100, track không có key `volume`) | `footage:1` | **1** | 1 |
+| `clip.volume = 40` | `footage:0.4` | **0.4000000059604645** | 1 |
+| thêm `track.volume = 50` | `footage:0.2` | **0.20000000298023224** | 1 |
+| thêm `track.muted = true` | `footage:0` | **0** | 1 |
+| `clip.volume = 100` khi vẫn mute | `footage:0` | **0** — mute thắng, đúng luật `audible` | 1 |
+| bỏ mute | `footage:0.5` | **0.5** | 1 |
+| khôi phục nguyên trạng | `footage:1` | **1** | 1 |
+| `previewVolume = 0.6` | không đổi | node vẫn **1** | 1 |
+| `previewMuted = true` | không đổi | bus **0**, node vẫn 1 | 1 |
+| `track.volume = 25` sau khi điều hướng route | `footage:0.25` | **0.25** | 1 |
+
+Bốn điều đọc ra từ bảng: node đi theo **đúng dãy số core trả** (kể cả dấu làm tròn float32 của AudioParam,
+`0.4000000059604645`), nên preview không tự tính gì; **master nằm trên bus** — kéo fader không chạm từng layer; element đã
+route giữ `volume = 1` qua **mười** lần viết, tức một đường viết thật; và sau khi route sang `/tmcut` rồi quay về
+`/tmcut/editor`, `mixContext.state` vẫn `running` và node dựng lại đúng mức của plan.
+
+Lượt đo **trước** trong cùng slice (khi timeline có một clip audio `tone.wav` trên `t-audio-1`) thêm được nhánh audio:
+`routed = ['footage', 'clip_1793876066571_903y']`, clip volume 40 → node 0.4000000059604645, track volume 50 →
+0.20000000298023224, track mute → 0, xóa clip → routing co lại còn `['footage']` (đường `detach`), và không lần nào
+`createMediaElementSource` ném. Hai hàng cuối của §45.1 (fade của bed) giờ có nghĩa trên màn hình: cùng một envelope mà
+`evaluateTimeline` fold vào `layer.volume` là con số node nhận.
+
+### 45.6 Falsification — hai mutation sống, và lý do chúng sống
+
+| # | Mutation | Kết quả |
+| --- | --- | --- |
+| M1 | mixer bỏ `element.volume = 1` khi vào graph ([audioMixer.ts:165](file:///D:/Applications/tm-studio/app/utils/tmcut/audioMixer.ts#L165)) | **RED** — `FAILED: … entering the graph gives the element its unity back / 0.4 !== 1` tại [tmcut_audio_mixer.spec.ts:131](file:///D:/Applications/tm-studio/tests/unit/tmcut_audio_mixer.spec.ts#L131), exit **1** |
+| M2 | core bỏ vế `slot.role !== 'paint'` ở [audioMix.mjs:54](file:///D:/Applications/tm-studio/packages/core/src/audioMix.mjs#L54) | **SỐNG lần đầu**: `node --test test/audio-mix-plan.test.mjs` in `tests 10 / pass 10 / fail 0`, exit 0 |
+| M2 (sau khi đóng) | cùng mutation, chạy lại với check mới | **RED** — `AssertionError … actual: null, expected: 0.6`, `tests 11 / pass 10 / fail 1` |
+| M3 | master bị nhân vào **từng layer** chứ không chỉ bus (`entry.gain.gain.value = layer * level` ở [:184](file:///D:/Applications/tm-studio/app/utils/tmcut/audioMixer.ts#L184)) | **RED** — `FAILED: … the layer keeps the number core answered / 0.2 !== 0.5` tại :214, exit **1** |
+| M4 | `applyPlan` không còn silence key ngoài plan (xóa [:200](file:///D:/Applications/tm-studio/app/utils/tmcut/audioMixer.ts#L200)) | **RED** — `FAILED: … the plan is the only set that sounds / 0.4 !== 0` tại :206, exit **1** |
+| M5 | `isRoutableMediaSrc` tin mọi địa chỉ (thân hàm bị chặn ngay đầu) | **RED** — `FAILED: … a cross-origin source is not routed / true !== false` tại :157, exit **1** |
+| M5 (vế hẹp) | chỉ đổi phép **so sánh origin** ở [:106](file:///D:/Applications/tm-studio/app/utils/tmcut/audioMixer.ts#L106) thành `return true` | **SỐNG lần đầu**: `14/14 checks PASSED` (spec **chưa** có check :163), exit **0** |
+| M5 (sau khi đóng) | cùng mutation hẹp, chạy lại với check mới | **RED** — `FAILED: … a foreign origin is not routed / true !== false` tại :169, exit **1** |
+
+Hai mutation sống, và chúng **cùng một hình hài lỗ hổng**: một check hỏi một câu **hợp**.
+M2 sống vì fixture crossfade mô tả transition bằng `transition: { in: { … } }` trong khi evaluator chỉ dựng
+`transition.role` khi clip mang **`transitionIn`** ([transitions.mjs:628-641](file:///D:/Applications/tm-studio/packages/core/src/transitions.mjs#L628)
+đọc `clip.transitionIn?.duration`). Một probe trực tiếp trên fixture đó in ra `slots: footage/paint/in` — **không** có slot
+`outgoing` nào, nên vế `role !== 'paint'` chưa từng được hỏi tới; check đó trông như pin crossfade nhưng thật ra chỉ pin "clip
+sau thắng clip trước khi chồng nhau". Check mới (:96) dựng đúng **hình hài đã apply** của crossfade (incoming shift trái một
+`duration`, window `[3s, 4s]`) và assert cả `compositePlan` lẫn `audioMixAt`, nên nó không thể xanh vì lý do sai.
+M5-vế-hẹp sống vì **chính cái harness**: check ở :155 gọi `attach`, mà trong Node thì `pageOrigin()` rỗng, nên lời từ chối
+`if (!origin) return false` ([:104](file:///D:/Applications/tm-studio/app/utils/tmcut/audioMixer.ts#L104)) chặn địa chỉ cross-origin
+**trước** phép so sánh ở :106 — check xanh vì một lý do không phải vế mà nó kê tên. Check mới (:163-174) gọi thẳng
+`isRoutableMediaSrc(src, origin)` với origin tường minh nên mỗi vế tự trả lời một câu, và **đúng** mutation hẹp đó thành RED.
+Spec mixer từ **14** check lên **15**; đó là con số dùng ở §45.7.
+
+Sáu mutation, bảy run, mỗi file restore byte-identical — `md5sum` sau restore: `audioMix.mjs` `a41b9eef6624e0702a6c9fff74e4edf6`,
+`audioMixer.ts` `a4b4e32ab0ff4de73a75b1f8f481e4de` — và hai spec chạy lại xanh sau mỗi lần restore
+(mixer **15/15** exit 0, core audio-mix **11/11** exit 0).
+
+### 45.7 Gate
+
+| Gate | Lệnh | Kết quả |
+| --- | --- | --- |
+| 1 Typecheck | `npx nuxt typecheck` | exit **0**, `0` × `error TS`; `.nuxt/eslint.config.mjs` regenerate 18:12:53, 28581 B |
+| 2 Lint | `npx eslint` trên **8** file chạm, chạy **sau** 18:12:53 | exit **0**, log rỗng (0 problem) |
+| 3 Unit | `npx tsx tests/unit/run-all.mts --smoke` | **127/127** specs, exit **0**, **127** dòng `PASS`, **0** dòng `FAIL` (126 của G2 + `tmcut_audio_mixer` mới); `tmcut_audio_mixer` **15/15**, `tmcut_preview_boundary` **8/8** |
+| 3 Core | `node --test "test/*.test.mjs"` trong `packages/core` | **728/728** exit 0 (717 của G2 + **11** check `audioMixAt`); `npx tsc -p . --noEmit` exit **0**, 0 `error TS` |
+| 4 Live | `:4003`, Chromium tab thật, 5 route | số đo §45.5; console: `/tmcut` và `/tmcut/autocut` **0** `[error]`, `/tmcut/editor` **4** × `401`, `/tmcut/templates` và `/tmcut/factory` **1** × `401` — tất cả là `GET /api/v1/ai/relay/catalog` **môi trường**, pre-existing (§44.8), không phải của lượt này |
+| 5 Dọn dẹp | mutation restore, browser state | hai file chạm md5-verified; `track.volume` trả về **không có key**, clip volume 100, bus 1, node 1, `routed = ['footage']`, 2 clip nguyên |
+| — Tests tsconfig | `npx tsc -p tsconfig.test.json --noEmit` | **không phải gate**: **2940** `error TS` trên toàn `tests/**`, một lớp pre-existing (TS2835 "relative import cần extension" vì `moduleResolution: nodenext`). File của lượt này chỉ mang **hai** dòng TS2835 ở :30/:100 — **không** dòng nào mới, và không dòng nào rơi vào check :163-174 |
+
+### 45.8 Chưa chứng minh / nợ
+
+- **Tai người chưa đo.** Mọi số ở §45.5 là **giá trị node**, không phải âm thanh phát ra. Không một fixture nào trong repo có
+  audio stream (đo: `h264.mp4` và các bản `.data/uploads/*.mp4` trả `audio=none`), nên "nghe có đúng không" vẫn là một câu
+  mở — và footage leg trên máy này **có** node đúng nhưng **không có** tiếng để đo.
+- **Desktop từ chối route theo thiết kế.** `media://local` không đi vào graph (§45.3), nên trên Electron host mix vẫn chạy
+  trên element: đúng luật, nhưng **chưa đo lại** trên packaged app.
+- **Playback vẫn là bytes trên server.** Gate 4 ghi nhận `GET /uploads/…tone.wav [206]` và hai bản `.mp4 [206]` khi editor
+  mount — tức ADR-033 còn nguyên vế "playback": bytes về máy đã có cache (D2/E4/G2) nhưng **element vẫn stream từ server**.
+  Đóng vế đó cần nguồn `blob:` từ byte cache, thuộc #140 / slice H.
+- **Nợ upload của lượt trước.** Bốn bản `.data/uploads/mw3f…` do probe của G2/G3 đưa lên vẫn còn trên đĩa; hai bản
+  (`mw3fhrja-…tone.wav`, `mw3fho19-…probe.mp4`) vẫn được **library** tham chiếu nên chưa xóa — xóa là một việc của lượt sau
+  và phải làm cả thư viện lẫn đĩa.
+- **`previewVolume` vẫn là 0..1 thuần app.** Core không có luật cho master monitoring; đó là lựa chọn (thiết bị của người
+  dùng quyết), nhưng nó có nghĩa là **không** có guard nào cho một caller khác muốn cùng một mức.
+- **Console còn `[error]` môi trường:** `401 /api/v1/ai/relay/catalog` ([catalog.get.ts:11](file:///D:/Applications/tm-studio/server/api/v1/ai/relay/catalog.get.ts#L11)) —
+  hàng này đã ghi ở §44.8, lượt này đo lại và giữ nguyên attribution, không tính là PASS im lặng.
+- **Gap/overlap/sync/trim/rate chưa có gì.** G3 giao **mức**, không giao **thời gian**: các check đồng bộ playhead audio,
+  overlap hai bed, trim và rate thuộc G4 (#140), cùng phần close-out ADR-033.
+

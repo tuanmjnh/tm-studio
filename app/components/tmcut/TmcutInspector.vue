@@ -497,7 +497,7 @@ function toggleKeyframe(prop: KfProp) {
 // Fade in/out (roadmap C12 / core audio.mjs): the audio tab toggles a
 // 0.5s default envelope per edge, with a slider while active. Values are
 // TICKS on the v1 item (same passthrough heritage as keyframes and
-// transitionIn); the preview ramps video.volume through core gainAt.
+// transitionIn); the preview reads the ramp off core's mix gain (`audioMixAt`).
 const DEFAULT_FADE_SEC = TMCUT_DEFAULT_FADE_SEC
 
 const fadeInTicks = computed(() => clip.value?.fade?.in || 0)
@@ -1908,8 +1908,8 @@ const saveStateLabel = computed(() => {
       </div>
 
       <!-- Fade in/out (roadmap C12): toggle a 0.5s envelope per edge, the
-           slider appears while active. The preview ramps through core
-           gainAt; export follows with the compiler round (R5), the same
+           slider appears while active. The preview ramps it through core's
+           mix gain; export follows with the compiler round (R5), the same
            gap family as the volume slider above. -->
       <div class="space-y-1.5 pt-1">
         <div class="flex items-center gap-2">

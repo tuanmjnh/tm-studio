@@ -3,14 +3,16 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import type { CSSProperties } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useTmcutProject } from '~/composables/useTmcutProject'
-import type { TmcutTrack, TmcutTimelineItem } from '~/composables/useTmcutProject'
+import type { TmcutTimelineItem } from '~/composables/useTmcutProject'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import type { PaintSurface, TextSurface } from '~/composables/useTmcutPlayback'
 import { computeFitObjectStyle, CROP_RATIO_PRESETS, clampCropRect, applyCropRatio, canvasFpsValue } from '~/utils/tmcut/canvas'
 import { effectCssParts, layerOverlayPlates } from '~/utils/tmcut/fxPreview'
-import { previewScale, evalKeyframe, gainAt, safeAreaRects, SAFE_AREA_PRESETS, secToTicks, maskCssMaskImage, previewTransitionRamp, classifyAssetKind, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_FONT_SIZE, textBoxPadding, textShadowOffset, textStrokeWidth } from 'tmcut-core'
+import { previewScale, safeAreaRects, SAFE_AREA_PRESETS, maskCssMaskImage, previewTransitionRamp, classifyAssetKind, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_FONT_SIZE, textBoxPadding, textShadowOffset, textStrokeWidth } from 'tmcut-core'
 import type { CoreEvaluatedLayer, CoreEvaluatedLayout } from 'tmcut-core'
-import { clipDurationTicks, clipStartSec, clipEndSec, clipMediaTimeSec } from '~/utils/tmcut/clipTime'
+import { clipStartSec, clipEndSec, clipMediaTimeSec } from '~/utils/tmcut/clipTime'
+import { createAudioMixer } from '~/utils/tmcut/audioMixer'
+import type { TmcutMixGraph } from '~/utils/tmcut/audioMixer'
 import { assetStateView, isMediaOffline } from '~/utils/tmcut/assetImport'
 import { useTmcutFrames } from '~/composables/useTmcutFrames'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
@@ -54,7 +56,8 @@ const {
   setRenderMark,
   loopPlayback,
   previewVolume,
-  previewMuted
+  previewMuted,
+  audioMix
 } = useTmcutPlayback()
 
 const internalVideoRef = ref<HTMLVideoElement | null>(null)
@@ -458,47 +461,6 @@ const activeVideoTrack = computed(() => {
 
 const isTrackHidden = computed(() => !!activeVideoTrack.value?.hidden)
 
-// Preview audio: the video element plays the active clip's
-// own audio track. Muted only when the video track itself is
-// muted (timeline header toggle). Timeline audio clips still
-// have no preview engine — their mute state is persisted for
-// the future audio engine.
-//
-// Keyframes (roadmap B1): `t` values are CLIP-LOCAL ticks — 0 is the
-// clip's own start on the timeline, so keyframes travel with the clip
-// when it is moved. Evaluation clamps outside the range (core C3).
-// PREVIEW ONLY: the export pipeline does not render keyframes yet
-// (Phase K roadmap item) — never expose them as exported behavior.
-function localTicks(clip: { offset?: number }): number {
-  // C16-R3: the render position is SECONDS, the store offset is TICKS — snap
-  // into tick space first, then subtract. renderSeconds (ADR-018) is the
-  // position the canvas actually draws from, so keyframes and text animation
-  // resolve on the same frame the layers were picked for.
-  return Math.round(secToTicks(renderSeconds.value) - (clip.offset || 0))
-}
-
-const isVideoMuted = computed(() => !!activeVideoTrack.value?.muted)
-const videoVolume = computed(() => {
-  const clip = activeVideoClip.value?.clip
-  const track = activeVideoTrack.value
-  if (!clip) return 1
-  const v = evalKeyframe(clip, 'volume', localTicks(clip)) ?? clip.volume
-  // R124 A1: track-level volume (0..100) multiplies the clip volume.
-  const trackVol = Number(track?.volume ?? 100)
-  // Fade envelope (roadmap C12 / core audio.mjs): gainAt multiplies the
-  // (keyframed) volume by the fade ramp, each edge clamped to half the
-  // clip. C16-R3: core's legacy flat branch reads in/out as SECONDS, so
-  // the store item (ticks) is handed over in the v3 shape instead.
-  // Preview only until the compiler round (R5) — the same gap
-  // family as the volume slider itself.
-  const shaped = {
-    fade: clip.fade,
-    volume: (typeof v === 'number' ? v : clip.volume ?? 100) * (trackVol / 100),
-    timeline: { duration: clipDurationTicks(clip) }
-  }
-  return gainAt(shaped, localTicks(clip))
-})
-
 // Re-sync preview after ANY timeline mutation (trim/move/split/add often
 // keep the same src URL, so the src watcher alone would leave a stale
 // frame when paused — no rAF loop runs to correct the drift).
@@ -534,6 +496,89 @@ watch(currentMediaSrc, (newSrc) => {
   }
 })
 
+// ===== Preview mix (zero-FFmpeg slice G3, ADR-033) =====
+// One question — "what does this timeline sound like at this tick" — is core's,
+// not the player's: `audioMixAt` over the playhead evaluation names the layers
+// that sound and gives each one linear gain that already carries the clip
+// volume, its keyframes, the track volume, the fade ramp and the track's mute.
+// The player maps that answer onto the elements it owns and the mixer owns the
+// graph plus the single write path, so a volume appears nowhere in the template
+// and is computed by nobody here.
+const MIX_FOOTAGE_KEY = 'footage'
+let mixContext: AudioContext | null = null
+let mixContextBroken = false
+
+// The graph is built on demand and only *used* once the browser lets it run: a
+// context created before the first play gesture stays `suspended`, and a routed
+// element inside a suspended context is silence. Every refusal here costs the
+// mix its graph, not its sound — the mixer then drives `element.volume`.
+function ensureMixGraph(): TmcutMixGraph | null {
+  if (mixContextBroken || typeof window === 'undefined') return null
+  const Ctor = window.AudioContext
+    ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+  if (!Ctor) {
+    mixContextBroken = true
+    return null
+  }
+  if (!mixContext) {
+    try {
+      mixContext = new Ctor()
+    } catch {
+      mixContextBroken = true
+      return null
+    }
+    // The unlock arrives as an event, not on the frame it was asked for. Without
+    // this the first play after a click would keep riding the elements until some
+    // other reason to re-sync came along.
+    mixContext.onstatechange = () => {
+      syncMix()
+    }
+  }
+  const context = mixContext
+  if (context.state !== 'running') {
+    // Called from the play click's own task, so the gesture still counts.
+    context.resume().catch(() => { })
+    return null
+  }
+  return context
+}
+
+const mixer = createAudioMixer(ensureMixGraph)
+
+// Every footage source shares one key: the file's sound is the bottom row's,
+// and that row is the element `mainSurface` paints. Audio sources are keyed by
+// clip id — the same id their <audio> element is mounted under.
+const mixGains = computed(() => {
+  const gains = new Map<string, number>()
+  for (const source of audioMix.value.sources) {
+    gains.set(source.role === 'footage' ? MIX_FOOTAGE_KEY : source.clipId, source.gain)
+  }
+  return gains
+})
+
+// The monitoring fader rides the bus, so moving it writes one node however many
+// layers are sounding.
+const mixMaster = computed(() => (previewMuted.value ? 0 : previewVolume.value))
+
+function syncMix() {
+  const videoEl = internalVideoRef.value
+  if (videoEl) mixer.attach(MIX_FOOTAGE_KEY, videoEl)
+  for (const [id, el] of audioEls) mixer.attach(id, el)
+  mixer.applyPlan(mixGains.value, mixMaster.value)
+}
+
+// A plan re-evaluates every frame while playing; only a moved number needs a
+// write. `post` because a plan naming a clip whose element Vue has not mounted
+// yet would silence it for a frame.
+const mixSignature = computed(() => {
+  const parts = [String(mixMaster.value)]
+  for (const [key, gain] of mixGains.value) parts.push(`${key}:${gain.toFixed(3)}`)
+  return parts.join('|')
+})
+watch(mixSignature, () => {
+  syncMix()
+}, { flush: 'post' })
+
 // ===== Audio-track playback engine (roadmap R124) =====
 // Audio clips used to have NO preview engine at all — dropping a (WebM)
 // audio file onto an audio track produced silence, which is what "webm
@@ -547,12 +592,17 @@ watch(currentMediaSrc, (newSrc) => {
 const audioEls = new Map<string, HTMLAudioElement>()
 function setAudioEl(clipId: string, el: unknown) {
   if (el instanceof HTMLAudioElement) audioEls.set(clipId, el)
-  else audioEls.delete(clipId)
+  else {
+    audioEls.delete(clipId)
+    // A clip deleted from the timeline takes its graph nodes with it: the mixer
+    // would otherwise hold the element (and its decoder) for the whole session.
+    mixer.detach(clipId)
+  }
 }
 
 const activeAudioClips = computed(() => {
   const tracks = currentProject.value?.timeline?.tracks || []
-  const out: { clip: TmcutTimelineItem, track: TmcutTrack }[] = []
+  const out: TmcutTimelineItem[] = []
   for (const track of tracks) {
     if (track.type !== 'audio') continue
     for (const clip of track.items || []) {
@@ -560,33 +610,25 @@ const activeAudioClips = computed(() => {
       // playback, and starting one at the wrong end is worse than silence.
       if (clip.reverse) continue
       if (renderSeconds.value >= clipStartSec(clip) && renderSeconds.value < clipEndSec(clip)) {
-        out.push({ clip, track })
+        out.push(clip)
       }
     }
   }
   return out
 })
 
-const activeAudioSrcs = computed(() => activeAudioClips.value.map(({ clip, track }) => {
-  // R124 A1: track-level volume (0..100) multiplies the clip volume, so a
-  // track dimmer is a global gain on that row. Track pan (-100..100) is a
-  // documented preview gap (mirrors video reverse): HTMLMediaElement has no
-  // stereo field control without a WebAudio graph, so the pan is honored
-  // at EXPORT only (core panFilter) and the preview stays centred.
-  const trackVol = Number(track?.volume ?? 100)
-  return {
-    id: clip.id,
-    src: clip.src ? previewEngine.resolveSrc(clip.src) : '',
-    mediaTime: clipMediaTimeSec(clip, renderSeconds.value),
-    muted: !!track.muted || !!previewMuted.value,
-    // Store volume is PERCENT 0..100 (v1 heritage, core audio.mjs) while
-    // HTMLMediaElement.volume speaks 0..1 — normalize + clamp before the
-    // DOM binding. The old `clip.volume ?? 1` wrote e.g. HTTP 100 straight
-    // into el.volume ("Failed setting prop volume: value 100 is invalid").
-    volume: Math.min(1, Math.max(0, ((clip.volume ?? 100) * trackVol / 10000) * previewVolume.value)),
-    rate: clip.speed && clip.speed >= 0.25 && clip.speed <= 4 ? clip.speed : 1
-  }
-}))
+const activeAudioSrcs = computed(() => activeAudioClips.value.map(clip => ({
+  // Mount material only. The level, the mute and the ramp are core's answer in
+  // `mixGains`, and the mixer is the only thing that writes a volume — an
+  // element that mounts at full scale is corrected by the sync this list
+  // triggers below, never by a binding here. Track pan (-100..100) stays a
+  // documented preview gap: HTMLMediaElement has no stereo field control
+  // without a graph, so it is honored at EXPORT only (core panFilter).
+  id: clip.id,
+  src: clip.src ? previewEngine.resolveSrc(clip.src) : '',
+  mediaTime: clipMediaTimeSec(clip, renderSeconds.value),
+  rate: clip.speed && clip.speed >= 0.25 && clip.speed <= 4 ? clip.speed : 1
+})))
 
 function seekAudioElement(el: HTMLAudioElement, time: number) {
   try {
@@ -624,12 +666,22 @@ function onAudioLoaded(a: { id: string, mediaTime: number }) {
 
 // Identity string: element mount/unmount (clip enters/leaves the
 // playhead or its src changes) resyncs after Vue has rendered the refs.
+// The mix rides the same event: an element that has just mounted sits at
+// HTMLMediaElement's own default of full scale until the plan is written.
 watch(
   () => activeAudioSrcs.value.map(a => `${a.id}:${a.src}`).join('|'),
-  () => { nextTick(syncAudioElements) }
+  () => {
+    nextTick(() => {
+      syncAudioElements()
+      syncMix()
+    })
+  }
 )
 watch(isPlaying, () => {
   syncAudioElements()
+  // The play click is the gesture the AudioContext is waiting for, and this
+  // watcher runs inside its task — so this is where the mix gets a graph.
+  syncMix()
 })
 // Scrub while paused: follow immediately (playing runs on media clocks).
 watch(playhead, () => {
@@ -1402,6 +1454,9 @@ onMounted(() => {
   audioDriftTimer = setInterval(() => {
     if (isPlaying.value) syncAudioElements()
   }, 500)
+  // Nothing binds a level any more, so the mix has to be written once by hand:
+  // the first render leaves every element at the browser's own default.
+  syncMix()
 })
 
 onUnmounted(() => {
@@ -1419,6 +1474,11 @@ onUnmounted(() => {
   audioDriftTimer = null
   for (const el of audioEls.values()) el.pause()
   audioEls.clear()
+  // A routed element only speaks through this graph, so the nodes and the
+  // context leave with the component (slice F10's rule, applied to audio).
+  mixer.dispose()
+  mixContext?.close().catch(() => { })
+  mixContext = null
 })
 </script>
 
@@ -1651,7 +1711,12 @@ onUnmounted(() => {
         <!-- HTML5 Video Element (served via media://local protocol,
            same as ToolsVideoFramePreview in tools/video.vue).
            `relative` keeps it in the stacking tree ABOVE the outgoing
-           crossfade layer (both positioned z-auto → tree order wins). -->
+           crossfade layer (both positioned z-auto → tree order wins).
+           No level binding: slice G3. This element is the bottom footage row's
+           picture, so it is also the row whose sound the file carries, and
+           `mixGains` says how loud — the mixer writes the node when the graph is
+           unlocked and the element when it is not. A binding here would be a
+           second writer of the same number. -->
         <div
           v-show="currentMediaSrc && !isTrackHidden && !isCurrentClipImage"
           class="relative w-full h-full pointer-events-none transition-transform duration-75"
@@ -1662,8 +1727,6 @@ onUnmounted(() => {
             :src="isCurrentClipImage ? undefined : currentMediaSrc"
             class="w-full h-full"
             :style="fitForSurface(mainSurface)"
-            :muted="isVideoMuted || previewMuted"
-            :volume="videoVolume * previewVolume"
             preload="auto"
             playsinline
             @loadedmetadata="onLoadedMetadata"
@@ -1757,14 +1820,15 @@ onUnmounted(() => {
              per clip under the playhead, keyed by clip id so the element
              (and its media clock) survives unrelated re-renders. WebM
              audio and any other audio clip on an audio track now plays in
-             the preview — previously these had no engine at all. -->
+             the preview — previously these had no engine at all. Slice G3
+             took the level out of this tag: core's plan names the rows that
+             sound and the mixer writes them, so a fade or a volume keyframe
+             on a bed ramps on the screen exactly as it does in the file. -->
         <audio
           v-for="a in activeAudioSrcs"
           :key="a.id"
           :ref="(el) => setAudioEl(a.id, el)"
           :src="a.src"
-          :muted="a.muted"
-          :volume="a.volume"
           preload="auto"
           hidden
           @loadedmetadata="onAudioLoaded(a)"

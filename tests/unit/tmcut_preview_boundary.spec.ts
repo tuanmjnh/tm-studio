@@ -136,8 +136,17 @@ async function main() {
 
   await check('the preview player renders text layers from the evaluator position', async () => {
     const player = readFileSync(join(root, 'app/components/tmcut/TmcutPreviewPlayer.vue'), 'utf8')
-    assert.match(player, /renderSeconds/, 'the player destructures the clamped position')
-    assert.match(player, /secToTicks\(renderSeconds\.value\)/, 'layer local time comes from the render position')
+    const seam = readFileSync(join(root, 'app/composables/useTmcutPlayback.ts'), 'utf8')
+    // This used to read `secToTicks(renderSeconds.value)` inside the player, i.e.
+    // the clamped position converted back to ticks for a private keyframe pass.
+    // F7 took the text layers and G3 took the audio layers off that path: every
+    // surface the player paints or mixes now comes from one evaluation, so the
+    // contract — the layers resolve on the frame actually drawn — is that the
+    // evaluation is taken AT the render position, in the composable.
+    assert.match(seam, /renderPosition\.value\.evaluation/, 'layers are evaluated at the clamped render position')
+    assert.match(player, /renderSeconds/, 'the player still reads the clamped position for media time')
+    assert.match(player, /activeTextSurfaces/, 'and paints the layers that evaluation picked')
+    assert.doesNotMatch(player, /secToTicks\(renderSeconds\.value\)/, 'nobody converts it back to ticks here any more')
   })
 
   console.log(`\n=== All ${passed} preview boundary checks passed ===`)
