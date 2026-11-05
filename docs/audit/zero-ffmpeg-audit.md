@@ -2834,6 +2834,8 @@ Lượt này staged **9** đường dẫn: [effects.mjs](file:///D:/Applications
 [tmcut_shared_model.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_shared_model.spec.ts) — **7** file
 code/spec — và **2** file docs: chính file này cùng
 [roadmap](file:///D:/Applications/tm-studio/docs/tmcut-v4-universal-rendering-multiplatform-roadmap.md). `git diff` của **từng** file trong 9 đường dẫn này đã đọc hết trước khi stage: không hunk nào thuộc
-WIP của chủ repo — working tree còn 40+ file `M`/`??` khác (`i18n/locales/*`, `app/pages/system/*`,
-`docs/content/`, `eslint.config.mjs`, `package.json`, `backup/`…) vẫn **không** indexed. Không xóa binary,
+WIP của chủ repo — working tree đo **65** mục trước commit, trong đó **9** thuộc lượt này; sau commit còn
+**56** mục `M`/`??` khác (`i18n/locales/*`, `app/pages/system/*`,
+`docs/content/`, `eslint.config.mjs`, `package.json`, `backup/`…) vẫn **không** indexed, và
+`git diff --cached` sau commit = **0** dòng. Không xóa binary,
 không đụng `backup/ffmpeg-engine-2026-11-03`, không đổi Project Schema v3, không đụng đường Storage Upload.
