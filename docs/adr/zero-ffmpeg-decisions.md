@@ -84,7 +84,7 @@ hoặc tách thành một phase riêng — không quay lại FFmpeg.
 ## 3. ADR-029 — Mediabunny là toolkit demux/mux, không phải FFprobe thứ hai
 
 **Bối cảnh.** Plan §3.1 chọn Mediabunny và cảnh báo rõ: nó nằm trong phạm vi API/format nó hỗ trợ, không phải một bản FFprobe đầy đủ.
-Probe cũ của web trả `fps: 0` khi không đo được ([app/utils/tmcut/webProbe.ts:48](file:///D:/Applications/tm-studio/app/utils/tmcut/webProbe.ts#L48)) —
+Probe cũ của web trả `fps: 0` khi không đo được ([app/utils/tmcut/webProbe.ts:34](file:///D:/Applications/tm-studio/app/utils/tmcut/webProbe.ts#L34)) —
 audit §5.2 chỉ ra rằng dùng `0` làm sentinel là đúng cái plan §4.3 cấm: một con số có vẻ hợp lệ thay cho "không biết".
 
 **Quyết định.** Cài `mediabunny@1.65.1` (license MPL-2.0, hai runtime dependency đều là type-only — đã xác minh ngày 2026-11-03, audit §6)

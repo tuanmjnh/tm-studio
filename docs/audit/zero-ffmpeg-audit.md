@@ -210,7 +210,7 @@ Con số định hình lại slice J: **10** module thật sự phải đổi ph
 
 ### 5.2 Probe web không dám nói sự thật về FPS
 
-[app/utils/tmcut/webProbe.ts:48](file:///D:/Applications/tm-studio/app/utils/tmcut/webProbe.ts#L48) trả `fps: 0`
+[app/utils/tmcut/webProbe.ts:34](file:///D:/Applications/tm-studio/app/utils/tmcut/webProbe.ts#L34) trả `fps: 0`
 và suy `hasAudio` từ "không có video track". Plan §4.1 bắt trường không đọc được là `undefined` kèm warning, §4.3 cấm mặc định 30 FPS.
 Hiện code dùng `0` làm sentinel, tức là phân biệt "không biết" bằng một con số có vẻ hợp lệ — đúng cái plan cấm.
 
@@ -2839,3 +2839,189 @@ WIP của chủ repo — working tree đo **65** mục trước commit, trong đ
 `docs/content/`, `eslint.config.mjs`, `package.json`, `backup/`…) vẫn **không** indexed, và
 `git diff --cached` sau commit = **0** dòng. Không xóa binary,
 không đụng `backup/ffmpeg-engine-2026-11-03`, không đổi Project Schema v3, không đụng đường Storage Upload.
+
+## 33. Slice F5 — element dùng một lần trả lại decoder **và** watchdog của nó (đo ngày 2026-11-05)
+
+Slice D đem việc giải frame về Mediabunny, và `openMedia` nhận kèm một luật: nó trả về `close`, mọi caller chạy
+`close` đó trong `finally`, vì "Mediabunny keeps fetching ranges until disposed" — xem
+[frameDecode.ts:69](file:///D:/Applications/tm-studio/app/utils/tmcut/frameDecode.ts#L69) và
+[input.dispose() :80](file:///D:/Applications/tm-studio/app/utils/tmcut/frameDecode.ts#L80).
+Nhánh DOM của cùng câu hỏi — "file này là gì", khi web runtime không có ffprobe — đứng ngoài luật đó. F5 không thêm
+khả năng mới: nó đem đúng luật ấy tới hai site còn lại, rồi đo trên Chromium thật rằng luật **đổi hành vi**, không
+chỉ đổi cách viết.
+
+### 33.1 Ba hình dạng rò, hai site mang chúng
+
+Hai site mở một element rồi bỏ đi:
+[probeWebMetadata](file:///D:/Applications/tm-studio/app/utils/tmcut/webProbe.ts#L19) (metadata) và
+[captureVideoThumb](file:///D:/Applications/tm-studio/app/composables/useTmcutMedia.ts#L531) (JPEG vẽ bằng canvas).
+Trước F5 mỗi site tự viết lại cùng một đoạn, và cả hai **thiếu** đúng một moment:
+
+- `src` vẫn chỉ vào blob URL hay `/uploads/…` sau khi câu trả lời đã giao. Element không "hết việc" chỉ vì biến
+  cục bộ không còn tham chiếu tới nó.
+- Reader vẫn bám vào đúng byte đó — `readyState` còn ở `4`, `networkState` còn ở `1`.
+- Watchdog 15 giây vẫn chạy **sau** khi promise đã resolve, vì `setTimeout(...)` không được `clearTimeout` ở đâu.
+
+Hình thứ ba là lý do lượt này tồn tại chứ không chỉ hai hình đầu: `finish()` của code cũ resolve rồi về, còn timer
+thì ở lại tới hết 15 giây. §33.4 đo cả ba bằng số, trên file thật.
+
+### 33.2 Luật
+
+[mediaElement.ts:25](file:///D:/Applications/tm-studio/app/utils/tmcut/mediaElement.ts#L25)
+`withThrowawayMedia(kind, setup, timeoutMs)` là nơi **duy nhất** định nghĩa "xong".
+[settle :39](file:///D:/Applications/tm-studio/app/utils/tmcut/mediaElement.ts#L39) làm ba việc theo đúng thứ tự —
+clear watchdog, release element, resolve — và
+[release :61](file:///D:/Applications/tm-studio/app/utils/tmcut/mediaElement.ts#L61) là: bốn handler về `null`, rồi
+`pause()`, `srcObject = null`, `removeAttribute('src')`, `load()`. Handler đi trước vì `load()` với không nguồn có
+báo error, và một handler còn sống sẽ trả lời câu hỏi không ai hỏi nữa.
+
+[Watchdog :48](file:///D:/Applications/tm-studio/app/utils/tmcut/mediaElement.ts#L48) là `const` và armed **trước**
+`setup`, nên một caller settle ngay trong `setup` vẫn có timer để clear.
+[THROWAWAY_MEDIA_TIMEOUT_MS :23](file:///D:/Applications/tm-studio/app/utils/tmcut/mediaElement.ts#L23) được export,
+nên probe không khai một con số thứ hai: [webProbe.ts:17](file:///D:/Applications/tm-studio/app/utils/tmcut/webProbe.ts#L17)
+import nó và [webProbe.ts:39](file:///D:/Applications/tm-studio/app/utils/tmcut/webProbe.ts#L39) truyền nó. Site thứ
+hai là [useTmcutMedia.ts:532](file:///D:/Applications/tm-studio/app/composables/useTmcutMedia.ts#L532): thumb capture
+giờ chỉ khai ba handler rồi gán `src`, không còn `document.createElement('video')`, không còn
+`setTimeout(() => finish(null), 15000)`.
+
+Chín check của [tmcut_media_element.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_media_element.spec.ts)
+dựng luật này trên DOM giả: trả lời thì release; **watchdog clear đúng id** nó đã armed; timeout cũng release;
+`settle` chỉ fires một lần nên không ai release hộ; nhánh audio release chính `new Audio()`; không có `document` thì
+build **0** element; `probeWebMetadata` đi qua law; và pin nguồn để site thứ ba không tự viết lại công thức.
+
+### 33.3 RED đo được, chín check một lượt
+
+Spec viết trước. Chạy **trước** khi có helper: `0/9 checks passed`, exit 1, log
+`node_modules/.cache/tmcut-gates/f5-red-rerun.txt` — đo bằng cách tạm dời `mediaElement.ts` vào
+`node_modules/.cache/tmcut-gates/` rồi trả về **nguyên byte** (`md5sum -c`: OK). Không trích log `f5-red.txt` của
+lượt đầu: nó in 9 dòng FAILED nhưng footer `0/8`, hai con số không khớp nhau, nên con số dùng ở đây là con số chạy lại.
+
+GREEN: `9/9 checks passed`, exit 0, log `f5-green-rerun.txt`. Giữa hai lần có một `8/9` (`f5-green.txt`): pin
+`/withThrowawayMedia\(/` không khớp `withThrowawayMedia<TmcutMediaMetadata>(` — nới thành `[<(]`, vẫn từ chối một
+file chỉ import mà không gọi. Code được sửa để thỏa assertion; assertion không được nới để thỏa code, trừ lần này,
+và lý do của nó nằm ngay trong chính message `8/9`.
+
+### 33.4 Số đo live trên Chromium thật
+
+Host: Chromium 156 (`navigator.userAgent` đo được `Chrome/156.0.0.0`), điều khiển qua CDP, trang đã đăng nhập, dev
+server `:4003`. Media **thiệt**, không phải blob tự sinh: `tests/fixtures/containers/h264.mp4` (4448 byte, 0.6 s,
+64×36) và `resources/tmcut-catalog/sample-sfx-sweep.wav` (132 344 byte), phục qua `/_nuxt/@fs/D:/…` — cả hai URL đo
+HTTP 200 bằng `curl` trước khi mở element.
+
+| Phép đo | Số đo |
+| --- | --- |
+| Law, một element | trả lời lúc **7 ms**: `duration 0.6`, `videoWidth 64`, `readyState 4`, `networkState 1`. Sau settle: `hasAttribute('src')` **false**, `srcObject` null, `paused` true, `readyState` **0**, bốn handler null, `networkState` **3** |
+| Pre-F5, một element | đọc được `duration 0.6`, nhưng `src` **vẫn trỏ file**, `readyState 4`, `networkState 1` — handler đi, decoder ở lại |
+| Pre-F5, sau khi detach handler | vẫn `src`, vẫn `readyState 4`: detach handler **không phải** release. Lý do law phải là một hàm, không phải một lời dặn |
+| Watchdog, element không bao giờ trả lời | promise resolve `null` lúc **252 ms** với `timeoutMs = 250`, và element ở đúng trạng thái release |
+| `probeWebMetadata` trên file thiệt | mp4 `{0.6, 64, 36, fps 0, hasAudio false}`; wav `{1.5, 0, 0, hasAudio true}`; jpg `null` — ảnh không có duration, hành vi **không đổi** so với trước khi rewrite |
+
+Bảng dưới là lô 12 + 12 chạy đồng thời trên route `/tmcut/voice`, mỗi watchdog theo dõi bằng chính timer của nó:
+
+| Lô | element giữ `src` | `readyState` | watchdog armed | watchdog **fired** sau 15 s |
+| --- | --- | --- | --- | --- |
+| Law | **0/12** | 0 (HAVE_NOTHING) | 12 | **0/12** |
+| Pre-F5 | **12/12** | 4 (HAVE_ENOUGH_DATA) | 12 | **12/12**, in ra 12 lần resolve `TIMEOUT` |
+
+Đó chính là câu "forty live timers and forty live decoders" ở đầu module, đo ở quy mô 12: code cũ để lại 12 timer và
+12 decoder sống thêm 15 giây cho 12 file **đã trả lời xong**; law để lại 0 và 0.
+`networkState` sau release in `3` (`NETWORK_EMPTY`) ngay tại settle và `0` (`NO_SOURCE`) khi đọc lại vài giây sau —
+cả hai lô 12 đều đọc muộn nên cùng in `0`. Hai giá trị đều có nghĩa "không còn nguồn", và spec unit không đoán con số
+này: nó đo `removeAttribute('src')` cùng `load()` đã chạy, nên khác biệt giữa `3` và `0` không phải chỗ dựa.
+`document.querySelectorAll('video')` không đổi quanh các lô đo (0 → 0 trên trang login, 1 → 1 trên editor — chiếc
+duy nhất là của player), tức law không cắm element nào vào cây.
+
+### 33.5 Tám route `/tmcut*`, và lô đo không để lại tiếng động
+
+Mỗi route mở bằng CDP trên cùng phiên đã đăng nhập (`:4003`), đọc console **sau** navigation, và mỗi dòng noise được
+quy về chủ của nó bằng network log cùng route:
+
+| Route | Dòng `[error]`/`[warn]`/`[issue]` | Chủ |
+| --- | --- | --- |
+| `/tmcut` | 0 | — |
+| `/tmcut/autocut` | 0 | — |
+| `/tmcut/editor` | `[error] 401` ×4 | `GET /api/v1/ai/relay/catalog` — network log in đúng 4 request 401 cùng URL; hub auth hết phiên, đã ghi ở §31.5 |
+| `/tmcut/templates` | `[error] 401` ×2 | cùng `relay/catalog` |
+| `/tmcut/factory` | `[error] 401` ×1 | cùng `relay/catalog` |
+| `/tmcut/html-video` | 0 | — |
+| `/tmcut/process` | `[issue] form field thiếu id/name` ×2 + `[error] 401` ×1 | markup có sẵn từ lâu (file này không chạm) + `relay/catalog` |
+| `/tmcut/voice` | `[error] 502` ×2 | `GET /api/v1/media/tts/status?baseUrl=http://127.0.0.1:8000` — network log in đúng 2 request; dịch vụ TTS không chạy |
+
+Không dòng nào thuộc F5. Bốn URL probe của lượt này (`/_nuxt/@fs/…mediaElement.ts`, `…webProbe.ts`, `h264.mp4`,
+`sample-sfx-sweep.wav`) đều **200**, nên khác §32.6, lần sweep này không có 404 nào do chính agent tự gây.
+Route `/tmcut/editor` còn một request `[206]` tới `uploads/mw2df63d-1b9463e6-f4b-probe.mp4`: đó là asset probe của
+§32 mà project hiện tại đang tham chiếu, do **player** mở — không phải throwaway element — và `.data` nằm trong
+`.gitignore` (đo bằng `git check-ignore`), nên nó là app data, không phải state của repo.
+
+Baseline console của `/tmcut/voice` là **1 dòng** (502 ×2 ở bảng trên). Chạy xong 24 element — 12 theo law, 12 theo
+kiểu cũ — đọc lại console: vẫn **1 dòng, cùng msgid**. `load()` với không nguồn không rò `error` ra page, vì handler
+đã detached trước; đó là lý do thứ tự trong `release` là handlers-first.
+
+### 33.6 Gates
+
+| Gate | Lệnh | Kết quả | Bằng chứng |
+| --- | --- | --- | --- |
+| 1 Types | `npx nuxt typecheck` | **PASS** | exit 0, `grep -c "error TS"` = **0**; `.nuxt/eslint.config.mjs` regenerate **08:14**, 28567 byte |
+| 2 Lint | `npx eslint` trên **5** file code/spec đã chạm, chạy **sau** gate 1 | **PASS** | exit 0, log **0 byte**; config không đổi mtime sau đó nên kết quả còn hiệu lực. Lượt đầu (07:36) FAIL 4 lỗi — `prefer-const` ở `watchdog`, `no-dynamic-delete` và 2 × `max-statements-per-line` trong spec — sửa code, không tắt rule |
+| 3 Tests | `npx tsx tests/unit/run-all.mts` | **PASS** | **111/111**, exit 0 (110 của F4b + spec mới) |
+| 3b Smoke | `run-all.mts --smoke` | **PASS** | **114/114**, exit 0 — chuỗi filter FFmpeg không đổi, chạy để chắc đường render không hồi quy |
+| 3c Core | `npx tsc -p packages/core --noEmit` | **PASS** | exit 0, log **0 byte** — lượt này **không** sửa `packages/core` |
+| 3d Spec mới | `node node_modules/tsx/dist/cli.mjs … tmcut_media_element.spec.ts` | **PASS** | RED **0/9** (exit 1) → GREEN **9/9** (exit 0); `tmcut_platform_adapter` **12/12**, `tmcut_asset_import` **16/16**, `tmcut_media_offline` **13/13**, `tmcut_media_probe` **13/13**, `tmcut_frame_service` **19/19** |
+| 4 Live | 8 route `/tmcut*` + đo release trên Chromium 156, :4003 | **PASS** | §33.4 và §33.5 |
+| 5 Docs | 5 guard markdown chạy **sau** khi §33 và bullet roadmap được viết | **PASS** | exit 0 cả năm: `tmcut_docs_link_integrity` **4/4**, `tmcut_doc_line_length` **4/4**, `tmcut_doc_table_shape` **3/3**, `tmcut_doc_citations` **5/5**, `docs_markdown` **12/12** |
+| 3 Suite (chạy lại cuối) | `npx tsx tests/unit/run-all.mts` + `--smoke`, sau toàn bộ edit docs | **PASS** | xem §33.6b |
+
+### 33.6b Chạy lại sau khi docs được viết
+
+`run-all.mts` gom mọi file `tests/unit/tmcut_*.spec.ts` và `docs_*.spec.ts`, nên năm guard markdown của gate 5 **nằm
+trong** gate 3: một lần chạy suite là một lần chứng minh cả code lẫn docs. Bảng dưới là lần chạy đặt **sau** khi §33.6,
+§33.6b, §33.8 và ba bullet roadmap F5 được viết — tức các con số này thuộc về cây sắp commit, không phải cây đo ở §33.4.
+
+| Lệnh | Kết quả | Bằng chứng |
+| --- | --- | --- |
+| `npx tsx tests/unit/run-all.mts` | **111/111**, exit 0 | `node_modules/.cache/tmcut-gates/f5b-suite.txt` |
+| `npx tsx tests/unit/run-all.mts --smoke` | **114/114**, exit 0 | `node_modules/.cache/tmcut-gates/f5b-smoke.txt` |
+| `npx nuxt typecheck` lại sau edit | **PASS** — exit 0, `grep -c "error TS"` = 0 | edit chỉ đụng `.md`, `grep -c "error TS"` vẫn `0` |
+| `npx eslint` trên 5 file code/spec | **PASS** — exit 0, log 0 byte | log `f5b-eslint.txt` |
+
+### 33.7 Chưa chứng minh
+
+- **Electron host chưa chạy lượt này.** Law nằm trong `app/**` và mới được đo trên Chromium web; desktop branch của
+  adapter không tới `webProbe.ts`, nên đây là khoảng trống kỹ thuật, không phải bằng chứng vô hại.
+- **Batch ở quy mô 12, không phải 40.** Con số 40 là cỡ một lần import nhiều file; 12 → 40 suy ra tuyến tính từ hai
+  lô đã đo, chưa phải số đo trực tiếp.
+- **Decoder được OS/GPU thu hồi thật thì chưa chứng minh.** `readyState 0` cộng `networkState` no-source là cách
+  HTML spec nói "element không còn giữ resource"; đó không phải bằng chứng lấy từ media pipeline internals.
+- `getMediaSize` ở [ffmpegHelper.ts:167](file:///D:/Applications/tm-studio/app/utils/ffmpegHelper.ts#L167) mang đúng
+  hình dạng site thứ ba: `document.createElement('video')`, `src` giữ nguyên, handler giữ nguyên
+  ([176-179](file:///D:/Applications/tm-studio/app/utils/ffmpegHelper.ts#L176)). Nó có **0** call site — `grep` trên
+  `app`, `server`, `shared`, `packages`, `electron`, `tests` chỉ ra chính định nghĩa nó, cộng một bản copy trong
+  `backup/ffmpeg-engine-2026-11-03/`. Không migrate một hàm chết, và cũng không xóa nó ở lượt này: đó là việc của
+  slice I, lượt gỡ engine.
+- **Không có pixel.** F5 không đụng đường vẽ, nên không có khung hình nào để so.
+
+### 33.8 Bảo vệ working tree
+
+Lượt này chạm **5** file code/spec — [mediaElement.ts](file:///D:/Applications/tm-studio/app/utils/tmcut/mediaElement.ts)
+(mới, 70 dòng), [webProbe.ts](file:///D:/Applications/tm-studio/app/utils/tmcut/webProbe.ts) (41 dòng),
+[useTmcutMedia.ts](file:///D:/Applications/tm-studio/app/composables/useTmcutMedia.ts),
+[tmcut_media_element.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_media_element.spec.ts) (mới, 381 dòng),
+[tmcut_platform_adapter.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_platform_adapter.spec.ts) — và
+**3** file docs: chính file này,
+[zero-ffmpeg-decisions.md](file:///D:/Applications/tm-studio/docs/adr/zero-ffmpeg-decisions.md) (một anchor trỏ tới
+dòng đã dời của `webProbe.ts`) cùng
+[roadmap](file:///D:/Applications/tm-studio/docs/tmcut-v4-universal-rendering-multiplatform-roadmap.md).
+Không xóa binary, không đụng `backup/ffmpeg-engine-2026-11-03`, không đổi Project Schema v3, không đụng đường Storage
+Upload, không tắt rule lint nào.
+
+Đếm cây trước khi stage (`git status --porcelain | wc -l`): **64** entry, trong đó **21** entry chưa từng được theo
+dõi (`git status --porcelain | grep -c '^??'`). Tám đường thuộc lượt F5 — 5 file code/spec kể trên cộng
+`docs/adr/zero-ffmpeg-decisions.md`, `docs/audit/zero-ffmpeg-audit.md`,
+`docs/tmcut-v4-universal-rendering-multiplatform-roadmap.md` — nên **56** entry còn lại là WIP của owner
+(`app/pages/system/**`, `app/assets/css/{decor,glass}.css`, `i18n/**`, `server/**`, `electron/main.cjs`, `backup/`,
+`docs/content/`…), và `git add` chỉ nhận đúng tám đường đó. Trong tám đường, **6** đã được theo dõi
+(`app/composables/useTmcutMedia.ts`, `app/utils/tmcut/webProbe.ts`, `tests/unit/tmcut_platform_adapter.spec.ts` và ba
+file docs) còn `app/utils/tmcut/mediaElement.ts` cùng `tests/unit/tmcut_media_element.spec.ts` là file mới.
+`git diff --name-only` vì thế giảm từ **42** xuống **36** sau stage: sáu đường sang index thì không còn là diff unstaged;
+`git status --porcelain` vẫn **64** dòng vì chúng chỉ đổi cột trạng thái. Sau commit, `git diff --cached` phải đọc
+**0** dòng.

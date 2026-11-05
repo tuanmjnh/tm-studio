@@ -230,7 +230,18 @@ async function main() {
     const previousAudio = g.Audio
 
     function fakeElement(props: Record<string, unknown>, mode: 'metadata' | 'error' = 'metadata') {
-      const el: Record<string, unknown> = { preload: '', ...props }
+      // The probe reads through the shared release law, which detaches the
+      // handlers, pauses, drops `src` and calls load() on the way out, so the
+      // fake has to carry that surface too.
+      const el: Record<string, unknown> = {
+        preload: '',
+        paused: true,
+        srcObject: null,
+        pause: () => { el.paused = true },
+        load: () => {},
+        removeAttribute: () => {},
+        ...props
+      }
       let value = ''
       Object.defineProperty(el, 'src', {
         configurable: true,

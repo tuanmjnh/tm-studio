@@ -20,6 +20,7 @@ import {
   type TmcutByteCacheInfo
 } from '~/utils/tmcut/byteStore'
 import { readStoredFlag, writeStored } from '~/utils/tmcut/localStore'
+import { withThrowawayMedia } from '~/utils/tmcut/mediaElement'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { toURL } from '~/utils/ffmpegHelper'
 import {
@@ -528,47 +529,35 @@ export function useTmcutMedia() {
   // Capture a video frame as a dataURL thumbnail (web only, best-effort).
   // Blob: URLs are same-origin so the canvas stays untainted.
   function captureVideoThumb(url: string): Promise<string | null> {
-    return new Promise((resolve) => {
-      let settled = false
-      const finish = (result: string | null) => {
-        if (settled) return
-        settled = true
-        resolve(result)
-      }
-      try {
-        const video = document.createElement('video')
-        video.muted = true
-        video.preload = 'auto'
-        video.onloadeddata = () => {
-          try {
-            video.currentTime = Math.min(0.5, (video.duration || 1) / 2)
-          } catch {
-            finish(null)
-          }
+    return withThrowawayMedia<string>('video', (video, settle) => {
+      video.muted = true
+      video.preload = 'auto'
+      video.onloadeddata = () => {
+        try {
+          video.currentTime = Math.min(0.5, (video.duration || 1) / 2)
+        } catch {
+          settle(null)
         }
-        video.onseeked = () => {
-          try {
-            const canvas = document.createElement('canvas')
-            const scale = 320 / (video.videoWidth || 320)
-            canvas.width = 320
-            canvas.height = Math.max(2, Math.round((video.videoHeight || 180) * scale))
-            const ctx = canvas.getContext('2d')
-            if (!ctx) {
-              finish(null)
-              return
-            }
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-            finish(canvas.toDataURL('image/jpeg', 0.7))
-          } catch {
-            finish(null)
-          }
-        }
-        video.onerror = () => finish(null)
-        setTimeout(() => finish(null), 15000)
-        video.src = url
-      } catch {
-        finish(null)
       }
+      video.onseeked = () => {
+        try {
+          const canvas = document.createElement('canvas')
+          const scale = 320 / (video.videoWidth || 320)
+          canvas.width = 320
+          canvas.height = Math.max(2, Math.round((video.videoHeight || 180) * scale))
+          const ctx = canvas.getContext('2d')
+          if (!ctx) {
+            settle(null)
+            return
+          }
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+          settle(canvas.toDataURL('image/jpeg', 0.7))
+        } catch {
+          settle(null)
+        }
+      }
+      video.onerror = () => settle(null)
+      video.src = url
     })
   }
 
