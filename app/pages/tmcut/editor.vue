@@ -13,6 +13,7 @@ import { findCanvasPreset, canvasFpsValue, normalizeCanvas } from '~/utils/tmcut
 import { instantiateTemplate } from 'tmcut-core'
 import { parseTemplateFile } from '~/utils/tmcut/templateIo'
 import { tmcutHostBridge } from '~/utils/tmcut/hostBridge'
+import { disposeFrameService } from '~/utils/tmcut/frameStore'
 import type { TmcutTrack } from '~/composables/useTmcutProject'
 
 definePageMeta({ layout: 'studio' })
@@ -102,6 +103,9 @@ onUnmounted(() => {
   // The dialog flags live at module scope, so the editor session ends them —
   // the dock may still be an unresolved lazy chunk and cannot self-reset.
   closeAllDialogs()
+  // The frame cache and its decoder pool are module-scope too: every strip the
+  // timeline painted is an object URL only this service can revoke (slice F10).
+  disposeFrameService()
 })
 
 const editorExtraActions = computed(() => [

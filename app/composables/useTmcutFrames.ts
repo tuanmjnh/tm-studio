@@ -14,7 +14,7 @@
  */
 
 import { tmcutHostIpc } from '~/utils/tmcut/hostBridge'
-import { frameService, requestFrame } from '~/utils/tmcut/frameStore'
+import { frameService, requestFrameBatch } from '~/utils/tmcut/frameStore'
 import { createStripReader } from '~/utils/tmcut/frameStrip'
 import type { TmcutStripAsk } from '~/utils/tmcut/frameStrip'
 
@@ -54,11 +54,16 @@ export function useTmcutFrames() {
    * One instant per entry, asked through the shared service. The pool core
    * names decides how many decoders run, so a caller asking for a hundred
    * stills and a caller asking for one pay the same concurrency.
+   *
+   * A batch is the service's batch leg, not a loop of single asks: the slots
+   * these jobs were asked under are handed back as soon as the answers land.
+   * Frame-by-frame asks would leave one tracked slot per job forever, and a
+   * losing batch would have no way to tell whose slot it was releasing.
    */
   async function extractFrames(jobs: TmcutFrameJob[]): Promise<Map<string | number, string>> {
     const frames = new Map<string | number, string>()
     if (jobs.length === 0) return frames
-    const urls = await Promise.all(jobs.map(job => requestFrame({
+    const urls = await requestFrameBatch(jobs.map(job => ({
       slot: job.slot ?? `batch:${job.id}`,
       fingerprint: job.fingerprint,
       atSec: job.atSec,

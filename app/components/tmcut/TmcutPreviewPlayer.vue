@@ -41,6 +41,7 @@ const {
   activeTextSurfaces,
   formatTimecode,
   seek,
+  pause,
   togglePlayPause,
   stepForward,
   stepBackward,
@@ -1404,6 +1405,10 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  // The playhead loop re-arms itself through requestAnimationFrame, so a
+  // component that leaves while the timeline is running would keep pacing a
+  // playhead nobody can see (slice F10, requirement 8).
+  pause()
   window.removeEventListener('keydown', handleKeydown)
   window.removeEventListener('resize', measureViewport)
   resizeObserver?.disconnect()

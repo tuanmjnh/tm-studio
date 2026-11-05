@@ -160,15 +160,19 @@ async function readAudioTrack(track: InputAudioTrack, capabilities: TmcutMediaCa
  * is "can this runtime raster it at all".
  */
 async function readStill(source: TmcutHostProbeSource, signal?: AbortSignal): Promise<TmcutProbeDescriptor['still']> {
+  let bitmap: ImageBitmap | null = null
   try {
     const blob = source.blob ?? await (await fetch(String(source.url), { signal })).blob()
-    const bitmap = await createImageBitmap(blob)
-    const still = { width: bitmap.width, height: bitmap.height, decodable: true }
-    bitmap.close?.()
-    return still
+    bitmap = await createImageBitmap(blob)
+    return { width: bitmap.width, height: bitmap.height, decodable: true }
   } catch (error) {
     if (aborted(signal)) throw error
     return { decodable: false }
+  } finally {
+    // A bitmap is real memory, and the read that failed still allocated it:
+    // closing on the way through is only half the law, so it closes on the way
+    // out — including when measuring it is what threw.
+    bitmap?.close?.()
   }
 }
 

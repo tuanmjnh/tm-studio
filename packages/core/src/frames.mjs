@@ -212,6 +212,27 @@ export function createFrameSlotLedger() {
     forget(slot) {
       return current.delete(slot)
     },
+    /**
+     * Hand back a slot from the owner that is still holding it.
+     *
+     * A batch asks slots, gets its answers and is done with them — but a newer
+     * ask (a re-analysis of the same source under the same slot names) may have
+     * taken those slots over while the batch was still decoding. Releasing by
+     * token means the loser can clean up after itself without evicting the
+     * owner that now has the right to paint.
+     */
+    release(slot, token) {
+      const entry = current.get(slot)
+      if (entry === undefined || entry.token !== token) return false
+      current.delete(slot)
+      return true
+    },
+    /** Hand every slot back at once: the session that owns them all is over. */
+    clear() {
+      const released = current.size
+      current.clear()
+      return released
+    },
     /** Slots still being tracked — a leak here means a component forgot to forget. */
     size() {
       return current.size

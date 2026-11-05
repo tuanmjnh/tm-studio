@@ -567,6 +567,9 @@ onMounted(() => window.addEventListener('keydown', onReviewKeydown))
 
 onUnmounted(() => {
   reviewVideo.value?.pause()
+  // A scene or silence scan holds a demuxer open and walks the file; the page
+  // that left cannot show its result, so the walk stops here (slice F10).
+  cancelScan()
   window.removeEventListener('keydown', onReviewKeydown)
 })
 

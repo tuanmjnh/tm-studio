@@ -364,6 +364,10 @@ export interface TmcutFrameSlotLedger {
   begin(slot: string, key: string): { token: number, superseded: number | null }
   isCurrent(slot: string, token: number): boolean
   forget(slot: string): boolean
+  /** Hand back a slot only if this token is still the one recorded for it. */
+  release(slot: string, token: number): boolean
+  /** Hand every slot back: the session that owned them all is over. */
+  clear(): number
   size(): number
 }
 /** The millisecond a request is made at; a negative or unusable ask is a refusal. */

@@ -14,6 +14,11 @@
 //  - a frame nobody is waiting for is cancelled, but its bytes are still kept.
 //    A scrub asks ten frames and shows one; the nine that lost are exactly the
 //    frames the user may scrub back to, so they are cached rather than painted.
+//
+// A third belongs to the end of a session rather than to one frame (slice F10):
+// everything this file takes on a caller's behalf — object URLs, decoders, slot
+// tokens — is given back when the session that asked for it is over, because no
+// other code holds the list of what to release.
 
 import {
   TMCUT_FRAME_CACHE_MAX_ENTRIES,
@@ -47,12 +52,28 @@ export interface TmcutFrameAsk {
 export interface TmcutFrameService {
   /** An object URL to show, or null when there is nothing to show. */
   request(ask: TmcutFrameAsk): Promise<string | null>
+  /**
+   * A list of instants somebody wants now and will not re-ask: each slot is
+   * handed back when its answer lands, so a batch never leaves the ledger
+   * holding slots nobody owns anymore.
+   */
+  requestBatch(asks: TmcutFrameAsk[]): Promise<Array<string | null>>
   /** The owner of a slot left: its pending ask may no longer paint. */
   forget(slot: string): boolean
   /** Frame keys currently held. */
   cached(): string[]
   /** Frames being read or decoded right now. */
   inFlight(): number
+  /** Slots still owned — a batch that never handed back shows up here. */
+  trackedSlots(): number
+  /**
+   * End the session: stop every decode, revoke every frame location and hand
+   * back every slot. Returns how many frames were let go.
+   *
+   * The service keeps answering afterwards — the app shares one instance, and a
+   * law that returns nothing forever is worse than one that costs a re-decode.
+   */
+  dispose(): number
 }
 
 type Waiter = { slot: string, token: number, task: FrameTask }
@@ -87,6 +108,9 @@ export function createFrameService(
 
   let decoding = 0
   const queue: Array<() => void> = []
+  // Bumped by `dispose()`: a decode that finishes into a younger generation
+  // belongs to a session that already left.
+  let generation = 0
 
   function acquire(): Promise<void> {
     if (decoding < TMCUT_FRAME_MAX_CONCURRENT) {
@@ -126,7 +150,38 @@ export function createFrameService(
     if (tasks.get(waiter.task.key) === waiter.task) tasks.delete(waiter.task.key)
   }
 
+  /** A batch is done with its slot: drop the waiter and the token it issued. */
+  function finishBatchSlot(slot: string, token: number) {
+    const waiter = slotWaiters.get(slot)
+    if (waiter && waiter.token === token) {
+      slotWaiters.delete(slot)
+      waiter.task.waiters.delete(waiter)
+    }
+    // Token-guarded in core: a newer ask that took this slot over keeps it.
+    ledger.release(slot, token)
+  }
+
+  /**
+   * End the session. Everything the service was holding on behalf of the page
+   * that is going — decoders, object URLs, slots — goes back.
+   */
+  function dispose(): number {
+    generation += 1
+    let released = 0
+    for (const row of held.values()) {
+      URL.revokeObjectURL(row.url)
+      released += 1
+    }
+    held.clear()
+    for (const task of tasks.values()) task.controller.abort()
+    tasks.clear()
+    slotWaiters.clear()
+    ledger.clear()
+    return released
+  }
+
   function startTask(key: string, fingerprint: string, atSec: number, width: number, src: string | null): FrameTask {
+    const born = generation
     const task: FrameTask = {
       key,
       controller: new AbortController(),
@@ -149,6 +204,10 @@ export function createFrameService(
           signal: task.controller.signal
         })
         if (!blob || blob.size <= 0) return null
+        // The session this decode belongs to ended while it was running. The
+        // bytes are already paid for, but a URL minted now would outlive the
+        // only cache that could ever revoke it.
+        if (born !== generation) return null
         const url = URL.createObjectURL(blob)
         held.set(key, { url, accessedAt: Date.now() })
         evict()
@@ -165,11 +224,14 @@ export function createFrameService(
     return task
   }
 
-  function request(ask: TmcutFrameAsk): Promise<string | null> {
+  type AskEntry = { slot: string, token: number, promise: Promise<string | null> }
+
+  /** Take the slot and point the ask at the frame that answers it. */
+  function beginAsk(ask: TmcutFrameAsk): AskEntry | null {
     const atSec = frameTimeWithinMedia(ask.atSec, ask.durationSec)
     const width = frameRequestWidth(ask.width)
     const key = atSec === null ? null : frameRequestKey(ask.fingerprint, atSec, width)
-    if (key === null || atSec === null) return Promise.resolve(null)
+    if (key === null || atSec === null) return null
 
     const entry = ledger.begin(ask.slot, key)
     const previous = slotWaiters.get(ask.slot)
@@ -179,7 +241,7 @@ export function createFrameService(
     const cachedRow = held.get(key)
     if (cachedRow) {
       cachedRow.accessedAt = Date.now()
-      return Promise.resolve(cachedRow.url)
+      return { slot: ask.slot, token: entry.token, promise: Promise.resolve(cachedRow.url) }
     }
 
     let task = tasks.get(key)
@@ -187,12 +249,30 @@ export function createFrameService(
     const waiter: Waiter = { slot: ask.slot, token: entry.token, task }
     task.waiters.add(waiter)
     slotWaiters.set(ask.slot, waiter)
+    return {
+      slot: ask.slot,
+      token: entry.token,
+      promise: task.promise.then(url => (url !== null && ledger.isCurrent(ask.slot, entry.token) ? url : null))
+    }
+  }
 
-    return task.promise.then(url => (url !== null && ledger.isCurrent(ask.slot, entry.token) ? url : null))
+  function request(ask: TmcutFrameAsk): Promise<string | null> {
+    const entry = beginAsk(ask)
+    return entry ? entry.promise : Promise.resolve(null)
+  }
+
+  async function requestBatch(list: TmcutFrameAsk[]): Promise<Array<string | null>> {
+    const entries = list.map(ask => beginAsk(ask))
+    const urls = await Promise.all(entries.map(entry => (entry ? entry.promise : Promise.resolve(null))))
+    entries.forEach((entry) => {
+      if (entry) finishBatchSlot(entry.slot, entry.token)
+    })
+    return urls
   }
 
   return {
     request,
+    requestBatch,
     forget(slot: string) {
       retire(slotWaiters.get(slot), false)
       slotWaiters.delete(slot)
@@ -203,7 +283,11 @@ export function createFrameService(
     },
     inFlight() {
       return tasks.size
-    }
+    },
+    trackedSlots() {
+      return ledger.size()
+    },
+    dispose
   }
 }
 
@@ -216,4 +300,14 @@ export function requestFrame(ask: TmcutFrameAsk): Promise<string | null> {
 
 export function forgetFrameSlot(slot: string): boolean {
   return frameService.forget(slot)
+}
+
+/** A list of instants that will not be re-asked; their slots come back with their answers. */
+export function requestFrameBatch(asks: TmcutFrameAsk[]): Promise<Array<string | null>> {
+  return frameService.requestBatch(asks)
+}
+
+/** The TMCut session is closing: the frames it held are no longer anyone's to show. */
+export function disposeFrameService(): number {
+  return frameService.dispose()
 }

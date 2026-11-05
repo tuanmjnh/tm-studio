@@ -4193,4 +4193,183 @@ grade, và một tile không còn hứa WYSIWYG mà file không giữ được.
   minh mức gần đúng thì cần fixture pixel cho từng effect, và F8 (§40) đã có hạ tầng đó nếu một
   lượt sau quyết định đo.
 - **Mở**: yêu cầu 8 — resource lifecycle và hủy request preview cũ — là F10 (#136). F (#103) chưa
-  exit cho tới khi nó xong.
+  exit cho tới khi nó xong. *(Dòng này nghỉ ở §42.)*
+
+## 42. Slice F10 — cuối một phiên preview cũng là một tài nguyên phải trả (đo ngày 2026-11-05)
+
+### 42.1 Câu hỏi mà F5 và D1 chưa trả lời
+
+Yêu cầu 8 của slice F đòi hai thứ, và trước lượt này mới có một nửa:
+
+- **trả lại mọi tài nguyên mà preview đã lấy** — `VideoFrame`, `ImageBitmap`, WebGL texture, object
+  URL, worker/decoder;
+- **một request frame cũ phải bị hủy, không được paint**.
+
+D1 (§19) đặt luật core cho vế thứ hai: một ask sau retire ask trước trên cùng một slot. F5 (§33)
+khép phía decoder: element dùng một lần trả `Input` và watchdog trong `finally`. Cả hai nói về **một
+lần yêu cầu**. Không luật nào nói về **một lần rời đi**: editor unmount thì ai revoke mấy trăm object
+URL, ai abort decode đang chạy, ai trả slot về ledger?
+
+Đo ở HEAD `0760990` — `git show HEAD:<file> | grep -c` cho từng chỗ mà spec mới đòi:
+`disposeFrameService` trong `editor.vue` = **0**, `requestFrameBatch` trong `useTmcutFrames.ts` =
+**0**, `pause()` trong khối `onUnmounted` của player = **0**, `cancelScan()` trong `onUnmounted` của
+autocut = **0**, `bitmap.close()` trong `readStill` = **0**, `release`/`clear` của ledger trong
+`frames.mjs` = **0**. Không có đường nào để kết thúc một phiên.
+
+### 42.2 Luật core mới: nhường có token, và nhường tất cả
+
+`createFrameSlotLedger()` thêm hai phương thức — [frames.mjs:224](file:///D:/Applications/tm-studio/packages/core/src/frames.mjs#L224)
+và [`:231`](file:///D:/Applications/tm-studio/packages/core/src/frames.mjs#L231), kiểu ở
+[index.d.ts:368](file:///D:/Applications/tm-studio/packages/core/src/index.d.ts#L368)/[:370](file:///D:/Applications/tm-studio/packages/core/src/index.d.ts#L370):
+
+- `release(slot, token)` chỉ xóa một slot khi **đúng token của người gọi** đang được ghi cho slot
+  đó. `forget(slot)` xóa vô điều kiện, và ở đây vô điều kiện là **sai**: autocut hỏi lại chính các
+  slot `thumb:<asset>#<index>` khi phân tích lại, nên một batch đã thua mà xóa slot theo tên sẽ đá
+  chủ mới đang giữ nó.
+- `clear()` trả về **số** slot được gỡ, để spec đòi được chữ "hết" thay vì chỉ "không còn slot nào
+  mình biết tên".
+
+### 42.3 Service: một thế hệ, một cú dispose, một đường batch
+
+[frameStore.ts](file:///D:/Applications/tm-studio/app/utils/tmcut/frameStore.ts) (313 dòng) có ba phần mới.
+
+**Thế hệ, không phải cờ `disposed`.** `generation` ([:113](file:///D:/Applications/tm-studio/app/utils/tmcut/frameStore.ts#L113))
+tăng mỗi lần dispose, và mỗi task ghi lại `born` của mình lúc khởi sinh. Trước khi mint URL, task
+kiểm `if (born !== generation) return null`
+([:210](file:///D:/Applications/tm-studio/app/utils/tmcut/frameStore.ts#L210)):
+một decode kết thúc vào một phiên **trẻ hơn** đã trả bytes về, nhưng không được phép trả một object
+URL mà không còn cache nào có khả năng revoke nó. Một cờ boolean sẽ biến dispose thành **tuyệt đối**
+— quay lại `/tmcut/editor` lần thứ hai sẽ không còn frame nào, trong khi singleton cấp module là cố
+ý dùng chung.
+
+**`dispose()`** ([:168](file:///D:/Applications/tm-studio/app/utils/tmcut/frameStore.ts#L168)) là một
+hành động chứ không phải một trạng thái: tăng thế hệ, revoke mọi URL trong `held` rồi xóa map, abort
+mọi `task.controller`, xóa `slotWaiters`, `ledger.clear()`
+([:179](file:///D:/Applications/tm-studio/app/utils/tmcut/frameStore.ts#L179)), và trả về **số URL đã
+revoke** — để spec đếm được chứ không suy ra.
+
+**`beginAsk()`** ([:230](file:///D:/Applications/tm-studio/app/utils/tmcut/frameStore.ts#L230)) tách
+phần "hỏi" khỏi phần "chờ": `request` và `requestBatch`
+([:264](file:///D:/Applications/tm-studio/app/utils/tmcut/frameStore.ts#L264)) cùng đi qua nó, nên
+cache-hit, slot token và cancellation chỉ có **một** định nghĩa. `requestBatch` gọi `finishBatchSlot`
+([:154](file:///D:/Applications/tm-studio/app/utils/tmcut/frameStore.ts#L154)) cho mọi slot khi câu
+trả lời cuối đã về: bỏ waiter của chính nó rồi `ledger.release(slot, token)`
+([:161](file:///D:/Applications/tm-studio/app/utils/tmcut/frameStore.ts#L161)). Batch giữ slot **tới
+khi nó có câu trả lời**, chứ không tới khi cả app đổi ý. Hai hàm module mới: `requestFrameBatch`
+([:306](file:///D:/Applications/tm-studio/app/utils/tmcut/frameStore.ts#L306)) và `disposeFrameService`
+([:311](file:///D:/Applications/tm-studio/app/utils/tmcut/frameStore.ts#L311)).
+
+### 42.4 Nối dây — đúng năm chỗ
+
+| Chỗ | Dòng | Cái gì trả về |
+| --- | --- | --- |
+| [useTmcutFrames.ts](file:///D:/Applications/tm-studio/app/composables/useTmcutFrames.ts#L66) | 66 | `extractFrames` hỏi **một batch**, không còn gọi `requestFrame` từng khung |
+| [editor.vue](file:///D:/Applications/tm-studio/app/pages/tmcut/editor.vue#L108) | 108 | `disposeFrameService()` trong `onUnmounted` |
+| [TmcutPreviewPlayer.vue](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L1411) | 1411 | `pause()` đứng đầu `onUnmounted` |
+| [autocut.vue](file:///D:/Applications/tm-studio/app/pages/tmcut/autocut.vue#L572) | 572 | `cancelScan()` trong `onUnmounted` |
+| [mediaProbe.ts](file:///D:/Applications/tm-studio/app/utils/tmcut/mediaProbe.ts#L175) | 175 | `bitmap?.close?.()` trong `finally` của `readStill` |
+
+Không đặt dispose trong layout, vì số đo này: chỉ `editor.vue` khai `layout: 'studio'`; các trang
+tmcut còn lại dùng `default` chung với cả app, nên dispose ở đó sẽ giết frame service của một trang
+chưa hề rời đi. Autocut cũng không cần dispose — chỗ nó rò là **slot**, và slot thì batch đã trả.
+
+`pause()` đứng riêng vì loop playhead tự nạp lại qua `requestAnimationFrame`: unmount mà không pause
+thì một playhead vô hình vẫn chạy đúng nhịp của monitor. `cancelScan()` cũng vậy — một scene/silence
+scan giữ `Input` mở, và `analyzeSource` đã tự bắt lỗi của nó nên abort ở đây không ném gì ra UI.
+Còn `readStill`: đường thành công vẫn đóng bitmap từ trước, nhưng một getter `width` ném lỗi thì
+bitmap đã cấp phát mà không ai giải phóng — đóng "trên đường đi" chỉ là nửa luật.
+
+### 42.5 Test trước production — 12 check
+
+Spec mới [tmcut_resource_lifecycle.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_resource_lifecycle.spec.ts)
+(368 dòng, **12** check) RED một lượt đo rồi GREEN. Theo nhóm:
+
+- **ledger** (:81, :98): `clear()` đếm số slot trả về; `release()` **từ chối** token lạ — đúng cái
+  mà `forget()` không làm được.
+- **dispose** (:163, :188, :214): 3 URL đang giữ thì revoke **cả 3** (`dispose() === 3`, `cached()`
+  rỗng, `trackedSlots()` = 0, `inFlight()` = 0); một decode đang chạy lúc dispose **không publish**
+  (`created.length === 0` — không URL mới được mint nên không gì rò); và service **trả lời tiếp**
+  sau dispose (URL khác, 2 decode mới) — dispose không phải một cửa đóng.
+- **batch** (:231, :256): batch trả slot của nó; rồi phiên bản cắn của cùng luật — batch **bị
+  superseded** không được đá chủ mới (`trackedSlots() === 2` giữa cuộc đua).
+- **hình dạng nguồn** (:292, :312, :320): app gọi `requestFrameBatch`, editor có
+  `disposeFrameService()`, player unmount có `pause()`, autocut unmount có `cancelScan()`. Check đầu
+  của nhóm còn **phủ định** `requestFrame(` trong composable — không được còn đường vòng cũ.
+- **still** (:327): `readStill` với một getter `width` ném lỗi vẫn đóng bitmap đúng **một** lần.
+- **worker** (:350): `/new (Shared)?Worker\s*\(/` không có kết quả nào trong `app/`.
+
+Check 7 ban đầu viết "một seek mới có bốn frame của riêng nó" và FAIL `3 !== 4`:
+`TMCUT_FRAME_MAX_CONCURRENT = 3` xếp frame thứ tư vào queue, nên con số đó là **nhịp** của máy chứ
+không phải luật của slot. Assertion đổi thành những gì tất định: signal của ask cũ
+`aborted === true`, nhả gate cũ rồi `trackedSlots() === 2`, nhả hết rồi thì hai URL mới về và slot
+về 0.
+
+### 42.6 Falsification — bốn mutation, mỗi cái làm sập đúng một check
+
+| Mutation | Check sập | Số đo |
+| --- | --- | --- |
+| bỏ guard `born !== generation` | "and it is not published either" | `1 !== 0` |
+| `ledger.release(slot, token)` → `ledger.forget(slot)` | "handing back its own slots leaves the newer batch owners in place" | `0 !== 2` |
+| bỏ `ledger.clear()` trong `dispose()` | "no slot is still owned by the page that left" | `3 !== 0` |
+| bỏ `bitmap?.close?.()` | "but the bitmap was allocated" | `0 !== 1` |
+
+Bốn mutation, bốn run, mỗi cái làm **đúng một** check sập — tức không check nào dư; cái thứ hai chứng
+minh phần thưởng của token guard: bỏ nó thì spec **nhìn thấy** chủ mới bị đá. File restore
+**byte-identical** (`sha256sum -c` OK — `frameStore.ts` `396d0fa9…`, `mediaProbe.ts` `fec94d84…`),
+spec chạy lại 12/12.
+
+### 42.7 Gate
+
+| Gate | Lệnh | Kết quả |
+| --- | --- | --- |
+| 1 Types | `npx nuxt typecheck` | **PASS** exit 0, 0 × `error TS`, config regenerate 14:22 (28581 B) |
+| 2 Lint | `npx eslint` trên **9** file chạm (sau gate 1) | **PASS** exit 0, 0 problem |
+| 3 Unit | `npx tsx tests/unit/run-all.mts --smoke` | **PASS** 124/124, exit 0 |
+| 3 Core | `npx tsc -p packages/core --noEmit` + `node --test packages/core/test/*.test.mjs` | **PASS** exit 0 / **679/679**, 0 fail, 0 skipped |
+| 4 Live | 5 route trên `:4003` | **PASS** 0 `[warn]`/`[issue]`, `401` đúng baseline |
+| 5 Docs | §42 + roadmap, scratch đã xóa | **PASS** |
+
+Dòng `SKIP|PARTIAL|FAIL` duy nhất grep được trong log gate 3 là chuỗi "0 FAILED" nằm **trong** một
+dòng PASS — không spec nào bị bỏ hay chạy dở.
+
+### 42.8 Live — playhead, blob URL và một lượt quay lại
+
+Bốn con số đầu đo trong Chromium thật trên `:4003` bằng một wrapper đếm callback
+`requestAnimationFrame` — không suy ra từ source.
+
+| Cái | Đo |
+| --- | --- |
+| callback rAF trước khi bấm play | **0/giây** |
+| callback rAF khi đang phát | **82/giây** |
+| callback trong 2 s chuyển route `/tmcut/editor` → `/tmcut` | **+10** (đó là unmount, không phải loop) |
+| callback 2 s **sau** khi đã ở `/tmcut` | **0** — loop đã chết |
+| `fetch()` một URL `blob:` filmstrip vừa capture, sau khi rời editor | **thất bại** — `disposeFrameService()` đã revoke |
+| rời rồi vào lại `/tmcut/editor` | **16** dải `blob:` vẽ lại, console đúng baseline |
+
+Bốn dòng đầu là bằng chứng của `pause()`; hai dòng sau là của `dispose()` và — quan trọng nhất cho
+luật "generation chứ không phải cờ" — dòng cuối chứng minh dispose **không** làm singleton vô dụng
+với lần vào sau.
+
+### 42.9 Chưa chứng minh / nợ
+
+- **WebGL texture**: yêu cầu 8 kể tên này, nhưng `grep webgl2` trong `app/` trả **0** — preview hiện
+  composite bằng lớp DOM/CSS, nên **không có** GL resource nào để trả. Đây là leg **rỗng**, không
+  phải leg đã xử lý; khi compositor WebGL2 của #103 vào, `dispose()` là chỗ duy nhất nó phải đăng ký
+  texture, và check "worker" là hình mẫu để pin điều đó.
+- **`VideoFrame`**: app không tự tạo cái nào — sink của Mediabunny vẽ vào canvas, `Input` đã đóng
+  trong `finally` (F5). Lượt này không thêm gì cho leg đó, chỉ giữ nó không hồi quy.
+- **autocut giữa một scan**: `cancelScan()` được pin ở source và unit, nhưng chưa có phép đo
+  "unmount thật giữa một scene scan" trên Chromium.
+- **Host Electron** (lifecycle của bridge/renderer), **độ bền OPFS qua reload**, và **số
+  listener/ledger trong production build**: không gate nào của lượt này chạm tới.
+
+### 42.10 Yêu cầu 8 đóng tới đâu
+
+- **Đóng**: mọi tài nguyên mà preview **tự lấy** — object URL, decode đang chạy, slot ledger,
+  `ImageBitmap` của still, `Input` của scan, loop rAF — nay có **một** chỗ kết thúc phiên và **12**
+  check đo nó. Một request cũ bị hủy (`signal.aborted === true`) chứ không paint, và hủy **không**
+  đã man: batch thua không được chiếm slot của người thắng.
+- **Đóng có điều kiện**: hai leg "WebGL texture" và "`VideoFrame`" được chứng minh là rỗng trong
+  kiến trúc hiện tại (§42.9), chứ không phải được giải quyết.
+- **Còn mở của slice F**: không có gì mới. §41.7 để lại đúng một dòng, và dòng đó đóng ở đây — nên
+  #103 exit được.
