@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import type { CSSProperties } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import type { TmcutTrack, TmcutTimelineItem } from '~/composables/useTmcutProject'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import type { PaintSurface } from '~/composables/useTmcutPlayback'
 import { computeFitObjectStyle, CROP_RATIO_PRESETS, clampCropRect, applyCropRatio, canvasFpsValue } from '~/utils/tmcut/canvas'
-import { effectCssParts } from '~/utils/tmcut/fxPreview'
-import { previewScale, evalKeyframe, gainAt, evaluateClip, textAnimationAt, safeAreaRects, SAFE_AREA_PRESETS, TICKS_PER_SECOND, secToTicks, maskCssMaskImage, resolveClipLayout, previewTransitionRamp, classifyAssetKind, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_FONT_SIZE, textBoxPadding, textShadowOffset, textStrokeWidth } from 'tmcut-core'
-import type { TmcutKeyframe, TmcutTextAnimationType } from 'tmcut-core'
+import { effectCssParts, layerOverlayPlates } from '~/utils/tmcut/fxPreview'
+import { previewScale, evalKeyframe, gainAt, textAnimationAt, safeAreaRects, SAFE_AREA_PRESETS, TICKS_PER_SECOND, secToTicks, maskCssMaskImage, previewTransitionRamp, classifyAssetKind, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_FONT_SIZE, textBoxPadding, textShadowOffset, textStrokeWidth } from 'tmcut-core'
+import type { CoreEvaluatedLayer, CoreEvaluatedLayout, TmcutTextAnimationType } from 'tmcut-core'
 import { clipDurationTicks, clipStartSec, clipEndSec, clipMediaTimeSec } from '~/utils/tmcut/clipTime'
 import { assetStateView, isMediaOffline } from '~/utils/tmcut/assetImport'
 import { useTmcutFrames } from '~/composables/useTmcutFrames'
@@ -689,11 +690,11 @@ function triggerCropTool() {
 }
 
 // Media fitting styles (Phase 2): fit/fill/crop/stretch/smart.
-// V4 M3: the defaults come from core's one layout resolver — the same call
-// `evaluateTimeline` puts on the layer and `toRenderClip` feeds the FFmpeg
-// compiler — so the preview cannot drift into a fourth set of defaults.
-function fitStyle(clip: { fit?: string, focusX?: number, focusY?: number, cropRect?: { x: number, y: number, w: number, h: number } | null }): Record<string, string> {
-  const layout = resolveClipLayout(clip)
+// Zero-FFmpeg slice F4b: the layout arrives on core's layer, resolved once by
+// the same evaluator `toRenderClip` feeds the compiler. This file used to call
+// the resolver a second time for the same clip — a third consumer writing its
+// own answer instead of reading the plan's.
+function fitStyle(layout: CoreEvaluatedLayout): Record<string, string> {
   return computeFitObjectStyle(layout.fit, layout.focusX, layout.focusY, layout.cropRect) as Record<string, string>
 }
 
@@ -701,11 +702,12 @@ function fitStyle(clip: { fit?: string, focusX?: number, focusY?: number, cropRe
 // it belongs to the element the user is actually dragging on — the main
 // picture — because the crop rect it draws is measured in that letterboxed
 // box. A stacked row keeps its real fit even while the crop tool is open.
-function fitForSurface(surface: PaintSurface): Record<string, string> {
+function fitForSurface(surface: PaintSurface | null | undefined): Record<string, string> {
+  if (!surface) return {}
   if (isCropActive.value && surface.clip.id === activeVideoClip.value?.clip?.id) {
     return { objectFit: 'contain', objectPosition: '50% 50%' }
   }
-  return fitStyle(surface.clip)
+  return fitStyle(surface.layer.layout)
 }
 
 // Text overlays scale with the rendered canvas size (docs §65.2):
@@ -721,24 +723,40 @@ const textScale = computed(() =>
   previewScale(containerWidth.value, currentProject.value?.canvas?.width || 0)
 )
 
-// Per-clip visual (transform + opacity from keyframes/static fields);
-// shared by every footage layer. The numbers come from core evaluateClip, the same evaluator the export will
-// read (V4 M2) — this file only turns them into CSS and preview-scale px.
-function clipVisual(clip: { offset?: number, scale?: number, x?: number, y?: number, rotation?: number, opacity?: number, keyframes?: TmcutKeyframe[] }) {
-  const visual = evaluateClip(clip, localTicks(clip))
+// The footage group's own transform + opacity, read straight off core's layer
+// for this tick. Slice F4b retired the local re-computation: this file used to
+// run the evaluator a second time on the authored clip and get an answer that
+// could disagree with the one the plan already carried.
+//
+// It is the GROUP's style, not the element's: the export bakes a layer's
+// effects into that layer and only then transforms, fades and masks it
+// (`render/video.ts` — trim, setpts, fit, the effect chain, then overlay), so
+// the plates added below have to ride inside the same group or they escape the
+// transform they belong to.
+function layerGroupBase(layer: CoreEvaluatedLayer): { transform: string, opacity: number } {
   const preview = textScale.value || 1
-  const { x, y, scaleX, rotation } = visual.transform
+  const { x, y, scaleX, rotation } = layer.transform
   return {
     transform: `translate(${x * preview}px, ${y * preview}px) scale(${scaleX}) rotate(${rotation}deg)`,
-    opacity: visual.opacity
+    opacity: layer.opacity
   }
 }
 
-// The live preview paints the registry face of each effect instance: no local
-// type table here, so a tile, the inspector and this element cannot disagree
-// about what `blur=80` or `lut=warm` looks like. Overlay-only definitions
-// (vignette, grain, letterbox …) need extra layers and report an empty filter;
-// the export still applies them, which is why the tile badges their fidelity.
+// The overlay face of each effect this layer carries, in the order the export
+// chains them. Which effects may plate a LIVE picture is the registry's answer
+// (`fxPreview.effectOverlay`), not a table here — a thumbnail mnemonic (a
+// keying band, a pixel grid) never tinted a monitor, and a real plate never sat
+// above the whole frame as it did before F4b.
+function surfacePlates(surface: PaintSurface | null | undefined): CSSProperties[] {
+  if (!surface) return []
+  return layerOverlayPlates(surface.layer.effects)
+}
+
+// The element-facing half of that face: the filter/transform an effect applies
+// to the picture it sits on. No local type table here, so a tile, the inspector
+// and this element cannot disagree about what `blur=80` or `lut=warm` looks
+// like. An overlay-only definition reports an empty filter — it is painted by
+// `surfacePlates` instead, and the tile badges its fidelity either way.
 function effectsCss(effects: Array<{ type: string, params?: Record<string, unknown> }>): { filter: string, transform: string } {
   const filter: string[] = []
   const transform: string[] = []
@@ -767,27 +785,16 @@ function maskPreviewStyle(mask: unknown): Record<string, string> {
   }
 }
 
-const activeVignetteStyle = computed(() => {
-  const clip = activeVideoClip.value?.clip
-  if (!clip?.effects) return null
-  const vig = clip.effects.find(e => e.type === 'vignette')
-  if (!vig) return null
-  const intensity = (Number(vig.params.intensity) || 50) / 100
-  const alpha = (intensity * 0.85).toFixed(2)
-  return {
-    background: `radial-gradient(circle, transparent 40%, rgba(0, 0, 0, ${alpha}) 100%)`
-  }
-})
-
 // ONE visual law for every footage layer (Zero-FFmpeg slice F2b). The main
 // picture, the crossfade partner and each stacked row are styled by this one
 // function of a surface, so a row painted above another cannot arrive with a
 // cheaper look than the row it covers — the asymmetry the exporter had already
 // resolved in the file and the monitor had kept for itself.
 //
-// The numbers are core's: `clipVisual` from evaluateClip (keyframes at the
-// playhead, static fields as the fallback), the mask and effects from the
-// registry, and the crossfade ramp from `previewTransitionRamp`, whose shape,
+// The numbers are core's own layer for this tick — `layer.transform` and
+// `layer.opacity` (keyframes resolved by the evaluator the export also reads),
+// `layer.mask` and `layer.effects` painted by the registry — plus the crossfade
+// ramp from `previewTransitionRamp`, whose shape,
 // travel law and CSS are measured against the bundled FFmpeg in
 // `tmcut-core/transitions.mjs` (V4 G16) — so the monitor and the export
 // describe the same cut. Fade and dissolve stay a complementary opacity ramp
@@ -802,15 +809,19 @@ const activeVignetteStyle = computed(() => {
 // core's plan adjacency, so a layer carrying a transition whose partner was
 // trimmed away paints as the plain cut `compositePlan` decided.
 function surfaceStyle(surface: PaintSurface | null | undefined): Record<string, string | number> {
-  const clip = surface?.clip
-  if (!clip || !surface) return {}
-  const base = clipVisual(clip)
+  if (!surface) return {}
+  const clip = surface.clip
+  const layer = surface.layer
+  // This is the GROUP's style: it positions the media element and that
+  // element's plates together, which is what the export composites before it
+  // transforms. The fit therefore stays on the element (`fitForSurface` in the
+  // template) — an `object-fit` on a div would silently do nothing.
+  const base = layerGroupBase(layer)
   const style: Record<string, string | number> = {
-    ...fitForSurface(surface),
     ...base,
-    ...maskPreviewStyle(clip.mask)
+    ...maskPreviewStyle(layer.mask)
   }
-  const effectStyle = effectsCss(clip.effects || [])
+  const effectStyle = effectsCss(layer.effects)
   if (effectStyle.filter) {
     style.filter = effectStyle.filter
   }
@@ -820,6 +831,8 @@ function surfaceStyle(surface: PaintSurface | null | undefined): Record<string, 
   // Blend mode (R116): CSS mix-blend-mode is the preview counterpart of
   // the FFmpeg `blend` filter the export uses — same mode names. In the DOM it
   // blends against the layer below, which is exactly the row order core gives.
+  // Remaining debt, unchanged by F4b: core's layer carries no `blend`, so this
+  // one number is still read off the authored clip instead of the plan.
   const blend = (clip as { blend?: string }).blend
   if (blend && blend !== 'normal') {
     style.mixBlendMode = blend
@@ -1638,56 +1651,95 @@ onUnmounted(() => {
         <!-- OUTGOING crossfade layer (roadmap B3): the neighbor under the
            incoming clip during a transition window. Muted — preview audio
            follows the incoming clip (documented simplification, §102).
-           Tree order puts it below the (positioned) main element above. -->
-        <video
+           Tree order puts it below the (positioned) main element above.
+           Zero-FFmpeg slice F4b: each footage layer is a GROUP — the element
+           plus the overlay plates its own core layer carries. The exporter
+           bakes a layer's effects into it and only then transforms, fades and
+           masks it, so `surfaceStyle` is the group's and the fit the element's.
+           A plate outside this group would be a monitor-wide tint wearing none
+           of its layer's numbers, which is what the frame-wide vignette was. -->
+        <div
           v-if="transitionCrossfade && outgoingMediaSrc"
           v-show="!isTrackHidden"
-          ref="internalOutgoingRef"
-          :src="outgoingMediaSrc"
-          class="absolute inset-0 w-full h-full pointer-events-none"
+          class="absolute inset-0 pointer-events-none"
           :style="surfaceStyle(crossfadeSurface)"
-          :muted="true"
-          preload="auto"
-          playsinline
-          @loadedmetadata="onOutgoingLoadedMetadata"
-        />
+        >
+          <video
+            ref="internalOutgoingRef"
+            :src="outgoingMediaSrc"
+            class="w-full h-full"
+            :style="fitForSurface(crossfadeSurface)"
+            :muted="true"
+            preload="auto"
+            playsinline
+            @loadedmetadata="onOutgoingLoadedMetadata"
+          />
+          <div
+            v-for="(plate, plateIndex) in surfacePlates(crossfadeSurface)"
+            :key="plateIndex"
+            class="absolute inset-0 pointer-events-none"
+            :style="plate"
+          />
+        </div>
 
         <!-- HTML5 Video Element (served via media://local protocol,
            same as ToolsVideoFramePreview in tools/video.vue).
            `relative` keeps it in the stacking tree ABOVE the outgoing
            crossfade layer (both positioned z-auto → tree order wins). -->
-        <video
+        <div
           v-show="currentMediaSrc && !isTrackHidden && !isCurrentClipImage"
-          ref="internalVideoRef"
-          :src="isCurrentClipImage ? undefined : currentMediaSrc"
           class="relative w-full h-full pointer-events-none transition-transform duration-75"
           :style="surfaceStyle(mainSurface)"
-          :muted="isVideoMuted || previewMuted"
-          :volume="videoVolume * previewVolume"
-          preload="auto"
-          playsinline
-          @loadedmetadata="onLoadedMetadata"
-          @waiting="onVideoWaiting"
-          @playing="onVideoPlaying"
-          @canplay="onVideoPlaying"
-          @error="onMediaError('video')"
-        />
-
-        <!-- Still-image layer: same fit/transform contract as the video, painted
-             by <img> because a still cannot decode in the video element. -->
-        <img
-          v-show="isCurrentClipImage && currentMediaSrc && !isTrackHidden"
-          :src="isCurrentClipImage ? currentMediaSrc : undefined"
-          class="relative w-full h-full pointer-events-none object-contain select-none"
-          :style="surfaceStyle(mainSurface)"
-          alt=""
-          draggable="false"
-          decoding="async"
-          @error="onMediaError('image')"
         >
+          <video
+            ref="internalVideoRef"
+            :src="isCurrentClipImage ? undefined : currentMediaSrc"
+            class="w-full h-full"
+            :style="fitForSurface(mainSurface)"
+            :muted="isVideoMuted || previewMuted"
+            :volume="videoVolume * previewVolume"
+            preload="auto"
+            playsinline
+            @loadedmetadata="onLoadedMetadata"
+            @waiting="onVideoWaiting"
+            @playing="onVideoPlaying"
+            @canplay="onVideoPlaying"
+            @error="onMediaError('video')"
+          />
+          <div
+            v-for="(plate, plateIndex) in surfacePlates(mainSurface)"
+            :key="plateIndex"
+            class="absolute inset-0 pointer-events-none"
+            :style="plate"
+          />
+        </div>
+
+        <!-- Still-image layer: same group/fit contract as the video, painted
+             by <img> because a still cannot decode in the video element. -->
+        <div
+          v-show="isCurrentClipImage && currentMediaSrc && !isTrackHidden"
+          class="relative w-full h-full pointer-events-none"
+          :style="surfaceStyle(mainSurface)"
+        >
+          <img
+            :src="isCurrentClipImage ? currentMediaSrc : undefined"
+            class="w-full h-full object-contain select-none"
+            :style="fitForSurface(mainSurface)"
+            alt=""
+            draggable="false"
+            decoding="async"
+            @error="onMediaError('image')"
+          >
+          <div
+            v-for="(plate, plateIndex) in surfacePlates(mainSurface)"
+            :key="plateIndex"
+            class="absolute inset-0 pointer-events-none"
+            :style="plate"
+          />
+        </div>
 
         <!-- Stacked footage rows (Zero-FFmpeg slice F2b): every surface core
-             paints ABOVE the main picture gets its own element, in plan order,
+             paints ABOVE the main picture gets its own group, in plan order,
              so the monitor shows the same stack the file writes. Muted — the
              preview's audio is the bottom row's, the same simplification the
              export makes with its one audio concat, and the plan already put
@@ -1695,33 +1747,44 @@ onUnmounted(() => {
              Tree order IS the paint order here: these sit after the main layer,
              so a row the plan stacked on top covers it. The still branch exists
              for the same reason the main one does — a still cannot decode in a
-             <video>. Known gap, unchanged by this slice: the effect plates
-             below (vignette) are monitor-wide, so they still tint the whole
-             stack while the file applies them to their own layer. -->
+             <video>. F4b closed the gap this comment used to carry: a row's
+             plates come from its OWN layer now, so a vignette on the top row
+             tints the top row, which is what the file bakes into that row. -->
         <template
           v-for="surface in stackedSurfaces"
           :key="surface.key"
         >
-          <video
-            v-if="!isImageClip(surface.clip)"
-            :ref="(el) => setStackedVideoEl(surface.key, el)"
-            :src="playableSrc(surface.clip)"
-            class="absolute inset-0 w-full h-full pointer-events-none"
+          <div
+            class="absolute inset-0 pointer-events-none"
             :style="surfaceStyle(surface)"
-            :muted="true"
-            preload="auto"
-            playsinline
-            @loadedmetadata="onStackedLoadedMetadata(surface, $event)"
-          />
-          <img
-            v-else
-            :src="playableSrc(surface.clip)"
-            class="absolute inset-0 w-full h-full pointer-events-none select-none"
-            :style="surfaceStyle(surface)"
-            alt=""
-            draggable="false"
-            decoding="async"
           >
+            <video
+              v-if="!isImageClip(surface.clip)"
+              :ref="(el) => setStackedVideoEl(surface.key, el)"
+              :src="playableSrc(surface.clip)"
+              class="w-full h-full"
+              :style="fitForSurface(surface)"
+              :muted="true"
+              preload="auto"
+              playsinline
+              @loadedmetadata="onStackedLoadedMetadata(surface, $event)"
+            />
+            <img
+              v-else
+              :src="playableSrc(surface.clip)"
+              class="w-full h-full object-contain select-none"
+              :style="fitForSurface(surface)"
+              alt=""
+              draggable="false"
+              decoding="async"
+            >
+            <div
+              v-for="(plate, plateIndex) in surfacePlates(surface)"
+              :key="plateIndex"
+              class="absolute inset-0 pointer-events-none"
+              :style="plate"
+            />
+          </div>
         </template>
 
         <!-- Audio-track playback layer (roadmap R124): one hidden <audio>
@@ -1739,13 +1802,6 @@ onUnmounted(() => {
           preload="auto"
           hidden
           @loadedmetadata="onAudioLoaded(a)"
-        />
-
-        <!-- Vignette overlay effect (Roadmap Phase E) -->
-        <div
-          v-if="activeVignetteStyle"
-          class="absolute inset-0 pointer-events-none z-10"
-          :style="activeVignetteStyle"
         />
 
         <!-- Buffering indicator: the playhead keeps running on its own clock,

@@ -397,9 +397,10 @@ const posterUrl = computed(() => {
 
 // Honest warning for parallel tracks (#88, V4 Phase 2 (5), slice F2b): both
 // surfaces composite every visible footage row in paint order, and captions
-// follow the same selector. The gap that remains is per-layer effect plates —
-// the monitor's vignette is frame-wide where the file bakes it into its own
-// layer. Read the row set from the selector rather than hand-rolling a second
+// follow the same selector. Slice F4b closed the last gap this comment used to
+// carry — the effect plates (vignette, grain, letterbox) now ride inside their
+// own layer's group, so a row's plate tints that row here as the file bakes it
+// there. Read the row set from the selector rather than hand-rolling a second
 // answer here, or the warning and the export drift apart.
 const parallelTracksWarning = computed(() => {
   if (!currentProject.value) return false

@@ -299,8 +299,12 @@ check('the preview resolves fit, focus and crop from the same core call', () => 
   // Third consumer, same rule. The SFC used to spell the defaults out a second
   // time (`clip.fit || 'fit'`, `focusX ?? 0.5`), which is how a fourth answer
   // gets written: valid for today's data, free to drift from it tomorrow.
+  // Slice F4b moved the preview one step further along the same law: the
+  // resolver is core's and its ANSWER arrives on the layer, so the DOM reads
+  // `surface.layer.layout` instead of calling it again for the same clip.
   const player = readFileSync(join(ROOT, 'app/components/tmcut/TmcutPreviewPlayer.vue'), 'utf8')
-  assert.ok(/resolveClipLayout\(clip\)/.test(player), 'the preview must read layout through core')
+  assert.ok(/fitStyle\(surface\.layer\.layout\)/.test(player), 'the preview must read layout through core')
+  assert.ok(!/resolveClipLayout\(/.test(player), 'nor re-resolve a layout the plan already carries')
   assert.ok(!/focusX \?\? 0\.5/.test(player), 'no local copy of the focus default may remain')
   assert.ok(!/computeFitObjectStyle\(clip\.fit \|\| 'fit'/.test(player), 'no local copy of the fit default may remain')
   const fitStyle = player.match(/function fitStyle[\s\S]*?\n}/)

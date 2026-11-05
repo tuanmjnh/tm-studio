@@ -8,6 +8,12 @@
 //  truthful "not exported yet" badge instead of implying the file will
 //  contain the effect. Preview (CSS/filter) may still render it.
 //
+//  `preview.layerOverlay` is the other honesty flag: TRUE only when this
+//  effect's CSS overlay is what the export bakes into the layer, so a live
+//  preview may paint it as its own plate. An overlay that only HINTS at the
+//  result (a keying band, a pixel grid) stays a tile device and never reaches
+//  the monitor.
+//
 //  `label` is an English constant (AGENTS.md); UIs translate by the
 //  registry type key and treat `label` as a developer fallback only.
 // =============================================================================
@@ -44,7 +50,7 @@ export const EFFECT_REGISTRY = {
     label: 'Vignette',
     category: 'light',
     renderReady: true,
-    preview: { strategy: 'css', fidelity: 'approximate' },
+    preview: { strategy: 'css', fidelity: 'approximate', layerOverlay: true },
     params: [
       { name: 'intensity', kind: 'number', min: 0, max: 100, default: 50 }
     ]
@@ -54,7 +60,7 @@ export const EFFECT_REGISTRY = {
     label: 'Grain',
     category: 'texture',
     renderReady: true,
-    preview: { strategy: 'css', fidelity: 'approximate' },
+    preview: { strategy: 'css', fidelity: 'approximate', layerOverlay: true },
     params: [
       { name: 'amount', kind: 'number', min: 0, max: 100, default: 30 },
       { name: 'size', kind: 'enum', options: ['fine', 'medium', 'coarse'], default: 'fine' }
@@ -176,7 +182,7 @@ export const EFFECT_REGISTRY = {
     label: 'Letterbox',
     category: 'stylize',
     renderReady: true,
-    preview: { strategy: 'css', fidelity: 'exact' },
+    preview: { strategy: 'css', fidelity: 'exact', layerOverlay: true },
     params: [
       // Bar height as a percentage of the frame height.
       { name: 'size', kind: 'number', min: 1, max: 40, default: 12 }
@@ -792,7 +798,7 @@ export function lut3dChain(preset) {
  * state rather than a generic animation.
  *
  * @param {string} type
- * @returns {{ fidelity: 'exact'|'approximate'|'illustrative', strategy: string, exportSupported: boolean, label: string, category: string } | null}
+ * @returns {{ fidelity: 'exact'|'approximate'|'illustrative', strategy: string, layerOverlay: boolean, exportSupported: boolean, label: string, category: string } | null}
  */
 export function fxCapabilities(type) {
   const desc = EFFECT_REGISTRY[type]
@@ -800,6 +806,7 @@ export function fxCapabilities(type) {
   return {
     fidelity: desc.preview?.fidelity ?? 'approximate',
     strategy: desc.preview?.strategy ?? 'css',
+    layerOverlay: desc.preview?.layerOverlay === true,
     exportSupported: desc.renderReady === true,
     label: desc.label,
     category: desc.category

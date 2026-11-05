@@ -956,6 +956,12 @@ export interface TmcutEffectPreview {
    * `illustrative` — hints at the effect only; it is NOT what the export does.
    */
   fidelity: 'exact' | 'approximate' | 'illustrative'
+  /**
+   * True when this effect's CSS overlay IS what the export bakes into the
+   * layer, so a live preview may paint it on its own row. Absent means the
+   * overlay only hints (a tile device) or the effect has no overlay at all.
+   */
+  layerOverlay?: boolean
 }
 
 export interface TmcutEffectDescriptor {
@@ -979,6 +985,8 @@ export function buildFfmpegEffectFilters(effects: unknown): string[]
 export function fxCapabilities(type: string): {
   fidelity: TmcutEffectPreview['fidelity']
   strategy: TmcutEffectPreview['strategy']
+  /** Whether this effect's overlay face may plate a live layer (never undefined). */
+  layerOverlay: boolean
   exportSupported: boolean
   label: string
   category: string

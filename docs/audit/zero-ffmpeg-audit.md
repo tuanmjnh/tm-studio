@@ -2686,3 +2686,154 @@ này và [roadmap](file:///D:/Applications/tm-studio/docs/tmcut-v4-universal-ren
 `git diff` trên composable **đã đọc hết** trước khi stage: mọi hunk nằm trong vùng `mediaRate` /
 `syncSecondaryVideo` / `step` / `play` / `shuttleForward` và một dòng import — không hunk nào là WIP của chủ
 repo. Không file locale, không `package.json`, không binary, không `backup/`, **không** đụng FFmpeg.
+
+## 32. Slice F4b — plate effect đi **theo layer**, và DOM đọc số của plan (đo ngày 2026-11-05)
+
+§29.8 và §31.6 cùng ghi một món nợ: monitor vẫn tự tính những gì plan đã trả lời. F4b đóng đúng món
+đó — không thêm khả năng mới, chỉ chuyển **quyền trả lời** về phía core và registry.
+
+### 32.1 Luật mà file đã áp dụng trước
+
+[render/video.ts:320](file:///D:/Applications/tm-studio/app/utils/tmcut/render/video.ts#L320) là chuỗi
+`trim, setpts, reverse, fit, <effect chain>, setsar` — hiệu ứng được nung **vào trong** layer, **sau**
+fit, và chỉ sau đó `overlay` mới đem layer đi transform / fade / mask. Hai hệ quả kéo cả lượt này:
+
+- Một plate đặt ngoài layer (phủ cả khung hình) mang **không** con số nào của layer đó: nó không co theo
+  scale, không nhạt theo opacity, không bị mask cắt, không theo row mà nó định tint.
+- `object-fit` là tính chất của **element chứa media**, không phải của div phủ; nên nó phải ở lại element,
+  còn transform/opacity/mask/filter/blend + plate phải lên **group** bọc quanh.
+
+Trước F4b, DOM viết lại ba câu trả lời của riêng mình: `clipVisual` gọi `evaluateClip` lần thứ hai cho
+đúng clip mà `surface.layer` đã mang số; `fitStyle` gọi `resolveClipLayout(clip)` lần thứ hai; và
+`activeVignetteStyle` tự phát minh công thức — `radial-gradient(circle, transparent 40%, …)` với
+`alpha = intensity × 0.85`, trong khi registry (và do đó file) dùng `ellipse at 50% 50%`, điểm dừng 52%
+và `× 0.82`. Ở intensity 50, hai luật cho **0.43** và **0.41** — hai số khác nhau cho cùng một khung hình.
+
+### 32.2 Cờ trung thực thứ hai của registry
+
+`fidelity` không trả lời câu "cái overlay này có phải thứ file nung không". `illustrative` thì chắc chắn
+không (chromakey vẽ dải key, pixelate vẽ lưới ô), nhưng `approximate` cũng chưa đủ: vignette approximate
+**là** chính plate mà file nung, còn grain approximate **là** chính lớp noise. Nên registry cần một cờ
+riêng — [effects.mjs:11-16](file:///D:/Applications/tm-studio/packages/core/src/effects.mjs#L11) định nghĩa
+`preview.layerOverlay`, bật `true` cho đúng ba mặt
+[ vignette :53](file:///D:/Applications/tm-studio/packages/core/src/effects.mjs#L53),
+[grain :63](file:///D:/Applications/tm-studio/packages/core/src/effects.mjs#L63),
+[letterbox :185](file:///D:/Applications/tm-studio/packages/core/src/effects.mjs#L185) — và
+[`fxCapabilities` :809](file:///D:/Applications/tm-studio/packages/core/src/effects.mjs#L809) luôn trả về
+một boolean (không `undefined`), kiểu hóa ở
+[index.d.ts:964](file:///D:/Applications/tm-studio/packages/core/src/index.d.ts#L964) và
+[:989](file:///D:/Applications/tm-studio/packages/core/src/index.d.ts#L989).
+
+Mặt overlay đi ra ngoài qua [fxPreview.ts:812](file:///D:/Applications/tm-studio/app/utils/tmcut/fxPreview.ts#L812)
+`effectOverlay(type, params)` — cửa duy nhất đọc cờ registry, không có bảng type cục bộ — và
+[:822](file:///D:/Applications/tm-studio/app/utils/tmcut/fxPreview.ts#L822) `layerOverlayPlates(effects)`,
+một call biến **một layer** hiệu ứng thành **đúng** các plate của nó, theo thứ tự chain mà
+`buildFfmpegEffectFilters` đưa cho file.
+
+### 32.3 RED đo được, cả bảy check một lượt
+
+Spec viết trước: [tmcut_surface_plate.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_surface_plate.spec.ts)
+(197 dòng, 7 check, harness `check()` gom failure nên một lần chạy đo **hết** bảy kết luận — khác §31.3,
+nơi runner dừng ở dòng đầu). `node node_modules/tsx/dist/cli.mjs --tsconfig tsconfig.test.json` trên file
+này, **trước** khi sửa code: `0/7 checks passed`, log
+`node_modules/.cache/tmcut-gates/f4b-red-all.txt`. Bốn dòng fail vì `effectOverlay` / `layerOverlayPlates`
+chưa tồn tại; check 1 fail vì player vẫn còn `activeVignetteStyle`; check 6 fail vì tập live chưa có trong
+registry; check 3 và 4 fail vì chưa có mặt overlay để đọc. Không check nào pass ngay từ đầu.
+
+### 32.4 GREEN: group, element, plate
+
+Player giờ có ba hàm mới thay cho ba chỗ tự tính —
+[layerGroupBase :736](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L736)
+(đọc `layer.transform` + `layer.opacity`),
+[surfacePlates :750](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L750)
+(đọc `layer.effects` qua registry face), và
+[fitStyle :697](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L697) nhận
+`CoreEvaluatedLayout` thay vì clip. `surfaceStyle` (:811) không còn `fitForSurface` trong spread — fit về
+element, group mang phần còn lại. Template đổi ở **bốn** site footage:
+crossfade [:1678](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L1678),
+video chính [:1710](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L1710),
+still [:1734](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L1734),
+và mọi row stacked [:1782](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L1782).
+
+Pin nguồn (`grep`): `evaluateClip` = **0**, `resolveClipLayout` = **0**, `radial-gradient(` = **0**,
+`activeVignetteStyle` = **0** trong player. Hợp đồng cũ vẫn sống: `fitStyle(` đúng **2** lần
+(một định nghĩa, một call site chung), `surfaceStyle(mainSurface)` / `surfaceStyle(crossfadeSurface)` còn
+nguyên, `:muted="true"` còn trong tầm 700 ký tự của `v-for="surface in stackedSurfaces"`, và spec tách
+tag `<img` nhiều dòng vẫn trích được.
+[tmcut_shared_model.spec.ts:307](file:///D:/Applications/tm-studio/tests/unit/tmcut_shared_model.spec.ts#L307)
+tiến hóa theo **luật**, không theo sự tiện: nó đòi `fitStyle(surface.layer.layout)` và phủ định
+`resolveClipLayout(` — cùng một nguyên tắc "một chỗ quyết", dời một bước dọc theo nguyên tắc đó, chứ không
+nới regex cho dễ thở.
+
+### 32.5 Live: số đo trên Chromium :4003
+
+Bằng chứng mạnh nhất là một phép đo **trên máy đang chạy**, không phải trên text. Nạp
+`tests/fixtures/containers/h264.mp4` (4448 bytes) qua Import Media → asset đạt "Ready" (64×36, thumbnail
+vẽ), thêm hai clip vào row 1, chọn clip ở `left: 0px`, mở inspector **Effects** → **Vignette** (intensity
+mặc định 50), rồi đọc DOM của `.tmcut-monitor`:
+
+- Con của monitor là **group** của layer, không phải plate: `DIV.relative w-full h-full pointer-events-none
+  transition-transform duration-75` mang `transform: translate(0px, 0px) scale(1) rotate(0deg); opacity: 1`,
+  bên trong là `<video class="w-full h-full" style="object-fit: contain; object-position: 50% 50%">` và
+  plate `DIV.absolute inset-0 pointer-events-none`.
+- Plate: `background: radial-gradient(transparent 52%, rgba(0, 0, 0, **0.41**) 100%)` — Chromium chuẩn hóa
+  `ellipse at 50% 50%` thành mặc định nên nó biến mất khỏi serialized form; **0.41** là `0.5 × 0.82` của
+  registry, không phải `0.43` của công thức DOM cũ. Luật số đã đổi thật, đo được, ở đúng row có effect.
+- Số child của monitor khớp `z-10`: **0**. Plate phủ toàn khung hình không còn tồn tại.
+- `fxCapabilities('vignette')` gọi từ module đã compile của chính trang trả
+  `{ fidelity: 'approximate', strategy: 'css', layerOverlay: true, exportSupported: true }`, và
+  `layerOverlayPlates([{type:'vignette',params:{intensity:50}}])` trả đúng một plate — mặt registry và mặt
+  live là **một** hàm, không phải hai bản sao.
+
+### 32.6 Gate (đo lượt này)
+
+| Gate | Lệnh | Kết quả | Bằng chứng |
+| --- | --- | --- | --- |
+| 1 Types | `npx nuxt typecheck` | **PASS** | exit 0, 0 × `error TS`; `.nuxt/eslint.config.mjs` regenerate 23:59, 28567 bytes. Lần chạy **đầu** FAIL: `TmcutPreviewPlayer.vue(697,27) TS2304 Cannot find name 'CoreEvaluatedLayout'` — thêm type import, chạy lại |
+| 2 Lint | `npx eslint` trên **4** file code đã chạm, chạy **sau** gate 1 | **PASS** | exit 0. Lần đầu FAIL 2 lỗi `no-unused-vars` ngay trong spec (import tĩnh thừa vì spec đã dùng `await import`) — xóa import, không tắt rule |
+| 3 Tests | `npx tsx tests/unit/run-all.mts` | **PASS** | **110/110** (thêm `tmcut_surface_plate` so với 109 của F4a), exit 0 |
+| 3b Smoke | `run-all.mts --smoke` | **PASS** | **113/113**, exit 0 — chuỗi filter FFmpeg không đổi, chạy để chắc đường render không hồi quy |
+| 3c Core | `npx tsc -p packages/core --noEmit` | **PASS** | exit 0 — lượt này **có** sửa core (`effects.mjs`, `index.d.ts`) |
+| 4 Live | 8 route `/tmcut*` trên :4003, Chromium | **PASS** | §32.5 đo plate; console: `tmcut` 0 dòng, `autocut` 0, `html-video` 0; `editor` `[error] 401` ×4, `templates` ×2, `factory` ×1, `process` ×1 — tất cả từ `GET /api/v1/ai/relay/catalog` (hub auth hết phiên, đã ghi ở §31.5); `process` thêm `[issue] form field thiếu id/name` ×2 (markup có sẵn, file này F4b không chạm); `voice` `[error] 502` ×2 từ `tts/status` (dịch vụ TTS không chạy). Bốn `[error] 404` thấy ở lượt đo **là do chính agent** probe `import('/_nuxt/app/utils/...')` sai URL, không phải traffic của app |
+| 5 Docs | 5 guard markdown + commit | xem cuối §32 | — |
+
+Số dòng: player **159/103**, fxPreview **27/0**, `effects.mjs` **11/4**, `index.d.ts` **8/0**,
+`TmcutExportModal.vue` **4/3** (chỉ comment thành thật — gap nó mô tả đã đóng), `tmcut_shared_model.spec.ts`
+**5/1**, spec mới **197**.
+
+### 32.7 Chưa chứng minh
+
+- **Không có pixel.** Plate được đo bằng `getAttribute('style')` trên Chromium thật, tức luật số và vị trí
+  DOM đã chứng minh; nhưng "vignette làm tối bốn góc của footage thật" chưa so khung hình với frame file
+  xuất. Đó vẫn là F6.
+- **Hai hàng chồng nhau** chưa dựng được live: thêm asset hai lần cho hai clip **nối tiếp**
+  (`left: 0px` rồi `left: 30px`), not a stack, nên chưa có `stackedSurfaces` để đo. Trường hợp này spec
+  check 7 khóa bằng hành vi store (`addClipToTrack(..., rows[1].id)`), và cả bốn site template dùng chung
+  một hàm plate — nhưng đó là **suy luận từ code**, không phải số đo live.
+- **Electron host** chưa chạy lượt này.
+- **Grain là plate tĩnh.** Registry face của grain kèm `overlayAnimation`, nhưng `effectOverlay` chỉ trả
+  `background`/`opacity` của overlay; hoạt ảnh `tmfx-grain` không đi sang live layer. File grain là ảnh
+  tĩnh động, khác `noise` trong export về chuyển động — ghi nợ, không phải bug mới.
+- **`blend` vẫn đọc từ clip authored**
+  ([TmcutPreviewPlayer.vue:834](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L834)):
+  `layerFor` ([evaluate.mjs:290](file:///D:/Applications/tm-studio/packages/core/src/evaluate.mjs#L290) là
+  nơi effects, mask, layout đi ra) chưa mang `blend`. Nhóm blend **có** nằm trong group nên nó đã theo
+  transform/opacity; chỉ riêng **số** blend chưa đến từ plan.
+- **F4 còn một vế**: đường rAF riêng của `TmcutHtmlVideoStudio` (leg 4 của #125) chưa về đồng hồ core; nó
+  thuộc F6 cùng `mediaTimeAt` fallback ở
+  [useTmcutPlayback.ts:152](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L152).
+
+### 32.8 Bảo vệ working tree
+
+Lượt này staged **9** đường dẫn: [effects.mjs](file:///D:/Applications/tm-studio/packages/core/src/effects.mjs),
+[index.d.ts](file:///D:/Applications/tm-studio/packages/core/src/index.d.ts),
+[fxPreview.ts](file:///D:/Applications/tm-studio/app/utils/tmcut/fxPreview.ts),
+[TmcutPreviewPlayer.vue](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue),
+[TmcutExportModal.vue](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutExportModal.vue),
+[tmcut_surface_plate.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_surface_plate.spec.ts),
+[tmcut_shared_model.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_shared_model.spec.ts) — **7** file
+code/spec — và **2** file docs: chính file này cùng
+[roadmap](file:///D:/Applications/tm-studio/docs/tmcut-v4-universal-rendering-multiplatform-roadmap.md). `git diff` của **từng** file trong 9 đường dẫn này đã đọc hết trước khi stage: không hunk nào thuộc
+WIP của chủ repo — working tree còn 40+ file `M`/`??` khác (`i18n/locales/*`, `app/pages/system/*`,
+`docs/content/`, `eslint.config.mjs`, `package.json`, `backup/`…) vẫn **không** indexed. Không xóa binary,
+không đụng `backup/ffmpeg-engine-2026-11-03`, không đổi Project Schema v3, không đụng đường Storage Upload.

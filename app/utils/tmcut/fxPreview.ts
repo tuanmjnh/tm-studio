@@ -801,6 +801,33 @@ export function effectCss(type: string, params: Record<string, unknown> = {}): s
   return effectCssParts(type, params).filter
 }
 
+/**
+ * The overlay face of one effect instance: the style of the extra plate the
+ * effect needs, or null when it paints on the element itself. The registry
+ * decides which faces may plate a LIVE layer — the registry's overlay honesty
+ * flag is true only when the overlay IS what the export bakes into that layer,
+ * so a mnemonic (a keying band, a pixel grid) stays on the tile and never tints
+ * a monitor. No local type table here, or the player re-invents a second law.
+ */
+export function effectOverlay(type: string, params: Record<string, unknown> = {}): CSSProperties | null {
+  if (fxCapabilities(type)?.layerOverlay !== true) return null
+  return EFFECT_BUILDERS[type]?.(params).overlay ?? null
+}
+
+/**
+ * One layer's plates, in its effect-chain order — the same order
+ * `buildFfmpegEffectFilters` hands the file, so a row with letterbox bars under
+ * a vignette shows bars under a vignette here too.
+ */
+export function layerOverlayPlates(effects: readonly { type: string, params?: Record<string, unknown> }[] | null | undefined): CSSProperties[] {
+  const plates: CSSProperties[] = []
+  for (const eff of effects || []) {
+    const plate = effectOverlay(eff.type, eff.params || {})
+    if (plate) plates.push(plate)
+  }
+  return plates
+}
+
 /** Every effect type this module can paint (coverage spec + marketplace guard). */
 export function effectAdapterKeys(): string[] {
   return Object.keys(EFFECT_BUILDERS)
