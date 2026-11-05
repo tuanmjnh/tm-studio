@@ -1702,7 +1702,7 @@ frame trong bộ nhớ.
 | proxy để preview nhẹ | [proxy.post.ts:79](file:///D:/Applications/tm-studio/server/api/v1/media/proxy.post.ts#L79) và [:1421](file:///D:/Applications/tm-studio/electron/tools/tmcut.controller.cjs#L1421) | **không có tương đương trong phạm vi này**: re-encode một stream nhẹ cần `VideoEncoder` + muxer, tức là cần H; cho tới H, preview đi thẳng nguồn local | **H** | proxy cho file 4K trên máy yếu; UI phải nói "proxy chưa khả dụng", không âm thầm render gốc |
 | export timeline | [render.post.ts:121](file:///D:/Applications/tm-studio/server/api/v1/media/render.post.ts#L121) (web) và `task-manager.cjs:208`/`:284` (desktop, `compileTimelineToFfmpeg`) | slice H: scheduler của core → `renderAt`/paint stack → `VideoEncoder` → Mediabunny muxer. Hai host **một** exporter | **H** | toàn bộ argv do `compileTimelineToFfmpeg` dựng — đó là §5.1, việc của J |
 | HTML-video encode | [htmlVideoRender.ts:177](file:///D:/Applications/tm-studio/server/utils/htmlVideoRender.ts#L177) | **A** (WebCodecs + muxer, leg dời sang client) hoặc **B** (preview-only) — chờ đo `isConfigSupported` | **H**, rồi chủ repo chốt | xem §25.2 |
-| caption audio extract (`mp3` mono 16 k) | `extractAudio` [:1127](file:///D:/Applications/tm-studio/electron/tools/tmcut.controller.cjs#L1127) | `decodePcm` (E3) + Web Audio; **mp3 không phải định dạng mà WebCodecs encode**, nên nếu下游 cần mp3 thì đó là `unsupported`, không phải tự đổi container | **G** | file `.mp3` cho service phiên âm ngoài phạm vi |
+| caption audio extract (`mp3` mono 16 k) | `extractAudio` [:1127](file:///D:/Applications/tm-studio/electron/tools/tmcut.controller.cjs#L1127) | `decodePcm` (E3) + Web Audio; **mp3 không phải định dạng mà WebCodecs encode**, nên nếu downstream cần mp3 thì đó là `unsupported`, không phải tự đổi container | **G** | file `.mp3` cho service phiên âm ngoài phạm vi |
 | stabilize (vidstab 2 pass) | [tmcut.controller.cjs:1427](file:///D:/Applications/tm-studio/electron/tools/tmcut.controller.cjs#L1427) | **Q1 đã chốt: bỏ hẳn** — xoá nút + key i18n, project cũ giữ nguyên dữ liệu và đánh dấu unsupported | **I/J** | tính năng, **có chủ đích** |
 | subtitle burn-in (libass) | emitter `subtitles` trong `render/` | **Q2 đã chốt: sơn bằng text track qua `paintStack`**; không parser ASS | **F/J** | các tag ASS nâng cao, phải khai rõ |
 | probe duration/streams | 8 chỗ nhóm (b) | `MediaProbeService` (§13). Field không lấy được → `undefined` + warning, **không** sentinel 0 | đã đóng ở B | `bitrate`/`fps` trung bình của VFR — phải đo lại trên fixture, không đoán |
@@ -1971,12 +1971,12 @@ footage thật có motion **thấp hơn** plate chuyển động nhanh (`real-14
 
 ### 26.5 Chưa chứng minh
 
-- **`realcuts.mp4` là một缺口 thật**: hai cut trong footage 720×1280 mà luật luma của core không tìm thấy ở bất
+- **`realcuts.mp4` là một khoảng trống thật**: hai cut trong footage 720×1280 mà luật luma của core không tìm thấy ở bất
   kỳ ngưỡng nào không bịa cut giả (§26.3.4). Muốn đóng phải thêm một luật histogram/chroma vào core — việc của
   một lượt khác, không phải việc chỉnh ngưỡng.
 - **`flash.mp4` trả hai cut cho một sự thật**: burst một frame ngắn hơn chu kỳ lấy mẫu, nên **cả** cạnh vào và
   cạnh ra đều là thay đổi thật (điểm 0.5121, `shippedCuts` 2.904 và 3.096). Với EDL thì đây là **đúng** hành vi
-  (khoanh vùng闪光), nhưng nó có nghĩa là số cut **không** bằng số cut thật trên nội dung có hiệu ứng một-frame.
+  (khoanh vùng chớp sáng), nhưng nó có nghĩa là số cut **không** bằng số cut thật trên nội dung có hiệu ứng một-frame.
 - **Host Electron chưa được chạy.** `hasFrameDecoder()`/`hasAudioDecoder()` và toàn bộ bảng (b)–(d) đo trong
   Chromium của dev server. Desktop host dùng **cùng module** nhưng chưa có một con số nào tự thân.
 - **10 Hz chỉ có ở harness offline.** App chạy 5 Hz (`TMCUT_SCENE_SAMPLE_HZ`), nên bảng (c) là bản chấm đúng
@@ -3888,3 +3888,164 @@ Không sửa luật core cũ — chỉ thêm field. Project Schema v3 không đ�
 không đổi; không binary mới, không đụng `backup/ffmpeg-engine-2026-11-03`, không tắt rule lint
 nào, ADR-033 vẫn Pending. Working tree còn **56** mục WIP của chủ repo (39 `M`, 20 `??`, 5 `D`),
 không mục nào được stage hộ.
+
+## 40. Slice F8 — fixture pixel "plan dự đoán file", và runner phải gọi một gate bị bỏ là SKIP (đo ngày 2026-11-05)
+
+§39.7 để lại đúng một dòng: *pixel preview-vs-export cho nhiều layer vẫn chưa có fixture — đó
+là F8 (#134)*. Lượt này đóng nó, và đóng luôn một lỗi nằm ở **chỗ báo cáo** chứ không ở chỗ
+render: `run-all.mts` quyết định PASS chỉ từ `res.status === 0`, nên một spec bail vì thiếu
+FFmpeg cũng được tính là đã đo.
+
+### 40.1 Câu hỏi mà mọi gate trước còn thiếu
+
+Các gate trước so hai host bằng **từ vựng của từng host**: paint-stack
+([tmcut_export_paint_stack.spec.ts:256](file:///D:/Applications/tm-studio/tests/unit/tmcut_export_paint_stack.spec.ts#L256))
+so tập row của `selectPaintRows` với các expression `enable` mà compiler phát ra; các layer
+spec so những con số DOM đọc. Chưa gate nào hỏi câu mà một người xem sẽ hỏi: *lấy đúng câu trả
+lời preview nhận ở từng khung, tự tay composite nó, có ra cái màu mà file thật đang chứa
+không?* Trả lời được câu đó thì "cùng evaluator" không còn là một tuyên bố về import — nó là
+một con số pixel.
+
+### 40.2 Project, model và một guard trên chính spec
+
+Fixture mới: [tmcut_preview_export_pixel_parity.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_preview_export_pixel_parity.spec.ts),
+canvas 128×72 @ 30 fps, nền `#102030`, bốn bề mặt:
+
+| Row | Clip | Cửa sổ | Cái nó khóa trong file |
+| --- | --- | --- | --- |
+| `v1` | `a`, plate xanh dương | 0–3 s, opaque | nền; sau 3 s bus `tpad` = màu canvas |
+| `v2` | `b`, plate đỏ | 1–3 s, `opacity: 50` | một layer **nửa trong** phải pha đúng tỉ lệ plan nói |
+| `v3` | `c`, plate xanh lá | 2–4 s, opacity **keyframed 0 → 100** trong 1 s đầu | boundary của keyframe, và ADR-018 ở đầu cửa sổ |
+| `t1` | `cap` "ABCD 0123" | 1.5–2.5 s | caption hiện trên **đúng** các khung plan gọi |
+
+Kỳ vọng là [`modelAt`:180](file:///D:/Applications/tm-studio/tests/unit/tmcut_preview_export_pixel_parity.spec.ts#L180):
+bắt đầu từ màu canvas, đi theo **slot order** của `compositePlan`, mỗi footage slot pha
+`plate × slot.layer.opacity`. Nó không đọc field authored nào, không có bảng màu tra theo frame
+index, và không lấy gì từ render. Check 3
+([:343](file:///D:/Applications/tm-studio/tests/unit/tmcut_preview_export_pixel_parity.spec.ts#L343))
+là guard **trên chính spec này**: tách thân `modelAt` bằng regex và pin nó chỉ được đọc
+`compositePlan(evaluateTimeline` và `slot.layer.opacity` — để một lượt sau không thể âm thầm
+tính lại kỳ vọng từ project rồi gọi đó là parity.
+
+Sáu check: hai **model** (cửa sổ `drawtext` == các khung plan gọi caption; kỳ vọng phải **biến
+thiên** theo khung), một **guard** (như trên), ba **pixel** (file thật khớp kỳ vọng trên mọi
+khung; từng khung boundary gọi tên một; caption có mực trên đúng số khung plan nói).
+
+### 40.3 Số đo (binary trong `resources/`, 2026-11-05)
+
+| Cái | Đo được |
+| --- | --- |
+| Sample / lệch lớn nhất | **480** sample (120 khung × 4 góc), lệch lớn nhất **5** trên trần 12 |
+| Số màu distinct của kỳ vọng | **32** trên 120 khung — 30 khung ramp + 3 vùng phẳng + 1 |
+| Boundary | 29 = xanh dương thuần; 30 = `mix(50 %)`; 60 = **vẫn** `mix(50 %)` (row mới vào ở opacity 0); 89 = ramp `29/30`; 90 = xanh lá thuần và base đã kết thúc; 119 = xanh lá |
+| Caption | ink ≥ 30 px trên đúng **30** khung plan gọi; **0** px ở mọi khung khác |
+| `MODEL_TOL = 12` | đo được chứ không đoán: plate phẳng drift 3 qua yuv420p, một pha 50 % drift ≤ 8 (overlay trộn trong YUV trong khi kỳ vọng trộn trong RGB) |
+
+### 40.4 Falsification — fixture có cắn thật
+
+Một fixture sinh ra đã xanh tốt không phải là chứng cứ, nên nó được làm hỏng hai lần trước khi
+được tin:
+
+| Mutation | Kết quả |
+| --- | --- |
+| tráo `PLATE.b ↔ PLATE.c` (plate nào mang màu nào) | check 4 **FAIL** ở frame 30: `got [125,52,107], want within 12 of [15,145,150]` |
+| `slots.slice().reverse()` trong `modelAt` | check 2 sập còn **2** màu distinct — layer xanh dương opaque bị đẩy lên trên cùng, nghĩa là **thứ tự paint được đo thật**, không phải chỉ được nêu |
+
+Cả hai mutation đã revert; chạy lại với file ở trạng thái commit thì 6/6 PASS và chính là các số
+ở §40.3.
+
+### 40.5 Runner: một gate bị bỏ không được gọi là PASS
+
+Đo trước lượt này: trên host không có FFmpeg, `run-all.mts` in `PASS tmcut_render_parity.spec.ts`
+với tail **rỗng**, rồi kết luận `119/119 specs passed` dù không một pixel nào được so.
+[helpers/spec_status.ts:34](file:///D:/Applications/tm-studio/tests/unit/helpers/spec_status.ts#L34)
+là luật mới, và phân biệt không phải skip/không-skip mà là **bao nhiêu đã chạy**:
+
+| Trạng thái | Nghĩa | Ví dụ đo thật |
+| --- | --- | --- |
+| `SKIP` | spec bail, không measure gì | `tmcut_zza_skipprobe` (probe tạm, đã xoá) in `SKIP  scratch bail: no FFmpeg binary (probe only)` |
+| `PARTIAL` | spec chạy hết check, **một gate bên trong** bị bỏ | `tmcut_export_paint_stack`: graph checks vẫn chạy, pixel gate SKIP |
+| `PASS` | mọi thứ spec đo được trên host này đã đo | 122 spec trên máy này, kể cả chính guard charset ở §40.9 |
+| `FAIL` | outrank **tất cả**, kể cả một dòng SKIP | một spec skip rồi fail vẫn là fail |
+
+Runner giờ chỉ gọi helper ([run-all.mts:41](file:///D:/Applications/tm-studio/tests/unit/run-all.mts#L41))
+và in summary qua `summarize`
+([:55](file:///D:/Applications/tm-studio/tests/unit/run-all.mts#L55)), nên dòng trên host không
+FFmpeg là `117/119 specs passed  (1 spec skipped, 1 spec partial)` — đo bằng hai spec probe tạm,
+đã xoá ngay sau khi in ra ba dòng đó. Guard
+[tmcut_runner_status.spec.ts:89](file:///D:/Applications/tm-studio/tests/unit/tmcut_runner_status.spec.ts#L89)
+liệt kê **9** spec có thể bail; spec nào mất dòng `SKIP` ở đầu dòng thì chính guard đó FAIL.
+
+Một chỗ đã sửa luôn vì đúng luật này: [tmcut_fx_catalog.spec.ts:201](file:///D:/Applications/tm-studio/tests/unit/tmcut_fx_catalog.spec.ts#L201)
+trước in `   SKIPPED: no FFmpeg binary …` ở **cột 3**, nên `specStatus` (key vào đầu dòng) không
+thấy gì và gate xfade-name ẩn trong một chữ PASS. Nay nó in `SKIP  the xfade-name gate: …` ở cột 0.
+Trên máy này binary có thật nên dòng đó không in, và suite vẫn 121/121.
+
+### 40.6 Gate
+
+| Gate | Lệnh | Kết quả | Chứng cứ |
+| --- | --- | --- | --- |
+| 1 Types | `npx nuxt typecheck` | PASS | exit 0, 0 × `error TS`; `.nuxt/eslint.config.mjs` regenerate 13:03 (28581 B) |
+| 2 Lint | `npx eslint <6 file>` sau gate 1 | PASS | lượt 1 FAIL 1 (`@stylistic/eol-last` trên spec mới) → `--fix` đúng một file, thêm đúng newline cuối; lượt 2 và lượt chốt (thêm guard charset) exit 0 |
+| 3 Tests | `npx tsx tests/unit/run-all.mts --smoke` | PASS | **122/122 specs passed**, exit 0, không dòng `FAIL`/`SKIP`/`PARTIAL` nào trên host có FFmpeg và có font hệ thống |
+| 3a Test tsconfig | `npx tsc -p tsconfig.test.json --noEmit` | BLOCKED | TS5101 ngay `tsconfig.test.json:5` (`baseUrl` deprecated) làm run dừng trước khi đọc bất kỳ file nào — đây là nợ của config, không phải của lượt này. Cách duy nhất để nó chạy là thêm `ignoreDeprecations`, tức tắt rule cho xanh, nên không dùng |
+| 3b Core | `npx tsc -p packages/core --noEmit` + `node --test packages/core/test/*.test.mjs` | PASS | exit 0 và **679/679** |
+| 4 Live | — | N/A | lượt này chỉ chạm `tests/**`; không `app/**`, không i18n, không CSS |
+| 5 Docs | §40 + roadmap F8, scratch đã xoá | PASS | `.golden-render-parity-*` không còn; không dòng SKIP nào bị sinh ra vì binary và font đều có thật |
+
+### 40.7 Chưa chứng minh / nợ
+
+- **Kỳ vọng là màu phẳng, không phải cả khung.** Fixture so 4 góc và đếm ink của caption; nó
+  **không** so transform / crop / mask / effect khi nhiều layer chạy cùng lúc. Những luật đó
+  mới chỉ có spec graph (F4, F4b), chưa có pixel do plan sinh.
+- **Transition chưa vào fixture.** Plan có `role: 'outgoing'`, nhưng export vẽ xfade bằng một
+  filter `xfade` chứ không bằng hai layer overlay, nên composite theo plan **không** tái tạo
+  được cửa sổ đó. Cần fixture riêng — và đó là chỗ H/I (engine WebCodecs paint theo plan) sẽ
+  phải trả lời, không phải F.
+- **Yêu cầu 4 và 8 của slice F vẫn mở**: `TmcutFxThumb` chưa được đo lại theo Effect Definition,
+  resource lifecycle (VideoFrame / ImageBitmap / texture / object URL / worker) và huỷ request
+  stale chưa có check. Vì vậy **F (#103) chưa exit** — F8 chỉ đóng req 7 (first/mid/last frame +
+  transition & keyframe boundary) và req 3 (preview T dùng đúng `evaluateTimeline`).
+- Default màu shadow/stroke (§39.1) và whitelist `addClipToTrack` (§39.7) còn nguyên như đã ghi.
+- Fixture chạy bằng binary trong `resources/` trên Windows; **chưa** đo trên app Electron đóng gói.
+
+### 40.8 Working tree
+
+Lượt này chạm **6** file test — 4 mới
+([spec_status.ts](file:///D:/Applications/tm-studio/tests/unit/helpers/spec_status.ts),
+[tmcut_runner_status.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_runner_status.spec.ts),
+[tmcut_preview_export_pixel_parity.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_preview_export_pixel_parity.spec.ts),
+[tmcut_doc_charset.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_doc_charset.spec.ts))
+và 2 sửa
+([run-all.mts](file:///D:/Applications/tm-studio/tests/unit/run-all.mts),
+[tmcut_fx_catalog.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_fx_catalog.spec.ts)) —
+cùng **2** file docs. **Không** sửa code production nào, không thêm luật core nào.
+Project Schema v3 không đổi; Storage Upload API không đổi; không binary mới, không đụng
+`backup/ffmpeg-engine-2026-11-03`, không tắt rule lint, ADR-033 vẫn Pending. Working tree còn
+**63** mục (36 `M`, 22 `??`, 5 `D`), gồm 4 spec mới và docs của lượt này; phần WIP của chủ repo
+không mục nào được stage hộ. Hai spec probe tạm dùng để chứng minh SKIP/PARTIAL đã bị xoá trước
+khi commit.
+Ba chữ Hán lọt vào §28/§33 của chính tài liệu này đã được sửa; vì sao
+chúng sống sót qua mọi gate và guard nào chặn chúng thì ở §40.9.
+
+### 40.9 Guard charset — các gate đếm được ký tự, nhưng không cái nào đọc được chữ
+
+Ba ký tự Hán đã được commit vào giữa câu tiếng Việt của chính tài liệu này (`:1705`, `:1974`,
+`:1979`): một thay cho "downstream", một thay cho "khoảng trống", một thay cho "chớp sáng". Chúng
+sống sót vì **không gate nào nhìn loại ký tự**: guard line-length đếm số ký tự trên dòng, guard
+table-shape đếm dấu `|`, guard link integrity kiểm tiền tố `file:///`, guard citations kiểm đường
+dẫn. Một script ngoại lai vô hình với cả năm lần chạy, nên lỗi này đòi thêm một guard chứ không
+phải sửa cách chép.
+
+| Cái | Số đo |
+| --- | --- |
+| Corpus | `docs/**`, `packages/core/**`, `app/composables/**`, `app/utils/tmcut/**`, `tests/unit/**`, `i18n/locales/**` = **401** file `.md/.ts/.mts/.mjs/.json` (19 markdown), ngoại trừ chính spec vì nó phải trích ranges |
+| Hit trước khi sửa | **1** dòng — chính dòng §40.8 mới trích ba ký tự đó; ba ký tự gốc đã thay bằng tiếng Việt trong cùng lượt |
+| RED → GREEN | viết guard trước: `pass 2 / fail 1` vì dòng trích; sửa dòng đó thành mô tả bằng lời → 3/3 |
+| Falsification | chèn một ký tự Hán vào heading §40.8 → `pass 2 / fail 1`; phục hồi byte-identical (md5 đầu/cuối `95eafc4d…`) → 3/3 |
+| Guard bắt được lỗi mới | Chính lượt sửa này sinh thêm một lỗi cùng loại: ghi chú §40.9 chèn U+2E93 (một radical CJK) trước dấu «**scope**». Guard bắt được ngay lần chạy kế tiếp, tức nó đã làm việc trước cả khi được commit |
+| Phạm vi | Hán U+4E00–9FFF + mở rộng U+3400–4DBF + tương thích U+F900–FAFF, Hiragana/Katakana, Hangul, dấu câu CJK — **không** chạm Latin Extended Additional (U+1EA0–1EF9), nơi dấu thanh tiếng Việt sống |
+
+Guard ở [tmcut_doc_charset.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_doc_charset.spec.ts); nó cũng
+kiểm các con số của chính nó («scope còn thật») và trình bày bằng ba cụm từ tiếng Việt đã thay,
+nên một lần revert lại chữ Hán làm nó cháy.

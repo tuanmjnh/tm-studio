@@ -196,7 +196,9 @@ function main() {
       }
     })
   } else {
-    console.log('   SKIPPED: no FFmpeg binary (set TOOLS_FFMPEG_PATH) — names checked against the documented set only')
+    // Column 0, starting with the word: that is what `run-all.mts` classifies,
+    // so the gate reports PARTIAL here instead of hiding inside a PASS.
+    console.log('SKIP  the xfade-name gate: no FFmpeg binary (set TOOLS_FFMPEG_PATH) — names checked against the documented set only')
   }
 
   check('xfadeNameFor maps the 6 legacy keys and falls back safely', () => {
