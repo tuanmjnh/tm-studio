@@ -1846,6 +1846,19 @@ export interface CoreEvaluatedLayout {
   cropRect: TmcutCropRect | null
 }
 
+/**
+ * How a clip composites over the footage beneath it. The names are spelled
+ * identically by CSS `mix-blend-mode` and FFmpeg `blend=all_mode=`, so one
+ * value serves monitor and file (Zero-FFmpeg slice F6d).
+ */
+export type CoreBlendMode = 'normal' | 'screen' | 'overlay' | 'multiply'
+
+/** The blend modes both counterparts implement — the exporter's allowlist. */
+export const BLEND_MODES: CoreBlendMode[]
+
+/** The clip's blend mode, normalized: absent or unknown composites as `normal`. */
+export function blendModeOf(clip: { blend?: unknown } | null | undefined): CoreBlendMode
+
 /** One clip resolved at an absolute tick — renderer-agnostic, JSON-safe. */
 export interface CoreEvaluatedLayer {
   clipId: string
@@ -1867,6 +1880,8 @@ export interface CoreEvaluatedLayer {
   /** Normalized mask geometry, null when absent or an unknown shape. */
   mask: TmcutMask | null
   layout: CoreEvaluatedLayout
+  /** Normalized by core so neither surface repaints or re-validates it. */
+  blend: CoreBlendMode
   transition: CoreEvaluatedTransition | null
   text: CoreEvaluatedText | null
   /** True when `sourceTicks` came from a speed curve (>= 2 valid points). */

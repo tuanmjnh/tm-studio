@@ -46,6 +46,18 @@ const playerSource = readFileSync(join(root, 'app', 'components', 'tmcut', 'Tmcu
 const enLocale = JSON.parse(readFileSync(join(root, 'i18n', 'locales', 'en.json'), 'utf8'))
 const viLocale = JSON.parse(readFileSync(join(root, 'i18n', 'locales', 'vi.json'), 'utf8'))
 
+/** Every `@keyframes` reachable from the ONE stylesheet nuxt.config loads. */
+function globalKeyframeNames(): Set<string> {
+  const main = readFileSync(join(root, 'app', 'assets', 'css', 'main.css'), 'utf8')
+  const imports = [...main.matchAll(/@import\s+["']\.\/([a-z0-9-]+\.css)["']/g)].map(m => m[1] as string)
+  const names = new Set<string>()
+  for (const file of imports) {
+    const css = readFileSync(join(root, 'app', 'assets', 'css', file!), 'utf8')
+    for (const match of css.matchAll(/@keyframes\s+([a-zA-Z0-9_-]+)/g)) names.add(match[1] as string)
+  }
+  return names
+}
+
 const SCENES = { a: 'url("A")', b: 'url("B")' }
 const anim = (type: string, animate = true, params: Record<string, unknown> = {}, kind: FxPreviewKind = 'effect') =>
   resolveFxPreview(kind, type, params, { scenes: SCENES, animate })
@@ -345,12 +357,21 @@ check('filter grades come from the lut3d chain, not a hand-copied table', () => 
 })
 
 // 6. CSS + i18n CONTRACTS ----------------------------------------------------
-check('every emitted animation name has @keyframes in the tile', () => {
+// `tmfx-grain` is defined app-wide, not here: a live plate animates too, and a
+// monitor with no thumbnail mounted cannot reach a frame declared inside the
+// tile. So a name may resolve in EITHER place, and must resolve in exactly one.
+check('every emitted animation name has @keyframes, tile or app-wide', () => {
   const declared = new Set([...thumbSource.matchAll(/@keyframes\s+([a-zA-Z0-9_-]+)/g)].map(m => m[1] as string))
+  const globalNames = globalKeyframeNames()
+  for (const name of globalNames) {
+    assert.equal(declared.has(name), false, `${name} is defined twice — the winner would be injection order`)
+    declared.add(name)
+  }
   const used = usedAnimationNames()
   assert.ok(used.length >= 30, `resolver emitted only ${used.length} names`)
   const missing = used.filter(name => !declared.has(name))
   assert.deepEqual(missing, [], `no @keyframes for: ${missing.join(', ')}`)
+  assert.ok(globalNames.has('tmfx-grain'), 'the live grain plate must animate from app-wide CSS')
 })
 
 check('the tile carries no hard-coded definition tables of its own', () => {

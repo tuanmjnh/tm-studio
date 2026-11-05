@@ -33,12 +33,14 @@ import {
   applyTransition,
   clearTransition
 } from 'tmcut-core'
-import type { CoreClipboard, TmcutTimeline, TmcutTextAnimationType, TmcutStabilizeLevel, TmcutStabilizeStatus } from 'tmcut-core'
+import type { CoreBlendMode, CoreClipboard, TmcutTimeline, TmcutTextAnimationType, TmcutStabilizeLevel, TmcutStabilizeStatus } from 'tmcut-core'
 
 // Type definitions for TMCut project
 /** R116: FFmpeg `blend` mode for compositing a clip over the track
- *  below it (normal = the classic overlay, no blend filter). */
-export type TmcutBlendMode = 'normal' | 'screen' | 'overlay' | 'multiply'
+ *  below it (normal = the classic overlay, no blend filter). Core owns the
+ *  legal set since F6d — both surfaces ask `blendModeOf`, so a mode the
+ *  binary would reject cannot reach a filtergraph or a monitor. */
+export type TmcutBlendMode = CoreBlendMode
 
 export interface TmcutTimelineItem {
   id: string

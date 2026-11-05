@@ -6,7 +6,7 @@ import { opacityAlpha } from './graph'
 import { fadeFilter } from './audio'
 import { buildFfmpegFitFilters, buildFfmpegTransform } from '../canvas'
 import { xfadeNameFor } from '../fxCatalog'
-import { keyframeExpr, maskAlphaExpr, rampSetptsExpr, buildFfmpegEffectFilters, stillImageInputFlags, ticksToSec } from 'tmcut-core'
+import { keyframeExpr, maskAlphaExpr, rampSetptsExpr, buildFfmpegEffectFilters, stillImageInputFlags, ticksToSec, blendModeOf } from 'tmcut-core'
 
 /**
  * Maps a TMCut transition type into an FFmpeg xfade transition name
@@ -322,8 +322,11 @@ export function compileVideoPipeline(
     // Blend mode (R116): 'normal' = the classic overlay combiner; any
     // other mode composites with the FFmpeg `blend` filter (2-input,
     // pixel-wise — screen/overlay/multiply). Both inputs are locked to
-    // the canvas size, so a full-frame blend is well-defined.
-    const blendMode = clip.raw.blend || 'normal'
+    // the canvas size, so a full-frame blend is well-defined. The mode
+    // comes from core's law (F6d), the same one the layer carries to the
+    // monitor — FFmpeg validates the name while parsing, so an un-normalized
+    // value would fail the whole render, not one clip.
+    const blendMode = blendModeOf(clip.raw)
     const blendCombiner = blendMode !== 'normal' ? `blend=all_mode='${blendMode}':shortest=1` : ''
 
     if (transform) {

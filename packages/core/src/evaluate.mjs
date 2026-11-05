@@ -30,6 +30,7 @@ import { normalizeMask } from './mask.mjs'
 import { TICKS_PER_SECOND } from './time.mjs'
 import { transitionWindows } from './transitions.mjs'
 import { clipSpan } from './timeline.mjs'
+import { blendModeOf } from './blend.mjs'
 
 function finiteOr(value, fallback) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
@@ -290,6 +291,7 @@ function layerFor(clip, track, at, windows, clipsById) {
     effects: Array.isArray(clip.effects) ? clip.effects.map(effect => ({ ...effect })) : [],
     mask: maskOf(clip),
     layout: resolveClipLayout(clip),
+    blend: blendModeOf(clip),
     transition: transitionOf(transitionAt(windows, clip.id, at), clipsById),
     text: textOf(clip, localTicks, span.duration),
     ramped: isRamped(clip),

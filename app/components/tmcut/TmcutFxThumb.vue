@@ -255,9 +255,11 @@ onBeforeUnmount(() => {
 @keyframes tmfxt-slice-x { 0% { -webkit-mask-position: 100% 0; mask-position: 100% 0; opacity: 0 } 55% { -webkit-mask-position: 0 0; mask-position: 0 0; opacity: 1 } 80% { -webkit-mask-position: 0 0; mask-position: 0 0; opacity: 1 } 100% { -webkit-mask-position: 100% 0; mask-position: 100% 0; opacity: 0 } }
 @keyframes tmfxt-slice-y { 0% { -webkit-mask-position: 0 100%; mask-position: 0 100%; opacity: 0 } 55% { -webkit-mask-position: 0 0; mask-position: 0 0; opacity: 1 } 80% { -webkit-mask-position: 0 0; mask-position: 0 0; opacity: 1 } 100% { -webkit-mask-position: 0 100%; mask-position: 0 100%; opacity: 0 } }
 
-/* Effects — scene delta pulses in and out, plus the self-running motions. */
+/* Effects — scene delta pulses in and out, plus the self-running motions.
+   `tmfx-grain` is NOT here: a live plate animates too, so its frame belongs in
+   app/assets/css/tmcut-fx.css, imported by main.css. Defining it twice would
+   leave the winner to stylesheet injection order. */
 @keyframes tmfx-compare { 0% { opacity: 0 } 12% { opacity: 1 } 62% { opacity: 1 } 78% { opacity: 0 } 100% { opacity: 0 } }
-@keyframes tmfx-grain { 0% { background-position: 0 0 } 100% { background-position: 6px -4px } }
 @keyframes tmfx-shake { 0% { transform: translate(0,0) scale(1.06) } 10% { transform: translate(-2px,1px) scale(1.06) } 20% { transform: translate(2px,-1px) scale(1.06) } 30% { transform: translate(-1.5px,2px) scale(1.06) } 45% { transform: translate(1.2px,-1.6px) scale(1.06) } 65% { transform: translate(-.5px,1px) scale(1.06) } 85% { transform: translate(.4px,-.5px) scale(1.06) } 100% { transform: translate(0,0) scale(1.06) } }
 @keyframes tmfx-rgb { 0% { transform: translateX(0) } 50% { transform: translateX(-3px) } 100% { transform: translateX(0) } }
 @keyframes tmfx-slide-ghost { 0% { transform: translateX(0); opacity: .3 } 50% { transform: translateX(5px); opacity: .55 } 100% { transform: translateX(0); opacity: .3 } }

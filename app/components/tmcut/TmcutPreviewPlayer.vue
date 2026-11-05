@@ -810,7 +810,6 @@ function maskPreviewStyle(mask: unknown): Record<string, string> {
 // trimmed away paints as the plain cut `compositePlan` decided.
 function surfaceStyle(surface: PaintSurface | null | undefined): Record<string, string | number> {
   if (!surface) return {}
-  const clip = surface.clip
   const layer = surface.layer
   // This is the GROUP's style: it positions the media element and that
   // element's plates together, which is what the export composites before it
@@ -829,13 +828,11 @@ function surfaceStyle(surface: PaintSurface | null | undefined): Record<string, 
     style.transform = `${style.transform} ${effectStyle.transform}`
   }
   // Blend mode (R116): CSS mix-blend-mode is the preview counterpart of
-  // the FFmpeg `blend` filter the export uses — same mode names. In the DOM it
-  // blends against the layer below, which is exactly the row order core gives.
-  // Remaining debt, unchanged by F4b: core's layer carries no `blend`, so this
-  // one number is still read off the authored clip instead of the plan.
-  const blend = (clip as { blend?: string }).blend
-  if (blend && blend !== 'normal') {
-    style.mixBlendMode = blend
+  // the FFmpeg `blend` filter the export uses — same mode names, and since F6d
+  // the same core law. In the DOM it blends against the layer below, which is
+  // exactly the row order core gives.
+  if (layer.blend !== 'normal') {
+    style.mixBlendMode = layer.blend
   }
   const spec = surface.layer.transition
   if (surface.crossfades && spec?.type) {

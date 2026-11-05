@@ -1,0 +1,12 @@
+/* tmcut — the motion a LIVE effect plate runs (Zero-FFmpeg slice F6d).
+   A plate is styled inline by `fxPreview.effectOverlay`, so the @keyframes it
+   names must be app-wide: the monitor paints footage rows whether or not a
+   single effect thumbnail is mounted on the page. A frame defined inside
+   TmcutFxThumb.vue would leave the monitor still while the file moves.
+
+   `noise=alls=…:allf=t` redraws grain every frame in the export, so the
+   counterpart here is a shifting tile, not a static wash. The offset is a whole
+   multiple of every grain cell the registry offers (fine 3px, medium 4px,
+   coarse 6px — 12 is the smallest that divides all three), so the loop wraps
+   with no phase jump on any size. */
+@keyframes tmfx-grain { 0% { background-position: 0 0 } 100% { background-position: 12px -12px } }

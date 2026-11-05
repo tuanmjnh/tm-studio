@@ -4,8 +4,8 @@ import { useI18n } from 'vue-i18n'
 import { useTmcutProject, TMCUT_DEFAULT_FADE_SEC } from '~/composables/useTmcutProject'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
-import { keyframeAt, setKeyframe, removeKeyframe, propsWithKeyframes, TICKS_PER_SECOND, secToTicks, ticksToSec, withSpeed, isRamped, buildRampPreset, SPEED_RAMP_PRESETS, EFFECT_REGISTRY, normalizeEffects, clampEffectParam } from 'tmcut-core'
-import type { TmcutTextAnimationType, TmcutStabilizeLevel } from 'tmcut-core'
+import { keyframeAt, setKeyframe, removeKeyframe, propsWithKeyframes, TICKS_PER_SECOND, secToTicks, ticksToSec, withSpeed, isRamped, buildRampPreset, SPEED_RAMP_PRESETS, EFFECT_REGISTRY, normalizeEffects, clampEffectParam, blendModeOf } from 'tmcut-core'
+import type { CoreBlendMode, TmcutTextAnimationType, TmcutStabilizeLevel } from 'tmcut-core'
 import { canvasFpsValue } from '~/utils/tmcut/canvas'
 import { clipDurationSec, clipDurationTicks, clipStartTicks } from '~/utils/tmcut/clipTime'
 import { applyMediaAnimPreset, effectDefaultParams, groupEffectsByCategory, registryEntries, humanizeKey, filterPresets, setLutPresetOnClip, activeLutPreset } from '~/utils/tmcut/fxLibrary'
@@ -436,7 +436,10 @@ const eqGamma = computed(() => eqParam('gamma', 100))
 const eqFade = computed(() => eqParam('fade', 0))
 const eqVibrance = computed(() => eqParam('vibrance', 0))
 
-const blendMode = computed(() => clip.value?.blend || 'normal')
+// The select shows core's answer, not the raw field: a mode outside the legal
+// set composites as `normal` on the monitor and in the file, so showing it here
+// would advertise a look neither counterpart paints.
+const blendMode = computed(() => blendModeOf(clip.value))
 
 const BLEND_OPTIONS = [
   { label: t('tmcut.inspectorProps.blendNormal'), value: 'normal' },
@@ -449,7 +452,7 @@ function handleBlendUpdate(value: string) {
   const id = selectedClipId.value
   if (!id) return
   pushHistory() // discrete blend change → its own undo entry (B8)
-  updateClip(id, { blend: value as 'normal' | 'screen' | 'overlay' | 'multiply' })
+  updateClip(id, { blend: value as CoreBlendMode })
 }
 
 // Desktop export renders keyframes (keyframeExpr in the render builders);

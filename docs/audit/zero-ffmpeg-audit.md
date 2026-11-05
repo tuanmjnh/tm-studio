@@ -3593,3 +3593,177 @@ và **2** file i18n **chạm nhưng không stage** (mục 37.6). Commit F6c stag
 không đổi; không binary mới, không đụng `backup/ffmpeg-engine-2026-11-03`, không tắt
 rule lint nào, ADR-033 vẫn Pending.
 
+## 38. Slice F6d — blend đi **qua** plan, và grain của file có mặt trên plate live (đo ngày 2026-11-05)
+
+§32.7 để lại đúng hai con số, và §35.6 nhắc lại nguyên văn ("blend lấy từ plan, và grain
+`overlayAnimation` trên plate live"). Lượt này đóng cả hai: mỗi chân có một số đo live,
+không chân nào chỉ có spec.
+
+### 38.1 Blend: hai counterpart viết **cùng** tên, nhưng chỉ một bên tha thứ
+
+Bốn mode hợp lệ (`normal`, `screen`, `overlay`, `multiply`) được CSS viết y hệt cách
+FFmpeg viết: `mix-blend-mode: screen` và `blend=all_mode='screen'`. Khác biệt nằm ở chỗ
+xử lý khi tên **không** hợp lệ:
+
+| Bên | Giá trị lạ | Hệ quả |
+| --- | --- | --- |
+| Preview (CSS) | bỏ qua, coi như `normal` | một hàng trông vẫn ổn, không ai biết |
+| Export (FFmpeg) | lỗi **lúc parse filtergraph** | **cả** render chết, không phải một clip |
+
+Chính tính bất đối xứng đó là lý do luật nằm trong core chứ không nằm ở hai chỗ đọc:
+[packages/core/src/blend.mjs:19](file:///D:/Applications/tm-studio/packages/core/src/blend.mjs#L19)
+là danh sách,
+[blend.mjs:28](file:///D:/Applications/tm-studio/packages/core/src/blend.mjs#L28)
+`blendModeOf` là bộ chuẩn hóa (absent / không phải chuỗi / không thuộc danh sách →
+`normal`), và
+[evaluate.mjs:294](file:///D:/Applications/tm-studio/packages/core/src/evaluate.mjs#L294)
+đặt kết quả lên layer — cùng chỗ `layerFor` đã sinh effects, mask, layout. Một project
+JSON bẩn vì thế không còn đường nào để làm hỏng một export.
+
+### 38.2 Ba chỗ đọc đổi nguồn, một chỗ đổi kiểu
+
+| Chỗ | Trước F6d | Sau F6d |
+| --- | --- | --- |
+| [TmcutPreviewPlayer.vue:834](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L834) | `surfaceStyle` cầm `surface.clip`, cast `(clip as { blend?: … })` | chỉ cầm `layer.blend`; **hết** một cast `as` trong đường paint |
+| [render/video.ts:329](file:///D:/Applications/tm-studio/app/utils/tmcut/render/video.ts#L329) | `clip.raw.blend` thô, chuỗi đó đi thẳng vào filtergraph | `blendModeOf(clip.raw)` — cùng luật với layer |
+| [TmcutInspector.vue:442](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutInspector.vue#L442) | `computed(() => clip.value?.blend \|\| 'normal')` — select **quảng cáo** một mode mà cả hai counterpart đều không vẽ | `computed(() => blendModeOf(clip.value))` |
+| [useTmcutProject.ts](file:///D:/Applications/tm-studio/app/composables/useTmcutProject.ts) | `TmcutBlendMode = 'normal' \| 'screen' \| 'overlay' \| 'multiply'` — union thứ hai, tự khai | `TmcutBlendMode = CoreBlendMode` (alias, không còn danh sách thứ hai để lệch) |
+
+`BLEND_OPTIONS` trong inspector vẫn là 4 nhãn UI: nó là chrome, không phải luật — và
+spec check 5 khóa cả hai chiều (alias phải có, union tự khai phải **không** còn).
+
+### 38.3 Grain: file có chuyển động thì plate phải có
+
+Bake của export là `noise=alls=…:allf=t` — `t` là **temporal**, mỗi khung một hạt mới.
+Trước lượt này plate live là một tấm **tĩnh**: hai counterpart cùng tên "grain" nhưng vẽ
+hai bức ảnh khác nhau. Chênh đó nằm ở đúng một field:
+
+- [fxPreview.ts:69](file:///D:/Applications/tm-studio/app/utils/tmcut/fxPreview.ts#L69)
+  `GRAIN_MOTION = 'tmfx-grain 1.1s linear infinite'` — một định nghĩa, hai chỗ dùng;
+- builder grain ([fxPreview.ts:166](file:///D:/Applications/tm-studio/app/utils/tmcut/fxPreview.ts#L166))
+  tách làm hai: `overlayMotion` (chuyển động **của chính effect**, plate chạy) và
+  `overlayAnimation` (tile: `tmfx-compare` reveal **cộng** motion);
+- [fxPreview.ts:834](file:///D:/Applications/tm-studio/app/utils/tmcut/fxPreview.ts#L834)
+  là chỗ plate chọn: `built.overlayMotion ?? built.animation`.
+
+Vì sao **không** mang cả `tmfx-compare` sang monitor: reveal là "so sánh trước/sau của
+một tile"; trên preview, hai khung hình đã ở đó rồi và một pha tan toàn màn hình sẽ bịa
+ra một transition không ai authored. Check 7 của spec mới khóa đúng điều đó (plate chỉ
+có `tmfx-grain`, tile vẫn có cả hai).
+
+`vhs` cũng mang grain nhưng **không** phải `layerOverlay`
+([effects.mjs:53](file:///D:/Applications/tm-studio/packages/core/src/effects.mjs#L53)/[63](file:///D:/Applications/tm-studio/packages/core/src/effects.mjs#L63)/[185](file:///D:/Applications/tm-studio/packages/core/src/effects.mjs#L185)
+là ba chỗ `layerOverlay: true`: vignette, grain, letterbox), nên nó ở lại tile — và
+`effectOverlay` trả `null` trước khi đọc tới animation của nó. Field thừa đã bị xóa sau
+khi đo, không để lại một key không ai đọc.
+
+### 38.4 Frame `tmfx-grain` lên CSS toàn app — và vì sao hết trùng
+
+Plate nhận style **inline**, nên nó cần `@keyframes` sống cùng trang **không phụ thuộc
+chunk của tile**. Frame vì thế dời sang
+[app/assets/css/tmcut-fx.css:12](file:///D:/Applications/tm-studio/app/assets/css/tmcut-fx.css#L12),
+[main.css:9](file:///D:/Applications/tm-studio/app/assets/css/main.css#L9)
+`@import`; [TmcutFxThumb.vue:259](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutFxThumb.vue#L259)
+giữ một comment nói rõ vì sao nó **không** còn ở tile (định nghĩa hai lần thì ai nạp
+muộn hơn thắng).
+
+Số của frame cũng đổi có lý do: tile cũ đi `6px -4px`, nhưng `background-size` của grain
+là `3px`/`4px`/`6px` tùy `size`, và `6px -4px` chỉ kín với cell 3px. App-wide dùng
+`12px -12px` — bội số của **cả ba** cell, nên loop kín mít với mọi độ hạt, và trạng thái
+cuối trùng trạng thái đầu (điều này còn có hệ quả ở mục 38.7).
+
+### 38.5 Test: một spec mới, một check cũ viết lại
+
+[tests/unit/tmcut_blend_grain.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_blend_grain.spec.ts)
+(201 dòng, **8** check): danh sách mode + chuẩn hóa của core; layer mang `blend`;
+preview hỏi core chứ không hỏi clip authored (cả hai chiều: phải có `layer.blend`, phải
+**không** còn `(clip as { blend`); exporter cùng luật; app không khai union thứ hai;
+plate grain chạy và plate vignette/letterbox **không** chạy; plate không mang reveal;
+mọi motion của plate phải có `@keyframes` **toàn app** — check cuối quét
+`EFFECT_REGISTRY` lấy đúng các `layerOverlay`, rồi đối chiếu tên với các stylesheet mà
+`main.css` import, nên một frame chỉ có trong tile là fail, không phải pass.
+
+RED chạy thật là `SyntaxError: … does not provide an export named 'BLEND_MODES'`
+(`f6d-red1.txt`) — với một luật **mới hoàn toàn** thì RED là fail ở chính pin đầu tiên,
+không phải fail giả vì harness. GREEN đầu tiên **7/8**: check 8 fail vì bug của **chính
+spec** (destructure một mảng string nên `names` rỗng), và guard chống-vacuous của nó bắt
+đúng; sửa spec, **không** nới assertion → **8/8** (`f6d-green2.txt`).
+[tmcut_fx_preview.spec.ts:50](file:///D:/Applications/tm-studio/tests/unit/tmcut_fx_preview.spec.ts#L50)
+thêm `globalKeyframeNames()` và check 6 đổi thành "tile **hoặc** app-wide", nay còn pin
+thêm rằng một tên đã có toàn app thì **không** được xuất hiện lại trong tile
+([:374](file:///D:/Applications/tm-studio/tests/unit/tmcut_fx_preview.spec.ts#L374)) →
+**24/24**.
+
+### 38.6 Live (`:4003`, `/tmcut/editor`, project `tmcut_project_default`: 2 clip trên `t-video-1`, 1920×1080@30, 00:01.05)
+
+Đường đi là **handler thật của app** (`handleAddEffect('grain')`, `handleBlendUpdate('screen')`,
+rồi `undo()` hai lần), không phải DOM tự dựng.
+
+| Chân | Số đo |
+| --- | --- |
+| Frame nằm ở đâu | stylesheet `main.css?direct`: **66** `@keyframes`, có `tmfx-grain` với `0%{background-position:0px 0px} 100%{background-position:12px -12px}`; sheet của tile: **44** tên và **không** có `tmfx-grain` (45 → 44, đúng một dòng dời đi) |
+| Plate chạy thật | `animation-name: tmfx-grain`, `1.1s`, `linear`, `infinite`, `background-size: 3px 3px`; `background-position` **2.15474 → 5.97277 → 2.88303 px** tại t0/+350ms/+1150ms; `getAnimations()` → `playState: running`, `currentTime 24398 ms` |
+| Blend đúng chỗ | group footage (`… transition-transform duration-75`) tính ra `mix-blend-mode: screen`; `<video>` bên trong vẫn `normal` → blend áp cho **cả nhóm** (media + plate), đúng như export composite nhóm rồi mới transform |
+| Hàng không vẽ | surface thứ hai (`display: none`) mang cùng plate style nhưng `getAnimations()` trả `[]` — Chromium không tạo animation object cho phần tử không render, nên hàng đang tắt không tốn frame |
+| Tile không hồi quy | tile grain khi **đã vào viewport** tính ra `animation-name: "tmfx-compare, tmfx-grain"`, cả hai `running`, `background-position` **11.5371 → 4.99141 px** trong 500 ms — frame mới toàn app vẫn điều khiển tile |
+| Khôi phục | sau 2 lần `undo`: `effects = [vignette]`, `blend = undefined`, **0** plate grain, **0** group có blend, inspector đọc `normal` |
+| Console | `/tmcut/editor`: `[info] <Suspense>` + `401 ×4` (đúng baseline §31.5); `/tmcut/html-video` và `/tmcut`: chỉ `[info] <Suspense>` |
+
+### 38.7 Reduced motion: suy từ stylesheet, **không** phải từ emulation
+
+[main.css:237-251](file:///D:/Applications/tm-studio/app/assets/css/main.css#L237)
+khoanh `*` trong `@media (prefers-reduced-motion: reduce)` bằng
+`animation-duration: 0.01ms !important; animation-iteration-count: 1 !important`, nên
+plate nằm trong ngân sách chuyển động chung của app — người tắt chuyển động sẽ **không**
+thấy hạt chạy. Điểm đáng nói là trạng thái đậu: 100% là `12px -12px`, tức đúng **4 ô**
+của lattice 3px (và 3 ô của 4px, 2 ô của 6px), nên hình cuối **giống hệt** hình đầu —
+không có một cái nhảy khi animation kết thúc. Chưa bật được cờ đó live: `emulate` của
+devtools không có feature `prefers-reduced-motion`, và `matchMedia(...).matches` trên
+máy đo là `false`.
+
+### 38.8 Gate
+
+| Gate | Lệnh | Kết quả |
+| --- | --- | --- |
+| 1 Types | `npx nuxt typecheck` | exit **0**, `grep -c "error TS"` = **0**; `.nuxt/eslint.config.mjs` sinh lại **11:26**, 28567 byte (lượt **11:06** đã chạy trước, nhưng code đổi sau đó nên gate 2 chạy lại) |
+| 2 Lint | `npx eslint` trên **12** file đã chạm (sau gate 1) | lần 1 exit **1** với 2 lỗi **tự gây** (`no-useless-escape` trong regex của spec, và một parse error vì hai `const` bị nối thành một dòng ở `tmcut_fx_preview.spec.ts:61`); sửa xong exit **0**, log **0 byte** (`f6d-eslint3.txt`, chạy sau lần sinh config **11:26**) |
+| 3 Tests | `npx tsx tests/unit/run-all.mts --smoke` | **118/118 specs passed**, exit **0** (`f6d-smoke3.txt`) — lượt chạy **cuối**, sau mọi sửa docs. Lượt trước đó **116/118** vì **hai gate docs của repo** bắt đúng lỗi của lượt này: `doc_line_length` (một bullet 1398 ký tự → **tách**, không nới trần) và `doc_table_shape` (một pipe đôi trong ô bảng chưa escape, sửa thành dạng escape) |
+| 3b Core | `npx tsc -p packages/core --noEmit` | exit **0**, log 0 byte (`f6d-core-tsc.txt`) |
+| 3c Spec mới | `npx tsx --tsconfig tsconfig.test.json tests/unit/tmcut_blend_grain.spec.ts` | RED (thiếu export) → 7/8 → **8/8** exit 0; `tmcut_fx_preview.spec.ts` **24/24** |
+| 4 Live | Chromium, `/tmcut/editor` + `/tmcut/html-video` + `/tmcut` | mục 38.6 |
+
+### 38.9 Chưa chứng minh
+
+- **Không có pixel.** Chưa render một file nào trong lượt này: `blend=all_mode='screen'`
+  được chứng minh ở tầng spec (check 4), còn "hai hàng `screen` cho ra cùng một ảnh ở
+  preview và trong file" vẫn thuộc fixture điểm ảnh của tiêu chí đóng F.
+- **Chỉ `screen` được đo live**; `overlay`/`multiply` đi qua đúng một dòng code và cùng
+  một luật, nhưng không có số đo riêng.
+- **Electron host** chưa chạy lượt này.
+- **Reduced motion** chỉ suy từ stylesheet (38.7), chưa phải một phép emulation.
+- **Effect thuần chuyển động** (`shake`, `rgb`, `slide-ghost`) vẫn **không** có mặt live:
+  plate chỉ tiêu `filter`/`transform`/`overlay`, nên motion của riêng chúng vẫn dừng ở
+  tile. Đây là **nợ còn lại**, không phải thứ §32.7 ghi.
+
+### 38.10 Bảo vệ working tree
+
+Lượt này chạm **4** file core ([blend.mjs](file:///D:/Applications/tm-studio/packages/core/src/blend.mjs) mới,
+[index.mjs](file:///D:/Applications/tm-studio/packages/core/src/index.mjs),
+[evaluate.mjs](file:///D:/Applications/tm-studio/packages/core/src/evaluate.mjs),
+[index.d.ts](file:///D:/Applications/tm-studio/packages/core/src/index.d.ts)),
+**6** file app ([TmcutPreviewPlayer.vue](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue),
+[TmcutInspector.vue](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutInspector.vue),
+[TmcutFxThumb.vue](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutFxThumb.vue),
+[useTmcutProject.ts](file:///D:/Applications/tm-studio/app/composables/useTmcutProject.ts),
+[render/video.ts](file:///D:/Applications/tm-studio/app/utils/tmcut/render/video.ts),
+[fxPreview.ts](file:///D:/Applications/tm-studio/app/utils/tmcut/fxPreview.ts)),
+**2** file CSS ([tmcut-fx.css](file:///D:/Applications/tm-studio/app/assets/css/tmcut-fx.css) mới,
+[main.css](file:///D:/Applications/tm-studio/app/assets/css/main.css)),
+**2** spec ([tmcut_blend_grain.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_blend_grain.spec.ts) mới,
+[tmcut_fx_preview.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_fx_preview.spec.ts))
+và **2** file docs. Khác F6c, lần này `packages/core` **có** đổi — vẫn chỉ là thêm luật,
+không sửa luật cũ. Project Schema v3 không đổi; Storage Upload API không đổi; không
+binary mới, không đụng `backup/ffmpeg-engine-2026-11-03`, không tắt rule lint nào,
+ADR-033 vẫn Pending. Working tree còn **69** mục WIP của chủ repo, không mục nào được
+stage hộ.
+

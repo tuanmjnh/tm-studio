@@ -59,6 +59,15 @@ const TOP_Z = 3
 /** The on/off reveal that shows a static grade's delta against the plate. */
 const COMPARE = 'tmfx-compare var(--tmfx-dur) ease-in-out infinite'
 
+/**
+ * The grain overlay's OWN motion. `noise=alls=…:allf=t` draws fresh grain every
+ * frame in the file, so a still plate on the monitor is a different picture;
+ * shifting the tile keeps the noise alive. Declared apart from the tile's
+ * `overlayAnimation` because a live plate must carry this and NOT the
+ * before/after reveal, which is a thumbnail mnemonic with nothing to compare.
+ */
+const GRAIN_MOTION = 'tmfx-grain 1.1s linear infinite'
+
 function plate(image: string, extra: CSSProperties = {}): CSSProperties {
   return { backgroundImage: image, backgroundSize: 'cover', backgroundPosition: 'center', ...extra }
 }
@@ -124,6 +133,9 @@ interface EffectPaint {
   /** Self-running motion: the effect itself, not a before/after reveal. */
   animation?: string
   overlay?: CSSProperties
+  /** The overlay's own motion — what a LIVE plate runs (F6d). */
+  overlayMotion?: string
+  /** The tile's animation: its own motion plus the before/after reveal. */
   overlayAnimation?: string
   ghost?: CSSProperties
   ghostAnimation?: string
@@ -151,7 +163,8 @@ const EFFECT_BUILDERS: Record<string, EffectBuilder> = {
         backgroundSize: `${cell}px ${cell}px`,
         opacity: r3(0.15 + unit('grain', 'amount', p.amount) * 0.75)
       },
-      overlayAnimation: `${COMPARE}, tmfx-grain 1.1s linear infinite`
+      overlayMotion: GRAIN_MOTION,
+      overlayAnimation: `${COMPARE}, ${GRAIN_MOTION}`
     }
   },
   // Illustrative: an export keys OUT the matched color; a thumbnail cannot
@@ -313,8 +326,9 @@ const EFFECT_BUILDERS: Record<string, EffectBuilder> = {
         background: `repeating-linear-gradient(to bottom, rgba(0,0,0,${r3(0.18 + a * 0.18)}) 0 1.5px, transparent 1.5px 3.5px)`,
         opacity: r3(0.4 + a * 0.6)
       },
+      // Tile-only: `vhs` is not a `layerOverlay` definition, so no plate reads it.
       // Export noise is temporal (`allf=t`), so the tracking drift is part of the look.
-      overlayAnimation: `${COMPARE}, tmfx-grain 1.1s linear infinite`
+      overlayAnimation: `${COMPARE}, ${GRAIN_MOTION}`
     }
   }
   // `lut3d` is presented through the filters tab (kind 'filter'), never as an
@@ -811,7 +825,14 @@ export function effectCss(type: string, params: Record<string, unknown> = {}): s
  */
 export function effectOverlay(type: string, params: Record<string, unknown> = {}): CSSProperties | null {
   if (fxCapabilities(type)?.layerOverlay !== true) return null
-  return EFFECT_BUILDERS[type]?.(params).overlay ?? null
+  const built = EFFECT_BUILDERS[type]?.(params)
+  if (!built?.overlay) return null
+  // The plate moves when the file's bake moves (F6d): grain is `noise=allf=t`,
+  // fresh every frame, so a still plate is a different picture. Only the
+  // effect's OWN motion crosses — the tile's before/after reveal has no
+  // counterpart here, and a monitor-wide dissolve would invent one.
+  const animation = built.overlayMotion ?? built.animation
+  return animation ? { ...built.overlay, animation } : built.overlay
 }
 
 /**
