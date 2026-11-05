@@ -129,8 +129,12 @@ describe('the preview reads the same law', () => {
   it('the preview keeps no literal fallback of its own', () => {
     assert.ok(!/\|\|\s*36\b/.test(source), 'a `|| 36` font-size copy is back in the preview')
     assert.ok(!/\|\|\s*'#ffffff'/.test(source), 'a `|| \'#ffffff\'` colour copy is back in the preview')
-    assert.ok(source.includes('textClip.fontSize || DEFAULT_TEXT_FONT_SIZE'), 'the size fallback is not the core constant')
-    assert.ok(source.includes('textClip.color || DEFAULT_TEXT_COLOR'), 'the colour fallback is not the core constant')
+    // F7: the preview no longer holds the clip in hand — it holds core's
+    // `layer.text`, whose colour fields are null when unauthored. The fallback
+    // is still core's constant, which is what this guard has always protected.
+    assert.ok(source.includes('const text = layer.text'), 'the fallback is no longer taken from core answered text')
+    assert.ok(source.includes('text.fontSize || DEFAULT_TEXT_FONT_SIZE'), 'the size fallback is not the core constant')
+    assert.ok(source.includes('text.color || DEFAULT_TEXT_COLOR'), 'the colour fallback is not the core constant')
   })
 
   it('one clip field feeds both hosts', () => {

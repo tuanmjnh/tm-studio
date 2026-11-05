@@ -11,7 +11,7 @@
  * The export side of that story is measured with real pixels in
  * tmcut_render_parity.spec.ts. This file covers the two preview halves that
  * spec cannot reach, and it deliberately does NOT need FFmpeg:
- *   1. `activeTextClips` reads layers from `evaluateTimeline` instead of
+ *   1. `activeTextSurfaces` reads layers from `evaluateTimeline` instead of
  *      running its own window comparison, so the boundary cannot drift again;
  *   2. `renderSeconds` pulls the render position back to the start of the last
  *      content frame when the playhead rests on the end, because that instant
@@ -64,7 +64,7 @@ async function main() {
     assert.equal(s.contentDuration.value, 4, 'two 2 s captions make a 4 s project')
     const p = useTmcutPlayback()
     p.seek(2)
-    const ids = p.activeTextClips.value.map(clip => clip.id)
+    const ids = p.activeTextSurfaces.value.map(surface => surface.clip.id)
     assert.deepEqual(ids, ['cap-2'], `t = end of the first window must not keep it alive (got ${ids})`)
   })
 
@@ -72,7 +72,7 @@ async function main() {
     const s = await twoCaptions()
     const p = useTmcutPlayback()
     p.seek(2 - frameSec(s))
-    const ids = p.activeTextClips.value.map(clip => clip.id)
+    const ids = p.activeTextSurfaces.value.map(surface => surface.clip.id)
     assert.deepEqual(ids, ['cap-1'], `the last frame of a window is inside it (got ${ids})`)
   })
 
@@ -80,11 +80,11 @@ async function main() {
     const s = await twoCaptions()
     const p = useTmcutPlayback()
     p.seek(1)
-    assert.equal(p.activeTextClips.value.length, 1, 'visible before the track is hidden')
+    assert.equal(p.activeTextSurfaces.value.length, 1, 'visible before the track is hidden')
     const track = s.currentProject.value!.timeline.tracks.find(t => t.type === 'text')!
     track.hidden = true
     p.seek(1.5)
-    assert.deepEqual(p.activeTextClips.value.map(clip => clip.id), [], 'the evaluator drops hidden tracks')
+    assert.deepEqual(p.activeTextSurfaces.value.map(surface => surface.clip.id), [], 'the evaluator drops hidden tracks')
     track.hidden = false
   })
 
@@ -96,7 +96,7 @@ async function main() {
     assert.ok(p.renderSeconds.value < 4, `position pulled back (got ${p.renderSeconds.value})`)
     assert.ok(Math.abs(p.renderSeconds.value - (4 - frame)) < 1e-6,
       `one frame before the end (got ${p.renderSeconds.value}, want ${4 - frame})`)
-    const ids = p.activeTextClips.value.map(clip => clip.id)
+    const ids = p.activeTextSurfaces.value.map(surface => surface.clip.id)
     assert.deepEqual(ids, ['cap-2'], `the finished project keeps its last caption on screen (got ${ids})`)
   })
 
@@ -112,7 +112,7 @@ async function main() {
     p.seek(2)
     assert.ok(Math.abs(p.renderSeconds.value - (2 - frameSec(s))) < 1e-6,
       `last content frame, not last ruler frame (got ${p.renderSeconds.value})`)
-    assert.deepEqual(p.activeTextClips.value.map(clip => clip.id), ['cap-1'],
+    assert.deepEqual(p.activeTextSurfaces.value.map(surface => surface.clip.id), ['cap-1'],
       'the caption is still on screen at the end of playback')
   })
 
@@ -131,7 +131,7 @@ async function main() {
     assert.equal(s.contentDuration.value, 0)
     p.seek(0)
     assert.equal(p.renderSeconds.value, 0, 'a 0-length project must not produce a negative position')
-    assert.deepEqual(p.activeTextClips.value, [])
+    assert.deepEqual(p.activeTextSurfaces.value, [])
   })
 
   await check('the preview player renders text layers from the evaluator position', async () => {

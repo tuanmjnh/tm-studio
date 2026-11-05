@@ -1825,6 +1825,10 @@ export interface CoreEvaluatedText {
   align: string
   shadow: boolean
   stroke: boolean
+  /** Optional effect colours, null when unauthored — the DOM keeps its legacy default. */
+  shadowColor: string | null
+  strokeColor: string | null
+  bgColor: string | null
   animIn: string
   animInDuration: number
   animOut: string

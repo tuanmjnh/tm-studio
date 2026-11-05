@@ -3767,3 +3767,124 @@ binary mới, không đụng `backup/ffmpeg-engine-2026-11-03`, không tắt rul
 ADR-033 vẫn Pending. Working tree còn **69** mục WIP của chủ repo, không mục nào được
 stage hộ.
 
+## 39. Slice F7 — chữ vẽ từ **layer** của core, không đọc lại clip (đo ngày 2026-11-05)
+
+F2b và F4 đã buộc footage đi qua plan. Text thì chưa: nó vẫn là **câu trả lời thứ ba**.
+`activeTextClips` đi đúng qua các slot overlay của plan, lấy clip authored rồi **vứt layer
+đi**, và [TmcutPreviewPlayer.vue](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue) tự tính lại
+mọi con số trong DOM.
+
+### 39.1 Bốn chỗ tự tính — và một chỗ đã thật sự lệch
+
+| Cái | Export | Preview trước F7 (DOM tự tính) |
+| --- | --- | --- |
+| vị trí / scale / opacity | `layer.transform`, `layer.opacity` ([evaluate.mjs:274](file:///D:/Applications/tm-studio/packages/core/src/evaluate.mjs#L274)) | `evalKeyframe(textClip, 'x'…)` bốn lần, rồi `textClip.scale / 100`, `textClip.opacity / 100` |
+| in/out animation | `text.animation` sinh ngay trong evaluator ([evaluate.mjs:223](file:///D:/Applications/tm-studio/packages/core/src/evaluate.mjs#L223)) | `textAnimationAt(textClip, …)` gọi lại từ DOM |
+| độ dài cửa sổ animation | `durationTicks` của evaluator | `clipDurationTicks({ in, out, speed })` rồi `Math.max(TICKS_PER_SECOND / 20, …)` tự chế |
+| màu shadow / stroke / box | `clip.shadowColor\|\|'black'` ([render/text.ts:133](file:///D:/Applications/tm-studio/app/utils/tmcut/render/text.ts#L133)) | `textClip.shadowColor\|\|'rgba(0, 0, 0, 0.85)'` |
+
+Ba hàng đầu chỉ **sai tiềm năng**: cùng luật, hai chỗ viết. Hàng thứ tư thì đã khác thật —
+export lấy `black` (alpha chỉ nhân thêm `@…` khi clip < 100%, [render/text.ts:126](file:///D:/Applications/tm-studio/app/utils/tmcut/render/text.ts#L126)),
+DOM lấy `rgba(0, 0, 0, 0.85)` (85% luôn luôn). F7 **không** sửa cái default đó: một bên là
+filter string của project cũ mà golden spec đang khóa byte-identical, một bên là CSS đang
+render — đó là một quyết định parity chứ không phải một dọn nguồn, nên nó nằm lại ở §39.7
+như một nợ **đã đo**, không phải một khác biệt bị giấu.
+
+Cái F7 đổi là **nguồn của giá trị authored**: [evaluate.mjs:203](file:///D:/Applications/tm-studio/packages/core/src/evaluate.mjs#L203)
+`textOf` nay trả `shadowColor` / `strokeColor` / `bgColor` lên layer
+([evaluate.mjs:216](file:///D:/Applications/tm-studio/packages/core/src/evaluate.mjs#L216)), `null` khi không authored — core
+không bịa default, và DOM chỉ còn việc áp preview scale. Kiểu
+[`CoreEvaluatedText`](file:///D:/Applications/tm-studio/packages/core/src/index.d.ts#L1829) mang đúng ba field đó.
+
+### 39.2 Ba chỗ đổi
+
+| Chỗ | Trước F7 | Sau F7 |
+| --- | --- | --- |
+| [useTmcutPlayback.ts:25](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L25) | `activeTextClips`: slot → clip, layer bị bỏ | kiểu `TextSurface { clip, layer }` + [activeTextSurfaces:265](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L265) giữ **layer theo reference**, giống `PaintSurface` đã quy ước từ F2a |
+| [TmcutPreviewPlayer.vue:889](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L889) | chữ ký cấu trúc tự khai **27** field của clip, `evalKeyframe` ×4, `textAnimationAt`, `clipDurationTicks` | `textOverlayStyle(surface: TextSurface)` đọc `layer.text` / `layer.transform` / `layer.opacity` / `layer.mask`; **cả bốn lời gọi kia biến mất khỏi đường paint** |
+| [TmcutPreviewPlayer.vue:2046](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L2046) | `v-for="textClip in activeTextClips"` | `v-for="surface in activeTextSurfaces"`, và chữ được vẽ là [`surface.layer.text?.content`](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L2057) |
+
+Scale thành `transform.scaleX/scaleY` nhân `animation.scale` (core đã đổi `%` → hệ số),
+nên DOM không còn phép chia `/ 100` nào. Opacity thành `layer.opacity * animation.opacity`.
+
+### 39.3 Test: sáu check mới, và một guard phải đổi theo **tên**
+
+[tmcut_text_layer.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_text_layer.spec.ts) (6 check, 158 dòng): 1–2
+khóa luật core (màu authored phải lên layer; không authored thì phải `null` — DOM không được
+bịa default), 3–4 khóa composable (layer đi theo reference; một keyframe `x`/`opacity` tới
+surface **qua layer**, không qua clip), 5–6 là pin nguồn: body của `textOverlayStyle` không
+còn `evalKeyframe(`, `textAnimationAt(`, `clipDurationTicks(`, và template loop đúng
+`activeTextSurfaces`.
+
+Check 1–2 tác nghiệp qua `updateClip` (đường Inspector), **không** qua `addClipToTrack`: store
+dựng `newItem` từ một danh sách field cố định ([useTmcutProject.ts:855](file:///D:/Applications/tm-studio/app/composables/useTmcutProject.ts#L855))
+và danh sách đó không mang ba màu text. Spec ghi thẳng lý do ngay cạnh lệnh tác nghiệp — đó
+là một phát hiện, không phải thứ được phép im (nợ ở §39.7).
+
+Gate 3 lần đầu **FAIL 118/119** vì [tmcut_text_style.spec.ts:129](file:///D:/Applications/tm-studio/tests/unit/tmcut_text_style.spec.ts#L129):
+guard F2 pin nguyên văn chuỗi `textClip.fontSize \|\| DEFAULT_TEXT_FONT_SIZE`, và refactor đổi
+tên binding. Hai assertion **tiêu cực** (`no `\|\| 36``, `no `\|\| '#ffffff'``) giữ nguyên, assertion
+mới thay pin tên cũ bằng `const text = layer.text` — ý định mà guard bảo vệ ("fallback là hằng
+của core, đặt trên chữ core đã trả lời") còn nguyên, không nới.
+
+### 39.4 Đo live (Chromium :4003, `+ Add Text` thật trên UI)
+
+Overlay đầu tiên có `font-size: 12.3594px`; clip caption authored `fontSize 42`, suy ra preview
+scale `12.3594 / 42 = 0.294271`. Bật Shadow + Outline và đổi màu sang `#3aa0ff`:
+
+| Trường | DOM đo được | Core nói gì | Khớp |
+| --- | --- | --- | --- |
+| `color` | `rgb(58, 160, 255)` | `layer.text.color` = authored | có |
+| `text-shadow` | `rgba(0, 0, 0, 0.85) 0.882812px` | `textShadowOffset(42) = 3` × `0.294271` = `0.882814` | có |
+| `-webkit-text-stroke` | `0.588542px rgba(0, 0, 0, 0.85)` | `textStrokeWidth(42) = 2` × `0.294271` = `0.588543` | có |
+| `background` | không có | `layer.text.bgColor = null` | có — DOM không bịa plate |
+
+Lệch 2e-6 px là CSS làm tròn, không phải hai luật. Undo ×4 trả workspace về "Untitled Project"
+(0 overlay) trước khi rời route, nên lượt QA không để lại project rác.
+
+### 39.5 Gate
+
+| Gate | Lệnh | Kết quả |
+| --- | --- | --- |
+| 1 Typecheck | `npx nuxt typecheck` | PASS — exit 0, 0 × `error TS`. `\.nuxt/eslint.config.mjs` regenerate **3** lần (12:07, 12:09, 12:14, 28581 B), lint chạy lại sau mỗi lần |
+| 2 Lint | `npx eslint` trên **8** file đã chạm, **sau** gate 1 | PASS exit 0. Lần đầu FAIL 4 lỗi: ba import chết (`textAnimationAt`, `TICKS_PER_SECOND`, `TmcutTextAnimationType`) refactor để lại + một biến không dùng trong spec — đã xoá, không tắt rule nào |
+| 3 Tests | `npx tsx tests/unit/run-all.mts --smoke` | PASS **119/119**, exit 0 (118 trước lượt này; spec mới = +1). `npx tsc -p packages/core --noEmit` exit 0; `node --test packages/core/test/*.test.mjs` **679/679**, 0 fail |
+| 4 Live | Chromium **:4003**, `list_pages` trước | PASS có ghi nợ — `/tmcut` **0** lỗi; `/tmcut/editor` đúng baseline §31.5 (`[info] <Suspense>` + `401` ×4, `list_network_requests` quy cả 4 cho `GET /api/v1/ai/relay/catalog`); số đo §39.4 |
+| 5 Docs | §39 + bullets F7 trong roadmap, xoá scratch | PASS |
+
+### 39.6 Vì sao đây là chỗ cuối của "một composite path" phía DOM
+
+Yêu cầu 3 và 7 của slice F nói cùng một điều: **một** evaluator trả lời cho **cả** hai host.
+Footage xong từ F2b/F4, blend + grain xong ở F6d, nhịp playhead xong ở F6e/F6b. Text là bề
+mặt DOM cuối cùng còn tự đọc clip. Sau lượt này, muốn biết một caption trông thế nào ở tick
+T thì chỉ còn một đường: hỏi `evaluateTimeline`.
+
+### 39.7 Chưa chứng minh / nợ ghi lại
+
+- **Default màu shadow-stroke vẫn lệch** (§39.1). Core là nguồn của giá trị *authored*, chưa
+  phải nguồn của *default*. Đóng nó nghĩa là đổi filter string của project cũ **hoặc** đổi
+  look của preview — cần một quyết định parity có test, không phải một refactor nhân tiện.
+- **Whitelist của store**: `addClipToTrack` ([useTmcutProject.ts:855](file:///D:/Applications/tm-studio/app/composables/useTmcutProject.ts#L855))
+  chỉ dựng `newItem` từ danh sách field cố định, nên ba màu text không đi qua đường đó.
+  Inspector dùng `updateClip` nên UI không hỏng, nhưng code khác thêm caption *kèm* màu sẽ
+  âm thầm rơi field. Chưa sửa vì đây là luật authoring, không phải luật paint.
+- **Pixel preview-vs-export cho nhiều layer** (footage + text + shape cùng khung) vẫn chưa có
+  fixture — đó là F8 (#134).
+- `TmcutFxThumb` cho caption (yêu cầu 4) chưa đo lại sau khi layer mang màu.
+- Route `/tmcut/editor` cần project có caption thật để đo trên **nhiều** surface cùng lúc;
+  lượt này đo một surface rồi trả lại workspace.
+
+### 39.8 Working tree
+
+Lượt này chạm **2** file core ([evaluate.mjs](file:///D:/Applications/tm-studio/packages/core/src/evaluate.mjs),
+[index.d.ts](file:///D:/Applications/tm-studio/packages/core/src/index.d.ts)), **2** file app
+([useTmcutPlayback.ts](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts),
+[TmcutPreviewPlayer.vue](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue)), **4** spec
+([tmcut_text_layer.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_text_layer.spec.ts) mới,
+[tmcut_text_style.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_text_style.spec.ts),
+[tmcut_preview_boundary.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_preview_boundary.spec.ts),
+[tmcut_frame_scheduler.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_frame_scheduler.spec.ts)) và **2** file docs.
+Không sửa luật core cũ — chỉ thêm field. Project Schema v3 không đổi; Storage Upload API
+không đổi; không binary mới, không đụng `backup/ffmpeg-engine-2026-11-03`, không tắt rule lint
+nào, ADR-033 vẫn Pending. Working tree còn **56** mục WIP của chủ repo (39 `M`, 20 `??`, 5 `D`),
+không mục nào được stage hộ.

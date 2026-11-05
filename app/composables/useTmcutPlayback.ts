@@ -19,6 +19,14 @@ export type PaintSurface = {
   crossfades: boolean
 }
 
+// One text overlay the canvas paints at this tick. Same shape rule as a footage
+// surface: the authored clip rides along for editing (drag, selection, the
+// Inspector), and every painted number comes from the layer BY REFERENCE.
+export type TextSurface = {
+  clip: TmcutTimelineItem
+  layer: CoreEvaluatedLayer
+}
+
 // Shared playback state across TMCut editor
 const playhead = ref(0) // Playhead position in seconds
 const isPlaying = ref(false)
@@ -249,14 +257,19 @@ export function useTmcutPlayback() {
   // Active text overlays at the render position — across EVERY visible text
   // track, so parallel caption/watermark tracks all render (R122). The plan
   // places them after all footage, which is also the DOM's paint order.
-  const activeTextClips = computed<TmcutTimelineItem[]>(() => {
+  //
+  // The slot already carries the layer core evaluated at this tick. Joining back
+  // to the clip is only for editing; painting from the clip would re-run
+  // `evalKeyframe` and `textAnimationAt` in the DOM — a third answer to where a
+  // caption sits, while the export reads core's.
+  const activeTextSurfaces = computed<TextSurface[]>(() => {
     const tracks = currentProject.value?.timeline?.tracks
     if (!tracks) return []
-    const out: TmcutTimelineItem[] = []
+    const out: TextSurface[] = []
     for (const slot of paintPlan.value.slots) {
       if (slot.kind !== 'overlay') continue
       const clip = tracks[slot.trackIndex]?.items?.find(item => item.id === slot.clipId)
-      if (clip) out.push(clip)
+      if (clip) out.push({ clip, layer: slot.layer })
     }
     return out
   })
@@ -681,7 +694,7 @@ export function useTmcutPlayback() {
     setStackedVideoEl,
     activeVideoClip,
     transitionCrossfade,
-    activeTextClips,
+    activeTextSurfaces,
     formatTimecode,
     seek,
     seekToFrame,

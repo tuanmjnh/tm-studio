@@ -5,11 +5,11 @@ import { useI18n } from 'vue-i18n'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import type { TmcutTrack, TmcutTimelineItem } from '~/composables/useTmcutProject'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
-import type { PaintSurface } from '~/composables/useTmcutPlayback'
+import type { PaintSurface, TextSurface } from '~/composables/useTmcutPlayback'
 import { computeFitObjectStyle, CROP_RATIO_PRESETS, clampCropRect, applyCropRatio, canvasFpsValue } from '~/utils/tmcut/canvas'
 import { effectCssParts, layerOverlayPlates } from '~/utils/tmcut/fxPreview'
-import { previewScale, evalKeyframe, gainAt, textAnimationAt, safeAreaRects, SAFE_AREA_PRESETS, TICKS_PER_SECOND, secToTicks, maskCssMaskImage, previewTransitionRamp, classifyAssetKind, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_FONT_SIZE, textBoxPadding, textShadowOffset, textStrokeWidth } from 'tmcut-core'
-import type { CoreEvaluatedLayer, CoreEvaluatedLayout, TmcutTextAnimationType } from 'tmcut-core'
+import { previewScale, evalKeyframe, gainAt, safeAreaRects, SAFE_AREA_PRESETS, secToTicks, maskCssMaskImage, previewTransitionRamp, classifyAssetKind, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_FONT_SIZE, textBoxPadding, textShadowOffset, textStrokeWidth } from 'tmcut-core'
+import type { CoreEvaluatedLayer, CoreEvaluatedLayout } from 'tmcut-core'
 import { clipDurationTicks, clipStartSec, clipEndSec, clipMediaTimeSec } from '~/utils/tmcut/clipTime'
 import { assetStateView, isMediaOffline } from '~/utils/tmcut/assetImport'
 import { useTmcutFrames } from '~/composables/useTmcutFrames'
@@ -38,7 +38,7 @@ const {
   setStackedVideoEl,
   activeVideoClip,
   transitionCrossfade,
-  activeTextClips,
+  activeTextSurfaces,
   formatTimecode,
   seek,
   togglePlayPause,
@@ -879,106 +879,70 @@ function toggleFullscreen() {
   }
 }
 
-function textOverlayStyle(textClip: {
-  id: string
-  color?: string
-  fontSize?: number
-  fontFamily?: string
-  bold?: boolean
-  italic?: boolean
-  align?: 'left' | 'center' | 'right'
-  shadow?: boolean
-  stroke?: boolean
-  /** Text effects (optional): undefined keeps the legacy black look. */
-  shadowColor?: string
-  strokeColor?: string
-  bgColor?: string
-  offset?: number
-  in?: number
-  out?: number
-  speed?: number
-  animIn?: TmcutTextAnimationType
-  animInDuration?: number
-  animOut?: TmcutTextAnimationType
-  animOutDuration?: number
-  x?: number
-  y?: number
-  scale?: number
-  rotation?: number
-  opacity?: number
-  text?: string
-  mask?: unknown
-  keyframes?: Array<{ t: number, prop: string, value: number, easing?: 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out' | 'step' }>
-}) {
+// ONE visual law for a text overlay (Zero-FFmpeg slice F7). Every painted number
+// comes from the layer core evaluated at this tick — position, scale, opacity and
+// the in/out curve are core's, the same reading the export compiles from. The
+// authored clip rides along on the surface for the edit affordances (drag, the
+// selection ring, the Inspector); nothing here reads it, because a second
+// `evalKeyframe` / `textAnimationAt` pass in the DOM is a third answer to where a
+// caption sits and the file has only ever had two.
+function textOverlayStyle(surface: TextSurface): Record<string, string | number> {
+  const layer = surface.layer
+  const text = layer.text
+  if (!text) return {}
   const scale = textScale.value
-  // Keyframes (roadmap B1): x/y/scale/opacity evaluate at the playhead
-  // (clip-local ticks); static fields are the no-keyframe fallback.
-  const at = localTicks(textClip)
-  const tx = evalKeyframe(textClip, 'x', at) ?? textClip.x ?? 0
-  const ty = evalKeyframe(textClip, 'y', at) ?? textClip.y ?? 0
-  const ts = evalKeyframe(textClip, 'scale', at) ?? textClip.scale ?? 100
-  const to = evalKeyframe(textClip, 'opacity', at) ?? textClip.opacity ?? 100
-  const fontSize = textClip.fontSize || DEFAULT_TEXT_FONT_SIZE
-
-  // Text in/out animations (Roadmap C-5): core owns the alpha/slide/zoom
-  // math (same numbers as the export's drawtext expressions); this file
-  // only applies the preview scale. C16-R3: offset/in/out are store TICKS;
-  // the animation durations (animInDuration/animOutDuration) stay seconds.
-  const animation = textAnimationAt(
-    textClip,
-    Math.max(0, at),
-    Math.max(TICKS_PER_SECOND / 20, clipDurationTicks({
-      in: textClip.in ?? 0,
-      out: textClip.out ?? TICKS_PER_SECOND,
-      speed: textClip.speed || 1
-    }))
-  )
+  const transform = layer.transform
+  // Core's own guard: an animation curve with nothing to animate is identity.
+  const animation = text.animation
+  const fontSize = text.fontSize || DEFAULT_TEXT_FONT_SIZE
 
   // Anchor (roadmap C-2) mirrors the export x expression exactly:
   // left = 0+x, center = (w−tw)/2+x, right = w−tw+x — the block's EDGE
   // lands at that point; vertical anchoring is always centered (export
   // y is always (h−th)/2+y).
-  const align = textClip.align || 'center'
+  const align = text.align || 'center'
   const anchorX = align === 'left' ? '0%' : align === 'right' ? '100%' : '50%'
   return {
-    // Font family (roadmap C-1): the CSS twin of the export's
-    // fontfile= — quoted via JSON.stringify so multi-word families
-    // ("Segoe UI") stay one valid family token.
-    ...(textClip.fontFamily ? { fontFamily: `${JSON.stringify(textClip.fontFamily)}, sans-serif` } : {}),
-    // Style flags (roadmap C-2): the CSS twin of the export's face
-    // file + drawtext shadow/border options — the pixel numbers come from
-    // tmcut-core (textStyle.mjs), the same source the export compiler reads.
-    ...(textClip.bold ? { fontWeight: '700' } : {}),
-    ...(textClip.italic ? { fontStyle: 'italic' } : {}),
-    // Colours come from the optional effect fields; the legacy black/85%
-    // values stay the default, so an old project previews exactly as before.
-    ...(textClip.shadow ? { textShadow: `${textShadowOffset(fontSize) * scale}px ${textShadowOffset(fontSize) * scale}px 0 ${textClip.shadowColor || 'rgba(0, 0, 0, 0.85)'}` } : {}),
-    ...(textClip.stroke
+    // Font family (roadmap C-1): the CSS twin of the export's fontfile=,
+    // quoted via JSON.stringify so multi-word families ("Segoe UI") stay one
+    // valid family token.
+    ...(text.fontFamily ? { fontFamily: `${JSON.stringify(text.fontFamily)}, sans-serif` } : {}),
+    // Style flags (roadmap C-2): the CSS twin of the export's face file +
+    // drawtext shadow/border options — the pixel numbers come from tmcut-core
+    // (textStyle.mjs), the same source the export compiler reads.
+    ...(text.bold ? { fontWeight: '700' } : {}),
+    ...(text.italic ? { fontStyle: 'italic' } : {}),
+    // The effect colours arrive on the layer (F7). An unauthored colour is
+    // null, and the legacy black/85% stays its twin in the export filter.
+    ...(text.shadow ? { textShadow: `${textShadowOffset(fontSize) * scale}px ${textShadowOffset(fontSize) * scale}px 0 ${text.shadowColor || 'rgba(0, 0, 0, 0.85)'}` } : {}),
+    ...(text.stroke
       ? {
           paintOrder: 'stroke fill',
-          WebkitTextStroke: `${textStrokeWidth(fontSize) * scale}px ${textClip.strokeColor || 'rgba(0, 0, 0, 0.85)'}`
+          WebkitTextStroke: `${textStrokeWidth(fontSize) * scale}px ${text.strokeColor || 'rgba(0, 0, 0, 0.85)'}`
         }
       : {}),
     // Background plate: the CSS twin of drawtext `box=1:boxborderw=`, using
     // the SAME padding number the export compiler uses (textBoxPadding).
-    ...(textClip.bgColor
+    ...(text.bgColor
       ? {
-          backgroundColor: textClip.bgColor,
+          backgroundColor: text.bgColor,
           padding: `${textBoxPadding(fontSize) * scale}px`,
           borderRadius: `${Math.max(2, Math.round(fontSize * 0.08)) * scale}px`
         }
       : {}),
-    color: textClip.color || DEFAULT_TEXT_COLOR,
+    color: text.color || DEFAULT_TEXT_COLOR,
     fontSize: `${fontSize * scale}px`,
     left: align === 'left' ? '0' : align === 'right' ? '100%' : '50%',
     top: '50%',
-    transform: `translate(${(tx + animation.deltaX) * scale}px, ${(ty + animation.deltaY) * scale}px) translate(${anchorX}, -50%) scale(${(ts / 100) * animation.scale}) rotate(${textClip.rotation || 0}deg)`,
-    opacity: (to / 100) * animation.opacity,
+    transform: `translate(${(transform.x + animation.deltaX) * scale}px, ${(transform.y + animation.deltaY) * scale}px) translate(${anchorX}, -50%) scale(${transform.scaleX * animation.scale}, ${transform.scaleY * animation.scale}) rotate(${transform.rotation}deg)`,
+    // Two factors, each applied once: the clip's own (possibly keyframed)
+    // opacity, and the in/out reveal sitting on top of it.
+    opacity: layer.opacity * animation.opacity,
     // R124 A3: masked text fades through the same SVG mask as video. The
     // overlay is text-sized, not canvas-sized, so mask units are the
     // box itself here — a small, documented WYSIWYG gap vs the canvas-frame
     // export box (export masks the full-frame text layer).
-    ...maskPreviewStyle(textClip.mask)
+    ...maskPreviewStyle(layer.mask)
   }
 }
 
@@ -2079,24 +2043,24 @@ onUnmounted(() => {
              mirror the export math — roadmap C-2; whitespace-pre-line
              honors the same \\n line breaks drawtext renders) -->
         <div
-          v-for="textClip in activeTextClips"
-          :key="textClip.id"
-          :ref="(el) => setTextEl(textClip.id, el)"
+          v-for="surface in activeTextSurfaces"
+          :key="surface.clip.id"
+          :ref="(el) => setTextEl(surface.clip.id, el)"
           class="absolute leading-tight whitespace-pre-line select-none cursor-move rounded"
-          :class="textClip.id === selectedClipId
+          :class="surface.clip.id === selectedClipId
             ? 'ring-1 ring-primary/80'
             : 'hover:ring-1 hover:ring-primary/60'"
-          :style="textOverlayStyle(textClip)"
+          :style="textOverlayStyle(surface)"
           data-canvas-hit
-          @mousedown="onTextMouseDown($event, textClip)"
+          @mousedown="onTextMouseDown($event, surface.clip)"
         >
-          {{ textClip.text }}
+          {{ surface.layer.text?.content }}
 
           <!-- Transform box for the SELECTED label (CapCut-style): corner
                handles scale the text (writes `scale`, the field the Inspector
                owns), the knob rotates it. Handles are counter-scaled so they
                stay legible at any text size. -->
-          <template v-if="textClip.id === selectedClipId && !isCropActive">
+          <template v-if="surface.clip.id === selectedClipId && !isCropActive">
             <span
               v-for="corner in selectionCorners"
               :key="corner.key"
@@ -2105,15 +2069,15 @@ onUnmounted(() => {
               :style="{
                 top: corner.key.startsWith('n') ? '0' : '100%',
                 left: corner.key.endsWith('w') ? '0' : '100%',
-                transform: `translate(-50%, -50%) scale(${textHandleInverse(textClip)})`
+                transform: `translate(-50%, -50%) scale(${textHandleInverse(surface.clip)})`
               }"
-              @mousedown.stop="onTextResizeMouseDown($event, textClip)"
+              @mousedown.stop="onTextResizeMouseDown($event, surface.clip)"
             />
             <div
               class="absolute left-1/2 w-px h-4 bg-primary/70 pointer-events-none"
               :style="{
                 top: '0',
-                transform: `translate(-50%, -100%) scale(${textHandleInverse(textClip)})`,
+                transform: `translate(-50%, -100%) scale(${textHandleInverse(surface.clip)})`,
                 transformOrigin: 'bottom center'
               }"
             />
@@ -2121,10 +2085,10 @@ onUnmounted(() => {
               class="absolute left-1/2 w-3 h-3 rounded-full bg-white border-2 border-primary cursor-grab active:cursor-grabbing"
               :style="{
                 top: '0',
-                transform: `translate(-50%, -50%) translateY(-16px) scale(${textHandleInverse(textClip)})`
+                transform: `translate(-50%, -50%) translateY(-16px) scale(${textHandleInverse(surface.clip)})`
               }"
               :title="t('tmcut.player.rotateLabel')"
-              @mousedown.stop="onTextRotateMouseDown($event, textClip)"
+              @mousedown.stop="onTextRotateMouseDown($event, surface.clip)"
             />
           </template>
         </div>

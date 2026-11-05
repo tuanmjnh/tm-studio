@@ -110,7 +110,7 @@ async function main() {
     const readout = () => JSON.stringify({
       playhead: p.playhead.value,
       active: p.activeVideoClip.value,
-      texts: p.activeTextClips.value.map(clip => clip.id),
+      texts: p.activeTextSurfaces.value.map(surface => surface.clip.id),
       crossfade: p.transitionCrossfade.value?.progress ?? null
     })
     p.seekToFrame(45)
