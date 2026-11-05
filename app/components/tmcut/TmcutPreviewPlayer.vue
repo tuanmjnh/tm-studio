@@ -8,9 +8,8 @@ import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import type { PaintSurface, TextSurface } from '~/composables/useTmcutPlayback'
 import { computeFitObjectStyle, CROP_RATIO_PRESETS, clampCropRect, applyCropRatio, canvasFpsValue } from '~/utils/tmcut/canvas'
 import { effectCssParts, layerOverlayPlates } from '~/utils/tmcut/fxPreview'
-import { previewScale, safeAreaRects, SAFE_AREA_PRESETS, maskCssMaskImage, previewTransitionRamp, classifyAssetKind, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_FONT_SIZE, textBoxPadding, textShadowOffset, textStrokeWidth } from 'tmcut-core'
+import { previewScale, safeAreaRects, SAFE_AREA_PRESETS, maskCssMaskImage, previewTransitionRamp, classifyAssetKind, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_FONT_SIZE, textBoxPadding, textShadowOffset, textStrokeWidth, ticksToSec } from 'tmcut-core'
 import type { CoreEvaluatedLayer, CoreEvaluatedLayout } from 'tmcut-core'
-import { clipStartSec, clipEndSec, clipMediaTimeSec } from '~/utils/tmcut/clipTime'
 import { createAudioMixer } from '~/utils/tmcut/audioMixer'
 import type { TmcutMixGraph } from '~/utils/tmcut/audioMixer'
 import { assetStateView, isMediaOffline } from '~/utils/tmcut/assetImport'
@@ -30,7 +29,6 @@ const previewEngine = useTmcutPreviewEngine()
 const { currentProject, contentDuration, hasTimelineClips, selectedClipId, selectClip, updateClip, pushHistory, isCropEditing, toggleCropEditing } = useTmcutProject()
 const {
   playhead,
-  renderSeconds,
   isPlaying,
   videoRef,
   outgoingVideoRef,
@@ -580,15 +578,10 @@ watch(mixSignature, () => {
 }, { flush: 'post' })
 
 // ===== Audio-track playback engine (roadmap R124) =====
-// Audio clips used to have NO preview engine at all — dropping a (WebM)
-// audio file onto an audio track produced silence, which is what "webm
-// audio không phát được" actually meant (the routing at R122 only moved
-// the clip to the right row). Each active audio clip now owns a hidden
-// <audio> element keyed by clip id. While playing, the elements run on
-// their own media clocks and only drift-correct (>=0.35s); while paused
-// they follow the playhead like the video layer (scrub = seek). Reverse
-// audio clips are not seek-looped (documented gap, mirrors the video
-// reverse handling being a step-loop feature).
+// Each source the plan names owns a hidden <audio> element keyed by clip id.
+// While playing, the elements run on their own media clocks and only
+// drift-correct (>=0.35s, a fact about this device, not about the timeline);
+// while paused they follow the playhead like the video layer (scrub = seek).
 const audioEls = new Map<string, HTMLAudioElement>()
 function setAudioEl(clipId: string, el: unknown) {
   if (el instanceof HTMLAudioElement) audioEls.set(clipId, el)
@@ -600,35 +593,39 @@ function setAudioEl(clipId: string, el: unknown) {
   }
 }
 
-const activeAudioClips = computed(() => {
+// Mount material, not a decision: which clips sound, where each is inside its
+// own file and how fast its element runs are core's answers in `audioMix`. A
+// source core refuses to play (a reversed clip — an element has no backward
+// playback, while the export runs `areverse`) is not mounted at all, and the
+// plan says why rather than the player dropping it in silence. Track pan
+// (-100..100) stays a documented preview gap: an element has no stereo field
+// without a graph, so it is honored at EXPORT only (core `panFilter`).
+const audioClipsById = computed(() => {
   const tracks = currentProject.value?.timeline?.tracks || []
-  const out: TmcutTimelineItem[] = []
+  const byId = new Map<string, TmcutTimelineItem>()
   for (const track of tracks) {
     if (track.type !== 'audio') continue
-    for (const clip of track.items || []) {
-      // Reverse clips are skipped: HTMLMediaElement has no backward
-      // playback, and starting one at the wrong end is worse than silence.
-      if (clip.reverse) continue
-      if (renderSeconds.value >= clipStartSec(clip) && renderSeconds.value < clipEndSec(clip)) {
-        out.push(clip)
-      }
-    }
+    for (const clip of track.items || []) byId.set(clip.id, clip)
+  }
+  return byId
+})
+
+const activeAudioSrcs = computed(() => {
+  const out: { id: string, src: string, mediaTime: number, rate: number }[] = []
+  for (const source of audioMix.value.sources) {
+    if (source.role !== 'audio' || !source.plays || source.mediaTicks === null) continue
+    const clip = audioClipsById.value.get(source.clipId)
+    const src = clip?.src ? previewEngine.resolveSrc(clip.src) : ''
+    if (!src) continue
+    out.push({
+      id: source.clipId,
+      src,
+      mediaTime: ticksToSec(source.mediaTicks),
+      rate: source.rate
+    })
   }
   return out
 })
-
-const activeAudioSrcs = computed(() => activeAudioClips.value.map(clip => ({
-  // Mount material only. The level, the mute and the ramp are core's answer in
-  // `mixGains`, and the mixer is the only thing that writes a volume — an
-  // element that mounts at full scale is corrected by the sync this list
-  // triggers below, never by a binding here. Track pan (-100..100) stays a
-  // documented preview gap: HTMLMediaElement has no stereo field control
-  // without a graph, so it is honored at EXPORT only (core panFilter).
-  id: clip.id,
-  src: clip.src ? previewEngine.resolveSrc(clip.src) : '',
-  mediaTime: clipMediaTimeSec(clip, renderSeconds.value),
-  rate: clip.speed && clip.speed >= 0.25 && clip.speed <= 4 ? clip.speed : 1
-})))
 
 function seekAudioElement(el: HTMLAudioElement, time: number) {
   try {
@@ -1823,7 +1820,10 @@ onUnmounted(() => {
              the preview — previously these had no engine at all. Slice G3
              took the level out of this tag: core's plan names the rows that
              sound and the mixer writes them, so a fade or a volume keyframe
-             on a bed ramps on the screen exactly as it does in the file. -->
+             on a bed ramps on the screen exactly as it does in the file. Slice
+             G4 took the clock out too: the position inside the file and the
+             element rate are the same plan's numbers, so a 6x clip can no longer
+             run its picture at 6x and its sound at 1x. -->
         <audio
           v-for="a in activeAudioSrcs"
           :key="a.id"

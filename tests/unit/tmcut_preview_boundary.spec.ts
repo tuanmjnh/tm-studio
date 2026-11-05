@@ -143,8 +143,11 @@ async function main() {
     // surface the player paints or mixes now comes from one evaluation, so the
     // contract — the layers resolve on the frame actually drawn — is that the
     // evaluation is taken AT the render position, in the composable.
+    // G4 closed the last hole in that sentence: the player also computed audio
+    // media time from `renderSeconds`. Now the seek target is `source.mediaTicks`
+    // from the plan, so the raw seconds are not even destructured here.
     assert.match(seam, /renderPosition\.value\.evaluation/, 'layers are evaluated at the clamped render position')
-    assert.match(player, /renderSeconds/, 'the player still reads the clamped position for media time')
+    assert.doesNotMatch(player, /renderSeconds/, 'the player no longer reads the raw seconds for media time')
     assert.match(player, /activeTextSurfaces/, 'and paints the layers that evaluation picked')
     assert.doesNotMatch(player, /secToTicks\(renderSeconds\.value\)/, 'nobody converts it back to ticks here any more')
   })

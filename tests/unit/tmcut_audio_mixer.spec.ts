@@ -293,6 +293,23 @@ async function main() {
     assert.match(types, /export function audioMixAt/, 'and typed for the app')
   })
 
+  await check('the audio leg takes its TIME from core, not from a private map', () => {
+    // G3 retired the level copies; G4 is the half-clock: the position inside the
+    // file, the element rate and whether an element can play the clip at all.
+    // Each of these was computed somewhere on the screen, so a 6x clip could run
+    // its picture at 6x and its sound at 1x, and a ramped bed reached the end of
+    // its file late. A source-reading guard is the only way to pin a retirement.
+    const player = read('app/components/tmcut/TmcutPreviewPlayer.vue')
+    const seam = read('app/composables/useTmcutPlayback.ts')
+    assert.match(player, /mediaTicks/, 'the seek target comes from the plan')
+    assert.match(seam, /shuttle/, 'the host clock is handed to core, not multiplied afterwards')
+    assert.match(seam, /elementRate/, 'the footage rate asks core the same question the audio leg asks')
+    assert.doesNotMatch(seam, /Math\.min\(16, Math\.max\(0\.25/, 'the private element-rate clamp is gone')
+    assert.doesNotMatch(player, /clipMediaTimeSec/, 'the app-side media map is gone')
+    assert.doesNotMatch(player, /clip\.speed >= 0\.25/, 'the app-side audio rate clamp is gone')
+    assert.doesNotMatch(player, /if \(clip\.reverse\) continue/, 'a refusal is core\'s answer, not a silent skip')
+  })
+
   console.log(`\n=== Audio mixer: ${passed}/${passed} checks PASSED ===`)
 }
 

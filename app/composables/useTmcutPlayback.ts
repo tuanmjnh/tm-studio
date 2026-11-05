@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import { TICKS_PER_SECOND, audioMixAt, compositePlan, createFramePace, createFrameScheduler, renderAt, speedAt, ticksToSec } from 'tmcut-core'
+import { TICKS_PER_SECOND, audioMixAt, compositePlan, createFramePace, createFrameScheduler, elementRate, renderAt, ticksToSec } from 'tmcut-core'
 import type { CoreEvaluatedLayer, CoreFramePace, TmcutClock } from 'tmcut-core'
 import { useTmcutProject } from './useTmcutProject'
 import type { TmcutTimelineItem } from './useTmcutProject'
@@ -186,8 +186,12 @@ export function useTmcutPlayback() {
   // Which layers sound at the playhead, and how loudly — core's answer, read
   // from the same evaluation the picture is painted from (`evaluateTimeline`
   // already folds track volume, mute, fades and keyframes into `layer.volume`).
-  // The player drives its mixer from this and never recomputes a gain.
-  const audioMix = computed(() => audioMixAt(playheadEvaluation.value))
+  // The player drives its mixer from this and never recomputes a gain. Since G4
+  // the plan answers the other half too — the position inside each file and the
+  // rate each element must run at — and the shuttle, which is a fact about this
+  // playhead rather than about the timeline, is handed to core so one law composes
+  // it. A host that multiplied afterwards would be a third clock.
+  const audioMix = computed(() => audioMixAt(playheadEvaluation.value, { shuttle: Math.abs(shuttleRate.value) }))
 
   // Transition crossfade state (roadmap B3 / core C5): while the playhead sits
   // inside a transition window core gives that row TWO surfaces — the outgoing
@@ -320,8 +324,9 @@ export function useTmcutPlayback() {
   // corrective seek fires every frame and the picture is a thrash instead of a
   // fast clip. The export has always divided `setpts` by the clip's speed for
   // every row, ramped or not (render/video.ts), so this is the screen-side
-  // reading of that same number — core's `speedAt`, once, for the whole stack.
-  // A constant `speed` is a speed: `isRamped` is not a gate here.
+  // reading of that same number — core's `elementRate`, once, for the whole stack.
+  // Since G4 the composition and the element's window are core's law too, shared
+  // with the audio leg, so the two can no longer be retimed apart.
   function mediaRate(clip: TmcutTimelineItem | null | undefined): number {
     const shuttle = Math.abs(shuttleRate.value)
     // No footage under the playhead: nothing is retimed, only the shuttle.
@@ -329,7 +334,7 @@ export function useTmcutPlayback() {
     // Read the curve at the tick the PLAN was built for, not at a fresh
     // playhead reading: a ramp sampled somewhere else is a third answer.
     const at = Math.round((renderSeconds.value - clipStartSec(clip)) * TICKS_PER_SECOND)
-    return Math.min(16, Math.max(0.25, shuttle * speedAt(clip, at)))
+    return elementRate(clip, at, shuttle)
   }
 
   // One media-clock law for the footage elements that are NOT the main one —

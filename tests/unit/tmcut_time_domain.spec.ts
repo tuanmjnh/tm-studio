@@ -14,7 +14,7 @@
  */
 import assert from 'node:assert/strict'
 import { TICKS_PER_SECOND, secToTicks, ticksToSec, ticksClipToV3, v3ClipToTicks, v1ClipToV3 } from 'tmcut-core'
-import { clipDurationSec, clipEndSec, clipStartSec, clipMediaTimeSec, clipSourceRange, clipDurationTicks, clipStartTicks, clipEndTicks } from '../../app/utils/tmcut/clipTime'
+import { clipDurationSec, clipEndSec, clipStartSec, clipSourceRange, clipDurationTicks, clipStartTicks, clipEndTicks } from '../../app/utils/tmcut/clipTime'
 import { toRenderClip } from '../../app/utils/tmcut/render/clip'
 import type { TmcutTimelineItem } from '../../app/composables/useTmcutProject'
 
@@ -70,14 +70,6 @@ function main() {
       assert.equal(clipStartSec(c), ticksToSec(c.offset || 0))
       assert.equal(clipEndSec(c), ticksToSec(c.offset || 0) + ticksToSec(expectedTicks))
     }
-  })
-
-  check('media time stays in the seconds domain (playback seeks by seconds)', () => {
-    assert.equal(clipMediaTimeSec(clip(), 2), 1) // start of clip -> source in
-    assert.equal(clipMediaTimeSec(clip(), 4), 3) // +2s timeline -> +2s source
-    // Reverse runs backwards from the source end (core C4 semantics).
-    assert.equal(clipMediaTimeSec(clip({ reverse: true }), 2), 5)
-    assert.equal(clipMediaTimeSec(clip({ reverse: true }), 3), 4)
   })
 
   check('toRenderClip DECODES ticks to SECONDS — export trim must not receive ticks', () => {

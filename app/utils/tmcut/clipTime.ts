@@ -1,5 +1,5 @@
 import type { TmcutTimelineItem } from '~/composables/useTmcutProject'
-import { ticksToSec, TICKS_PER_SECOND, isRamped, rampTimelineToSource } from 'tmcut-core'
+import { ticksToSec } from 'tmcut-core'
 
 /**
  * C16-R2/R3: single accessors for clip TIME GEOMETRY.
@@ -62,40 +62,4 @@ export function clipStartSec(clip: Pick<TmcutTimelineItem, 'offset'>): number {
 /** Timeline end, seconds. */
 export function clipEndSec(clip: Pick<TmcutTimelineItem, 'in' | 'out' | 'speed' | 'offset'>): number {
   return clipStartSec(clip) + clipDurationSec(clip)
-}
-
-/**
- * Source-media time at a timeline position (roadmap B2 retime semantics):
- * forward clips run `in + localSec*speed`, reverse clips run from the
- * source end backwards. Input and output are SECONDS; the ticks fields are
- * decoded once here.
- */
-export function clipMediaTimeSec(
-  clip: Pick<TmcutTimelineItem, 'in' | 'out' | 'speed' | 'offset' | 'reverse' | 'speedPoints'>,
-  atSec: number
-): number {
-  const localSec = atSec - clipStartSec(clip)
-  // Speed ramp (R124 A4): source position is the speed integral, not the
-  // linear formula. Non-ramped clips keep the byte-identical classic path.
-  if (isRamped(clip)) {
-    return ticksToSec(rampTimelineToSource(clip, Math.round(localSec * TICKS_PER_SECOND)))
-  }
-  return clipMediaTimeSecLinear(clip, atSec)
-}
-
-/**
- * Classic constant-speed media map, IGNORING any speed curve. R124 A4:
- * embedded audio does not warp with the video ramp (preview keeps the
- * element at its base rate, export keeps the constant asetpts chain), so
- * audio sync must stay on the linear map to match — documented v1 gap.
- */
-export function clipMediaTimeSecLinear(
-  clip: Pick<TmcutTimelineItem, 'in' | 'out' | 'speed' | 'offset' | 'reverse'>,
-  atSec: number
-): number {
-  const localSec = atSec - clipStartSec(clip)
-  const mediaTicks = clip.reverse
-    ? clip.out - localSec * clipSpeed(clip) * TICKS_PER_SECOND
-    : clip.in + localSec * clipSpeed(clip) * TICKS_PER_SECOND
-  return ticksToSec(mediaTicks)
 }

@@ -131,6 +131,29 @@ export function isRamped(clip) {
   return pts.filter(p => p && Number.isFinite(p.t) && Number.isFinite(p.speed)).length >= 2
 }
 
+/** The slowest rate a media element is worth running — below it a clip stutters. */
+export const ELEMENT_RATE_MIN = 0.25
+/** The fastest a browser will accept on `HTMLMediaElement.playbackRate`. */
+export const ELEMENT_RATE_MAX = 16
+
+/**
+ * One authored rate plus the host's clock, inside the element's window.
+ * A `shuttle` of 0 (or anything unusable) is not a rate request — the clip runs
+ * at its own speed rather than being clamped down to the floor.
+ */
+export function clampedElementRate(rate, shuttle = 1) {
+  const base = Number(rate)
+  const clock = Number(shuttle)
+  const composed = Number.isFinite(base) ? base : 1
+  const factor = Number.isFinite(clock) && clock !== 0 ? Math.abs(clock) : 1
+  return Math.min(ELEMENT_RATE_MAX, Math.max(ELEMENT_RATE_MIN, composed * factor))
+}
+
+/** The rate a media element must run at for one clip at one clip-local tick. */
+export function elementRate(clip, atTicks, shuttle = 1) {
+  return clampedElementRate(speedAt(clip, atTicks), shuttle)
+}
+
 /** Valid speed points sorted by time (defensive copy). */
 function sortedPoints(clip) {
   return (Array.isArray(clip?.speedPoints) ? clip.speedPoints : [])

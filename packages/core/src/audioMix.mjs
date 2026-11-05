@@ -1,6 +1,7 @@
 // =============================================================================
 //  tmcut-core — audio mix plan
-//  Which layers make SOUND at one tick, and with what gain (Zero-FFmpeg G3).
+//  Which layers make SOUND at one tick — at what gain, at what position in their
+//  own file, at what element rate (Zero-FFmpeg G3 + G4).
 //
 //  `evaluateTimeline` already answers the gain question per layer: `volume` is
 //  the clip's keyframed volume, the track's volume and the fade envelope
@@ -25,9 +26,17 @@
 //  Audio node. The master belongs to the monitoring device the user is on, and
 //  the graph belongs to the host — this module names the sources and their
 //  gains so that both hosts sum the same set.
+//
+//  Slice G4 gave the same answer for TIME: each source also carries where it is
+//  inside its own file (`mediaTicks`, the evaluator's own `sourceTicks`), the
+//  rate its media element must run at, and whether an element can play it at
+//  all. Those were three private laws on the screen — one per leg, plus the
+//  export's own divisor — so a 6x clip could run its picture at 6x and its
+//  sound at 1x, and a ramped bed reached the end of the file late.
 // =============================================================================
 
 import { compositePlan } from './composite.mjs'
+import { clampedElementRate } from './retime.mjs'
 
 /** A layer contributes its evaluated gain, and nothing at all when muted. */
 function gainOf(layer) {
@@ -35,17 +44,37 @@ function gainOf(layer) {
 }
 
 /**
+ * Where this layer is in its own file, how fast its element must run, and whether
+ * a media element can play it at all. The position is the evaluator's number —
+ * trim, speed and ramp are already folded into it — so the sound cannot be
+ * retimed apart from the picture that came from the same tick.
+ */
+function playoutOf(layer, shuttle) {
+  const refusal = layer.reverse === true ? 'reverse' : null
+  return {
+    mediaTicks: Number.isFinite(layer.sourceTicks) ? layer.sourceTicks : null,
+    rate: clampedElementRate(layer.sourceRate, shuttle),
+    plays: refusal === null,
+    refusal
+  }
+}
+
+/**
  * The sources one mix holds at one tick, in the order the host should build them.
  *
  * @param {{ at?: number, tracks?: object[] }} evaluation an `evaluateTimeline`
  *   result — never a project, so the caller does not evaluate the timeline twice.
+ * @param {{ shuttle?: number }} [options] the host's own playhead multiplier —
+ *   a shuttle is a fact about the clock the user is riding, not about the
+ *   timeline. It composes with each clip's rate inside the element's window.
  * @returns {{ at: number, sources: Array<{ role: 'footage' | 'audio', clipId:
- *   string, trackId: string | null, trackIndex: number, gain: number }> }}
+ *   string, trackId: string | null, trackIndex: number, gain: number,
+ *   mediaTicks: number | null, rate: number, plays: boolean, refusal: string | null }> }}
  *   At most one `footage` source: the picture layer of the bottom paintable row.
  *   Then every live layer of every audio row, in track order. A text or overlay
  *   layer never sounds, and a tick with nothing live returns no sources.
  */
-export function audioMixAt(evaluation) {
+export function audioMixAt(evaluation, options = {}) {
   const sources = []
   let footageClaimed = false
 
@@ -58,7 +87,8 @@ export function audioMixAt(evaluation) {
       clipId: slot.clipId,
       trackId: slot.trackId,
       trackIndex: slot.trackIndex,
-      gain: gainOf(slot.layer)
+      gain: gainOf(slot.layer),
+      ...playoutOf(slot.layer, options.shuttle)
     })
   }
 
@@ -74,7 +104,8 @@ export function audioMixAt(evaluation) {
         clipId: layer.clipId,
         trackId: entry.id ?? null,
         trackIndex: index,
-        gain: gainOf(layer)
+        gain: gainOf(layer),
+        ...playoutOf(layer, options.shuttle)
       })
     }
   }

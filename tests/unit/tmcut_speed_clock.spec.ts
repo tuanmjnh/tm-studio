@@ -13,8 +13,10 @@
  *
  * The export has always been unambiguous here: `setpts` divides by the clip's
  * speed for EVERY row, ramped or not (`render/video.ts`). The law these checks
- * demand is the preview-side reading of that same number: `speedAt(clip, local)`,
- * once, for every element the plan names.
+ * demand is the preview-side reading of that same number — core's
+ * `elementRate(clip, local, shuttle)`, once, for every element the plan names.
+ * G4 moved the 0.25..16 clamp into core, so the composable no longer holds any
+ * rate arithmetic of its own.
  *
  * Run: node node_modules/tsx/dist/cli.mjs --tsconfig tsconfig.test.json \
  *        tests/unit/tmcut_speed_clock.spec.ts
@@ -177,8 +179,10 @@ async function main() {
   // 5. The law is one function, not a per-surface copy with its own clamp.
   await check('one rate law drives every footage element', () => {
     const src = read(CLOCK)
-    assert.equal((src.match(/speedAt\(/g) || []).length, 1,
-      'core speedAt is read in exactly one place')
+    assert.equal((src.match(/elementRate\(/g) || []).length, 1,
+      'core elementRate is read in exactly one place')
+    assert.equal((src.match(/speedAt\(/g) || []).length, 0,
+      'the composable does not sample the curve itself — core answers the rate')
     const writes = src.split('\n').filter(line => line.includes('.playbackRate ='))
     assert.ok(writes.length > 0, 'the composable still owns the element rate')
     for (const line of writes) {

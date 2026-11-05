@@ -347,7 +347,7 @@ export function volumeExpr(clip: CoreFadeClip): string
 export function panFilter(pan: number): string
 export function isTrackMuted(track: { muted?: boolean } | null | undefined): boolean
 
-// --- Zero-FFmpeg G3: which layers make sound at one tick ---
+// --- Zero-FFmpeg G3/G4: which layers make sound at one tick, and their time ---
 export interface CoreAudioMixSource {
   role: 'footage' | 'audio'
   clipId: string
@@ -355,8 +355,19 @@ export interface CoreAudioMixSource {
   trackIndex: number
   /** Linear gain 0..1 — core's layer volume, with the track's mute folded in. */
   gain: number
+  /** Position inside the clip's own file, in ticks — the evaluator's `sourceTicks`. */
+  mediaTicks: number | null
+  /** The rate its media element must run at, already inside the element's window. */
+  rate: number
+  /** False when no media element can play this source at all. */
+  plays: boolean
+  /** Why `plays` is false, so a silent skip on screen is a named refusal. */
+  refusal: 'reverse' | null
 }
-export function audioMixAt(evaluation: CoreTimelineEvaluation | null | undefined): {
+export function audioMixAt(
+  evaluation: CoreTimelineEvaluation | null | undefined,
+  options?: { shuttle?: number }
+): {
   at: number
   sources: CoreAudioMixSource[]
 }
@@ -956,6 +967,12 @@ export function withSpeed<T extends { in?: number, out?: number, speed?: number 
 export interface TmcutSpeedPoint { t: number, speed: number }
 export function isRamped(clip: { speedPoints?: TmcutSpeedPoint[] | null } | null | undefined): boolean
 export function speedAt(clip: { speed?: number, speedPoints?: TmcutSpeedPoint[] | null } | null | undefined, atTicks: number): number
+// Zero-FFmpeg G4: the rate a media element runs at. One law for both legs, so
+// the sound cannot be retimed apart from the picture at the same tick.
+export const ELEMENT_RATE_MIN: number
+export const ELEMENT_RATE_MAX: number
+export function clampedElementRate(rate: number, shuttle?: number): number
+export function elementRate(clip: { speed?: number, speedPoints?: TmcutSpeedPoint[] | null } | null | undefined, atTicks: number, shuttle?: number): number
 export function rampIntegral(clip: { speed?: number, speedPoints?: TmcutSpeedPoint[] | null } | null | undefined, toTicks: number): number
 export function rampTimelineToSource(clip: { in?: number, out?: number, speed?: number, reverse?: boolean, speedPoints?: TmcutSpeedPoint[] | null } | null | undefined, atTicks: number): number
 export const SPEED_RAMP_PRESETS: string[]
@@ -1919,6 +1936,14 @@ export interface CoreEvaluatedLayer {
   endTicks: number
   localTicks: number
   sourceTicks: number | null
+  /**
+   * The authored media-clock rate at this tick: the speed curve's value when a
+   * ramp runs, the clip's constant otherwise. An element that seeks by
+   * `sourceTicks` must run at THIS number or it is retimed apart from the
+   * picture that came from the same tick.
+   */
+  sourceRate: number
+  reverse: boolean
   visible: boolean
   /** 0..1 */
   opacity: number

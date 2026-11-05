@@ -3060,7 +3060,7 @@ Nhưng [useTmcutPlayback.ts](file:///D:/Applications/tm-studio/app/composables/u
 còn giữ một câu trả lời thứ hai cho đúng một case: khi core nói "clip này sống
 nhưng ta không có khoảng nguồn nào cho nó", surface rơi vào `clipMediaTimeSec`
 của app — tức `clip.in + local * speed`
-([clipTime.ts:92](file:///D:/Applications/tm-studio/app/utils/tmcut/clipTime.ts#L92)).
+([clipTime.ts](file:///D:/Applications/tm-studio/app/utils/tmcut/clipTime.ts), helper đã gỡ ở §46).
 
 Case đó không phải tưởng tượng. `clipSpan` ưu tiên hình dạng DSL và chỉ cần
 `timeline.{start,duration}` là clip sống ([timeline.mjs:55](file:///D:/Applications/tm-studio/packages/core/src/timeline.mjs#L55)),
@@ -4893,4 +4893,198 @@ Sáu mutation, bảy run, mỗi file restore byte-identical — `md5sum` sau res
   hàng này đã ghi ở §44.8, lượt này đo lại và giữ nguyên attribution, không tính là PASS im lặng.
 - **Gap/overlap/sync/trim/rate chưa có gì.** G3 giao **mức**, không giao **thời gian**: các check đồng bộ playhead audio,
   overlap hai bed, trim và rate thuộc G4 (#140), cùng phần close-out ADR-033.
+
+## 46. Slice G4 — audio nghe theo **thời gian** của core: trim, gap, overlap, rate — và một trần tốc độ duy nhất (đo ngày 2026-11-05)
+
+### 46.1 Việc của lượt này, và hiện trạng đo được ở HEAD `f2524b8`
+
+§45.8 để lại đúng một dòng nợ: G3 giao **mức**, không giao **thời gian**. G4 trả nó: ở một tick, câu hỏi "file này đang ở
+chỗ nào, chạy nhanh cỡ nào, và một element có chạy được không" phải là **một câu trả lời của core cho cả hai leg**. Đo
+trước lượt này — luật thời gian sống ở app, và nó **không cùng trần** với luật của picture:
+
+| Chỗ | Dòng (HEAD) | Hiện trạng đo được |
+| --- | --- | --- |
+| `git grep -c clipMediaTimeSec HEAD -- app` | — | **5** kết quả — luật "vị trí trong file" **chỉ** tồn tại ở app, core không biết tới nó |
+| [TmcutPreviewPlayer.vue:629](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue) | 629 (HEAD) | `mediaTime: clipMediaTimeSec(clip, renderSeconds.value)` — preview tự tính seek target cho audio |
+| `…/TmcutPreviewPlayer.vue:603-619` | 603-619 (HEAD) | `activeAudioClips`: app **tự quét** hàng audio theo `clipStartSec`/`clipEndSec`, và `if (clip.reverse) continue` — từ chối **im lặng**, không có tên, không có chỗ nào để hỏi |
+| `…/TmcutPreviewPlayer.vue:630` | 630 (HEAD) | `rate: clip.speed && clip.speed >= 0.25 && clip.speed <= 4 ? clip.speed : 1` — trần audio là **4** |
+| [useTmcutPlayback.ts:332](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts) | 332 (HEAD) | `Math.min(16, Math.max(0.25, shuttle * speedAt(clip, at)))` — trần của picture là **16**, và shuttle nhân **sau** khi curve đã được đọc riêng |
+| [render/audio.ts:53-54](file:///D:/Applications/tm-studio/app/utils/tmcut/render/audio.ts#L53) | 53-54 | `aSpeed = clip.speed` → `asetpts=(PTS-STARTPTS)/aSpeed` — **không** clamp, **không** curve |
+| `git grep -c "Math.min(16, Math.max(0.25" HEAD -- app` | — | **1** |
+
+Ba chỗ, **ba trần khác nhau** (4 / 16 / không trần) cho cùng một con số. Hệ quả đọc được thẳng từ dòng :630: một clip **6×**
+chạy picture 6× nhưng rơi vào nhánh `: 1` của audio — tiếng chạy một phần tư tốc độ hình, và đó là lý do `activeAudioSrcs`
+không thể là nguồn sự thật. Ramp còn lệch thêm một tầng: [clipTime.ts](file:///D:/Applications/tm-studio/app/utils/tmcut/clipTime.ts)
+giữ `clipMediaTimeSecLinear` **bỏ qua curve** có chủ đích, để bed audio "khớp" export — trong khi embedded audio của footage
+đã warp theo curve từ slice F4. Hai leg audio của **cùng một clip** đi hai đường.
+
+### 46.2 Luật mới nằm trong core
+
+| chỗ | dòng | nội dung |
+| --- | --- | --- |
+| [retime.mjs:135](file:///D:/Applications/tm-studio/packages/core/src/retime.mjs#L135) và :137 | 135 / 137 | `ELEMENT_RATE_MIN = 0.25`, `ELEMENT_RATE_MAX = 16` — cửa sổ element, **một** chỗ khai báo |
+| [retime.mjs:144](file:///D:/Applications/tm-studio/packages/core/src/retime.mjs#L144) | 144 | `clampedElementRate(rate, shuttle = 1)` — shuttle là **tham số**; clamp ở [:149](file:///D:/Applications/tm-studio/packages/core/src/retime.mjs#L149) áp lên **tích đã compose**, không áp lên từng thừa số |
+| [retime.mjs:153](file:///D:/Applications/tm-studio/packages/core/src/retime.mjs#L153) | 153 | `elementRate(clip, atTicks, shuttle)` — luật đầy đủ cho một clip, ramp hay không ramp |
+| [evaluate.mjs:292-293](file:///D:/Applications/tm-studio/packages/core/src/evaluate.mjs#L292) | 292-293 | mỗi layer mang thêm `sourceRate: speedAt(clip, localTicks)` và `reverse` — evaluation tự kể tốc độ của nó tại tick đã sơn |
+| [audioMix.mjs:52-58](file:///D:/Applications/tm-studio/packages/core/src/audioMix.mjs#L52) | 52-58 | `playoutOf(layer, shuttle)` — bốn field thời gian cho **cả hai** leg |
+| [audioMix.mjs:77](file:///D:/Applications/tm-studio/packages/core/src/audioMix.mjs#L77) | 77 | `audioMixAt(evaluation, { shuttle })` — host **giao** đồng hồ của mình cho core thay vì nhân ở đầu kia |
+
+| Field mỗi source | Dòng | Luật |
+| --- | --- | --- |
+| `mediaTicks` | [:55](file:///D:/Applications/tm-studio/packages/core/src/audioMix.mjs#L55) | `layer.sourceTicks` khi hữu hạn, ngược lại `null` — **chính** con số mà picture đã được sơn theo, nên trim/speed/ramp đã fold xong |
+| `rate` | [:56](file:///D:/Applications/tm-studio/packages/core/src/audioMix.mjs#L56) | `clampedElementRate(layer.sourceRate, shuttle)` — một trần 0.25..16 dùng chung footage và audio |
+| `plays` | [:57](file:///D:/Applications/tm-studio/packages/core/src/audioMix.mjs#L57) | `refusal === null` — element có chạy được không |
+| `refusal` | [:53](file:///D:/Applications/tm-studio/packages/core/src/audioMix.mjs#L53) và :58 | **tên** của lời từ chối; hiện tại một giá trị duy nhất `'reverse'`, vì `HTMLMediaElement` không phát ngược |
+
+`audioMixAt` vẫn là **selection** như §45.2 — không một phép nhân gain nào mới xuất hiện; `playoutOf` chỉ được gọi ở hai
+chỗ push (footage [:84-92](file:///D:/Applications/tm-studio/packages/core/src/audioMix.mjs#L84) và audio), nên mọi source
+đều mang đúng bốn field.
+
+### 46.3 Nối dây: những bản sao nghỉ việc, đo bằng `grep`
+
+| Tên | HEAD | Nay | Đường mới |
+| --- | --- | --- | --- |
+| `clipMediaTimeSec` | **5** | **0** | xóa khỏi `clipTime.ts` (file **101 → 65** dòng, `wc -l`); seek target đọc `source.mediaTicks` |
+| `clipMediaTimeSecLinear` | (trong file) | **0** | exit cùng luật — không còn "bản đồ bỏ qua curve" nào ở app |
+| `activeAudioClips` | **2** | **0** | scan hàng audio nghỉ việc; [:604](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L604) `audioClipsById` chỉ còn để **tra `src`** |
+| `clip.speed >= 0.25` | **1** | **0** | trần 4 nghỉ việc |
+| `Math.min(16, Math.max(0.25` | **1** | **0** | clamp riêng của footage nghỉ việc |
+| `speedAt(` trong composable | **1** | **0** | [:337](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L337) `elementRate(clip, at, shuttle)` — số hit `elementRate(` = **1** |
+
+Bốn con số 0 ở trên đo bằng `grep -rF <tên> app | wc -l`, và `git grep -c … HEAD -- app` cho cột HEAD — tức lượt này **gỡ**,
+không phải **thêm chỗ thứ hai**.
+
+| Chỗ nối | Dòng hiện tại | Nội dung |
+| --- | --- | --- |
+| [useTmcutPlayback.ts:194](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L194) | 194 | `audioMixAt(playheadEvaluation.value, { shuttle: Math.abs(shuttleRate.value) })` — mix đọc **đúng** evaluation picture đã sơn, và giao shuttle cho core |
+| `…/useTmcutPlayback.ts:330-338` | 330-338 | `mediaRate(clip)` giờ là một lời gọi `elementRate`; nhánh `if (!clip) return Math.max(0.1, shuttle)` giữ nguyên (không có footage thì chỉ còn shuttle) |
+| [TmcutPreviewPlayer.vue:614-626](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L614) | 614-626 | `activeAudioSrcs` **duyệt plan**: bỏ `role !== 'audio'`, bỏ `!source.plays`, bỏ `mediaTicks === null`, rồi `mediaTime: ticksToSec(source.mediaTicks)` và `rate: source.rate` |
+| [:647](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L647) và :648-656 | 647-656 | `el.playbackRate = a.rate` cho element audio; paused thì mirror playhead, đang chạy thì sửa lệch khi quá `0.35` s — **ngưỡng** là của app, **vị trí** là của core |
+| [template :1829-1834](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L1829) | 1829-1834 | `<audio v-for="a in activeAudioSrcs">` không còn binding nào tính thời gian |
+
+Bốn assertion trong `tmcut_time_domain.spec.ts` (check 'media time stays in the seconds domain') nghỉ theo luật bị gỡ — spec
+từ 7 check xuống **6**. Luật đó giờ sống ở nơi nó được quyết: [audio-time-plan.test.mjs:54](file:///D:/Applications/tm-studio/packages/core/test/audio-time-plan.test.mjs#L54)
+/:65 (vị trí + trim) và `evaluate.test.mjs` cho `sourceTicks`; reverse ở [:144](file:///D:/Applications/tm-studio/packages/core/test/audio-time-plan.test.mjs#L144).
+Guard mới [tmcut_audio_mixer.spec.ts:296](file:///D:/Applications/tm-studio/tests/unit/tmcut_audio_mixer.spec.ts#L296) đọc **nguồn**
+của hai file app để pin phần retirement: phải có `mediaTicks` và `elementRate`, phải **không** còn ba cái tên cũ và `if (clip.reverse) continue`.
+
+### 46.4 Quyết định ramp: preview đi theo curve, file FFmpeg thì không
+
+Trước G4, bed audio đi `clipMediaTimeSecLinear` (cố tính bỏ curve) **để khớp** export; nhưng embedded audio của footage đã
+warp theo curve từ F4 — nghĩa là **hai leg audio của cùng một clip ramp lệch nhau giữa chừng**. G4 chọn một luật (curve) cho
+cả hai leg preview, vì preview là thứ người dùng nghe để quyết định cắt.
+
+Hệ quả đo được, ghi thẳng vào nợ: export vẫn `aSpeed = clip.speed` **hằng số**
+([render/audio.ts:53-54](file:///D:/Applications/tm-studio/app/utils/tmcut/render/audio.ts#L53)); `grep -rn "speedPoints\|isRamped\|rampTimelineToSource" app/utils/tmcut/render/*.ts`
+= **0** kết quả. Một clip ramp: preview giữ sync suốt curve, **file FFmpeg** vẫn audio-chạy-linear nên audio file trôi —
+đúng hướng Zero-FFmpeg (slice H mux từ chính số của core), **không** phải một regression im lặng. Nợ ghi ở §46.9.
+
+### 46.5 Tests
+
+| File | Số check | Nội dung mới |
+| --- | --- | --- |
+| [audio-time-plan.test.mjs](file:///D:/Applications/tm-studio/packages/core/test/audio-time-plan.test.mjs) (mới, **185** dòng) | **11** | cùng vị trí với layer (:54), trim (:65), gap (:73), overlap (:85), 2× (:94), ramp (:105), vượt trần cũ (:117), shuttle + clamp (:131), reverse refusal (:144), hai leg cùng số (:156), footage leg cũng trả lời thời gian (:173) |
+| [audio-mix-plan.test.mjs:194](file:///D:/Applications/tm-studio/packages/core/test/audio-mix-plan.test.mjs#L194) | 11 (giữ) | `deepEqual` **nguyên khối** một source: thêm `mediaTicks: T(1)`, `rate: 1`, `plays: true`, `refusal: null` — đổi shape là một **lựa chọn** có chữ ký, không phải tai nạn |
+| [tmcut_audio_mixer.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_audio_mixer.spec.ts) | **15 → 16** | check 16 (:296) pin retirement bằng cách đọc nguồn app |
+| [tmcut_speed_clock.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_speed_clock.spec.ts) | **5** | check 5 viết lại: `elementRate(` = 1 và `speedAt(` = 0 trong composable — composable không tự lấy mẫu curve |
+| [tmcut_time_domain.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_time_domain.spec.ts) | **7 → 6** | bỏ check mà luật đã về core |
+
+Check ramp (:105) đáng chú ý vì nó là **tích phân**, không phải phép nhân: clip `speedPoints` 1→2 trong 1 s, tại local 0.5 s
+core trả `rate 1.5` và `mediaTicks` bằng **0.625 s** — đúng diện tích dưới curve. Check :117 và :131 là hai mặt của trần:
+6× giữ nguyên 6 (thoát trần 4 cũ), còn 40× và shuttle 100 bị **kẹp về 16**; shuttle `0` (non-finite path) không được phép
+thành 0 tốc độ.
+
+### 46.6 Falsification — bốn mutation, bốn lần bị bắt
+
+Mỗi mutation chạy trên `packages/core/test/audio-time-plan.test.mjs` (11 check), log ở `node_modules/.cache/tmcut-gates/`.
+
+| # | Mutation | Check bị bắt | Kết quả đo |
+| --- | --- | --- | --- |
+| M1 | `playoutOf` bỏ từ chối: `const refusal = null` ([audioMix.mjs:53](file:///D:/Applications/tm-studio/packages/core/src/audioMix.mjs#L53)) | `a reverse clip refuses the element and names the reason` | fail **1**/11, exit **1**, `actual: true, expected: false` (`g4-m1.log`) |
+| M2 | bỏ clamp ở [retime.mjs:149](file:///D:/Applications/tm-studio/packages/core/src/retime.mjs#L149), trả tích thô | `a clip past the old audio ceiling runs at its own speed` + `the host clock multiplies the rate and the clamp binds` | fail **2**/11, exit **1**, `actual: 200, expected: 16` (`g4-m2.log`) |
+| M3 | `mediaTicks` không đọc layer (bỏ `layer.sourceTicks`) | checks :54, :65, :73, :85, :94, :105, :117, :173 — **8** check | fail **8**/11, exit **1**, `actual: null, expected: 12240000` (`g4-m3.log`) |
+| M4 | evaluator ngừng trả `sourceRate` (xóa [evaluate.mjs:292](file:///D:/Applications/tm-studio/packages/core/src/evaluate.mjs#L292)) | `a ramp gives the sound the rate the picture is riding` + `the sound and the picture are handed the same rate at the same tick` | fail **2**/11, exit **1**, `actual: 1, expected: 1.5` (`g4-m4.log`) |
+
+Bốn lần đều **bị bắt**, và M3 là phép thử cho câu hỏi "luật có thật sự nằm trong core không": bỏ một field ở `playoutOf` làm
+sập **tám** check, tức cả trim lẫn overlap lẫn ramp đều đọc cùng một nguồn. Baseline md5 dựng trước khi mutate
+(`g4-mutation-baseline.md5`); sau bốn lượt mutate/restore, `md5sum -c` in **3 dòng OK** và exit **0** (`audioMix.mjs`
+`7f85d4f3…`, `retime.mjs` `eb7b3583…`, `evaluate.mjs` `6e34b8d2…`), và toàn bộ core suite chạy lại **739/739** exit 0
+(728 của G3 + **11** check mới).
+
+### 46.7 Bằng chứng live — plan → element, trên Chromium `:4003`
+
+Fixture: WAV tự ghi `.data/uploads/g4-tone.wav` (**282 284** byte, RIFF PCM mono 44 100 Hz, **3.200 s**, mỗi giây một cao độ
+220/440/880 Hz — để một cái tai kiểm được **vị trí**, không chỉ con số). Sáu clip trên hàng audio, nạp vào store **đang chạy**
+của tab: `g4a` trim `in=1s out=3s` tại 0 · `g4b` `speed 2` tại 3s · `g4c` `in 0..1s` tại 4s · `g4d` `in 2..3s` tại 4.5s
+(overlap với `g4c`) · `g4e` ramp `speedPoints 1→2` tại 6s · `g4f` `reverse` tại 9s. Số đo đọc **ba** nguồn cùng lúc: plan của
+core (`audioMixAt`), list mà Vue mount (`activeAudioSrcs`), và `<audio>` element thật (`currentTime`, `playbackRate`, `duration`, `readyState`).
+
+| Playhead | Case | plan `mediaSec` | element `currentTime` | plan `rate` | element `playbackRate` |
+| --- | --- | --- | --- | --- | --- |
+| 0.50 s | trim `in=1s` | **1.5** | **1.500** | 1 | 1 |
+| 2.50 s | gap | plan **rỗng** | **0** element | — | — |
+| 3.25 s | `speed 2` | **0.5** | **0.500** | **2** | **2** |
+| 4.75 s | overlap hai clip | **0.75** + **2.25** | **0.750** + **2.250** | 1, 1 | 1, 1 |
+| 6.50 s | ramp giữa chừng | **0.625** (tích phân) | **0.625** | **1.5** (curve tại local 0.5 s) | **1.5** |
+| 9.50 s | reverse | `plays:false refusal:'reverse'` | **không có element** | — | — |
+
+Sáu hàng, **không hàng nào** lệch giữa ba nguồn; `duration` 3.2 và `readyState` 4 trên mọi element đo được. Hai điều đọc ra
+thêm: một tick **gap** không dựng element nào (kế hoạch rỗng → DOM rỗng, không phải element nằm im ở vị trí cũ), và một clip
+**reverse** vẫn có `mediaTicks` trong plan nhưng `plays:false` — tức core trả **lời từ chối có tên**, còn app chỉ việc không
+mount; đó chính là chỗ `if (clip.reverse) continue` của HEAD không kể lại được gì.
+
+Shuttle đo trên **chính project đã lưu của owner** (không sửa gì): mỗi lần `shuttleForward()`, plan trả `rate` **2** cho
+**cả hai** leg (footage `clip_1793875812268_q549` và audio `clip_1793875823705_xziv`) và `<video>.playbackRate` đọc **2**;
+`shuttleStop()` trả cả ba về **1**. Cùng tick, cùng số — mục tiêu của lượt này đo được trên máy thật.
+
+Phát hiện tình cờ **không thuộc G4**, đo trên cùng tab: ba file `.data/uploads/*.wav` (`mw3br9v4-…`, `mw3fck52-…`, `mw3fhrja-…`)
+lỗi `MediaError code 4 SRC_NOT_SUPPORTED` (`readyState:0`, `duration:null`) trong khi một bản `.mp4` cùng thư mục decode
+bình thường. Nguyên nhân nằm **trên đĩa**, không ở transport: các file đó **bắt đầu bằng** `------WebKitFormBoundary…` (RIFF
+nằm ở offset **140**) — tức một probe cũ đã POST body **multipart** vào route khai nhận raw bytes
+([upload.post.ts:20](file:///D:/Applications/tm-studio/server/api/v1/media/upload.post.ts#L20) và :26 "body = raw file bytes").
+App client **đúng** ([useTmcutMedia.ts:584-588](file:///D:/Applications/tm-studio/app/composables/useTmcutMedia.ts#L584) gửi
+`content-type: application/octet-stream`), nên đây là nợ của **probe cũ**, không phải bug của app — nhưng project đã lưu của
+owner vẫn trỏ vào một trong ba file đó, nên clip audio của họ **không bao giờ phát được**. Việc xóa/thay là của owner.
+
+Ghi chú phương pháp và dọn dẹp: `setupState` là proxyRefs đã unwrap; fixture chỉ sống trong store đang chạy — **reload tab
+trả về đúng project đã lưu** (`updated_at` vẫn 10:50:23Z, `revision` 2, một clip video), tức probe không lọt vào disk và cũng
+không có autosave nào bị kích hoạt bởi một mutation thô (một **phát hiện** về cơ chế lưu, ghi ở §46.9); tab để nguyên ở
+playhead 0, `playing: false`. `.data/uploads/` bị gitignore (đo: `git check-ignore -v` → `.gitignore:3:.data`), nên fixture
+WAV ở lại trên đĩa và **không** vào commit.
+
+### 46.8 Gates — số đo của lượt này, từng cổng một
+
+| Cổng | Lệnh | Kết quả | Số đo, lấy từ chính lần chạy ghi ở cột lệnh |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | exit **0**, grep `error TS` = **0**; `.nuxt/eslint.config.mjs` regenerate 20:08:43 |
+| 2 Lint | `npx eslint` trên **13** file đã chạm, chạy **sau** 20:08:43 | PASS cho dòng của lượt này | exit **1**, còn đúng **2** error trong `retime.mjs`: `no-useless-assignment` (:194) + `@stylistic/arrow-parens` (:428). **Cả hai có trước**: lint một bản HEAD của chính file báo cùng hai rule (dòng :171/:405), và `git diff -U0` cho thấy hunk duy nhất của lượt này là `@@ -133,0 +134,23 @@` |
+| 3 Unit | `npx tsx tests/unit/run-all.mts --smoke` | PASS | **127/127** specs, exit **0**, **0** dòng FAIL |
+| 3b Core | `cd packages/core && node --test "test/*.test.mjs"` | PASS | tests **739** / pass **739** / fail **0**, exit **0**; `npx tsc -p packages/core --noEmit` exit **0**, 0 `error TS` |
+| 4 Live | 5 route `:4003`, đọc console sau mỗi route | PASS (một error môi trường) | `/tmcut` + `/tmcut/autocut`: **0** error/warn/issue. `/tmcut/editor`: **2** message, toàn `[debug]` vite. `/tmcut/templates`: **2** `[debug]`, page render 6 744 ký tự. `/tmcut/factory`: 4 message, `[error]` duy nhất là `401 /api/v1/ai/relay/catalog` (network list đo **2** lần 401; pre-existing §44.8) |
+| 5 Dọn dẹp | scratch xóa, fixture gitignored, docs append | PASS | `md5sum -c` baseline falsification → **3 OK**, exit **0** (ba file core trở về byte-identical sau §46.6) |
+
+Cổng 2 **từng FAIL vì lỗi của chính lượt này**, và đã sửa theo TDD chứ không suppress: `TmcutPreviewPlayer.vue:32` vẫn
+destructure `renderSeconds` sau khi không còn ai dùng (`no-unused-vars`). Trước khi xóa, assertion cũ của
+[tmcut_preview_boundary.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_preview_boundary.spec.ts) — "the player
+still reads the clamped position for media time" — đã bị viết lại thành `assert.doesNotMatch(player, /renderSeconds/)`,
+chạy thấy **RED** thật, rồi mới xóa destructure → **GREEN 8/8**. Guard nghỉ việc cùng code, không phải code nghỉ việc theo guard.
+
+### 46.9 Chưa chứng minh / nợ
+
+- **Tai người vẫn chưa đo.** Fixture WAV **có** audio stream thật (khác §45.8 — nơi repo không có file nào), và cao độ đổi
+  theo giây là để một người nghe kiểm được vị trí — nhưng **chưa ai nghe**. Mọi số ở §46.7 là giá trị element.
+- **Element clock trong lúc play thật ở rate ≠ 1 chưa bắt được.** `playbackRate` trên element đã đo = 2, nhưng script
+  `togglePlayPause` qua evaluate không làm máy chạy (`playing: false`), nên " đồng hồ element **chạy** đúng nhịp plan" vẫn mở.
+- **Export FFmpeg với clip ramp**: audio vẫn `asetpts/speed` hằng số (§46.4). Preview đã theo curve; file thì chưa — cần
+  slice H hoặc một quyết định riêng, và đó là **drift đã biết**, không phải drift chưa biết.
+- **`trackPan` vẫn chỉ export** — preview chưa pan (nợ cũ từ §45.4).
+- **Autosave không firing trên mutation thô** (§46.7): hoặc lưu theo debounce/user action, hoặc theo một đường khác. Chưa
+  đo, nhưng nó có nghĩa là một probe mutate store **không** tự ghi lên đĩa — tiện cho QA, và là điều cần biết trước khi ai đó
+  dùng probe để "sửa hộ" project của người dùng.
+- **Desktop host chưa đo lại** packaged app; `media://local` vẫn từ chối vào graph theo §45.3.
+- **ADR-033 vế playback còn nguyên**: bytes về máy đã có cache (D2/E4/G2) nhưng element vẫn stream `/uploads/…` (gate 4 đo
+  `[206]`). Đóng vế đó cần nguồn `blob:` từ byte cache — **nửa còn lại của #140**, tức chân G4b.
+- **Hai file WAV hỏng + project của owner** trỏ vào một file trong số đó (§46.7): xóa/thay là việc của owner.
+- **Console còn `[error]` môi trường**: `401 /api/v1/ai/relay/catalog` (đã ghi ở §44.8, §45.8) — lượt này đo lại, giữ nguyên
+  attribution.
 

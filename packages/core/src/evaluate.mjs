@@ -24,7 +24,7 @@
 
 import { evalKeyframe } from './keyframes.mjs'
 import { gainAt } from './audio.mjs'
-import { isRamped, rampTimelineToSource } from './retime.mjs'
+import { isRamped, rampTimelineToSource, speedAt } from './retime.mjs'
 import { resolveClipLayout } from './canvas.mjs'
 import { normalizeMask } from './mask.mjs'
 import { TICKS_PER_SECOND } from './time.mjs'
@@ -286,6 +286,11 @@ function layerFor(clip, track, at, windows, clipsById) {
     endTicks: span.end,
     localTicks,
     sourceTicks: sourceAt(clip, localTicks, span.duration),
+    // The authored media-clock rate at this tick (curve value, or the constant).
+    // A host that seeks by `sourceTicks` must run its element at THIS number, or
+    // the corrective seek fires every frame — one answer for picture and sound.
+    sourceRate: speedAt(clip, localTicks),
+    reverse: clip.reverse === true,
     visible: track?.hidden !== true && visual.opacity > 0,
     opacity: visual.opacity,
     volume: clamp(gain, 0, 1),

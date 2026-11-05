@@ -196,7 +196,13 @@ describe('audioMixAt', () => {
       clipId: 'a',
       trackId: 'v1',
       trackIndex: 0,
-      gain: 1
+      gain: 1,
+      // G4 grew the shape: the same source also answers where it is in its file
+      // and how fast its element runs. Pinned whole, so a new field is a choice.
+      mediaTicks: T(1),
+      rate: 1,
+      plays: true,
+      refusal: null
     })
   })
 
