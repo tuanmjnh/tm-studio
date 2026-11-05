@@ -3303,3 +3303,148 @@ Lượt này chạm **2** file code/spec — [useTmcutPlayback.ts](file:///D:/Ap
 `packages/core`, `TmcutPreviewPlayer.vue`, `TmcutHtmlVideoStudio.vue` và đường export
 không đổi một dòng nào; Project Schema v3 không đổi; không binary mới, không đụng
 `backup/ffmpeg-engine-2026-11-03`, không tắt rule lint nào.
+
+## 36. Slice F6b — một luật nhịp cho hai host preview, và scrub đi trên lưới khung hình (2026-11-05)
+
+### 36.1 Bản copy thứ hai của luật vừa đóng ở #35, và cái giá thật của nó
+
+#35 đóng luật nhịp nhưng đóng nó **bên trong** `useTmcutPlayback.ts`: loop editor
+không còn cộng `delta` vào `playhead` nữa, mà hỏi clock. Cùng lúc đó, ở host thứ
+hai, [TmcutHtmlVideoStudio.vue](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutHtmlVideoStudio.vue)
+vẫn giữ nguyên hình dạng cũ của bài toán — `const delta = lastFrameAt ? Math.min(0.25, (now - lastFrameAt) / 1000) : 0`
+rồi `previewTime.value + delta`, tức đúng một bản copy thứ hai của cùng phép tích phân.
+
+Host này đắt hơn nó trông vậy, vì preview của nó **không phải một video element**.
+Nó gửi `{ type: 'hf:seek', time }` sang tài liệu HTML/CSS chạy trong iframe
+`sandbox="allow-scripts"`, và tài liệu ấy paint theo `window.__hf.seek(t)`. Job
+render (nút *Render MP4*) repaint frame thứ `i` tại `i / fps` — nghĩa là mỗi thời
+gian nằm giữa hai khung là một thời gian **file xuất ra không chứa**. Preview kiểu
+cộng delta vì thế không chỉ lệch nhịp: nó xin composition một bức tranh mà không
+bao giờ tồn tại trên đĩa, rồi người dùng bấm Render và thấy một video hơi khác
+cái vừa xem.
+
+### 36.2 Luật: nhịp nằm trong core, hai host chỉ giao timestamp
+
+`createFramePace(clock)` — [pace.mjs:84](file:///D:/Applications/tm-studio/packages/core/src/pace.mjs#L84) —
+là chuyển đổi duy nhất từ "host nói ngần này thời gian trôi" sang "playhead đứng
+trên khung hình này". Neo là bộ ba `(timestamp, frame, rate)`; mỗi lần gọi
+`at(timestampMs, rate, currentFrame)` chỉ mua một số **nguyên** khung
+([pace.mjs:93](file:///D:/Applications/tm-studio/packages/core/src/pace.mjs#L93))
+và đặt xuống bằng `clock.frameStartAt` ([pace.mjs:61](file:///D:/Applications/tm-studio/packages/core/src/pace.mjs#L61)),
+nên vị trí luôn là một **điểm bắt đầu khung**, không bao giờ là một float giữa hai
+khung. Ba đường re-arms ([pace.mjs:88](file:///D:/Applications/tm-studio/packages/core/src/pace.mjs#L88)):
+đổi rate, vị trí không do nhịp sinh ra, và `reset()`
+([pace.mjs:103](file:///D:/Applications/tm-studio/packages/core/src/pace.mjs#L103)) —
+khoảng thời gian đã mang theo bị **tiêu**, không được chi tiếp.
+
+Module law giữ nguyên: host vẫn sở hữu WHEN (nó giao timestamp của rAF), core sở
+hữu WHAT. hai host đọc nó:
+
+| Neo | Trước | Sau |
+| --- | --- | --- |
+| [useTmcutPlayback.ts:395](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L395) | `armPace` + `needsRearm` + 4 biến closure | `framePace()` cache theo **danh tính clock** của scheduler, gọi `createFramePace(clock)` |
+| [useTmcutPlayback.ts:406](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L406) | `ticksToSec(clock.frameStartAt(anchorFrame ± advanced))` tự tính ở app | `ticksToSec(framePace().at(timestamp, shuttleRate, currentFrameIndex).startTicks)` |
+| [useTmcutPlayback.ts:270](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L270) / [:547](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L547) / [:559](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L559) / [:612](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L612) | `needsRearm = true` | `resetPace()` — cùng một nghĩa, giờ là lời gọi vào nhịp |
+| [TmcutHtmlVideoStudio.vue:95-96](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutHtmlVideoStudio.vue#L95) | không có clock nào cả | `previewClock = createClock(fpsToRational(fps))`, `previewPace = createFramePace(previewClock)` |
+| [TmcutHtmlVideoStudio.vue:215](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutHtmlVideoStudio.vue#L215) | `previewTime.value + delta`, clamp bằng `if (next >= renderDuration) next = 0` | `previewPace.at(now, 1, currentPreviewFrame()).frame` → [showFrame](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutHtmlVideoStudio.vue#L183) paint đúng frame start; wrap thì `reset()` + frame 0 |
+| [TmcutHtmlVideoStudio.vue:177](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutHtmlVideoStudio.vue#L177) | `seekPreview(time)` nhận một float tùy ý | `seekFrame(frame)` — reset nhịp rồi đặt xuống frame đã kẹp trong `[0, lastPreviewFrame]` |
+
+### 36.3 Scrub: `step="0.01"` xin ~100 thời điểm mỗi giây, lưới 30 fps chỉ có 30
+
+Đặt nhịp vào core xong vẫn còn **một** chỗ xin thời gian ngoài lưới: thanh
+*Preview time* có `step="0.01"` — tức nó post `hf:seek` cho bất kỳ bội số nào của
+một phần trăm giây, trong khi lưới 30 fps chỉ có 30 điểm hợp lệ trên mỗi giây. Đo trực tiếp trên live
+trước khi sửa: kéo slider tới `0.37` → composition nhận đúng `0.37`
+(`0.37 × 30 = 11.1` — không phải một khung hình).
+
+Luật mới: slider đi trên **chỉ số khung**. [Dòng template:576](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutHtmlVideoStudio.vue#L576)
+là `:max="lastPreviewFrame"` (`durationFrames − 1`, [studio:97](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutHtmlVideoStudio.vue#L97))
+với `step="1"` và `:value="currentPreviewFrame()"`; `@load`
+([:565](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutHtmlVideoStudio.vue#L565))
+và `hf:ready` ([:196](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutHtmlVideoStudio.vue#L196))
+cũng re-seek bằng frame, không bằng float. Đọc số vẫn là giây (`0.00 / 4.00s`), vì
+người dùng nghĩ bằng giây; cái thay đổi là **cái được gửi sang composition**.
+
+RED/GREEN của chân này: check 8 của
+[tmcut_frame_pace.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_frame_pace.spec.ts)
+pin `doesNotMatch /step="0\.01"/` và `match /:max="lastPreviewFrame"/`.
+RED chạy thật: `EXIT=1`, fail ngay assertion `doesNotMatch` (log
+`node_modules/.cache/tmcut-gates/f6b-scrub-red.txt`), 7 check trước đã xanh — nghĩa
+là failure đến từ scrub, không từ harness. GREEN: **8/8**, `EXIT=0`
+(`f6b-scrub-green.txt`).
+
+### 36.4 Spec nhịp: 8 check, và hợp đồng cũ tiến hóa
+
+Spec mới 152 dòng, dựng trên `createClock(fpsToRational(30))` thật (`PER = 4000`):
+
+1. mọi vị trí là frame start — quét 0→2000 ms bước 17 ms, 2 s phải ra ~60 khung;
+2. đổi rate re-arm — 1 s ở 1x đưa tới frame 30, `at(1000, 8, 30)` không nhúc nhích, `at(1125, 8, …)` ≈ 60;
+3. vị trí không do nhịp sinh ra re-arm — nhảy tới frame 100 rồi +3 khung → 103, `startTicks = 100 · 4000` tại thời điểm nhảy;
+4. `reset()` disarm — 4 s đứng yên không được chi tiếp vào vị trí;
+5. reverse đi cùng lưới và kẹp về 0 — `at(300, -1, 60)` ≈ 51 **đúng lưới**, `at(10_000, -1, 51)` = 0;
+6. jitter không đổi vị trí — `3480 ms` giao thành bước 5 ms cho cùng frame như một cú nhảy (~104 khung): vị trí đo từ neo, không cộng dồn;
+7. **pin hai host**: cả composable lẫn studio phải `/createFramePace/`, không còn `/playhead\.value \+ delta|previewTime\.value \+ delta/`, không còn `/const delta = \w*[Ll]ast/`, và `elapsedTicks \* Math\.abs` không còn ở app;
+8. scrub đi trên khung hình (mục 36.3).
+
+Check 7 là lý do lượt này **gộp** luôn phần editor: nếu nhịp còn nằm trong
+composable thì luật có hai bản copy và không cách nào pin được "một luật".
+`tmcut_playback_pace.spec.ts` check 6 vì thế tiến hóa theo luật — vẫn hai phủ định
+cũ (`playhead.value + delta`, `const delta = …`), thêm `/createFramePace/` và phủ
+định `/clock\.(frameIndexAt|frameStartAt)/`: host không tự đếm, không tự đặt.
+
+### 36.5 Live, và một cái bug không phải bug
+
+`:4003`. Chromium **không phát frame cho tab đang đứng sau**: rAF của tab background
+chỉ chạy đúng **1** callback trong 600 ms (đo: `fired: 1`, `visibilityState: 'visible'`),
+nên phép thử editor đầu tiên cho kết quả "playhead đứng 00:00.00 suốt 900 ms" trong
+khi video element vẫn chạy — một regression **ảo**. Bằng chứng phân biệt: cùng code
+đó, khi tab được nâng lên front, rAF chạy 40/40 mẫu. Bài học ghi lại cho các lượt
+sau: probe transport phải chạy trên tab front-end, và `select_page` không đủ — phải
+đóng tab kia hoặc navigate tab đang hiển thị.
+
+Số đo thật, trên tree cuối:
+
+| Surface | Phép đo | Kết quả |
+| --- | --- | --- |
+| studio, play 1.2 s (starter *Kinetic title*, 1080×1920, 30 fps, composition khai báo 4.00 s) | 90 echo `hf:frame` | **0** mẫu ngoài lưới; walk liên tục 11→46 = 36 khung trong ~1.17 s. Quét cuối trên tree chốt: 89 echo / **0** ngoài lưới, `min 0 / max 119 / step 1` |
+| studio, scrub | `min 0 / max 119 / step 1` | index 11 → composition nhận `0.36666666666666664` = **11/30** (trước sửa: `0.37`) |
+| studio, wrap | xuất phát frame 117 | `117,118,119,0,1,2,3,4,5` — tất cả trên lưới, frame 0 re-arm chứ không cộng overshoot |
+| editor, forward | 25 khung / 882 ms, sampler 40 ms | không hồi lùi (`regressed: false`), paceRatio 0.9448 — thiếu hụt là do sampler bỏ qua khung (40 ms > 33 ms), cùng dung sai một-khung-mỗi-segment đã dùng ở #35 |
+| editor, `L` | 8 → 31 / 465 ms | đơn điệu tăng |
+| editor, `J` | 33 → 22 / 457 ms | đơn điệu giảm, đúng khung |
+
+Console: `/tmcut/html-video` **sạch** (chỉ `[info] <Suspense>`, hết thời hạn chờ);
+`/tmcut/editor` giữ baseline đã ghi ở §31.5 — `[info] <Suspense>` + `401 (error.unauthorized) ×4`.
+
+### 36.6 Gate
+
+| Gate | Lệnh | Kết quả |
+| --- | --- | --- |
+| 1 Types | `npx nuxt typecheck` | exit 0, 0 × `error TS`; `.nuxt/eslint.config.mjs` được sinh lại **trước** gate 2 |
+| 2 Lint | `npx eslint <7 file đã chạm>` (sau gate 1) | exit 0, log 0 byte |
+| 3 Tests | `npx tsx tests/unit/run-all.mts --smoke` | **117/117 specs passed**, exit 0 (`f6b-smoke3.txt`) — lượt chạy **cuối**, sau mọi sửa docs, nên hai guard docs (độ dài dòng, link integrity) và 8 check nhịp đều nằm trong 117 |
+| 3b Core | `npx tsc -p packages/core --noEmit` | exit 0, log 0 byte |
+| 4 Live | Chromium, `/tmcut/html-video` + `/tmcut/editor` | bảng số ở 36.5 |
+
+### 36.7 Chưa chứng minh được
+
+- **Host Electron**: `createFramePace` chạy trong renderer của app desktop nhưng lượt này chỉ đo trên Chromium web. Đường desktop chưa được bấm Play lần nào trong slice này.
+- **`renderDuration` FALLBACK 5 s** khi composition chưa kịp báo `hf:ready`: `lastPreviewFrame` tính từ số đó, nên vài trăm ms đầu, scrub cho phép tới khung mà composition sẽ không paint (nó khai báo 4 s). Không phải regression — cùng hành vi cũ — nhưng cũng chưa được đóng.
+- **Wrap reset neo**: khung hình đầu sau wrap là **re-arm**, không phải tiếp tục lưới bằng overshoot. Đúng luật ("khoảng đã tiêu thì tiêu"), nhưng nghĩa là wrap có thể chậm tối đa <1 khung so với một loop đếm liên tục.
+- **Đổi fps giữa lúc đang phát**: `previewClock`/`previewPace` là computed theo `fps`, nên đổi fps dựng nhịp mới và mất neo — có chủ đích (một lưới khác thì neo cũ vô nghĩa), chưa đo trên live.
+- **Đảo chiều ở frame 0**: `at(10_000, -1, 51)` kẹp về 0 trong unit check 5; đường editor gọi `pause()` khi chạm 0 ([useTmcutPlayback.ts:446](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L446)) chưa được đo bằng số ở lượt này.
+
+### 36.8 Bảo vệ working tree
+
+Lượt này chạm **5** file code/spec —
+[packages/core/src/pace.mjs](file:///D:/Applications/tm-studio/packages/core/src/pace.mjs) (mới, 111 dòng),
+[index.mjs:4](file:///D:/Applications/tm-studio/packages/core/src/index.mjs#L4),
+[index.d.ts:2008-2026](file:///D:/Applications/tm-studio/packages/core/src/index.d.ts#L2008),
+[useTmcutPlayback.ts](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts),
+[TmcutHtmlVideoStudio.vue](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutHtmlVideoStudio.vue) —
+cùng **2** spec ([tmcut_frame_pace.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_frame_pace.spec.ts) mới 152 dòng,
+[tmcut_playback_pace.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_playback_pace.spec.ts) check 6 tiến hóa)
+và **2** file docs (file này + [roadmap](file:///D:/Applications/tm-studio/docs/tmcut-v4-universal-rendering-multiplatform-roadmap.md)).
+`TmcutPreviewPlayer.vue`, đường export, Project Schema v3 và Storage Upload API
+không đổi một dòng nào; không binary mới, không đụng `backup/ffmpeg-engine-2026-11-03`,
+không tắt rule lint nào, ADR-033 vẫn Pending.

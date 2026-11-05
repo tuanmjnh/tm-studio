@@ -2003,6 +2003,28 @@ export function compositePlan(
 // --- Clock + host capability contract (V4 Phase 1 / M1) ---
 export function createClock(rate: FrameRate): TmcutClock
 
+// --- Live-preview pace (V4 Phase 2, slice F req 6) ---
+/** Where a preview stands: the frame it is on and that frame's start tick. */
+export interface CoreFramePacePosition {
+  readonly frame: number
+  readonly startTicks: number
+}
+
+/** One preview's pace, measured on one clock. Stateful only in its anchor. */
+export interface CoreFramePace {
+  /**
+   * The position at a host timestamp (ms, e.g. a rAF callback argument).
+   * `rate` is a signed shuttle factor (0 holds, negative rewinds); `currentFrame`
+   * is where the host says the playhead is — a frame the pace did not deliver
+   * re-arms the anchor instead of carrying the old interval along.
+   */
+  at(timestampMs: number, rate: number, currentFrame: number): CoreFramePacePosition
+  /** Forget the anchor; the next call starts a fresh segment at the frame given. */
+  reset(): void
+}
+
+export function createFramePace(clock: TmcutClock): CoreFramePace
+
 // --- Frame-index scheduler (V4 Phase 2, item 3) ---
 /** One renderable frame: its ordinal, its tick position, its content. */
 export interface CoreFrame {

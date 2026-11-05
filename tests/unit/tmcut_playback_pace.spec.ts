@@ -176,16 +176,18 @@ async function main() {
     p.pause()
   })
 
-  // 6. No second copy of the pace law in the app: the loop asks core, and it
-  // no longer turns a wall-clock interval into timeline position by itself.
-  await check('the loop reads core clock and keeps no delta integral', () => {
+  // 6. No second copy of the pace law in the app: the loop asks core for the
+  // pace itself (F6b moved the anchor and the conversion into `createFramePace`)
+  // and keeps no frame arithmetic of its own.
+  await check('the loop reads core pace and keeps no delta integral', () => {
     const source = read('app/composables/useTmcutPlayback.ts')
     assert.doesNotMatch(source, /const delta = \(timestamp - lastTimestamp\) \/ 1000/,
       'reading the rAF interval as seconds is the law F6e retires')
     assert.doesNotMatch(source, /playhead\.value \+ delta/,
       'and integrating it into the playhead is the second copy of the pace')
-    assert.match(source, /clock\.frameIndexAt/, 'the frame count comes from core')
-    assert.match(source, /clock\.frameStartAt/, 'and so does the frame position')
+    assert.match(source, /createFramePace/, 'the pace is core\'s, shared with every other preview')
+    assert.doesNotMatch(source, /clock\.(frameIndexAt|frameStartAt)/,
+      'the host counts nothing and places nothing by itself')
   })
 
   console.log(`\n=== All ${passed} playback-pace checks passed ===`)

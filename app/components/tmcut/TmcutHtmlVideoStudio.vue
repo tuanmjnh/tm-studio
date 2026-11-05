@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { collectHtmlTokens, lintHtmlVideo, replaceHtmlTokens } from 'tmcut-core'
+import { collectHtmlTokens, createClock, createFramePace, fpsToRational, lintHtmlVideo, replaceHtmlTokens, secToTicks, ticksToSec } from 'tmcut-core'
 import { HTML_VIDEO_STARTERS, buildHtmlVideoPreviewDocument } from '~/utils/tmcut/htmlVideoStarters'
 import type { HtmlVideoStarter } from '~/utils/tmcut/htmlVideoStarters'
 import { useFileSystem } from '~/composables/useFileSystem'
@@ -86,7 +86,22 @@ const progressPercent = computed(() => Math.round(progress.value))
 
 let previewTimer: ReturnType<typeof setTimeout> | undefined
 let rafId = 0
-let lastFrameAt = 0
+
+// The preview's grid and pace come from core, exactly like the editor transport
+// (Zero-FFmpeg slice F6b). The capture job paints frame `i` at `i / fps`, so a
+// preview that integrates its own wall-clock intervals is asking the composition
+// for times the file never contains; pacing on the clock's grid makes the two
+// walks identical.
+const previewClock = computed(() => createClock(fpsToRational(fps.value)))
+const previewPace = computed(() => createFramePace(previewClock.value))
+const lastPreviewFrame = computed(() => Math.max(
+  0,
+  previewClock.value.durationFrames(secToTicks(renderDuration.value)) - 1
+))
+
+function currentPreviewFrame(): number {
+  return previewClock.value.frameIndexAt(secToTicks(previewTime.value))
+}
 
 // Chips are derived from the starters themselves: catalog order, and only
 // industries that a starter actually claims, so the filter can never produce
@@ -155,6 +170,20 @@ function postSeek(time: number): void {
   previewFrame.value?.contentWindow?.postMessage({ type: 'hf:seek', time: target }, '*')
 }
 
+/**
+ * Put the playhead on a frame the file can be painted at, and re-arm the pace:
+ * a seek the pace did not produce invalidates the interval it was carrying.
+ */
+function seekFrame(frame: number): void {
+  previewPace.value.reset()
+  showFrame(Math.min(lastPreviewFrame.value, Math.max(0, frame)))
+}
+
+/** The one position the pace is allowed to deliver: a frame start. */
+function showFrame(frame: number): void {
+  postSeek(ticksToSec(previewClock.value.frameStartAt(frame)))
+}
+
 function handlePreviewMessage(event: MessageEvent): void {
   if (event.source !== previewFrame.value?.contentWindow) return
   const data = event.data as { type?: string, duration?: number, message?: string } | null
@@ -163,7 +192,8 @@ function handlePreviewMessage(event: MessageEvent): void {
     const duration = Number(data.duration) || 0
     declaredDuration.value = duration
     previewError.value = ''
-    postSeek(previewTime.value)
+    // A fresh document restarted the composition at its own frame 0.
+    seekFrame(currentPreviewFrame())
   } else if (data.type === 'hf:error') {
     previewError.value = data.message || t('tmcut.htmlVideo.previewError')
     playing.value = false
@@ -174,27 +204,33 @@ function togglePlay(): void {
   if (playing.value) {
     playing.value = false
     cancelAnimationFrame(rafId)
+    previewPace.value.reset()
     return
   }
   playing.value = true
-  lastFrameAt = 0
+  previewPace.value.reset()
   rafId = requestAnimationFrame(tick)
 }
 
 function tick(now: number): void {
   if (!playing.value) return
-  const delta = lastFrameAt ? Math.min(0.25, (now - lastFrameAt) / 1000) : 0
-  lastFrameAt = now
-  let next = previewTime.value + delta
-  if (next >= renderDuration.value) next = 0
-  postSeek(next)
+  const last = lastPreviewFrame.value
+  const frame = previewPace.value.at(now, 1, currentPreviewFrame()).frame
+  if (frame > last) {
+    // Wrapping back to the first frame starts a new segment; the interval that
+    // carried the playhead past the end is spent, not replayed.
+    previewPace.value.reset()
+    showFrame(0)
+  } else {
+    showFrame(frame)
+  }
   rafId = requestAnimationFrame(tick)
 }
 
 function step(frames: number): void {
   playing.value = false
   cancelAnimationFrame(rafId)
-  postSeek(previewTime.value + frames / fps.value)
+  seekFrame(currentPreviewFrame() + frames)
 }
 
 function errorMessage(err: unknown): string {
@@ -526,7 +562,7 @@ onBeforeUnmount(() => {
             sandbox="allow-scripts"
             class="max-h-[520px] max-w-full border-0 bg-neutral-950"
             :style="{ width: `${Math.min(width, 640)}px`, aspectRatio: `${width} / ${height}` }"
-            @load="postSeek(previewTime)"
+            @load="seekFrame(currentPreviewFrame())"
           />
         </div>
         <label class="block space-y-1 text-xs text-muted">
@@ -537,11 +573,11 @@ onBeforeUnmount(() => {
             name="tmcut-html-video-scrub"
             type="range"
             min="0"
-            :max="renderDuration"
-            step="0.01"
-            :value="previewTime"
+            :max="lastPreviewFrame"
+            step="1"
+            :value="currentPreviewFrame()"
             :aria-label="t('tmcut.htmlVideo.scrub')"
-            @input="playing = false; postSeek(Number(($event.target as HTMLInputElement).value))"
+            @input="playing = false; seekFrame(Number(($event.target as HTMLInputElement).value))"
           >
         </label>
         <div class="grid grid-cols-4 gap-2">
@@ -551,7 +587,7 @@ onBeforeUnmount(() => {
             variant="soft"
             icon="i-lucide-skip-back"
             :aria-label="t('tmcut.htmlVideo.start')"
-            @click="playing = false; postSeek(0)"
+            @click="playing = false; seekFrame(0)"
           >
             {{ t('tmcut.htmlVideo.start') }}
           </UButton>
