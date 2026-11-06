@@ -5323,3 +5323,164 @@ thật. 128/128 là số của lần chạy **sau** sửa đó.
   `packages/core/src/exportEncode.mjs`. Chữ đã là một hằng số export (`ENCODER_EVEN_DIMENSION_REASON`) nhưng `htmlVideo.mjs` chưa
   import nó — hai chuỗi đang **giống nhau từng byte**, và gộp chúng là việc của một lượt sau, không phải của lượt này.
 - Tuyên bố §13.2 (PCM-S16 không encoder nào nhận, nên "remux lossless" phải đo lại từng máy) vẫn chưa được đo lại bởi H.
+
+## 49. Slice H2 — thang preset ở core, câu hỏi thật gửi cho runtime, và ma trận encoder đầu tiên (đo ngày 2026-11-06)
+
+§48 để lại đúng một nợ: "ma trận capability **của máy này** vì thế vẫn trống". Lượt này trả nợ đó, và trả bằng số đo chứ không
+bằng suy luận. Việc đồng thời là **luật thứ tư** của export — `planEncodePresets` — cộng một seam app gọi
+`VideoEncoder.isConfigSupported` / `AudioEncoder.isConfigSupported` lần đầu tiên trong repo cho một preset export.
+
+### 49.1 Luật mới ở core: `planEncodePresets` trả về danh sách CÂU HỎI, không phải danh sách câu trả lời
+
+`packages/core/src/exportEncode.mjs` giờ có bốn luật, và luật mới khác ba luật còn lại ở chỗ nó **không được phép** biết máy nào
+sẽ encode. Nó chỉ trả "(preset, container) nào đáng hỏi, theo thứ tự nào", cùng `errors` khi câu hỏi tự nó vô nghĩa.
+Bốn quyết định nó nhận:
+
+| Quyết định | Luật | Vì sao nằm ở core chứ không ở IO |
+|---|---|---|
+| Level nào hỏi trước | đếm macroblock theo `ceil(w/16) * ceil(h/16)` và theo giây, rồi lấy level **chặt nhất hợp pháp** và **lỏng nhất**, hai câu | level ghi trong header là thứ điện thoại kiểm lại sau này; IO layer không được quyền nhân danh Annex A |
+| Codec nào, trong container nào | `avc1.6400<idc>` đi MP4, `vp09.00.50.08` và `av01.0.09M.08` đi WebM | exporter hỏi sai container thì câu trả lời `supported` vẫn vô giá trị, vì muxer sẽ từ chối chính config đó |
+| Audio hỏi thế nào | MP4: **cả hai** `mp4a.40.2` và `aac`; WebM: `opus`; không audio thì không nhân bản câu hỏi | một spelling đã đo ra `false` trong khi spelling kia `true` trên cùng máy; hỏi một spelling là âm thầm mất tiếng |
+| Bitrate | `w*h*fps*0.1` bit/s, kẹp trong `[1 Mbps, 40 Mbps]` | con số này là chất lượng, không phải capability; phải đọc được trong preset chứ không phải trong args của ffmpeg |
+
+Từ chối — không kẹp — ba trường hợp: cạnh lẻ (lý do `ENCODER_EVEN_DIMENSION_REASON`), FPS float, và raster mà không level nào
+chở nổi (8K). Cả ba đều trả `errors` có tên, vì "không có preset" và "có preset nhưng runtime không nhận" là hai thông báo
+khác nhau mà UI phải phân biệt được.
+
+22 checks trong `packages/core/test/export-encode-presets.test.mjs`, 15 mutant đều CAUGHT. Hai mutant ban đầu **sống** và
+được biến thành hợp đồng thay vì bỏ qua: M6 (hỏi trùng một level) và M13 (không bao giờ hỏi level lỏng hơn), rồi M14 (id preset
+thiếu frame rate nên 30 fps và 59.94 fps trả lời lẫn nhau). Một bug thật do assertion mới bắt ra: khi request **không** có audio,
+nhánh MP4 vẫn nhân theo `MP4_AUDIO_CANDIDATES` và sinh hai id giống hệt nhau — "a silent export was asked twice".
+
+### 49.2 Bảng Annex A: một lỗi trong hằng số của tôi, và cách nó bị bắt
+
+Bảng `AVC_LEVELS` ban đầu ghi `idc 1f` với cặp giới hạn **1620 / 40 500**. Đó là số của **level 3**, không phải 3.1; level 3.1 là
+**3600 / 108 000**. Bảng gốc lấy từ [Advanced Video Coding (ITU-T H.264 Annex A)](https://en.wikipedia.org/wiki/Advanced_Video_Coding),
+và khi đối chiếu lại từng hàng với số đo runtime tôi thấy hàng 3.1 lệch: máy này nhận `avc1.42001f` ở 1280x720@30, tức đúng
+3600 macroblock/frame, trong khi bảng của tôi nói level đó chỉ chở được 1620.
+
+Sửa theo đúng thứ tự: **test đỏ trước** — thêm vào check "accepts the level whose limit the picture hits exactly" một raster
+720p30, nhận `avc1.640028` thay vì `avc1.64001f`; sau đó đổi hằng số, 795/795 vẫn xanh. Hệ quả thật sự: export 720p giờ hỏi level
+chặt hơn một bậc, hợp pháp hơn, không đổi với 1080p trở lên (8160 macroblock/frame đã vượt cả hai).
+
+Comment đi kèm cũng sửa cho đúng sự thật: các level bị bỏ qua (3, 3.2, 4.1, 4.2) chỉ **nới** hai giới hạn này lên, nên bỏ chúng
+chỉ khiến câu trả lời **lỏng hơn mức cần**, không bao giờ thành bất hợp pháp.
+
+### 49.3 Seam app: `app/utils/tmcut/exportEncodePlan.ts`
+
+`createEncodeCapability(probes)` trả về `decide(request)` → `{ kind, config, checked, errors, container, presets }`. File này chỉ còn
+ba việc mà một luật pure không làm được, và mỗi việc có một check:
+
+- **hình dáng API**: `framerate` là float (`rationalToFloat`), `avc:{format:'avc'}` chỉ đi với chuỗi `avc1.`, audio là
+  `numberOfChannels` chứ không phải `channelCount`. `isConfigSupported` **ném** khi thấy `avc` cạnh VP9, nên seam phải dịch shape
+  chứ không được đẩy shape của core xuống browser.
+- **một probe ném là một câu chưa trả lời**, không phải một câu từ chối: `unmeasured` chứ không phải `unsupported`, và một config
+  bị API reject không được quyền xóa những codec đã trả lời.
+- **hỏi tốn tiền**: capability nhớ theo **cả request** (`JSON.stringify`), vì level và frame rate là một phần của câu hỏi — trả
+  lời 30 fps không phải trả lời 60 fps. Không có cache toàn module và không có `resetForTests()`: bộ nhớ là private của một
+  capability, đúng hợp đồng đã viết ở §48.
+
+Runtime không có WebCodecs → từ chối kèm lý do đọc được, không ném. `kind: 'ready'` bao giờ cũng kèm `container` của preset thắng.
+10 checks, 11 mutant **CAUGHT** (M6 — "probe ném thành từ chối" — sống tới khi viết thêm check ở gạch đầu dòng thứ hai).
+`tmcut_export_encode_plan.spec.ts:184` đóng băng điều khoản `mediabunny`: file này không được import muxer, và guard nhắm vào
+**câu import**, không nhắm vào từ "mediabunny" (lần đầu tôi viết guard nhắm vào từ, nó bắt cả comment giải thích sự vắng mặt).
+
+### 49.4 Ma trận encode đo thật trên máy này — Chrome 156, ngày 2026-11-06
+
+Lần đầu tiên `VideoEncoder.isConfigSupported` chạy cho preset export trong repo. Probe: 6 raster (1280x720@30, 1920x1080@30,
+1920x1080@60, 2560x1440@30, 3840x2160@30, 3840x2160@60), bitrate 4 Mbps, `avc:{format:'avc'}` cho chuỗi `avc1.`; một codec tính là
+nhận khi `supported === true` **và** config vọng về đúng codec đã hỏi. `navigator.userAgent` là `Chrome/156.0.0.0`.
+
+| Codec | Raster runtime nhận | Ghi chú |
+|---|---|---|
+| `avc1.42001f` (Baseline 3.1) | 1280x720@30 | khớp giới hạn 3600 MB/frame của 3.1 |
+| `avc1.640028` (High 4.0) | 720p30, 1080p30, 1080p60 | xem 49.5: 1080p60 **vượt** giới hạn MB/s của 4.0 |
+| `avc1.640032` (High 5.0) | tới 2560x1440@30 | |
+| `avc1.640033` (High 5.1) | tới 3840x2160@60 | |
+| `avc1.640034` / `3c` / `3d` / `3e` (5.2, 6.0, 6.1, 6.2) | cả sáu raster | hết mức đo |
+| `avc1.640021` / `22` / `23` (level 3.3 / 3.4 / 3.5) | **không raster nào** | ba level này không tồn tại trong Annex A, đây là bằng chứng đo chứ không phải suy luận |
+| `vp09.00.50.08` (VP9 profile 0) | **cả sáu raster**, gồm 4K60 | |
+| `vp09.01.40.10` (VP9 profile 1) | không raster nào | khác nhau ở profile, không phải level |
+| `av01.0.08M.08`, `av01.0.09M.08` (AV1 main 8/10-bit) | cả sáu raster | |
+| `hev1.1.6.L153.B0` (HEVC) | không raster nào | |
+
+| Audio config | Kết quả |
+|---|---|
+| `opus` @ 48000 | `supported`, vọng về `opus` |
+| `mp4a.40.2` @ 48000 | `supported`, vọng về `mp4a.40.2` |
+| `aac` @ 48000 và @ 44100 | **`supported: false`** |
+| `flac` @ 48000 | `supported: false` |
+
+| `hardwareAcceleration` | `isConfigSupported` |
+|---|---|
+| `no-preference` | `true` |
+| `prefer-software` | `true` |
+| `prefer-hardware` | `true` |
+
+Ba hàng cuối là lý do ADR-030 còn **MỘT PHẦN**, không phải ĐÃ XONG: trên máy này field đó **không phân biệt được** phần mềm với
+phần cứng, nên "hardware H.264" vẫn chưa chứng minh, và nói "được" sẽ đúng là điều ADR-030 cấm.
+
+### 49.5 Phát hiện quan trọng nhất: runtime **không** enforce Annex A
+
+`isConfigSupported` trả `true` cho hai config mà Annex A cấm:
+
+| Câu hỏi | Giới hạn Annex A | Nhu cầu thực | Runtime |
+|---|---|---|---|
+| `avc1.640028` @ 1920x1080@60 | 8192 MB/frame, **245 760 MB/s** | 8160 MB/frame, **489 600 MB/s** | nhận |
+| `avc1.640033` @ 3840x2160@60 | 36 864 MB/frame, **983 040 MB/s** | 32 400 MB/frame, **1 944 000 MB/s** | nhận |
+
+Vì vậy luật chọn level **theo Annex A**, không theo câu trả lời: encoder máy này có thể nhận, nhưng decoder của điện thoại và của
+trình duyệt khác sẽ đọc `level_idc` trong SPS và có quyền từ chối. `supported: true` nghĩa là "máy này encode được config này",
+**không** nghĩa là "file này hợp pháp", và đó chính xác là chỗ một exporter non-TDD sẽ đoán sai.
+
+### 49.6 Gate chạy trên working tree này (HEAD `bc9a369`)
+
+| Gate | Lệnh | Kết quả | Bằng chứng |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | **PASS** | exit 0, `grep -c "error TS"` = 0, `.nuxt/eslint.config.mjs` regenerate lần cuối 13:01 (28 605 B) |
+| 2 Lint | `npx eslint` trên 5 file chạm, chạy **sau** gate 1 | **PASS** | exit 0 ở cả ba lần chạy (12:31, 12:52 và 13:01 sau khi sửa `index.d.ts`) |
+| 3 Unit | `npx tsx tests/unit/run-all.mts --smoke` | **PASS** | **129/129** specs, exit 0 (128 + spec mới) |
+| 3b Core | `node --test "packages/core/test/*.test.mjs"` | **PASS** | 795/795, exit 0 |
+| 3c Core types | `npx tsc -p packages/core --noEmit` | **PASS** | exit 0 |
+| 3d Boundaries | `node packages/core/tools/check-boundaries.mjs` | **PASS** | core không import gì platform-specific; `mediabunny` không file mới nào import |
+| 4 Live | chrome-devtools trên `http://localhost:4003` | **BLOCKED** | owner chưa sign-in; route `/login` sweep sạch (1 dòng `info` về Suspense, 0 `error`/`warn`/`issue`); bốn route cần auth không vào được |
+
+Cả hai gate 1 và gate 2 đều **fail trước khi pass**, và mỗi lần fail là một lỗi thật trong file tôi vừa viết, không phải noise:
+
+- Lint lần đầu: 10 lỗi — 3 `no-explicit-any` (tôi cast `globalThis` sang `any`), `arrow-parens`, `max-statements-per-line`. Sửa
+  trong bốn file chạm, không chạy `--fix` repo-wide.
+- Typecheck lần hai (sau khi đã sửa lint): **2 lỗi TS2352**, và đây là lỗi thiết kế chứ không phải lỗi cú pháp — `lib.dom` đã khai
+  báo `VideoEncoder.isConfigSupported(config: VideoEncoderConfig)`, nên một seam nhận `Record<string, unknown>` buộc phải cast
+  hai tầng để gọi API. Cách sửa **không phải** `as unknown as`, mà để seam **nói đúng kiểu của API** (`VideoEncoderConfig` /
+  `AudioEncoderConfig`) và ép core sinh config đúng kiểu đó; `probe()` thành generic nên hai nửa video/audio vẫn đi qua một
+  đường. Gate 1 sau sửa: exit 0, 0 `error TS`. Vì `lib.dom` khai `VideoEncoder` là **luôn có**, việc sniff runtime phải nằm ở
+  `typeof globalThis.VideoEncoder === 'undefined'` — không còn là một `?.` vô nghĩa.
+- Sequence thật, ghi để không ai đọc bảng này như thể mọi số đến từ một lần chạy: typecheck 12:30 → lint FAIL 10 → sửa → lint
+  PASS 12:31 → specs → core 795 → docs → **typecheck lại vì code đã đổi** → FAIL 2 TS2352 → sửa seam → typecheck PASS 12:51 →
+  **lint lại vì config vừa regenerate** → PASS 12:52 → mutation 11/11 → specs 10/10 lại. `tests/unit/**` không nằm trong graph
+  typecheck của Nuxt (`.nuxt/tsconfig.app.json` chỉ lấy `../tests/nuxt/**`), nên spec chạy bằng tsx và không được gate 1 soi;
+  đó là lý do seam phải tự khai kiểu đúng, chứ không dựa vào spec bắt lỗi.
+- Chặng cuối **không phải** noise: đọc lại diff trước khi commit thấy `packages/core/src/index.d.ts` có một dòng bị nối
+  (`/** ... */export interface CoreEncodeSupportAnswer {`) do chính tôi sửa ẩu — typecheck và test đều không bắt vì nó là
+  comment nối với khai báo, chỉ người đọc mới thấy. Tách dòng ra rồi chạy lại toàn bộ: core tsc exit 0 (13:00), core 795/795
+  (13:00), typecheck exit 0 + 0 `error TS` (13:01, config regenerate 13:01), lint 5 file chạm exit 0 (13:01), unit 129/129.
+  Gate 2 từ đó chạy trên **năm** file, không phải bốn: `exportEncode.mjs`, `index.d.ts`, `exportEncodePlan.ts`,
+  `export-encode-presets.test.mjs`, `tmcut_export_encode_plan.spec.ts`.
+
+Probe 49.4 **không** chờ gate 4: WebCodecs globals có sẵn trên trang login, và đọc capability là thao tác không đăng nhập.
+
+### 49.7 Chưa chứng minh / nợ
+
+- **Chưa có consumer.** Không component nào gọi `createEncodeCapability`; dialog export vẫn spawn FFmpeg. Lượt này dựng đường ray,
+  chưa chạy tàu.
+- **Chưa một frame nào được encode.** Không `VideoEncoder` thật nào được instantiate, không mux, không file, không bằng chứng
+  A/V sync. Luật timestamp `planEncodeSample` ở §48.2 vẫn mới chỉ đúng trong test.
+- `hardwareAcceleration` không phân biệt được trên máy này, nên **hardware H.264 vẫn chưa chứng minh** (đúng điều ADR-030 yêu cầu).
+- **Electron chưa đo.** Ma trận 49.4 là Chrome 156 của trình duyệt ngoài; Electron main mang Chromium version riêng và có thể có
+  câu trả lời khác, nhất là về phần cứng. Leg này phải đo lại trong Electron khi gate 4 mở.
+- **Bitrate 0.1 bit/sample là phỏng đoán kỹ thuật, không phải số đo chất lượng**, chưa hiệu chỉnh trên footage thật.
+- 8K bị từ chối **theo luật**; chưa có runtime nào được đo để xem nó có encode 8K không, luật chỉ nói "không level nào trong tập
+  ta hỏi chở nổi".
+- Audio timestamp vẫn **không có luật riêng** (kế từ §48.6), và allowlist `mediabunny`
+  (`tmcut_media_probe.spec.ts:350`, `tmcut_silence_scan.spec.ts:189`, `tmcut_autocut_detect.spec.ts:108`) vẫn nguyên; slice H3 sẽ
+  phải **cố ý** sửa ba chỗ đó.

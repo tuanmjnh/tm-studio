@@ -2304,7 +2304,7 @@ export function planBlobUrlLifecycle(
   wanted: Iterable<string>
 ): TmcutBlobUrlLifecycle
 
-// --- Export encode laws (zero-FFmpeg slice H1) ---
+// --- Export encode laws (zero-FFmpeg slice H1, ladder in H2) ---
 /** The parenthetical both encode paths use when an edge has no chroma block. */
 export const ENCODER_EVEN_DIMENSION_REASON: string
 /** Frames allowed inside the encoder at once when the caller names no limit. */
@@ -2313,6 +2313,8 @@ export const DEFAULT_ENCODE_IN_FLIGHT: number
 /** One encode preset, in the order the caller prefers it. */
 export interface CoreEncodePreset {
   id: string
+  /** The container the codec pair can actually live in; set by the ladder. */
+  container?: string
   video: {
     codec: string
     width: number
@@ -2340,6 +2342,23 @@ export interface CoreEncodeVerdict {
     video: CoreEncodePreset['video']
     audio: { codec: string, sampleRate: number, channelCount: number } | null
   } | null
+}
+
+/** The output the user asked for, as the ladder receives it. */
+export interface CoreEncodeRequest {
+  width?: number
+  height?: number
+  fps?: FrameRate
+  audio?: { sampleRate: number, channelCount: number } | null
+}
+
+/**
+ * The configs worth asking a runtime about — never a claim that any of them
+ * works. An unusable request yields no presets and the reasons in `errors`.
+ */
+export function planEncodePresets(input: CoreEncodeRequest): {
+  presets: CoreEncodePreset[]
+  errors: string[]
 }
 
 export function planEncodeConfig(input: {

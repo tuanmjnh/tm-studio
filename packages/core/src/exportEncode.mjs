@@ -2,10 +2,15 @@
 //  tmcut-core — export encode laws (zero-FFmpeg slice H1).
 //
 //  Slice A measured that nothing in this repo can export without FFmpeg, and
-//  ADR-030 names the replacement: WebCodecs, asked first. These three laws are
+//  ADR-030 names the replacement: WebCodecs, asked first. These four laws are
 //  the parts of that loop that must not live in the IO layer, because an
 //  exporter can only be reviewed by reading its decisions.
 //
+//  * `planEncodePresets` builds the list of configs worth ASKING about, which is
+//    not the list of configs that work. The level comes from Annex A because
+//    the level a file declares is what a phone checks later, and a codec comes
+//    with the container that can hold it. Both spellings of AAC are asked: one
+//    runtime answered `aac` false and `mp4a.40.2` true for the same encoder.
 //  * `planEncodeConfig` chooses the preset from RECORDED `isConfigSupported`
 //    answers. An unmeasured preset is not a supported one, a runtime that
 //    answered a different codec than the one asked is a substitution and not a
@@ -26,13 +31,62 @@
 //  API calls; this module owns what they mean.
 // =============================================================================
 
-import { TICKS_PER_SECOND } from './time.mjs'
+import { rationalToFloat, TICKS_PER_SECOND } from './time.mjs'
 
 /** The chroma rule, in the words the HTML-video contract already uses. */
 export const ENCODER_EVEN_DIMENSION_REASON = 'the encoder subsamples chroma 2x2'
 
 /** Frames allowed in the encoder at once when the caller names no limit. */
 export const DEFAULT_ENCODE_IN_FLIGHT = 4
+
+/**
+ * Annex A levels worth asking about, tightest first. `maxMbPerFrame` and
+ * `maxMbPerSecond` are the two constraints that decide whether a level may
+ * carry a picture at all; the levels between them (3, 3.2, 4.1, 4.2) only ever
+ * move those limits up, so leaving one out can make the answer looser than it
+ * needs to be but never illegal — and 3.3/3.4/3.5 do not exist, measured on
+ * this runtime they are refused at every raster.
+ */
+const AVC_LEVELS = Object.freeze([
+  Object.freeze({ idc: '1f', maxMbPerFrame: 3600, maxMbPerSecond: 108_000 }),
+  Object.freeze({ idc: '28', maxMbPerFrame: 8192, maxMbPerSecond: 245_760 }),
+  Object.freeze({ idc: '32', maxMbPerFrame: 22_080, maxMbPerSecond: 589_824 }),
+  Object.freeze({ idc: '33', maxMbPerFrame: 36_864, maxMbPerSecond: 983_040 }),
+  Object.freeze({ idc: '34', maxMbPerFrame: 36_864, maxMbPerSecond: 2_073_600 })
+])
+
+/**
+ * High profile: the one every player in scope decodes. It also matters for the
+ * probe — Baseline 3.1 was measured refused at 1080p while High 4.0 was
+ * accepted, so the profile and the level are one question, not two.
+ */
+const AVC_HIGH_PROFILE = '64'
+
+/**
+ * One candidate per family. Unlike H.264, VP9 and AV1 carry their level in a
+ * field that is a code point count rather than a frame-size limit, and both
+ * were measured accepted at every raster in scope up to 4K60, so there is
+ * nothing for the ladder to choose.
+ */
+const VP9_CANDIDATE = 'vp09.00.50.08'
+const AV1_CANDIDATE = 'av01.0.09M.08'
+
+/**
+ * The same codec, two spellings, two measured answers: this runtime refused
+ * `aac` and accepted `mp4a.40.2`. An exporter that names one of them loses
+ * audio on the machines that answer the other way.
+ */
+const MP4_AUDIO_CANDIDATES = Object.freeze(['mp4a.40.2', 'aac'])
+const WEBM_AUDIO_CANDIDATE = 'opus'
+
+/**
+ * A target bitrate is a quality decision, and the picture size alone sets it:
+ * the bounds stop a 320x240 clip from being starved and a 4K60 clip from
+ * asking for more than any encoder will accept.
+ */
+const ENCODE_BITS_PER_SAMPLE = 0.1
+const ENCODE_BITRATE_FLOOR = 1_000_000
+const ENCODE_BITRATE_CEILING = 40_000_000
 
 function isInteger(value) {
   return typeof value === 'number' && Number.isInteger(value)
@@ -162,6 +216,106 @@ function judgePreset(preset, answer) {
     }
   }
   return row
+}
+
+/** Why a picture cannot be offered at any level, in the words a UI can show. */
+function levelError(width, height, rate) {
+  return `no Annex A level carries ${width}x${height} at ${rate.numerator}/${rate.denominator} fps; the export is refused instead of clamped to a level that would be illegal in the file`
+}
+
+/**
+ * The levels worth asking about for one picture: the tightest that Annex A
+ * allows, then the loosest, so a runtime that refuses the tight one for a
+ * reason this module cannot see still gets a second question.
+ */
+function avcLevelsFor(width, height, fpsFloat) {
+  const mbPerFrame = Math.ceil(width / 16) * Math.ceil(height / 16)
+  const mbPerSecond = mbPerFrame * fpsFloat
+  const fitting = AVC_LEVELS.filter(level => level.maxMbPerFrame >= mbPerFrame && level.maxMbPerSecond >= mbPerSecond)
+  if (fitting.length === 0) return []
+  const tightest = fitting[0]
+  const loosest = fitting[fitting.length - 1]
+  return tightest === loosest ? [tightest.idc] : [tightest.idc, loosest.idc]
+}
+
+function audioPresetErrors(audio) {
+  if (audio === undefined || audio === null) return []
+  if (!audio || typeof audio !== 'object') return ['audio: must be a { sampleRate, channelCount } pair or absent']
+  const reasons = []
+  if (!isInteger(audio.sampleRate) || audio.sampleRate <= 0) {
+    reasons.push(`audio.sampleRate: must be a positive integer, got ${String(audio.sampleRate)}`)
+  }
+  if (!isInteger(audio.channelCount) || audio.channelCount <= 0) {
+    reasons.push(`audio.channelCount: must be a positive integer, got ${String(audio.channelCount)}`)
+  }
+  return reasons
+}
+
+/**
+ * The configs an exporter should ASK a runtime about, in preference order.
+ *
+ * This is not a capability table and must never be read as one: nothing here
+ * knows what any machine can encode. The ladder only names the questions worth
+ * asking — H.264 at the level the picture needs, VP9 and AV1 after it, each in
+ * the container that can hold it, with both spellings of AAC because a runtime
+ * was measured answering them differently. `planEncodeConfig` then decides with
+ * the answers.
+ *
+ * @param {{ width?: number, height?: number, fps?: { numerator: number, denominator: number },
+ *           audio?: { sampleRate: number, channelCount: number } | null }} input
+ *   the output the user asked for
+ * @returns {{ presets: object[], errors: string[] }}
+ *   `presets` in preference order, empty when `errors` says why there are none
+ */
+export function planEncodePresets(input = {}) {
+  const request = input && typeof input === 'object' ? input : {}
+  const errors = []
+
+  const widthError = evenDimensionError('width', request.width)
+  if (widthError) errors.push(widthError)
+  const heightError = evenDimensionError('height', request.height)
+  if (heightError) errors.push(heightError)
+  const fpsError = rationalError(request.fps)
+  if (fpsError) errors.push(`fps: ${fpsError}`)
+  errors.push(...audioPresetErrors(request.audio ?? null))
+  if (errors.length > 0) return Object.freeze({ presets: Object.freeze([]), errors: Object.freeze(errors) })
+
+  const { width, height, fps } = request
+  const audio = request.audio ?? null
+  const fpsFloat = rationalToFloat(fps)
+  const bitrate = Math.min(
+    ENCODE_BITRATE_CEILING,
+    Math.max(ENCODE_BITRATE_FLOOR, Math.round(width * height * fpsFloat * ENCODE_BITS_PER_SAMPLE))
+  )
+
+  const levels = avcLevelsFor(width, height, fpsFloat)
+  if (levels.length === 0) {
+    return Object.freeze({ presets: Object.freeze([]), errors: Object.freeze([levelError(width, height, fps)]) })
+  }
+
+  const video = codec => Object.freeze({
+    codec,
+    width,
+    height,
+    fps: Object.freeze({ numerator: fps.numerator, denominator: fps.denominator }),
+    bitrate
+  })
+  const withAudio = codec => (audio ? Object.freeze({ codec, sampleRate: audio.sampleRate, channelCount: audio.channelCount }) : null)
+
+  const families = [
+    ...levels.map(idc => ({ container: 'mp4', codec: `avc1.${AVC_HIGH_PROFILE}00${idc}`, audio: audio ? MP4_AUDIO_CANDIDATES : [null] })),
+    { container: 'webm', codec: VP9_CANDIDATE, audio: audio ? [WEBM_AUDIO_CANDIDATE] : [null] },
+    { container: 'webm', codec: AV1_CANDIDATE, audio: audio ? [WEBM_AUDIO_CANDIDATE] : [null] }
+  ]
+
+  const presets = families.flatMap(family => family.audio.map((audioCodec) => {
+    const audioConfig = audio ? withAudio(audioCodec) : null
+    const id = `${family.container}:${family.codec}:${width}x${height}@${fps.numerator}/${fps.denominator}`
+      + (audioConfig ? `:${audioConfig.codec}` : '')
+    return Object.freeze({ id, container: family.container, video: video(family.codec), audio: audioConfig })
+  }))
+
+  return Object.freeze({ presets: Object.freeze(presets), errors: Object.freeze([]) })
 }
 
 /**
