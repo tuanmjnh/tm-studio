@@ -5484,3 +5484,112 @@ Probe 49.4 **không** chờ gate 4: WebCodecs globals có sẵn trên trang logi
 - Audio timestamp vẫn **không có luật riêng** (kế từ §48.6), và allowlist `mediabunny`
   (`tmcut_media_probe.spec.ts:350`, `tmcut_silence_scan.spec.ts:189`, `tmcut_autocut_detect.spec.ts:108`) vẫn nguyên; slice H3 sẽ
   phải **cố ý** sửa ba chỗ đó.
+
+## 50. Slice H3a — đồng hồ audio là một phép chia sample count, và nó phải kết thúc cùng chỗ video kết thúc (đo ngày 2026-11-06)
+
+§48.6 để lại đúng một câu nợ: "`planEncodeSample` quy đổi từ **ticks** … packet PCM đến từ mixer cần một luật tính theo
+sample count." H3 là lượt exporter thật, và exporter thật có **hai** đồng hồ. Luật của đồng hồ thứ nhất đã viết từ H1;
+lượt này viết đồng hồ thứ hai, cộng một hằng số codec mà IO layer sẽ đoán sai.
+
+### 50.1 Ba xuất khẩu mới ở `packages/core/src/exportEncode.mjs`
+
+| Xuất khẩu | Luật | Vì sao không được nằm ở IO |
+|---|---|---|
+| `AUDIO_PACKET_FRAMES` | AAC (`mp4a.40.2` và `aac`) là **1024** sample/kênh/frame; Opus là 960 (20 ms @ 48 kHz); codec không có trong bảng thì **không có đáp án**, không có default | AAC-LC *là* 1024: một `AudioData` dài khác đi là một codec khác, và muxer sẽ nhận một file không decoder nào đồng ý đọc. Một vòng encode "cứ đưa bao nhiêu PCM cũng được" là lỗi thiết kế, không phải lỗi runtime |
+| `encodeAudioSampleCount` | `round(contentEndTicks * sampleRate / TICKS_PER_SECOND)` — một lần làm tròn | nội dung kết thúc giữa hai sample (1/120 s @ 44,1 kHz = 367,5 sample); quyết định đó phải ghi một chỗ, nếu không mỗi bên tự `floor`/`ceil` một kiểu |
+| `planEncodeAudioSample` | `timestamp = round(startSample * timescale / sampleRate)`, `duration = hiệu hai vị trí`, packet cuối mang **phần còn lại** chứ không nguyên frame | đây là chính xác lỗi H1 đã giết ở phía video, đặt trong tay người viết exporter là họ sẽ lấy `round(frameSize/rate)` rồi **nhân** lên theo số packet |
+
+### 50.2 Cái giá của "durations bằng nhau": test tự viết ra số của nó
+
+Bẫy này chỉ hiện ra khi chọn đúng timescale. Ở µs, 1024 sample @ 44,1 kHz là 23220 µs và `2 × 23220 = 46440` — **trùng**
+với vị trí thật, nên một phép nhân duration trông hoàn toàn đúng. Ở 90 kHz (timescale mà container thật dùng) thì
+`1024 → 2089,8 → 2090`, và ba packet nói `3 × 2090 = 6270` trong khi ranh giới thật là **6269**. Test
+"keeps positions exact at 90 kHz" chốt ba vị trí 2090 / 4180 / 6269 và chốt luôn `duration` của packet 1 khác packet 2
+(2090 vs 2089): duration không phải một hằng số, nó là hiệu hai vị trí.
+
+Phát hiện thứ hai đến từ check "two clocks": audio và video **không** trùng nhau tuyệt đối. Với nội dung 1000 ticks
+@ 44,1 kHz, video kết thúc ở 8333 µs còn audio ở 8345 µs — audio không thể bắt đầu giữa hai sample. Hiệu 12 µs nhỏ hơn
+một sample (22,68 µs) và đó là **toàn bộ** dung sai mà lượt H3c được phép tuyên bố khi đo A/V sync, chứ không phải "0 ms".
+Hai đồng hồ trùng khít khi nội dung dài đúng một số nguyên lần sample (30 frame @ 30 fps = 48000 sample = 1 000 000 µs;
+và cùng cặp đó ở 29,97 fps là 1 001 000 µs, tức luật H1 và H3a chia sẻ đúng một nguồn: `contentEndTicks`).
+
+### 50.3 Bằng chứng
+
+15 checks trong `packages/core/test/export-encode-audio.test.mjs` (RED trước: import fail vì luật chưa tồn tại; một
+assertion 90 kHz của tôi sai số học ngay lần chạy đầu — 2090 chứ không phải 2092 — và tôi sửa **test** vì production
+code chưa tồn tại, tức sửa theo phép chia chứ không theo code). Core: **810/810**, `tsc -p packages/core` exit 0,
+boundaries PASS. **Mutation 12/12 CAUGHT** (M1 duration-nhân-lên, M2 packet cuối nguyên frame, M3 packet bắt đầu đúng
+ranh giới vẫn được ghi, M4 không packet nào `isLast`, M5 `floor` thay `round`, M6/M9/M12 chấp nhận số fraction, M7 Opus
+bị nhồi 1024, M8 default timescale thành ms, M10 bỏ clamp ở cuối, M11 nội dung ≤ 0 vẫn đếm), nguồn restore
+**IDENTICAL** (md5 `749f5e94419a924688e32189cae108ca`).
+
+Con số 12/12 đó **không** chạy trên cây được commit cho tới khi nó được chạy lại. Harness mutation keyed bằng **chuỗi
+nguyên văn** của nguồn, và `@stylistic/quote-props` đổi `opus: 960` thành `'opus': 960` để lint exit 0 — mẫu của M7 vì
+thế không còn khớp, M7 **không được áp** mà lần chạy cũ đã kịp báo CAUGHT. Khi chạy lại trên cây chốt, harness in ra
+`PATTERN MISSING` (đúng điều một harness trung thực phải làm thay vì âm thầm bỏ qua), và chỉ sau khi sửa mẫu của M7 thì
+12/12 mới là sự thật của cây này. Bài học ghi thành luật làm việc, không phải thành chú thích: **mọi bằng chứng mutation
+phải được sản xuất trên đúng md5 của nguồn sắp commit**, và một lần gate ESLint `--fix`/sửa style là một lần buộc chạy lại
+mutation. Đây là cùng một lớp lỗi với ba lỗi comment ở §50.5: cơ chế kiểm tra bám vào văn bản nguồn sẽ im lặng khi văn
+bản đó đổi, còn logic thì không đổi.
+
+### 50.4 Chưa chứng minh / nợ
+
+- **Chưa encoder thật nào nhận một `AudioData` 1024 sample** trên máy này. `AUDIO_PACKET_FRAMES` là luật của định dạng,
+  không phải kết quả đo; H3c phải ghi lại câu trả lời của `AudioEncoder` thật, theo đúng cách §49.4 ghi cho video.
+- **Chưa có consumer**: `planEncodeAudioSample` chưa được gọi từ file app nào. Nợ này có tên và có lịch trình — H3b là
+  `createEncodeSession`, chính là consumer — khác với §48 ở chỗ nợ này được khai ra trước khi viết code, chứ không
+  phải lúc viết docs mới phát hiện.
+- Chưa mux, chưa file, chưa A/V sync đo trên track thật; `mediabunny` vẫn chưa có một dòng output nào.
+
+### 50.5 Gate chạy trên working tree này (HEAD `bd7fbf5`)
+
+| Gate | Lệnh | Kết quả | Bằng chứng |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | **PASS** | exit 0, 0 × `error TS`; `.nuxt/eslint.config.mjs` regenerate **13:41** (28 605 B) — lần này là lần có hiệu lực, vì code còn đổi sau lần 13:37 |
+| 2 Lint | `npx eslint` trên 3 file chạm, chạy **sau** gate 1 | **PASS** | exit 0 ở **13:42**; **lần đầu FAIL 2 lỗi** `@stylistic/quote-props` ở `AUDIO_PACKET_FRAMES` (một khóa bắt buộc phải quote vì có dấu chấm nên các khóa còn lại không được để trần), sửa trong file chạm rồi chạy lại |
+| 3 Unit | `npx tsx tests/unit/run-all.mts --smoke` | **PASS** | **129/129**, exit 0 lúc **14:05** và `grep -c '^FAIL'` = 0, sau mọi sửa đổi kể cả hai bản sửa docs gần nhất; các spec guard doc (charset / citations / line-length / link-integrity) PASS ở chính lần chạy này. **Lúc 13:47 FAIL 128/129** — xem lỗi thứ tư bên dưới. Lần **14:09 PASS 129/129** là lần chạy trên đúng cây commit, khác 14:05 chỉ ở hai câu ghi số giờ này. |
+| 3b Core | `node --test "packages/core/test/*.test.mjs"` | **PASS** | **810/810** (795 + 15 checks mới), exit 0 lúc **13:41**; riêng `export-encode-audio.test.mjs` = 15/15 |
+| 3c Core types | `npx tsc -p packages/core --noEmit` | **PASS** | exit 0 lúc **13:41** |
+| 3d Boundaries | `node packages/core/tools/check-boundaries.mjs` | **PASS** | exit 0: core không import gì platform-specific, `mediabunny` chưa file nào mới import |
+| 3e Mutation | 12 mutant trên `exportEncode.mjs`, restore bằng md5 | **12/12 CAUGHT** | md5 sau restore `749f5e94419a924688e32189cae108ca`; **lần chạy đầu trên cây chốt báo 11/12 + `PATTERN MISSING` ở M7** — xem lỗi thứ năm |
+| 4 Live | — | **N/A** | lượt này chỉ chạm `packages/core/**` + docs; không file `app/**` nào đổi nên không có đường render nào mới |
+
+Ba lỗi pre-commit read bắt được, **không gate nào bắt được**, và cả ba nằm trong phần luật vừa viết:
+
+- `planEncodeQueue` mất dòng ` *` trống: `* * @param {{ inFlight?: number, limit?: number }} input`. Đây là **lần thứ ba**
+  cùng một kiểu lỗi trong hai lượt (đã ghi ở §49.6 hai trường hợp ở `index.d.ts`), và nó vẫn compile, vẫn lint sạch, vẫn
+  typecheck exit 0 — `tsc` không đọc `@param` như một ràng buộc. Nguyên nhân cơ học: một Edit có `old_string` kết thúc
+  ngay sau tên hàm nên lần chèn ăn cả newline đầu dòng.
+- JSDoc của `planEncodeAudioSample` chép số học **của bản nháp bị sai**: "1024 sample @ 44,1 kHz = 2091,61 unit của clock
+  90 kHz, packet thứ hai muộn một unit". Con số đúng là **2089,80 → 2090**, packet 2 vẫn khớp (4180), và độ lệch chỉ hiện
+  ở packet 3 (`3 × 2090 = 6270` so với ranh giới thật **6269**). Test đã chốt 2090/4180/6269 từ lâu; comment thì không
+  ai chạy. Một comment sai số học trong file luật là loại lỗi worse hơn comment thừa: người đọc lượt sau sẽ sửa code
+  theo comment.
+- JSDoc của `encodeAudioSampleCount` nói "nội dung kết thúc trên ranh giới sample" trong khi chính luật đó tồn tại vì
+  nội dung **không** kết thúc trên ranh giới sample (367,5 sample cho 1/120 s @ 44,1 kHz). Sửa thành "thường kết thúc
+  giữa hai sample, và đây là chỗ duy nhất quyết định điều đó".
+
+Lỗi thứ tư không nằm trong code mà do **gate bắt**, và cách xử lý là phần đáng ghi: `tmcut_doc_line_length.spec.ts` FAIL
+trên lượt chạy cuối, vì dòng ADR-030 trong bảng trạng thái phình lên 1437 ký tự (> trần 1356). Guard đó không chỉ cấm
+dòng dài, nó còn khẳng định **chỉ** `docs/v4-phase-0-audit.md` được phép có bảng dài — tức thêm một file vào danh sách
+dòng dài là đổi luôn ý nghĩa của guard. Hai đường: nới allowlist của test, hoặc viết lại cho ngắn. Chọn đường thứ hai,
+vì đây là đúng điều guard này được sinh ra để chặn (§71: một dòng 19k ký tự lớn lên từng câu một). Kết quả: 1198 ký tự,
+và chứng minh bằng round-trip — bỏ đúng một câu vừa thêm thì dòng khớp **byte-for-byte** với bản HEAD, nên không có nội
+dung nào khác của ADR bị chạm trong lúc sửa.
+
+Lỗi thứ năm cũng do gate bắt, và nó dạy một điều khác bốn lỗi trên: mutant M7 ("Opus bị nhồi 1024") đã báo CAUGHT trên một
+cây mà chính lệnh lint `--fix` sau đó đổi chữ ký — `opus: 960` thành `'opus': 960` — nên pattern chuỗi nguyên văn của M7
+không còn khớp và mutant **không được áp** nữa. Harness trung thực nên mới in `PATTERN MISSING` thay vì âm thầm bỏ qua, và
+12/12 chỉ là sự thật của cây được commit sau khi chạy lại trên md5 `749f5e94419a924688e32189cae108ca`. Chi tiết và bài học
+ghi ở §50.3; ở đây ghi vì nó là lần đầu tiên một bằng chứng **đã báo PASS** bị chính bằng chứng đó bác bỏ trong cùng một lượt.
+
+Sequence thật: law test RED (import fail) → luật → 14/15, một assertion 90 kHz của **test** sai số học → sửa test theo
+phép chia (2090/4180/6269) → 15/15 → mutation 12/12 → docs §50 + note ADR → typecheck 13:24 → lint **FAIL 2** →
+quote-props → typecheck 13:25 → lint PASS 13:25 → core 810 → unit 129/129 13:30 → **pre-commit read** bắt ba lỗi comment
+→ sửa comment → core 810 + tsc + boundaries 13:41 → typecheck 13:41 (config regenerate) → lint 13:42 → **unit FAIL
+128/129** (dòng ADR-030 1437 ký tự, `tmcut_doc_line_length.spec.ts`) → viết lại dòng còn 1198, không nới guard → **mutation
+chạy lại trên cây chốt: 11/12 + PATTERN MISSING** → sửa pattern M7 → 12/12, restore IDENTICAL → docs (md5 + lỗi thứ năm) →
+unit **129/129 lúc 13:52**, không được tính vì docs đổi sau đó → sửa nốt md5 trong note ADR và §50.5 → unit **129/129 lúc
+14:05**. Kết quả lint 13:25 và 13:38, và cả lần mutation 12/12 đầu, **không** được tính: mỗi cái đứng trước một lần cây đổi,
+tức là proof của một cây khác.
+

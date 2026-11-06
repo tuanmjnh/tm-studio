@@ -1,8 +1,9 @@
 // =============================================================================
-//  tmcut-core — export encode laws (zero-FFmpeg slice H1).
+//  tmcut-core — export encode laws (zero-FFmpeg slice H1; ladder in H2, the
+//  audio clock in H3a).
 //
 //  Slice A measured that nothing in this repo can export without FFmpeg, and
-//  ADR-030 names the replacement: WebCodecs, asked first. These four laws are
+//  ADR-030 names the replacement: WebCodecs, asked first. These laws are
 //  the parts of that loop that must not live in the IO layer, because an
 //  exporter can only be reviewed by reading its decisions.
 //
@@ -78,6 +79,19 @@ const AV1_CANDIDATE = 'av01.0.09M.08'
  */
 const MP4_AUDIO_CANDIDATES = Object.freeze(['mp4a.40.2', 'aac'])
 const WEBM_AUDIO_CANDIDATE = 'opus'
+
+/**
+ * Samples one audio packet must carry, per codec spelling the ladder asks with.
+ * This is not a tuning knob: AAC-LC IS 1024 samples per channel per frame, so
+ * an AudioData of any other length is a different codec and the muxer would be
+ * handed a file no decoder agrees to read. Opus allows several frame sizes and
+ * 20 ms is the one the encoders in scope run at, which the app leg measures.
+ */
+export const AUDIO_PACKET_FRAMES = Object.freeze({
+  'mp4a.40.2': 1024,
+  'aac': 1024,
+  'opus': 960
+})
 
 /**
  * A target bitrate is a quality decision, and the picture size alone sets it:
@@ -380,6 +394,68 @@ export function planEncodeSample(input = {}) {
     // length past the timeline makes a file longer than the project.
     duration: Math.min(next - timestamp, contentEnd - timestamp),
     isLast: next >= contentEnd
+  })
+}
+
+/**
+ * Where the audio of a project ends, in whole samples.
+ *
+ * @param {{ contentEndTicks?: number, sampleRate?: number }} input
+ *   the same content end the video law is given, in ticks
+ * @returns {number | null} the sample count, or null when either number is not
+ *   a clock — the content usually ends BETWEEN two samples, so this is the one
+ *   place that decision is rounded and it is never re-derived downstream
+ */
+export function encodeAudioSampleCount(input = {}) {
+  const { contentEndTicks, sampleRate } = input
+  if (!isFiniteNumber(contentEndTicks) || contentEndTicks <= 0) return null
+  if (!isInteger(sampleRate) || sampleRate <= 0) return null
+  return Math.round((contentEndTicks * sampleRate) / TICKS_PER_SECOND)
+}
+
+/**
+ * One audio packet of the sequence, in the muxer's timescale.
+ *
+ * The audio half of the same rule {@link planEncodeSample} states for video: a
+ * position is the count divided by the rate, rounded once. Multiplying one
+ * packet's rounded length by the packet number is the tempting version and it
+ * is wrong — 1024 samples at 44.1 kHz are 2089.80 units of a 90 kHz clock, so
+ * the law rounds to 2090 and two of them say 4180, while the third packet's
+ * real boundary is 6269.39: the file is one unit long by then and stays long.
+ * The last packet carries what is left rather than a whole frame, which
+ * is what lets the two clocks promise the muxer the same end.
+ *
+ * @param {{ index?: number, sampleRate?: number, framesPerPacket?: number,
+ *           contentEndTicks?: number, timescale?: number }} input
+ *   the packet's ordinal position, the rate the PCM was read at, and the frame
+ *   size of the codec being encoded — `AUDIO_PACKET_FRAMES` names it
+ * @returns {{ startSample: number, frames: number, timestamp: number, duration: number, isLast: boolean } | null}
+ *   null when the packet starts at or after the end of the content, or when an
+ *   input cannot describe a clock
+ */
+export function planEncodeAudioSample(input = {}) {
+  const { index, sampleRate, framesPerPacket, timescale = 1_000_000 } = input
+  if (!isInteger(index) || index < 0) return null
+  if (!isInteger(sampleRate) || sampleRate <= 0) return null
+  if (!isInteger(framesPerPacket) || framesPerPacket <= 0) return null
+  if (!isFiniteNumber(timescale) || timescale <= 0) return null
+  const totalSamples = encodeAudioSampleCount(input)
+  if (totalSamples === null) return null
+
+  const startSample = index * framesPerPacket
+  if (startSample >= totalSamples) return null
+
+  /** Where the sample at `position` starts — one rounding, from the count. */
+  const startsAt = position => Math.round((position * timescale) / sampleRate)
+  const frames = Math.min(framesPerPacket, totalSamples - startSample)
+  const timestamp = startsAt(startSample)
+  const end = startsAt(Math.min(startSample + framesPerPacket, totalSamples))
+  return Object.freeze({
+    startSample,
+    frames,
+    timestamp,
+    duration: end - timestamp,
+    isLast: startSample + frames >= totalSamples
   })
 }
 

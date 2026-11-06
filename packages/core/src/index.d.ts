@@ -2375,6 +2375,28 @@ export function planEncodeSample(input: {
   timescale?: number
 }): { timestamp: number, duration: number, isLast: boolean } | null
 
+/**
+ * Samples one audio packet must carry, keyed by the codec spelling the ladder
+ * asks with. A codec missing from the table has not been told: there is no
+ * default, because a packet of the wrong length is a different codec.
+ */
+export const AUDIO_PACKET_FRAMES: Record<string, number>
+
+/** Where a project's audio ends, in whole samples, or null for no such clock. */
+export function encodeAudioSampleCount(input: {
+  contentEndTicks?: number
+  sampleRate?: number
+}): number | null
+
+/** One muxed audio packet, on the same clock as {@link planEncodeSample}. */
+export function planEncodeAudioSample(input: {
+  index?: number
+  sampleRate?: number
+  framesPerPacket?: number
+  contentEndTicks?: number
+  timescale?: number
+}): { startSample: number, frames: number, timestamp: number, duration: number, isLast: boolean } | null
+
 export function planEncodeQueue(input: {
   inFlight?: number
   limit?: number
