@@ -5593,3 +5593,157 @@ unit **129/129 lúc 13:52**, không được tính vì docs đổi sau đó → 
 14:05**. Kết quả lint 13:25 và 13:38, và cả lần mutation 12/12 đầu, **không** được tính: mỗi cái đứng trước một lần cây đổi,
 tức là proof của một cây khác.
 
+## 51. Slice H3b — `createEncodeSession`: hai đồng hồ chạy chung một vòng, và encoder được phép trả lời lộn xộn (đo ngày 2026-11-06)
+
+§49 dựng cách **hỏi** runtime, §50 dựng cách **tính** hai đồng hồ. Lượt này dựng chỗ chúng chạy với nhau:
+`app/utils/tmcut/exportEncodeSession.ts` — 776 dòng, file đầu tiên của leg encode + mux. Hình dạng của nó là kết quả của
+một đòi hỏi: seam **không có quyền tự quyết**. Vòng lặp chỉ là `planEncodeFinish(counters())` rồi làm đúng việc nó nói;
+việc của seam là gọi API của runtime và ghi lại đúng số cho lần hỏi kế tiếp. Mọi con số đều đi qua core.
+
+### 51.1 Ranh giới core/seam cắt ngang từng con số
+
+| Việc | Luật nằm ở core | Seam chỉ được làm |
+|---|---|---|
+| Packet đặt ở đâu theo clock | `planEncodeSample` (§48.2) và `planEncodeAudioSample` (§50.1) | gọi luật, rồi đưa **đúng số sample** cho `VideoFrame`/`AudioData`; không tự cộng timestamp từ wall clock |
+| Được phép nhét bao nhiêu sample vào encoder | `planEncodeQueue` (§48.2) | giữ `inFlight` và trả nó **một lần duy nhất** |
+| Track nào được đóng khi nào, theo thứ tự nào | `planEncodeFinish` | không hỏi lại; `stalled` là `throw`, không phải `wait` |
+| Packet đầu của một track phải mang gì | `planEncodePacketMeta` | giữ packet trong `parked` và nhả credit tương ứng với việc đã giữ |
+| Tiến trình bao nhiêu % | `planEncodeProgress` | đọc counters rồi đưa cho core; không tự chia |
+
+Ba câu trả lời của core được dịch thành `throw` thay vì chờ, vì chờ chúng là một export không bao giờ kết thúc: `stop`
+(container đã `canceled` hoặc đang bị người khác finalize — không ai viết vào đó được nữa), `stalled` (món nợ không lệ
+nào trả nổi), và `null` từ `planEncodeFinish`/`planEncodeProgress` (seam khai bộ counters mà core không đọc được, tức
+file đang nói về mình hai chuyện khác nhau).
+
+### 51.2 Credit của queue: packet bị giữ chờ description không còn là việc của encoder
+
+Hai đồng hồ chỉ gặp nhau nếu mỗi sample đưa vào encoder được **trả** đúng một lần. Có một trạng thái bản đầu xử lý sai:
+packet đã rời encoder nhưng chưa vào file được, vì packet đầu tiên của track phải mang decoder description
+(`planEncodePacketMeta` trả `hold`). Nếu packet đó vẫn giữ slot `inFlight` thì không ai còn giảm được số đó nữa: encoder
+đã nhả packet nên không việc gì trả lại slot, còn muxer thì chưa viết được — `planEncodeFinish` sẽ chờ một slot mà
+**không còn ai có thể trả**. Seam nhả credit ngay khi park (`onChunk`: `parked.push` rồi `inFlight -= 1`); khi description
+đến, đống parked được write với `credit: false` để không trả lần thứ hai — trả hai lần làm `inFlight` âm, và core có quyền
+từ chối đọc một bộ counters không cùng đúng được.
+
+Lớp thứ hai của cùng một lỗi nằm ở phía core, và nó là luật mới của lượt này:
+
+```
+const drained = (inFlight, written, parked, handed) => inFlight > 0 && written + parked >= handed
+```
+
+`inFlight > 0` một mình không nói "encoder còn việc"; nó chỉ còn nghĩa khi **có một sample đã đưa mà chưa vào file và
+cũng không nằm trong đống parked**. Đủ điều kiện thì `planEncodeFinish` trả `wait` (chờ chính lời write của mình), không
+đủ thì trả `stalled` kèm tên món nợ. Trạng thái đó có log thật: seam ở mutant S5 (packet held vẫn giữ slot) chết với
+`the encode stalled, still owing video-in-flight: 3/3 video and 47/47 audio packets reached the file` — mọi packet đã vào
+file mà `inFlight` vẫn dương. Không có `drained` thì câu trả lời cho cùng trạng thái là `wait`, và `wait` với một món nợ
+không ai trả nổi là export treo vĩnh viễn. Bằng chứng: M2 (`stalled` đổi thành `wait`), M14 (bỏ điều kiện
+drained), M15 (off-by-one `>` thay `>=`), M16 (đổi tên lý do audio để không khớp điều kiện nào), M17 (parked bị tính là
+việc của encoder), M18 (đống parked không được đếm) — **18/18 CAUGHT**, cùng S4/S5 ở phía seam.
+
+### 51.3 Danh tính sample: chunk phải trả đúng sample nó sinh ra, không phải sample cũ nhất
+
+Đây là lỗi thật duy nhất lượt này tìm ra **bằng cách đọc luật**, và phải viết lại fake runtime mới bắt được. Seam giữ các
+sample chưa đóng trong một mảng FIFO (`open: TmcutCloseable[]`) và khi có chunk thì `open.shift()`. Với encoder in-order
+thì đúng. Nhưng WebCodecs cho phép encoder **đổi thứ tự output** mà không cần lý do: chunk đầu tiên trả về không nhất thiết
+là sample đầu tiên đưa vào. Khi ấy `shift()` đóng một `VideoFrame` mà encoder **vẫn còn đang giữ** — `close()` là lời báo
+"hết dùng, thu hồi được", gọi sớm thì buffer bị lấy lại trước khi encoder đọc xong — còn sample thật của chunk thì được
+tính là đã trả ở một thời điểm sai. Số lần close vẫn khớp, nên không check nào kiểu "mỗi frame đóng đúng một lần" bắt
+được; chỉ một assertion về **thời điểm** mới thấy.
+
+Sửa: `handed: Map<number, TmcutCloseable>`, key là timestamp đã đưa sample vào encoder, vì `EncodedVideoChunk.timestamp`
+chính là media timestamp của sample nó được tạo ra. Sample được đăng ký **trước** lời gọi `encode()`, vì khi `flush()`
+được gọi cả queue còn lại trả về trong một nhịp — chunk đầu tiên phải tìm thấy sample của nó ngay. Chunk không khớp
+timestamp nào là runtime cãi lại clock của core: seam `fail` thay vì đoán, vì đoán thì đóng nhầm buffer của packet khác
+và file sẽ mang một timestamp không ai paint.
+
+Test phải có bằng chứng đỏ trước khi sửa. `fakeRuntime` thêm tùy chọn `videoReorder`: encoder không trả gì trong
+`encode()`, giữ hết và chỉ nhả trong `flush()`, theo thứ tự decode `[0, 66_667, 33_333]` cho 3 frame; mỗi frame được ghi
+vào `held`, và `close` của frame chép mọi lần đóng sớm vào `illegalCloses`. RED của check mới (22/22 sau khi sửa):
+
+```
+AssertionError [ERR_ASSERTION]: each chunk closed its own frame
++   [33333]      // chunk thứ hai là của frame 66_667, FIFO lại lấy frame 33_333 ra đóng
+-   []
+```
+
+Lỗi này **không gate nào bắt được** nếu fake runtime chỉ in-order: 21 check cũ vẫn xanh hết. Mutant S10 (đóng sample cũ
+nhất) và S11 (không đăng ký sample) đều CAUGHT, nên cả hai nửa của luật — "khớp theo timestamp" và "đăng ký trước khi
+đưa" — đều có test, không chỉ có comment.
+
+### 51.4 API đọc lại từ file khai, không nhớ từ lượt trước
+
+Mỗi claim dưới đây được đối chiếu `.d.ts` của `mediabunny@1.65.1` và WebCodecs IDL ngay trong lượt này, vì seam nằm giữa
+hai thứ và một sai lệch nhỏ chỉ hiện ra khi có file thật:
+
+| Claim | Đọc ở đâu | Hóa thành gì trong seam |
+|---|---|---|
+| `Output.state` là field thường, union `pending`/`started`/`canceled`/`finalizing`/`finalized` | `.d.ts` của mediabunny | `counters().outputState` đọc trực tiếp; `canceled` và `finalizing` đều là `stop` = throw |
+| Track chỉ thêm được **trước** `start()` | docs `addVideoTrack`/`addAudioTrack` | `mediabunnyMuxer` dựng track lúc tạo, trước khi core ra lệnh `start` |
+| `add(packet, meta?)`: "pass this for the first call, including a valid decoder config"; promise là backpressure | docs `EncodedVideoPacketSource.add` | description đi **cùng** packet đầu, và write serialize qua `chain` vì container nhận packet theo decode order |
+| Decoder description là argument **thứ hai** của output callback; `EncodedVideoChunk` không có property `metadata` | WebCodecs IDL | `output: (chunk, metadata) => handlers.output(chunk, metadata)`; mutant S2 (làm rơi metadata) CAUGHT |
+| `AudioDataInit.duration` tính bằng **giây** trong khi timestamp vẫn là µs | WebCodecs IDL | check 'AudioData is promised seconds while its timestamp stays microseconds' |
+| `EncodedPacket.fromEncodedChunk(chunk)` là đường vào của packet đã encode | docs | seam không tự dựng packet, không tự đặt codec string |
+| `BufferTarget.buffer` là `ArrayBuffer \| null` cho tới khi finalized | docs | `result()` chỉ đọc sau khi core cho phép finalize |
+| `VIDEO_CODECS`/`AUDIO_CODECS` là **họ codec**, không phải fourcc | docs | `videoFamily`/`audioFamily` trả member hợp lệ của bảng đó (`avc1.640028` → `avc`) |
+
+### 51.5 Allowlist container sửa **có chủ ý** — và §49.7 đếm sai một chỗ
+
+Guard "ai được phép mở container" là danh sách đóng băng, nên thêm `exportEncodeSession.ts` vào là một thay đổi phải khai
+ra. Hai file đã sửa: `tmcut_media_probe.spec.ts` (rule 12 đổi thành "bốn seam sở hữu container", danh sách holder thêm
+`app/utils/tmcut/exportEncodeSession.ts`) và `tmcut_silence_scan.spec.ts` (check "the container belongs to exactly four
+modules"). Chỗ thứ ba mà §49.7 hứa sẽ phải sửa — `tmcut_autocut_detect.spec.ts:108` — **không** cần đụng tới, và lý do
+đáng ghi vì đây là một dự đoán sai chứ không phải một chiến thắng: check đó assert điều **phủ định** về một file cụ thể
+(`autocutDetect.ts` không được import `mediabunny`), nên thêm một holder ở nơi khác không làm nó sai. §49.7 gộp nhầm một
+assert phủ định vào nhóm assert danh sách.
+
+### 51.6 Bằng chứng
+
+| Gate | Lệnh | Kết quả | Bằng chứng |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | **PASS** | exit 0, 0 × `error TS`, lúc **15:46**; `.nuxt/eslint.config.mjs` regenerate **15:45** (28 605 B). Gate 1 là bằng chứng type **duy nhất** của seam vì `tsx` không typecheck, và seam thật sự nằm trong graph đó qua `../app/**/*` của `.nuxt/tsconfig.app.json` |
+| 2 Lint | `npx eslint` trên 6 file chạm, chạy **sau** gate 1 | **PASS** | exit 0 lúc **15:46**, 0 problems; chỉ lần chạy sau regenerate 15:45 mới có hiệu lực |
+| 3 Unit | `npx tsx tests/unit/run-all.mts --smoke` | **PASS** | **130/130** (thêm spec 22 check của seam), exit 0, 0 dòng `FAIL`, lúc **16:19** — lần đọc đúng cây commit, sau mọi sửa docs vì doc guards đọc `docs/**`. Các lần 15:57 / 16:02 / 16:12 cũng 130/130 nhưng là của những bản docs trước; khác biệt giữa chúng chỉ là chữ số giờ và citation, không phải nội dung kỹ thuật, và lần chạy lại **sau** câu này (ghi ở §51.8) xác nhận vẫn 130/130 |
+| 3b Core | `node --test "packages/core/test/*.test.mjs"` | **PASS** | **838/838**, exit 0 lúc **15:46** |
+| 3c Core types | `npx tsc -p packages/core --noEmit` | **PASS** | exit 0 lúc **15:46** |
+| 3d Boundaries | `node packages/core/tools/check-boundaries.mjs` | **PASS** | exit 0: core vẫn không import gì platform-specific; `mediabunny` chỉ nằm trong 4 holder ở §51.5 |
+| 3e Mutation core | 18 mutant trên `exportEncode.mjs` | **18/18 CAUGHT** | md5 `82af69d535c2fa2409c6e330052530e8`, restore **IDENTICAL**, chạy **15:48** |
+| 3f Mutation seam | 11 mutant trên `exportEncodeSession.ts` | **11/11 CAUGHT** | md5 `5bda4be0d0bbd2bc4d0e6ba63dd53169`, restore **IDENTICAL**, chạy **15:57** (hai lần trước đó cùng 11/11 và 10/11, xem đoạn dưới); S10/S11 là hai mutant của luật reorder ở §51.3 |
+| 4 Live | — | **N/A** | chưa route/component nào import `createEncodeSession` (`grep` chỉ ra chính nó và spec của nó); lượt H3c mới mở đường đó |
+
+Một bằng chứng mutation **không** được tính, theo đúng luật §50.3. Pattern S6 cũ trỏ vào
+`const sample = who.open.shift()` — đúng câu mà luật reorder ở §51.3 vừa xóa — nên harness in `PATTERN 0/1` và báo
+**10/11** thay vì âm thầm xanh; viết lại S6 thành "sample đã đóng vẫn nằm trong map nên teardown đóng lại" thì hai lần
+chạy trên md5 chốt mới đạt 11/11. Đây là lần thứ hai luật "bằng chứng mutation phải sản xuất trên đúng md5 của nguồn sắp
+commit" cứu một bằng chứng rỗng, và cả hai lần nó cứu được nhờ harness in `PATTERN` thay vì im lặng.
+
+### 51.7 Chưa chứng minh / nợ
+
+- **Chưa có consumer.** `createEncodeSession` chưa được file app nào import; dialog export vẫn spawn FFmpeg. Lượt này
+  dựng đường ray cho cả leg encode lẫn leg mux, chưa chạy tàu.
+- **Chưa một `VideoEncoder`/`AudioEncoder` thật nào** nhận một sample từ seam; chưa mux, chưa file, chưa A/V sync. Mọi
+  claim ở §51.4 là đọc `.d.ts`, chưa phải đo.
+- **Reorder mới chỉ được chứng minh bằng một fake runtime chịu reorder.** Chrome thật có reorder không và reorder bao xa
+  là **số chưa đo**; `AUDIO_PACKET_FRAMES` (1024) cũng vẫn là luật của định dạng chứ không phải câu trả lời của
+  `AudioEncoder` thật. H3c phải ghi lại cả hai, theo đúng cách §49.4 ghi ma trận capability.
+- **Electron chưa đo** (kế từ §49.7): ADR-030 vẫn đòi một lần đo trong runtime thật, và `hardwareAcceleration` vẫn không
+  phân biệt được phần mềm/phần cứng trên máy này.
+- **Bitrate và level vẫn là phỏng đoán theo chuẩn**, chưa hiệu chỉnh trên footage thật (§49.7 còn nguyên).
+- Write bị **vòng lặp** chặn chứ không bị chuỗi `chain` chặn: sau một writer bị từ chối, `chain` vẫn còn những bước đã xếp
+  và chúng tự nuốt lỗi qua `try/catch`, rồi file bị cancel. Không test nào chứng minh điều đó gây hại, nên nó được ghi ở
+  đây thay vì sửa mà không có test đỏ.
+
+### 51.8 Sequence thật của lượt này
+
+Đọc lại `.d.ts`/IDL → seam bản 1 → 21 check xanh (trên fake in-order) → **đọc luật reorder, thấy FIFO là một lỗi thật** →
+RED: check 22 với `videoReorder` + `illegalCloses`, fail `+ [33333] - []` → GREEN: `handed` Map, 22/22 → typecheck exit 0
+(15:40, rồi 15:46 sau lần regenerate gần nhất — lấy lần 15:46) → lint 6 file exit 0 (15:46) → core 838/838 + `tsc -p
+packages/core` + boundaries (15:46) → mutation core **18/18** (15:48) → mutation seam **10/11 vì pattern S6 stale** →
+sửa S6 → docs §51 + ADR → **đọc lại chính văn mình vừa viết**, sáu chỗ sửa: citation `planEncodeQueue (§48.4)` sai (luật
+bound nằm ở §48.2, còn §48.4 là mục mutation), số dòng của `tmcut_autocut_detect.spec.ts` phải là `:108` chứ không phải
+`:104`, câu luật (2) mất chủ ngữ vì một lần sửa văn, một chỗ thiếu space sau dấu gạch, comment của RED ghi **sai timestamp**
+(`66_667` trong khi giá trị đo được là `33333` — chính frame bị đóng sớm là frame 33 ms), và claim "để lọt sample thật"
+phải bỏ vì **số phép close vẫn khớp**, chỉ thời điểm là sai → 4 doc guards exit 0 → unit 130/130 (15:57) → seam mutation
+**11/11** trên đúng md5 sắp commit (15:57) → unit 130/130 (16:02) → unit (16:12) → unit **16:19** → viết lại §51.6/§51.8
+bằng chính các số giờ vừa đo → **một lần suite cuối cùng** chạy trên cây commit, và câu này tồn tại để nó được kiểm chứng:
+nếu nó không in ra 130/130 thì §51.6 sai và phải sửa.
+

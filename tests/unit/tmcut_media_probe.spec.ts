@@ -333,7 +333,7 @@ async function main() {
     assert.deepEqual(stillAsking, [], 'no renderer module calls media.probe')
   })
 
-  await check('three seams own the demuxer, and no component reaches past them (rule 12)', async () => {
+  await check('four seams own the container, and no component reaches past them (rule 12)', async () => {
     const demuxerFiles: string[] = []
     const walk = (dir: string) => {
       for (const entry of readdirSync(join(root, dir), { withFileTypes: true })) {
@@ -346,12 +346,15 @@ async function main() {
     // Probing a file, drawing a frame of it and reading its sound are three
     // different questions, each with exactly one module allowed to open a
     // container. Slice D added the frame seam beside the probe seam, slice E3
-    // added the audio seam beside both; a fourth importer would be drift.
+    // added the audio seam beside both. Slice H3b adds the writer: an exporter
+    // that opens a container to close one is the fourth and last direction the
+    // library can be pointed in, and a fifth importer would be drift.
     assert.deepEqual(demuxerFiles.sort(), [
       'app/utils/tmcut/audioDecode.ts',
+      'app/utils/tmcut/exportEncodeSession.ts',
       'app/utils/tmcut/frameDecode.ts',
       'app/utils/tmcut/mediaProbe.ts'
-    ], 'the services own the demuxer')
+    ], 'the services own the container')
     // The contract carries the rich question, so a feature asks the host and
     // never a library.
     assert.match(read('packages/core/types/platform.ts'), /probeInfo\(src: string, hints\?: TmcutProbeHints\)/)

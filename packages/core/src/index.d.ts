@@ -2397,6 +2397,50 @@ export function planEncodeAudioSample(input: {
   timescale?: number
 }): { startSample: number, frames: number, timestamp: number, duration: number, isLast: boolean } | null
 
+/** How many audio packets the schedule must produce, or null for no such clock. */
+export function encodeAudioPacketCount(input: {
+  contentEndTicks?: number
+  sampleRate?: number
+  framesPerPacket?: number
+}): number | null
+
+/** The order the exporter must close a file in, from the counters of one run. */
+export function planEncodeFinish(input: {
+  totalFrames?: number
+  framesQueued?: number
+  videoPackets?: number
+  audioPackets?: number
+  totalAudioPackets?: number
+  audioPacketsQueued?: number
+  videoInFlight?: number
+  audioInFlight?: number
+  videoParked?: number
+  audioParked?: number
+  videoFlushed?: boolean
+  audioFlushed?: boolean
+  outputState?: string
+  hasVideo?: boolean
+  hasAudio?: boolean
+}): { action: 'start' | 'paint' | 'pump' | 'flush-video' | 'flush-audio' | 'wait' | 'stalled' | 'finalize' | 'stop' | 'done', ready: boolean, blocking: readonly string[] } | null
+
+/** Whether the encoder's decoder description travels with this packet. */
+export function planEncodePacketMeta(input: {
+  packetsAdded?: number
+  hasMeta?: boolean
+}): { action: 'with-meta' | 'hold' | 'plain', reason?: string } | null
+
+/** How far the export has come: the slower leg, capped until the file is closed. */
+export function planEncodeProgress(input: {
+  totalFrames?: number
+  framesDone?: number
+  totalAudioPackets?: number
+  audioPacketsDone?: number
+  outputState?: string
+}): number | null
+
+/** The highest progress may read while the muxer still holds the file open. */
+export const ENCODE_PROGRESS_UNTIL_CLOSED: number
+
 export function planEncodeQueue(input: {
   inFlight?: number
   limit?: number

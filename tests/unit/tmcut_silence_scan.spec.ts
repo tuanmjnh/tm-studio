@@ -186,14 +186,17 @@ async function main() {
       'the seam delivers samples; what they mean is decided in core')
   })
 
-  await check('the demuxer belongs to exactly three modules', () => {
+  await check('the container belongs to exactly four modules', () => {
     const dir = join(root, 'app/utils/tmcut')
     const holders = readdirSync(dir)
       .filter(name => name.endsWith('.ts'))
       .filter(name => /from 'mediabunny'/.test(readFileSync(join(dir, name), 'utf8')))
       .sort()
-    assert.deepEqual(holders, ['audioDecode.ts', 'frameDecode.ts', 'mediaProbe.ts'],
-      'E3 adds one audio seam on purpose; a fourth holder would be a fourth place to drift')
+    // E3 added one audio seam on purpose. H3b added the one module that opens a
+    // container to WRITE it, so the count is four and every entry has a reason:
+    // a fifth holder is a fifth place to drift.
+    assert.deepEqual(holders, ['audioDecode.ts', 'exportEncodeSession.ts', 'frameDecode.ts', 'mediaProbe.ts'],
+      'each reader of the container has a name, and so does its only writer')
   })
 
   console.log(`\n=== [TMCut silence scan] ${passed} passed ===`)

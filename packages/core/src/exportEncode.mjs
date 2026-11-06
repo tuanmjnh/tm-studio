@@ -1,6 +1,6 @@
 // =============================================================================
 //  tmcut-core — export encode laws (zero-FFmpeg slice H1; ladder in H2, the
-//  audio clock in H3a).
+//  audio clock in H3a, the mux order in H3b).
 //
 //  Slice A measured that nothing in this repo can export without FFmpeg, and
 //  ADR-030 names the replacement: WebCodecs, asked first. These laws are
@@ -27,6 +27,18 @@
 //  * `planEncodeQueue` bounds the in-flight frames. `VideoFrame` holds a real
 //    buffer, so an unbounded queue dies mid-export, and a limit the loop honours
 //    as zero would wait for a slot that can never exist.
+//  * `AUDIO_PACKET_FRAMES`, `encodeAudioSampleCount` and `planEncodeAudioSample`
+//    are the second clock: a packet is placed by the samples it starts at, its
+//    length is the difference of two rounded positions, and the last one carries
+//    the remainder, so the audio end and the video end are the same number.
+//  * `encodeAudioPacketCount` is that schedule counted up front, because a total
+//    measured from packets as they arrive can only ever agree with itself.
+//  * `planEncodeFinish` owns the order the file is closed in — feed both legs,
+//    flush both encoders, drain, finalize — since every way to get it wrong writes
+//    a short or unreadable file without an error, and a shortfall with nothing
+//    outstanding is a stall, not a wait. `planEncodePacketMeta` writes the
+//    encoder's decoder description with the first packet of a track and never
+//    again, and `planEncodeProgress` reads the slower leg instead of the clock.
 //
 //  Pure: no timers, no browser globals, no encoder objects. The host owns the
 //  API calls; this module owns what they mean.
@@ -457,6 +469,205 @@ export function planEncodeAudioSample(input = {}) {
     duration: end - timestamp,
     isLast: startSample + frames >= totalSamples
   })
+}
+
+/** The output states a muxer reports, copied from the API the session drives. */
+const ENCODE_OUTPUT_STATES = Object.freeze(['pending', 'started', 'canceled', 'finalizing', 'finalized'])
+
+/** The highest a progress bar may read while the file is still open. */
+export const ENCODE_PROGRESS_UNTIL_CLOSED = 0.99
+
+/**
+ * How many audio packets an export must carry.
+ *
+ * The session needs this before it starts: it is the number the last packet is
+ * checked against, and a total that comes from counting packets as they arrive
+ * can only ever agree with itself. The remainder is a packet of its own, so
+ * this rounds UP where the sample count rounds to the nearest boundary — 48000
+ * samples at 48 kHz are 46 whole AAC frames and 896 samples, and dropping those
+ * samples writes a file 18.6 ms short that nothing reports.
+ *
+ * @param {{ contentEndTicks?: number, sampleRate?: number, framesPerPacket?: number }} input
+ *   the same clock {@link planEncodeAudioSample} is given
+ * @returns {number | null} the packet count, or null when an input cannot
+ *   describe a clock or the codec has no frame size
+ */
+export function encodeAudioPacketCount(input = {}) {
+  const { framesPerPacket } = input
+  if (!isInteger(framesPerPacket) || framesPerPacket <= 0) return null
+  const totalSamples = encodeAudioSampleCount(input)
+  if (totalSamples === null) return null
+  return Math.ceil(totalSamples / framesPerPacket)
+}
+
+/**
+ * Whether the exporter may close the file, and what it still owes if it may not.
+ *
+ * Every failure mode of a flush is silent: finalize while the encoder still
+ * holds frames and the tail is gone with no error; skip the flush and the last
+ * frames die in a queue that was never asked to empty; write a second time after
+ * a cancel and the container is corrupt. So the order is one function, in one
+ * place, and the reasons come back as words the UI can show.
+ *
+ * Stall is its own answer. Every frame painted, both encoders flushed, nothing
+ * in flight and the packet count still short is not a wait — no future callback
+ * can add the packet that a flushed encoder will never emit (the common cause is
+ * a first chunk that arrived without its decoder description and was held). A
+ * driver told to `wait` there hangs with a half-written file and no error, which
+ * is the one outcome worse than a refusal.
+ *
+ * @param {{ totalFrames?: number, framesQueued?: number, videoPackets?: number,
+ *           audioPackets?: number, totalAudioPackets?: number, audioPacketsQueued?: number,
+ *           videoInFlight?: number, audioInFlight?: number, videoParked?: number,
+ *           audioParked?: number, videoFlushed?: boolean,
+ *           audioFlushed?: boolean, outputState?: string, hasVideo?: boolean,
+ *           hasAudio?: boolean }} input
+ *   the counters of one running export; a leg the project does not have is
+ *   named by `hasVideo` / `hasAudio` and never blocks on numbers it lacks.
+ *   `audioPacketsQueued` counts samples handed to the audio encoder, which is
+ *   what the close order waits on before it flushes that leg. `videoParked` /
+ *   `audioParked` count packets that have left the encoder but are held back from
+ *   the file for want of a decoder description; they default to zero because a
+ *   driver with no such pile has nothing to report.
+ * @returns {{ action: 'start'|'paint'|'pump'|'flush-video'|'flush-audio'|'wait'|'stalled'|'finalize'|'stop'|'done',
+ *             ready: boolean, blocking: string[] } | null}
+ *   `action` is the first thing still owed, `blocking` names everything owed;
+ *   null when a counter or a state cannot be read, because a green light from
+ *   nonsense numbers is worse than no green light
+ */
+export function planEncodeFinish(input = {}) {
+  const {
+    totalFrames, framesQueued, videoPackets, audioPackets, totalAudioPackets, audioPacketsQueued,
+    videoInFlight, audioInFlight, videoParked = 0, audioParked = 0, videoFlushed, audioFlushed, outputState,
+    hasVideo = true, hasAudio = true
+  } = input
+  const counters = [
+    totalFrames, framesQueued, videoPackets, audioPackets, totalAudioPackets, audioPacketsQueued,
+    videoInFlight, audioInFlight, videoParked, audioParked
+  ]
+  if (counters.some(value => !isInteger(value) || value < 0)) return null
+  if (typeof videoFlushed !== 'boolean' || typeof audioFlushed !== 'boolean') return null
+  if (!ENCODE_OUTPUT_STATES.includes(outputState)) return null
+
+  if (outputState === 'finalized') {
+    return Object.freeze({ action: 'done', ready: true, blocking: Object.freeze([]) })
+  }
+  if (outputState === 'canceled' || outputState === 'finalizing') {
+    const reason = outputState === 'canceled' ? 'output-canceled' : 'output-finalizing'
+    return Object.freeze({ action: 'stop', ready: false, blocking: Object.freeze([reason]) })
+  }
+  if (outputState === 'pending') {
+    return Object.freeze({ action: 'start', ready: false, blocking: Object.freeze(['output-not-started']) })
+  }
+
+  const blocking = []
+  if (hasVideo && framesQueued < totalFrames) blocking.push('frames-queued')
+  if (hasAudio && audioPacketsQueued < totalAudioPackets) blocking.push('audio-not-queued')
+  if (hasVideo && !videoFlushed) blocking.push('video-not-flushed')
+  if (hasAudio && !audioFlushed) blocking.push('audio-not-flushed')
+  if (hasVideo && videoInFlight > 0) blocking.push('video-in-flight')
+  if (hasAudio && audioInFlight > 0) blocking.push('audio-in-flight')
+  if (hasVideo && videoPackets < framesQueued) blocking.push('video-packets')
+  if (hasAudio && audioPackets < totalAudioPackets) blocking.push('audio-packets')
+  if (blocking.length === 0) {
+    return Object.freeze({ action: 'finalize', ready: true, blocking: Object.freeze([]) })
+  }
+
+  // Only a packet count is still owed, and every encoder is flushed and drained:
+  // nothing can arrive any more, so waiting would be a hang dressed as patience.
+  // An in-flight count is the same kind of debt once every sample the leg was
+  // handed has either been written into the file or is sitting in the seam's
+  // parked pile: a slot is only released when a packet is parked or when its
+  // write lands, and both of those are behind it — so a leg that still reports
+  // work outstanding at that point has lost a release, and no future callback
+  // will ever give it back.
+  const drained = (inFlight, written, parked, handed) => inFlight > 0 && written + parked >= handed
+  const owed = blocking.filter(reason => reason !== 'video-packets'
+    && reason !== 'audio-packets'
+    && !(reason === 'video-in-flight' && drained(videoInFlight, videoPackets, videoParked, framesQueued))
+    && !(reason === 'audio-in-flight' && drained(audioInFlight, audioPackets, audioParked, audioPacketsQueued)))
+  if (owed.length === 0) {
+    return Object.freeze({ action: 'stalled', ready: false, blocking: Object.freeze(blocking) })
+  }
+
+  const first = blocking[0]
+  const action = first === 'frames-queued'
+    ? 'paint'
+    : first === 'audio-not-queued'
+      ? 'pump'
+      : first === 'video-not-flushed'
+        ? 'flush-video'
+        : first === 'audio-not-flushed'
+          ? 'flush-audio'
+          : 'wait'
+  return Object.freeze({ action, ready: false, blocking: Object.freeze(blocking) })
+}
+
+/**
+ * What to hand the muxer alongside one packet.
+ *
+ * A container needs the encoder's decoder description — the `avcC` / `esds` a
+ * WebCodecs encoder reports through its metadata callback — and it writes it
+ * once, into the first packet of the track. A first packet written without it
+ * produces a track no decoder can be pointed at, and writing it twice produces
+ * a description that contradicts itself; so the description is passed with the
+ * first packet only, and a first packet that arrives without one is held rather
+ * than written bare.
+ *
+ * @param {{ packetsAdded?: number, hasMeta?: boolean }} input
+ *   how many packets of this track the muxer already has, and whether this
+ *   chunk arrived with a description attached
+ * @returns {{ action: 'with-meta'|'hold'|'plain', reason?: string } | null}
+ *   null when the count cannot be read
+ */
+export function planEncodePacketMeta(input = {}) {
+  const { packetsAdded, hasMeta = false } = input
+  if (!isInteger(packetsAdded) || packetsAdded < 0) return null
+  if (typeof hasMeta !== 'boolean') return null
+  if (packetsAdded > 0) {
+    return Object.freeze({
+      action: 'plain',
+      reason: hasMeta ? 'description-already-written' : undefined
+    })
+  }
+  return hasMeta
+    ? Object.freeze({ action: 'with-meta', reason: 'first-packet' })
+    : Object.freeze({ action: 'hold', reason: 'no-description' })
+}
+
+/**
+ * How far the export has come, as a fraction of the work.
+ *
+ * The slowest leg is the whole answer: video cannot be ahead of the file, and a
+ * bar that reads 100% while the muxer still holds packets is the reason people
+ * do not trust progress bars. Nothing here is time-based — an export of the
+ * same project on the same machine takes different seconds on every run, but it
+ * always takes the same number of frames.
+ *
+ * @param {{ totalFrames?: number, framesDone?: number, totalAudioPackets?: number,
+ *           audioPacketsDone?: number, outputState?: string }} input
+ *   the counters of one running export; a leg the project does not have simply
+ *   totals zero and is left out
+ * @returns {number | null} 0..1, capped at
+ *   {@link ENCODE_PROGRESS_UNTIL_CLOSED} until the output is finalized, and
+ *   null when a counter cannot be read
+ */
+export function planEncodeProgress(input = {}) {
+  const {
+    totalFrames = 0, framesDone = 0, totalAudioPackets = 0, audioPacketsDone = 0, outputState
+  } = input
+  const counters = [totalFrames, framesDone, totalAudioPackets, audioPacketsDone]
+  if (counters.some(value => !isInteger(value) || value < 0)) return null
+  if (outputState !== undefined && !ENCODE_OUTPUT_STATES.includes(outputState)) return null
+
+  const closed = outputState === 'finalized'
+  if (closed) return 1
+  const video = totalFrames === 0 ? null : Math.min(1, framesDone / totalFrames)
+  const audio = totalAudioPackets === 0 ? null : Math.min(1, audioPacketsDone / totalAudioPackets)
+  const shares = [video, audio].filter(share => share !== null)
+  if (shares.length === 0) return 0
+  const slowest = Math.min(...shares)
+  return slowest >= 1 ? ENCODE_PROGRESS_UNTIL_CLOSED : slowest
 }
 
 /**
