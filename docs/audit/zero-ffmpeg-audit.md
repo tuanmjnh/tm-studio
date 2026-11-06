@@ -6024,8 +6024,10 @@ khẳng định **chữ nhật thô**, không phải thuộc tính dẫn xuất 
 
 - Con số **±1 px**: `planEncodePlate` dùng `round`, FFmpeg dùng phép chẵn-hoá và `pad`, preview dùng CSS %. Đây là số
   **duy nhất** không suy ra được từ builder; nó thuộc về lượt đo live (#156), không phải chỗ đoán.
-- Consumer thật: capability ask → `createEncodeSession`, `paint(index)`, mixer PCM offline (#154); dispatch + tải file +
-  copy từ chối (#155); file thật trên `:4003` và parity điểm ảnh với file FFmpeg (#156).
+- Đường **browser** của ba port chưa có: `readPlate` thật trong `frameDecode.ts`, PCM thật trong `audioDecode.ts`, và
+  mixer offline `pcm(request)` (#154). Keo (#53.6) mới chạy trên fake; port thật chưa nối thì chưa file thật.
+- Dispatch + tải file + copy từ chối in từ `verdict.reasons` (#155); file thật trên `:4003` và parity điểm ảnh với file
+  FFmpeg (#156).
 - `planEncodeContent` chưa từng chạy trên **project người dùng thật** — mọi con số ở đây là từ fixture.
 
 ### 53.5 Gates của increment H3d-1 (chạy trên cây sẽ commit)
@@ -6053,3 +6055,83 @@ một hàng bảng bị ngắt dòng (tôi chèn `\n` vào giữa hàng ADR-030 
 chối một `|` trần trong cell (điều kiện crop có `||`). Sửa: viết lại điều kiện bằng lời, **không** nới guard.
 `tmcut_doc_line_length` thì lộ một trần thật: hàng ADR-030 đã dài **1 346 / 1 356 ký tự**, nên phần H3d-1 của nó **không
 đi vào bảng** mà nằm ở note ngày 2026-11-06 cuối file — và lượt H3d-5 muốn ghi vào bảng thì phải **cắt** chứ không thêm.
+
+### 53.6 Increment H3d-2c — chất keo: một chỗ gọi, và mọi cách kết thúc đều là một kết quả
+
+Luật đã có (#53.1, #53.2), session đã có (§52), nhưng giữa chúng **không có module nào**: chưa chỗ nào hỏi runtime nhận
+config nào, chưa chỗ nào đưa cho session một frame đã vẽ, và chưa chỗ nào biến một probe chết thành một câu in được.
+Chỗ đó giờ là [webCodecsExport.ts](file:///D:/Applications/tm-studio/app/utils/tmcut/webCodecsExport.ts) —
+`createWebCodecsExport(deps)` ([:175](file:///D:/Applications/tm-studio/app/utils/tmcut/webCodecsExport.ts#L175)) trả
+`run(ask)`. Nó **cố ý là file ít thông minh nhất thư mục**, vì mọi quyết định trong đó đã thuộc core rồi; keo mà quyết
+thêm thì keo là chỗ thứ hai nói "project này được".
+
+Bốn thứ cần browser hoặc mixer **đi vào làm tham số**, không nằm trong file:
+
+| Port | Nhiệm vụ | Ai sở hữu bản thật |
+|---|---|---|
+| `readPlate` | giải **một** khoảnh khắc của **một** file ra một ảnh | `frameDecode.ts` (#154, chưa nối) |
+| `createCanvas` | tấm nền mà painter vẽ lên, và `dispose()` khi xong | caller của modal (#155) |
+| `surfaces` | từ `evaluation` của core, kế hoạch paint là những surface nào | `useTmcutPlayback.ts` — xem đoạn nợ bên dưới |
+| `pcm` | mixer offline, packet audio đến từ đây | `audioDecode.ts` (#154, chưa nối) |
+
+Nhờ đó spec chạy **plain Node, không DOM, không encoder**: 18 check trong
+[tmcut_web_codecs_export.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_web_codecs_export.spec.ts),
+tất cả đi qua đúng hàm thật của core (`planEncodeContent`, `planEncodePlate`, `encodeCanvasFill`,
+`createFrameScheduler`) — fake chỉ ở bốn port và ở session.
+
+Ba luật mà check giữ, và vì sao chúng không phải trang trí:
+
+1. **Một lời từ chối không tốn gì.** Project core không vẽ nổi, hoặc runtime không nhận config nào, trả về **trước khi**
+   canvas tồn tại và trước khi encoder được chạm tới — check "a refused project costs one core call and nothing else"
+   ([:262](file:///D:/Applications/tm-studio/tests/unit/tmcut_web_codecs_export.spec.ts#L262)) và "a runtime that accepts
+   nothing never starts a session" ([:310](file:///D:/Applications/tm-studio/tests/unit/tmcut_web_codecs_export.spec.ts#L310))
+   đếm từng lời gọi port, không chỉ đếm `kind`.
+2. **Plate giải mã thất bại là lỗi, không phải frame đen.** `readPlate` trả `null` thì **throw kèm tên src**
+   ([:241](file:///D:/Applications/tm-studio/app/utils/tmcut/webCodecsExport.ts#L241)); `planEncodePlate` trả `null` rect
+   thì cũng vậy. Vẽ không gì ở chỗ đáng ra có footage **chính là bug §53**, và check
+   "a plate that will not decode fails instead of painting black"
+   ([:434](file:///D:/Applications/tm-studio/tests/unit/tmcut_web_codecs_export.spec.ts#L434)) chặn đúng đường đó. Màu
+   bắt đầu của frame cũng lấy từ câu trả lời của core, không phải từ một chuỗi đẹp trong keo
+   (`encodeCanvasFill` ở [exportContent.mjs:424](file:///D:/Applications/tm-studio/packages/core/src/exportContent.mjs#L424);
+   nhánh `null` rời với `surface.dispose()` ở [webCodecsExport.ts:219](file:///D:/Applications/tm-studio/app/utils/tmcut/webCodecsExport.ts#L219)).
+3. **Mixer, abort và progress đi qua nguyên trạng.** File **có tiếng mà không có mixer** thì từ chối
+   ([webCodecsExport.ts:213](file:///D:/Applications/tm-studio/app/utils/tmcut/webCodecsExport.ts#L213)) chứ **không** tự viết im lặng vào
+   chỗ đó. Và `run` **luôn resolve**: probe chết ([webCodecsExport.ts:194](file:///D:/Applications/tm-studio/app/utils/tmcut/webCodecsExport.ts#L194)),
+   session chết, abort của caller — tất cả thành kết quả. Nút export là UI; một exception nó quên bắt là một export
+   trông như không làm gì.
+
+**Hai lỗi thật mà RED bắt được**, ghi rõ bên nào được sửa để không ai đọc thành "sửa assertion cho xanh":
+
+- Check "a probe that throws is a failure with its own name" ([:444](file:///D:/Applications/tm-studio/tests/unit/tmcut_web_codecs_export.spec.ts#L444))
+  để `Error: the probe died` **thoát ra ngoài** `run()`. Đây là defect của **keo**, sửa **keo**: thêm `messageOf`
+  ([:145](file:///D:/Applications/tm-studio/app/utils/tmcut/webCodecsExport.ts#L145)) và bọc `capability.decide`.
+- Check "an export that dies with the caller signal is cancelled, not failed" báo `failed` thay vì `canceled`. Ở đây
+  code **đúng**, fake **sai**: nó chỉ abort bên trong vòng paint, là vòng mà nhánh throw bỏ qua. Abort được chuyển lên
+  đầu fake session và tuỳ chọn đó đổi tên thành `abortWhileRunning`. Nói thẳng ra vì đây là lần thứ hai trong slice này
+  một check đỏ vì harness, và §52.7 đã ghi nợ loại này.
+
+**Chưa nối, và chưa giả vờ là xong**: `surfaces(evaluation)` hiện là port vì **luật surface chung vẫn nằm trong
+`useTmcutPlayback.ts`** — preview và export đang trả lời từ hai chỗ. Tách luật đó ra là một increment riêng của #154,
+không phải việc vặt. Ngoài ra `deps.createCanvas` **throw** vẫn thoát thành rejection: chưa có RED cho nhánh đó nên
+chưa viết code — ghi ở đây để nó là một khoảng trống **có tên**, không phải một khoảng trống được tưởng là đã kín.
+
+Gates của increment này (chạy trên đúng cây đã commit `21b7182`):
+
+| Gate | Lệnh | Kết quả | Bằng chứng |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | exit 0, `error TS` = 0; `.nuxt/eslint.config.mjs` tái sinh 28 605 B (`h3d2c-typecheck.txt`) |
+| 2 Lint | `npx eslint` trên 5 file keo, **sau** gate 1 | PASS | exit 0 (`h3d2c-eslint.txt`). 10 lỗi lần đầu đều ở file tôi mới viết, sửa trong file đó, không `--fix` toàn repo |
+| 3 Core | `pnpm typecheck:core` + `pnpm check:core` | PASS | exit 0; "core imports nothing platform-specific" |
+| 4 Core tests | `pnpm test:core` | PASS | **950 pass / 0 fail** (864 của §52 → 912 của #53.5 → 942 của H3d-2b → 950, thêm 8 test nền canvas) |
+| 5 Spec keo | `tsx --tsconfig tsconfig.test.json` spec mới | PASS | 18/18, exit 0 (`h3d2c-spec.txt`) |
+| 6 App suite | `npx tsx tests/unit/run-all.mts --smoke` | PASS | **131/131**, exit 0; nền không `--smoke` là **128/128** — hai số không so sánh được, như §53.5 đã ghi |
+| 7 Electron | `node --test "electron/tools/*.test.mjs"` | PASS | 59 pass / 0 fail, exit 0 (`h3d2c-electron.txt`) |
+| 8 Live sweep | 5 route `:4003`, lọc `error`/`warn`/`issue` | **KHÔNG PASS** | xem đoạn dưới |
+
+Gate 8 là chỗ duy nhất không xanh, và nguyên nhân **không phải** lượt này: `/tmcut` và `/tmcut/autocut` sạch (0 dòng),
+còn `/tmcut/editor` (4 lần), `/tmcut/templates` (2 lần), `/tmcut/factory` (1 lần) cùng báo một lỗi
+`401 (error.unauthorized)` trên `GET /api/v1/ai/relay/catalog` — do [catalog.get.ts:12](file:///D:/Applications/tm-studio/server/api/v1/ai/relay/catalog.get.ts#L12)
+`throw createError({ statusCode: 401 })` khi trình drive **không có phiên hub**. Signing in cần credential giống mà ràng
+buộc của phase này cấm tôi chạm, nên phần **authed** của sweep là **BLOCKED**, không phải PASS được viết lại lời.
+Bằng chứng rằng 401 không phải do keo: diff core là **54 thêm / 0 xoá** và **9 thêm / 0 xoá**, module mới **chưa có ai
+import trong `app/`** (`grep webCodecsExport app/` trả về rỗng), và route gây lỗi tôi không đụng.
