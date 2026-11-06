@@ -2536,6 +2536,15 @@ export function planEncodePlate(input: {
   opacity?: number
 }): CoreEncodePlateRect | null
 
+/**
+ * The colour one painted export frame starts from — the canvas background in the
+ * one spelling a canvas `fillStyle` accepts. Null for the two shapes
+ * `planEncodeContent` refuses as `background-*`, where no colour tells the truth.
+ */
+export function encodeCanvasFill(canvas: {
+  background?: { type?: string, value?: unknown } | null
+} | null | undefined): string | null
+
 // --- Export packet mix (zero-FFmpeg slice H3d-2a) ---
 /** Every reason `planExportMixPacket` can leave a source out, in list order. */
 export const EXPORT_MIX_REFUSALS: readonly string[]

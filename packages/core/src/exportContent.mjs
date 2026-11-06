@@ -378,3 +378,57 @@ export function planEncodePlate(input = {}) {
     alpha: isFiniteNumber(input.opacity) ? Math.min(1, Math.max(0, input.opacity)) : 1
   })
 }
+
+// --- the frame the painter starts from ---------------------------------------
+//
+// `planEncodePlate` says where a layer lands; it says nothing about what is
+// underneath it. A painter that never clears re-uses the previous frame's pixels
+// and ships a smear, so every frame begins at the canvas background — and that
+// background is read in three languages today: CSS (`bgStyle.backgroundColor =
+// bg.value || '#000000'` in the preview), FFmpeg's `color=` source (through
+// `buildBackgroundSource`, whose `toFfmpegColor` blanks to `0x000000`) and a
+// canvas `fillStyle`, which is the weakest of the three: it keeps the OLD colour
+// when handed a string it cannot parse, so a bad value does not paint black, it
+// paints last frame.
+//
+// `null` is part of the answer, not an error: it means "no colour paints this
+// background correctly", and it is reserved for the two shapes
+// `planEncodeContent` already refuses — a transparent canvas (the preset ladder
+// has no alpha) and a real image background (no decoder-fed cover fit yet). So a
+// caller that ran the content law first can never be handed a black frame where
+// the preview shows through, and a caller that skipped it gets `null` rather than
+// a wrong picture.
+
+/** The canvas spelling of an authored colour, or null when it is not a colour. */
+function cssColorOf(value) {
+  if (typeof value !== 'string') return null
+  const text = value.trim()
+  if (text === '') return null
+  // `toFfmpegColor` accepts the `0xRRGGBB` spelling, so a project can hold it —
+  // and a canvas cannot. One colour, two spellings, resolved here rather than
+  // silently dropped by a `fillStyle` that never changed.
+  if (/^0x[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/.test(text)) return `#${text.slice(2)}`
+  return text
+}
+
+/**
+ * The fill colour one painted export frame starts from.
+ *
+ * @param {{ background?: { type?: string, value?: unknown } | null } | null} canvas
+ *   the project's canvas, read through the same `background` field
+ *   `planEncodeContent` classifies
+ * @returns {string | null} a CSS colour for `ctx.fillStyle`, or null when this
+ *   background has no correct colour answer — which is exactly the pair of shapes
+ *   the content law refuses, so a null here means the caller never asked.
+ */
+export function encodeCanvasFill(canvas) {
+  const background = canvas?.background
+  const type = background?.type
+  if (type === 'transparent') return null
+  // A blank image path is no background in either counterpart — the FFmpeg chain
+  // says so in its own comment and falls back to a black source.
+  if (type === 'image') return cssColorOf(background.value) === null ? '#000000' : null
+  // Everything else is the colour branch, which is also what an unknown type
+  // becomes in `buildBackgroundSource` and what the preview leaves unpainted.
+  return cssColorOf(background?.value) ?? '#000000'
+}
