@@ -5088,3 +5088,125 @@ chạy thấy **RED** thật, rồi mới xóa destructure → **GREEN 8/8**. Gu
 - **Console còn `[error]` môi trường**: `401 /api/v1/ai/relay/catalog` (đã ghi ở §44.8, §45.8) — lượt này đo lại, giữ nguyên
   attribution.
 
+## 47. Slice G4b — preview lấy bytes từ cache của chính nó: `blob:` thay cho `/uploads/`, và phần vẫn chờ một session (đo ngày 2026-11-06)
+
+### 47.1 Việc của lượt này, và hiện trạng đo được ở HEAD `36e4c0a`
+
+§46 khép nửa **thời gian** của leg audio và để lại đúng một nợ kỹ thuật, ghi ở §46.9: element vẫn hỏi server. ADR-033 có hai
+vế — "bytes về máy" đã có từ C2b và đã được ba leg dùng (D2 pixels, E4 silence, G2 waveform, §44.5); vế thứ hai, "**bytes
+được dùng để phát**", là việc của G4b. Luật của nó không nằm ở đây: `planPlaybackByteSource` trả `cache` / `stream` /
+`unresolved`, `planBlobUrlLifecycle` trả `keep` / `create` / `revoke` (#141). Code của **cả hai chân** vào history trong một
+commit của chủ repo — `36e4c0a` (137 file) — chứ không thành commit riêng của slice, nên mọi số trong §47.7 lấy từ chính tree
+đã commit đó, không phải từ bản làm việc trước commit.
+
+Đo bằng `git show --stat 36e4c0a` trên các file của lượt này: `app/utils/tmcut/playbackBytes.ts` **+150**,
+`app/composables/useTmcutPlaybackBytes.ts` **+74**, `tests/unit/tmcut_playback_bytes.spec.ts` **+287**,
+`packages/core/src/byteCache.mjs` **+67**, `packages/core/src/index.d.ts` **+25**,
+`packages/core/test/byte-cache-playback.test.mjs` **+155**, `app/components/tmcut/TmcutPreviewPlayer.vue` **+73**,
+`app/composables/useTmcutMedia.ts` **+20/-8**.
+
+### 47.2 Ba quyết định thiết kế, và lý do chúng không phải là sở thích
+
+- **Ledger là của host** (`ledger` / `setLedger`), không phải của module. Đọc byte là async còn `playableSrc` là sync: surface
+  hỏi và nhận stream URL cho tới khi bytes về. Host giữ ledger trong `shallowRef` nên cú swap tự re-render; module không cần
+  biết gì về Vue. Đo ở §47.6: trước `sync` trả stream, sau `sync` trả `blob:` — đúng thứ tự đó là hệ quả của hợp đồng, không
+  phải của may mắn.
+- **Key là revision thật sự phát, không phải `clip.src`**. `previewEngine.resolveSrc()` là đường proxy-aware; nếu cache key
+  lấy theo `clip.src` thì một blob full-resolution sẽ thắng bản proxy 960px mà engine định chơi. Vì thế luật "file nào phát"
+  được tách thành `resolvePlayPath()` trong `useTmcutMedia.ts` và **cả hai** phía — URL lẫn key — cùng hỏi nó một lần.
+- **Một revision, nhiều surface, một lần đọc**. Footage plate và `<audio>` của cùng clip là cùng file, nên ledger keyed by
+  revision khiến unmount một surface không được phép làm im surface kia; `inflight` làm hai pass chồng lên nhau gộp thành một
+  lần đọc.
+
+### 47.3 Nối dây: đo bằng `grep`, không đo bằng trí nhớ
+
+| Chỗ | Số đo ở HEAD | Nghĩa |
+|---|---|---|
+| `playbackBytes` trong `TmcutPreviewPlayer.vue` | **5** lần | seam được dùng thật, không phải chỉ import |
+| `:340` `playableSrc` | `playbackBytes.srcFor(path, previewEngine.resolveSrc(path))` | leg video: stream vẫn là fallback, seam trả blob khi bytes về |
+| `:635` `activeAudioSrcs` | `const src = playbackBytes.srcFor(path, stream)` | leg audio: cùng một câu trả lời, nên `<audio>` và footage dùng chung một URL |
+| `:676` | `playbackBytes.sync(mountedMediaPaths.value)` | một lần reconcile cho toàn bộ surface đang mount, `flush: 'post'`, `immediate: true` |
+| `:1531` `onUnmounted` | `playbackBytes.releaseAll()` | rời editor là trả hết URL, đo ở §47.6 |
+| `:303` | `bgStyle.backgroundImage = url(previewEngine.resolveSrc(bg.value))` | **cố ý không đổi**: nền CSS không phải footage, cho nó vào ledger là trả một `blob:` cho thứ chưa từng được decode |
+
+### 47.4 Tests
+
+`tests/unit/tmcut_playback_bytes.spec.ts`: **15** checks, chạy độc lập ở HEAD → `All 15 playback-byte-source checks passed`.
+Bốn checks đóng vai hợp đồng nối dây, không phải kiểm tra hành vi: "*both preview legs ask the seam, and only one module reads
+playback bytes*", "*nothing cached means no reads at all*", "*an unresolved clip gets no src at all — never an empty
+attribute*", "*a cache that cannot answer is not an error*". Host giả trong spec thay **cả** `setLedger` bằng một phép thay
+toàn bộ record — đúng điều `shallowRef` làm — vì một host mutate tại chỗ sẽ giữ DOM đứng nguyên dù ledger đã đổi.
+
+### 47.5 Falsification — bảy mutation, bảy lần bị bắt
+
+| Mutation | Sửa gì | Assertion đã bắt |
+|---|---|---|
+| M1 blob bị ignore, stream luôn trả lời | `return url \|\| streamUrl` → `return streamUrl` | `Expected values to be strictly equal` (0 checks pass được) |
+| M2 revision rời màn hình vẫn mount | bỏ `&& wanted.has(key)` | "no url for a revision no surface wants" (8 checks) |
+| M3 đọc hỏng vẫn sinh URL | bỏ `!bytes \|\|` | "no url for bytes that are not there" (7 checks) |
+| M4 không gộp request song song | `const running = inflight.get(key)` → `undefined` | "the second pass joined the read already running" (3 checks) |
+| M5 một departure thu hồi tất cả | revoke theo danh sách → revoke cả ledger | "only the revision that left the screen is freed" (4 checks) |
+| M6 `releaseAll` không ghi ledger | `if (Object.keys(held).length > 0)` → `if (false)` | "the emptied ledger is written too" (6 checks) |
+| M7 phớt lờ lời từ chối của core | `plan.kind === 'cache'` → `!==` | "a revision the store does not have is not worth a read" (11 checks) |
+
+`md5sum -c` trên `app/utils/tmcut/playbackBytes.ts` sau khi dựng lại bản gốc: **OK** — file ở HEAD byte-identical với bản đã
+đo, nên các số ở §47.6–47.7 mô tả đúng code đang được ship.
+
+### 47.6 Bằng chứng live trên origin `:4003` — phần đo được mà không cần đăng nhập
+
+Cách đo, và vì sao đó là code thật: dev server chạy `npx nuxt dev --port 4003`; trong trang `/login` (same-origin, **không**
+cần session) tôi `await import('/_nuxt/utils/tmcut/playbackBytes.ts')` và `'/…/byteStore.ts'` — tức module đã compile từ
+source, không phải bản copy trong test, không mock. `readBytes` chỉ được bọc để **đếm** rồi gọi `readCachedBytes` thật;
+`revokeUrl` đếm rồi gọi `URL.revokeObjectURL` thật. `fingerprintFor` ở đây là hàm giả (`clip://<key>` → `<key>`) vì thư viện
+asset cần session; hợp đồng "asset nào trả fingerprint nào" do check nối dây ở §47.4 giữ.
+
+| Mục đo | Số đo live |
+|---|---|
+| cache thật trên profile này | **3** revision: `99374b2a` 4 448 B, `6a47b973` 4 448 B (12 byte đầu `… ftypisom` = MP4 thật), `717a0beb` 48 230 B (16 byte đầu `------WebKitForm`) |
+| `srcFor` **trước** `sync` | trả đúng stream URL — hợp đồng "hỏi sync thì nhận stream trước" |
+| `srcFor` **sau** `sync` | `blob:http://localhost:4003/eac032b8-…` |
+| read-back của chính URL đó | `fetch(blob:)` → **status 200**, **4 448 byte**, 12 byte đầu `… ftypisom` — đúng bytes trong store |
+| số resource `/uploads/…` trên trang | **0** trước và **0** sau khi mount hai revision và đọc hết bytes của chúng (`performance.getEntriesByType('resource')`) |
+| gộp đọc song song | hai `sync` song song trên một revision → **1** lần đọc |
+| hai revision cùng mount | **2** lần đọc, cả hai ra `blob:` |
+| một revision rời màn hình | **1** lần revoke; revision ở lại giữ **đúng URL cũ** (identical, không tạo lại); revision đi trả stream; `fetch` URL đã revoke → **`TypeError: Failed to fetch`** (thu hồi thật, không phải gỡ tham chiếu) |
+| `releaseAll()` | tổng **2** lần revoke, ledger về **0** key, mọi src trở lại stream |
+| hai lời từ chối | `ffffffff` (hợp lệ nhưng chưa cache) và `zzzzzzzz` (digest hỏng) → **0** lần đọc, **0** lần ghi ledger, cả hai trả stream |
+| revision hỏng `717a0beb` | **1** lần đọc, vẫn có `blob:`, và blob đó mở đầu bằng multipart body |
+
+Dòng cuối là một phát hiện, không phải một lỗi của G4b: seam chuyển **đúng** bytes mà store giữ; tính hợp lệ của một file được
+quyết ở đường import, không phải ở playback. `717a0beb` chính là file đã nêu ở §46.7/§46.9 (`.data/uploads/mw3fck52-…-tone.wav`,
+body multipart thay vì RIFF) — và nó **đã vào cache phía client từ chính bytes hỏng đó**, nên đường duy nhất để sửa là owner
+xóa/thay asset, không phải code.
+
+### 47.7 Gates — số đo của lượt này, từng cổng một, chạy trên HEAD `36e4c0a` ngày 2026-11-06
+
+| Cổng | Lệnh | Kết quả | Số đo, lấy từ chính lần chạy ghi ở cột lệnh |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | exit **0**, grep `error TS` = **0**; `.nuxt/eslint.config.mjs` regenerate **11:31:13**, 28 605 B |
+| 2 Lint | `npx eslint` trên **8** file của lượt này, chạy **sau** 11:31:13 | PASS | exit **0**, log **0** dòng |
+| 3 Unit | `npx tsx tests/unit/run-all.mts --smoke` | PASS | **128/128** specs, exit **0**, **0** dòng FAIL |
+| 3b Core | `node --test "test/*.test.mjs"` trong `packages/core` | PASS | tests **753** / pass **753** / fail **0** / cancelled **0**, exit **0**; `npx tsc -p packages/core --noEmit` exit **0**, **0** `error TS` |
+| 4 Live | origin `:4003`, module thật + store thật | **MỘT PHẦN / BLOCKED** | nửa seam đo live ở §47.6 (read-back 200 + 4 448 B, 0 request `/uploads`, revoke thật). Nửa **element mà editor mount** và console sweep 5 route **chưa đo**: `/tmcut/editor` redirect `/login?redirect=/tmcut/editor`, `POST /api/v1/auth/refresh` hết hạn, và credential không phải thứ tôi được cầm |
+| 5 Dọn dẹp | mutation runner đã xóa, log nằm ở `node_modules/.cache/tmcut-gates/` | PASS | `md5sum -c` → **OK**; không có scratch file trong repo; fixture không touched |
+
+Cổng 4 vì sao tách làm hai nửa thay vì để nguyên một BLOCKED: hai nửa đó chứng minh hai điều khác nhau, và nửa đã chứng minh
+thì không được phép bị loãng bởi nửa chưa. Nửa seam + store + URL lifecycle là **toàn bộ logic mới** của lượt này, đo trên bytes
+thật trong OPFS của chính máy. Nửa còn lại là một **dây nối** đã được check ở §47.4 bằng grep và bằng typecheck — nó cần session
+để đọc `currentSrc`, không cần để suy ra nó đúng.
+
+### 47.8 Chưa chứng minh / nợ
+
+- **`currentSrc` của element mà editor mount** + số `GET /uploads/…` trên `/tmcut/editor`: cần bạn đăng nhập tại
+  http://localhost:4003/login. Đây là dòng duy nhất khiến ADR-033 chưa thể lật vế playback.
+- **Console sweep 5 route** (`/tmcut`, `/tmcut/autocut`, `/tmcut/editor`, `/tmcut/templates`, `/tmcut/factory`): cùng lý do.
+- **Desktop host (Electron)**: chưa đo packaged app; chưa đo liệu `byteStore` phía desktop có entry nào, và khi không có thì
+  seam có trả đúng `media://…` như một lời từ chối (`not-cached`) thay vì một URL rỗng.
+- **Export vẫn đi `/uploads/`** — đó là leg của slice H, không phải của G4b. ADR-033 vì thế vẫn **CHỜ** vì export và vì một dòng
+  đo còn thiếu ở §47.8, chứ không phải vì code playback chưa viết.
+- **`717a0beb`**: bytes trong cache là multipart body; xóa/thay asset là việc của owner (§46.7).
+- **Nền CSS** (`:303`) vẫn nhận stream URL theo quyết định ở §47.3; nếu sau này muốn nó vào cache thì đó là một slice khác, vì
+  nó là `background-image`, không phải một media element có lifecycle.
+- **`fingerprintFor` trong §47.6 là hàm giả** vì thư viện asset cần session; đường thật (`findAssetBySrc`) được giữ bởi check
+  nối dây §47.4 chứ chưa được đo live ở lượt này.
+
