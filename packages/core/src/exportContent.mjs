@@ -63,6 +63,7 @@ export const ENCODE_AUDIO_REQUEST = Object.freeze({ sampleRate: 48_000, channelC
 export const ENCODE_REFUSAL_REASONS = Object.freeze([
   'bad-canvas',
   'background-image',
+  'background-transparent',
   'empty',
   'stacked-rows',
   'text',
@@ -179,6 +180,11 @@ export function planEncodeContent(input) {
   const background = canvas.background
   const blank = typeof background?.value !== 'string' || background.value.trim() === ''
   if (background?.type === 'image' && !blank) reasons.add('background-image')
+  // A transparent canvas is a second thing the file cannot answer: the FFmpeg
+  // chain switches to an alpha-capable output for it, while the preset ladder
+  // asks H.264, VP9 and AV1 with no alpha option — so the painter would deliver
+  // black where the preview shows through. A refusal, not a surprise.
+  if (background?.type === 'transparent') reasons.add('background-transparent')
 
   // The rows the file actually uses: the footage the painter paints and the
   // audio the mixer mixes. Hidden rows are skipped by `selectFileRows` because

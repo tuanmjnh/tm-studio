@@ -5935,11 +5935,15 @@ Cả hai đều là luật **core**, chạy được không cần browser, nên 
 
 `ENCODE_REFUSAL_REASONS`
 ([:63](file:///D:/Applications/tm-studio/packages/core/src/exportContent.mjs#L63)) là một từ vựng **đóng và đủ**:
-`bad-canvas`, `background-image`, `empty`, `stacked-rows`, `text`, `effects`, `mask`, `blend`, `transition`, `reverse`,
-`stabilize`, `fit-unsupported`, `rotation`. `planEncodeContent` trả `kind: 'refused'` kèm danh sách đã lọc theo từ vựng
-và sắp thứ tự — nên modal chỉ việc in từng lý do, **không được tự quyết định** lý do nào tồn tại. Đó là lý do danh sách
-nằm ở core chứ không phải ở `TmcutExportModal.vue`: một chỗ quyết ở UI sẽ là chỗ thứ hai nói "project này được" cho một
-project mà renderer không vẽ nổi.
+`bad-canvas`, `background-image`, `background-transparent`, `empty`, `stacked-rows`, `text`, `effects`, `mask`, `blend`,
+`transition`, `reverse`, `stabilize`, `fit-unsupported`, `rotation` — 14 tên, chứ không phải 13: khi viết chân video của
+consumer (increment H3d-2) mới lộ ra rằng canvas `background.type === 'transparent'` cũng là một thứ file không trả lời được.
+Dây FFmpeg bật output có alpha đúng cho background đó (`render/index.ts:112`), còn thang preset chỉ hỏi H.264, VP9, AV1
+**không có tuỳ chọn alpha** — nghĩa là painter sẽ giao màu đen ở chỗ preview cho xuyên qua. Đó đúng là lớp "im lặng khác
+biệt" mà luật này sinh ra để chặn, nên nó từ chối chứ không vẽ. `planEncodeContent` trả `kind: 'refused'` kèm danh sách
+đã lọc theo từ vựng và sắp thứ tự — nên modal chỉ việc in từng lý do, **không được tự quyết định** lý do nào tồn tại.
+Đó là lý do danh sách nằm ở core chứ không phải ở `TmcutExportModal.vue`: một chỗ quyết ở UI sẽ là chỗ thứ hai nói
+"project này được" cho một project mà renderer không vẽ nổi.
 
 Điểm thiết kế quan trọng nhất: module **không tự viết lại** bất kỳ quy tắc phân loại nào. Nó đọc qua đúng các hàm mà
 preview và FFmpeg-export đang đọc, vì mỗi quy tắc viết lại là một quy tắc có cơ chế **lệch**:

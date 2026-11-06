@@ -17,7 +17,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { TICKS_PER_SECOND } from '../src/time.mjs'
 import { createFrameScheduler } from '../src/scheduler.mjs'
-import { planEncodeContent } from '../src/exportContent.mjs'
+import { ENCODE_REFUSAL_REASONS, planEncodeContent } from '../src/exportContent.mjs'
 
 const T = TICKS_PER_SECOND
 
@@ -236,6 +236,38 @@ describe('planEncodeContent — what the exporter cannot paint yet', () => {
       background: { type: 'image', value: '  ' }
     })
     assert.equal(planEncodeContent(project).kind, 'eligible')
+  })
+
+  it('a transparent canvas is refused: no config the ladder asks for carries alpha', () => {
+    // The FFmpeg chain switches to an alpha-capable output for exactly this
+    // background (`render/index.ts:112`); `planEncodePresets` offers H.264, VP9
+    // and AV1 with no alpha option, so the file would be black where the preview
+    // is see-through. That is the silent-difference class this law exists to stop.
+    const project = projectOf([['row-a', [clip('a', 0, 6)]]], {
+      width: 1920,
+      height: 1080,
+      fps: FPS_30,
+      background: { type: 'transparent', value: '' }
+    })
+    assert.deepEqual(planEncodeContent(project).reasons, ['background-transparent'])
+  })
+
+  it('a colour canvas background is the fill the painter already does', () => {
+    const project = projectOf([['row-a', [clip('a', 0, 6)]]], {
+      width: 1920,
+      height: 1080,
+      fps: FPS_30,
+      background: { type: 'color', value: '#101820' }
+    })
+    assert.equal(planEncodeContent(project).kind, 'eligible')
+  })
+
+  it('the vocabulary names the transparent canvas, so the UI has words for it', () => {
+    assert.ok(ENCODE_REFUSAL_REASONS.includes('background-transparent'))
+    assert.deepEqual(
+      ENCODE_REFUSAL_REASONS.filter(reason => reason.startsWith('background-')),
+      ['background-image', 'background-transparent']
+    )
   })
 
   it('a refusal reports no request, so a caller cannot run it by accident', () => {
