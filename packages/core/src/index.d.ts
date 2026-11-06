@@ -2535,3 +2535,55 @@ export function planEncodePlate(input: {
   transform?: Pick<CoreEvaluatedTransform, 'x' | 'y' | 'scaleX' | 'scaleY'> | null
   opacity?: number
 }): CoreEncodePlateRect | null
+
+// --- Export packet mix (zero-FFmpeg slice H3d-2a) ---
+/** Every reason `planExportMixPacket` can leave a source out, in list order. */
+export const EXPORT_MIX_REFUSALS: readonly string[]
+
+/** One `audioMixAt` source with the decoded run the caller read for it. */
+export interface CoreExportMixSource {
+  clipId?: string | number | null
+  trackId?: string | null
+  gain?: number
+  mediaTicks?: number | null
+  rate?: number
+  plays?: boolean
+  refusal?: string | null
+  /** One flat run per source channel, at the native rate the decoder returned. */
+  channels?: ArrayLike<number>[] | null
+  sampleRate?: number
+}
+
+/** What one source became in the packet, or nothing at all when it was refused. */
+export interface CoreExportMixEntry {
+  clipId: string | number | null
+  trackId: string | null
+  gain: number
+  rate: number
+  mediaStartSec: number
+  sampleRate: number
+  /** Channel samples of the running sum outside full scale once this source was added. */
+  overRange: number
+}
+
+/**
+ * The samples one export packet holds: position from `mediaTicks` phase-locked to
+ * the tick that produced it, media advanced by `rate`, resampled linearly from the
+ * decoder's native rate to the file's, scaled by gain and summed without
+ * normalisation — the same arithmetic the preview's Web Audio graph runs.
+ */
+export function planExportMixPacket(input: {
+  at?: number
+  startSample?: number
+  frames?: number
+  target?: { sampleRate?: number, channelCount?: number }
+  sources?: CoreExportMixSource[]
+}): {
+  at: number
+  startSample: number
+  frames: number
+  target: { sampleRate: number, channelCount: number }
+  channels: Float32Array[]
+  mixed: readonly CoreExportMixEntry[]
+  refused: ReadonlyArray<{ clipId: string | number | null, reason: string }>
+} | null
