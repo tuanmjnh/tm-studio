@@ -2303,3 +2303,60 @@ export function planBlobUrlLifecycle(
   held: Record<string, string | null>,
   wanted: Iterable<string>
 ): TmcutBlobUrlLifecycle
+
+// --- Export encode laws (zero-FFmpeg slice H1) ---
+/** The parenthetical both encode paths use when an edge has no chroma block. */
+export const ENCODER_EVEN_DIMENSION_REASON: string
+/** Frames allowed inside the encoder at once when the caller names no limit. */
+export const DEFAULT_ENCODE_IN_FLIGHT: number
+
+/** One encode preset, in the order the caller prefers it. */
+export interface CoreEncodePreset {
+  id: string
+  video: {
+    codec: string
+    width: number
+    height: number
+    fps: FrameRate
+    bitrate?: number
+  }
+  audio?: { codec: string, sampleRate: number, channelCount: number } | null
+}
+
+/** What the host recorded from isConfigSupported for one preset. */
+export interface CoreEncodeSupportAnswer {
+  video?: { supported?: boolean, config?: { codec?: string } }
+  audio?: { supported?: boolean, config?: { codec?: string } }
+}
+
+/** One preset's place in the capability matrix. */
+export interface CoreEncodeVerdict {
+  id?: string
+  verdict: 'supported' | 'unsupported' | 'substituted' | 'unmeasured' | 'invalid'
+  reasons: string[]
+  preset: CoreEncodePreset | null
+  config: {
+    id: string
+    video: CoreEncodePreset['video']
+    audio: { codec: string, sampleRate: number, channelCount: number } | null
+  } | null
+}
+
+export function planEncodeConfig(input: {
+  presets?: CoreEncodePreset[]
+  answers?: Record<string, CoreEncodeSupportAnswer | undefined>
+}): { kind: 'ready', preset: CoreEncodePreset, config: NonNullable<CoreEncodeVerdict['config']>, checked: CoreEncodeVerdict[] }
+  | { kind: 'refused', reason: 'no-presets' | 'nothing-measured' | 'nothing-supported', checked: CoreEncodeVerdict[] }
+
+/** One muxed sample: integers in `timescale` units, or null outside the content. */
+export function planEncodeSample(input: {
+  index?: number
+  rate?: FrameRate
+  contentEndTicks?: number
+  timescale?: number
+}): { timestamp: number, duration: number, isLast: boolean } | null
+
+export function planEncodeQueue(input: {
+  inFlight?: number
+  limit?: number
+}): { action: 'push' | 'wait', outstanding: number, limit: number, room: number }

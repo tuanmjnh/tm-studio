@@ -5210,3 +5210,116 @@ thật trong OPFS của chính máy. Nửa còn lại là một **dây nối** �
 - **`fingerprintFor` trong §47.6 là hàm giả** vì thư viện asset cần session; đường thật (`findAssetBySrc`) được giữ bởi check
   nối dây §47.4 chứ chưa được đo live ở lượt này.
 
+
+## 48. Slice H1 — exporter hỏi, ghi lại câu trả lời, và từ chối có tên; nó không đoán (đo ngày 2026-11-06)
+
+Slice G còn mở đúng một việc (mục "Chưa chứng minh" ở §47.8: `currentSrc` của element mà editor mount, cần một session đăng nhập),
+nên lượt này chuyển sang slice H theo đúng thứ tự roadmap. §6 của bản audit này đã đo vì sao H là phần khó nhất: **0** dòng
+`VideoEncoder` trong repo, và "không tồn tại đường export nào không cần FFmpeg trong repo hôm nay". Bắt đầu H bằng một file
+exporter sẽ là bắt đầu bằng thứ khó kiểm tra nhất; bắt đầu bằng **luật** thì ba quyết định sống còn của nó — chọn preset nào,
+frame nào chạy lúc nào, và bao nhiêu frame được phép nằm trong encoder — thành thứ đọc được và test được mà không cần browser.
+
+### 48.1 Việc của lượt này
+
+Ba luật mới, một module, chưa có consumer:
+
+| File | Trạng thái | Dòng |
+|---|---|---|
+| `packages/core/src/exportEncode.mjs` | mới | 250 |
+| `packages/core/test/export-encode-plan.test.mjs` | mới | 263 |
+| `packages/core/src/index.mjs` | barrel cộng một dòng export | +1 |
+| `packages/core/src/index.d.ts` | khai báo cho app | +57 |
+
+Không có file `app/**` nào đổi. `compileTimelineToFfmpeg` vẫn là đường export duy nhất mà người dùng bấm tới, và đó là sự thật
+cần nói rõ trước khi ai đó đọc hai chữ "slice H".
+
+### 48.2 Ba quyết định, và cái giá của mỗi quyết định
+
+**Preset đến từ câu trả lời đã ghi, không từ hy vọng.** `planEncodeConfig` nhận `presets` theo thứ tự ưu tiên và `answers` là
+kết quả `isConfigSupported` mà host đã đo. Luật nói ba điều mà một vòng encode viết tay sẽ nói sai:
+
+- một preset **chưa đo** là `unmeasured`, không phải `supported` — brief ghi "ghi kết quả, không đoán hardware H.264", và trên
+  máy không có codec phần cứng thì đoán nghĩa là xuất ra file không tồn tại;
+- runtime trả về **codec khác** codec mình hỏi là `substituted`, tức là **thất bại**, không phải thành công — ADR-030 cấm tự đổi
+  codec/container, và một exporter âm thầm đổi `avc1` sang `vp09` tạo ra file mở được nhưng không phải file người dùng yêu cầu;
+- ma trận verdict đi theo cả câu trả lời **thành công** (`checked` luôn có mặt), vì exit criterion của H là "kết quả
+  `isConfigSupported` được ghi vào report", không chỉ "có file chạy được".
+
+**Timestamp là index nhân FPS hữu tỉ, làm tròn đúng một lần.** `planEncodeSample({ index, rate, contentEndTicks, timescale })`
+trả `{ timestamp, duration, isLast }` bằng số nguyên trong timescale của muxer. Đây là chỗ repo đang sai:
+`app/utils/tmcut/canvas.ts:40` trả `Math.round((numerator / denominator) * 1000) / 1000`, tức 30000/1001 thành **29.97**, và mọi
+consumer chia cho con số đã làm tròn đó. 30 frame của 29.97 là 1,001 s; chia cho 29,97 ra 1,001001 s. Luật mới không đi qua con
+số ấy: `round(index × timescale × denominator / numerator)`, và `duration` là **hiệu hai timestamp liên tiếp** nên tổng các frame
+luôn đúng bằng timeline — 300 frame của 29.97 cộng lại chính xác 10,01 s, không tích sai số. Frame cuối lấy độ dài của
+**content**, không lấy độ dài của một frame: muxer mà được báo ngược thì viết file dài hơn project.
+
+**Bound không được phép thành 0.** `planEncodeQueue` trả `push` hay `wait`, nhưng một `limit` không phải số nguyên dương rơi về
+`DEFAULT_ENCODE_IN_FLIGHT` (4). Đây là lỗi chết người theo kiểu im lặng: loop được bảo chờ một slot không bao giờ mở thì không
+encode frame nào, và exporter trông như đang chạy.
+
+### 48.3 Test, và hai lỗi trong test của chính tôi
+
+20 checks, ba describe. Chạy đầu tiên là trên một bản stub trả `null`/rỗng để chắc rằng test fail vì **hành vi**, không vì không
+load được module. Ba việc tự bắt được ở đó:
+
+- `returns nothing for an index outside the sequence` **đậu ngay trên stub**, vì nó chỉ toàn assertion `null` — một luật trả
+  `null` cho mọi thứ sẽ qua nó. Đã thêm một positive control (frame 29 của project 1 giây phải là
+  `{timestamp: 966667, duration: 33333, isLast: true}`) vào cùng block.
+- Tôi đã viết "frame 2 nằm ngoài project 1 giây". Sai: ở 30 fps project 1 giây có frame 0..29, frame 30 mới là ngoài.
+- Tôi đã viết độ dài frame của 29.97 "luân phiên" 33367/33366. Sai: nó theo chu kỳ 3 (33367, 33366, 33367, 33367, …), assertion
+  đã đổi thành "mỗi frame dài một trong hai số đó, và tổng 300 frame chính xác 10,01 s".
+
+Sửa hai dòng cuối là sửa **test**, không sửa luật.
+
+### 48.4 Mutation: 11 mutant, 10 bị bắt, 1 sống và sống đúng
+
+| Mutant | Kết quả | Assertion nào bắt |
+|---|---|---|
+| M1a chia cho float của một hữu tỉ đúng (`numerator/denominator`) | **SỐNG** | — (xem giải thích) |
+| M1b FPS làm tròn 3 chữ số như `canvasFpsValue` | CAUGHT | `keeps 29.97 exact where a float FPS drifts` |
+| M1c `Date.now()` thay cho index | CAUGHT | `keeps 29.97 exact…` + `sizes a frame so the durations add up` |
+| M2 preset chưa đo được tính là supported | CAUGHT | `names every preset still unmeasured instead of encoding on a guess` |
+| M3 bỏ so codec echo | CAUGHT | `refuses when the runtime swapped the codec it was asked about` |
+| M4 cho qua kích thước lẻ | CAUGHT | `kills an odd height before the answer matters, naming the chroma law` |
+| M5 tôn trọng `limit` = 0 | CAUGHT | `a limit of zero falls back to the default instead of waiting forever` |
+| M6 frame cuối giữ nguyên một frame thay vì content | CAUGHT | `gives the last frame the length of the content` |
+| M7 mux cả sample nằm sau content | CAUGHT | `returns nothing for an index outside the sequence` |
+| M8 audio không tham gia verdict | CAUGHT | `a preset with a supported video and an unsupported audio is not supported` |
+| M9 `isLast` không bao giờ bật | CAUGHT | `gives the last frame the length of the content` + positive control |
+
+M1a sống là **mutant tương đương**, không phải lỗ thủng: `30000/1001` ở dạng float sai khoảng 1e-17 relative, tới 20 triệu µs vẫn
+lệch dưới 1e-9, nên `Math.round` cho cùng một số. Bệnh thật là làm tròn 3 chữ số, và M1b bắt nó. Ghi lại vì một bảng mutation
+không có mutant sống nào thì đáng nghi hơn bảng này.
+
+### 48.5 Gate chạy trên HEAD `1f0d0bb`
+
+| Gate | Lệnh | Kết quả | Bằng chứng |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | **PASS** | exit 0, `grep -c "error TS"` = 0, `.nuxt/eslint.config.mjs` regenerate 11:53 (28 605 B) |
+| 2 Lint | `npx eslint` trên 4 file chạm, chạy **sau** gate 1 | **PASS** | exit 0, log 0 dòng |
+| 3 Unit | `npx tsx tests/unit/run-all.mts --smoke` | **PASS** | 128/128 specs, exit 0 |
+| 3b Core | `node --test "packages/core/test/*.test.mjs"` | **PASS** | 773/773 (753 trước lượt này + 20 checks mới), exit 0 |
+| 3c Core types | `npx tsc -p packages/core --noEmit` | **PASS** | exit 0, 0 `error TS` |
+| 3d Boundaries | `node packages/core/tools/check-boundaries.mjs` | **PASS** | core không import gì platform-specific |
+| 4 Live | — | **N/A** | chưa có consumer: không file `app/**` nào đổi, không route nào render, và chưa gọi `isConfigSupported` lần nào |
+
+Một gate **đã fail trước khi pass**, và đó là gate của repo chứ không phải của luật: chạy lần đầu, `tmcut_doc_citations` báo
+exit 1 vì dòng chữ `audit §6` trong header comment của test mới bị hiểu là trích dẫn tới một tài liệu tên `audit`, mà registry
+chỉ khai báo `docs`, `roadmap v1`, `roadmap v3`, `architecture`… Cách sửa **không phải** thêm `audit` vào registry (sẽ làm guard
+yếu đi để vừa với comment của tôi), mà bỏ ký hiệu `§` khỏi comment: luật vẫn dẫn đúng nguồn, guard vẫn bắt được mọi trích dẫn
+thật. 128/128 là số của lần chạy **sau** sửa đó.
+
+### 48.6 Chưa chứng minh / nợ
+
+- **Chưa có ai gọi ba luật này.** `planEncodeConfig` mới chỉ sống trong test; host nào cũng chưa từng gọi
+  `VideoEncoder.isConfigSupported` cho một preset export thật. Ma trận capability **của máy này** vì thế vẫn trống.
+- **Audio chưa có luật timestamp riêng.** `planEncodeSample` quy đổi từ **ticks**, tức là từ lưới frame; packet PCM đến từ mixer
+  cần một luật tính theo sample count. Đừng suy ra từ §48.2 rằng hai đường đã cùng một câu trả lời — chúng chưa cùng tồn tại.
+- **Leg mux vẫn chưa có gì.** ADR-029 ghi "leg mux thuộc slice H": chưa một dòng `mediabunny` output nào được viết, và khi viết
+  thì phải **cố ý** sửa allowlist mà `tmcut_media_probe.spec.ts:350`, `tmcut_silence_scan.spec.ts:189` và
+  `tmcut_autocut_detect.spec.ts:108` đang đóng băng (danh sách file import `mediabunny`).
+- **ADR-030 vẫn MỘT PHẦN**, ADR-029 vẫn MỘT PHẦN, ADR-033 vẫn CHỜ: export vẫn đi `/uploads/` và vẫn spawn FFmpeg.
+- Câu "phải chẵn vì encoder subsample chroma 2x2" giờ nằm **hai chỗ**: `packages/core/src/htmlVideo.mjs:207,212` và
+  `packages/core/src/exportEncode.mjs`. Chữ đã là một hằng số export (`ENCODER_EVEN_DIMENSION_REASON`) nhưng `htmlVideo.mjs` chưa
+  import nó — hai chuỗi đang **giống nhau từng byte**, và gộp chúng là việc của một lượt sau, không phải của lượt này.
+- Tuyên bố §13.2 (PCM-S16 không encoder nào nhận, nên "remux lossless" phải đo lại từng máy) vẫn chưa được đo lại bởi H.
