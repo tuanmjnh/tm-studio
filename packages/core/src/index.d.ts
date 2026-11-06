@@ -2482,3 +2482,56 @@ export function planEncodeQueue(input: {
   inFlight?: number
   limit?: number
 }): { action: 'push' | 'wait', outstanding: number, limit: number, room: number }
+
+// --- Export content laws (zero-FFmpeg slice H3d) ---
+/**
+ * The audio config the exporter asks a runtime about when the file has sound:
+ * 48 kHz stereo, measured as the one AAC answers `supported` to (§49.4, §52.1).
+ */
+export const ENCODE_AUDIO_REQUEST: { sampleRate: number, channelCount: number }
+
+/** Every reason `planEncodeContent` can name, in its reported (sorted) order. */
+export const ENCODE_REFUSAL_REASONS: readonly string[]
+
+/** One project, judged for the WebCodecs exporter. */
+export interface CoreEncodeContentVerdict {
+  kind: 'eligible' | 'refused'
+  /** Sorted and complete: every unpaintable feature in the project, named once. */
+  reasons: readonly string[]
+  /** Hand this to `planEncodePresets`. Null whenever anything is refused. */
+  request: CoreEncodeRequest | null
+  /** The validated canvas the painter sizes itself to. Null on a refusal. */
+  canvas: { width: number, height: number, fps: FrameRate } | null
+  totalFrames: number
+  contentEndTicks: number
+  durationSec: number
+}
+
+/**
+ * What one project means for the exporter: the frame grid the session is owed,
+ * and the named reasons a canvas painter cannot reproduce the monitor yet.
+ */
+export function planEncodeContent(
+  input: TmcutProject | TmcutTimeline | { canvas?: TmcutCanvas, tracks?: TmcutTrack[] } | null | undefined
+): CoreEncodeContentVerdict
+
+/** Where one layer lands, in canvas pixels — the two rects of one `drawImage`. */
+export interface CoreEncodePlateRect {
+  source: { sx: number, sy: number, sw: number, sh: number }
+  /** May extend past the canvas, with a negative origin: the frame edge crops. */
+  dest: { dx: number, dy: number, dw: number, dh: number }
+  alpha: number
+}
+
+/**
+ * The plate rect for one layer, mirroring the preview's `object-fit` CSS and the
+ * file's `scale`/`pad`/`crop`/`overlay` chain. Null for an unusable media or
+ * canvas size, and for a fit mode with no measured canvas twin (`smart`).
+ */
+export function planEncodePlate(input: {
+  media?: { width?: number, height?: number } | null
+  canvas?: { width?: number, height?: number } | null
+  layout?: CoreEvaluatedLayout | null
+  transform?: Pick<CoreEvaluatedTransform, 'x' | 'y' | 'scaleX' | 'scaleY'> | null
+  opacity?: number
+}): CoreEncodePlateRect | null

@@ -5915,3 +5915,137 @@ lọt**, nghĩa là guard "stamp lạ" không có test → RED check 28 với `v
 chạy → watchdog trong `main()` (mutant giờ chết **có tên**) → **8/8** → docs §52 + ADR → **một lần suite cuối cùng
 chạy trên cây commit**; câu này tồn tại để nó bị kiểm chứng: nếu lần đó không in ra 130/130 thì §52.6 sai và phải sửa.
 
+
+## 53. Slice H3d — trước khi có consumer: dự án nào exporter vẽ nổi, và plate nằm ở đâu (đo ngày 2026-11-06)
+
+§51.7 và §52.8 cùng trả một câu nợ: "**Lượt H3d là lượt consumer** — nút export → `renderAt` → session → tải file".
+Trước khi viết consumer, lượt này phải trả lời hai câu mà **không ai từng viết ra** ở bất kỳ đâu:
+
+1. Project nào exporter WebCodecs vẽ nổi **một cách trung thực**? Câu cũ của §48 chỉ là "runtime có encoder không"; nó
+   không nói gì về việc trong project có caption, có mask, có hàng chồng nhau hay không.
+2. Plate của một clip nằm ở **chữ nhật nào** trên canvas? `renderAt` cho layers, session cho packet, nhưng giữa hai cái
+   là chỗ vẽ — và chưa có luật nào mô tả chỗ đó.
+
+Cả hai đều là luật **core**, chạy được không cần browser, nên đều có RED trước. Văn kiện của luật:
+[exportContent.mjs](file:///D:/Applications/tm-studio/packages/core/src/exportContent.mjs) —
+`planEncodeContent` ([:159](file:///D:/Applications/tm-studio/packages/core/src/exportContent.mjs#L159)) và
+`planEncodePlate` ([:294](file:///D:/Applications/tm-studio/packages/core/src/exportContent.mjs#L294)).
+
+### 53.1 Luật thứ nhất: từ chối **có tên**, đừng xuất ra đen
+
+`ENCODE_REFUSAL_REASONS`
+([:63](file:///D:/Applications/tm-studio/packages/core/src/exportContent.mjs#L63)) là một từ vựng **đóng và đủ**:
+`bad-canvas`, `background-image`, `empty`, `stacked-rows`, `text`, `effects`, `mask`, `blend`, `transition`, `reverse`,
+`stabilize`, `fit-unsupported`, `rotation`. `planEncodeContent` trả `kind: 'refused'` kèm danh sách đã lọc theo từ vựng
+và sắp thứ tự — nên modal chỉ việc in từng lý do, **không được tự quyết định** lý do nào tồn tại. Đó là lý do danh sách
+nằm ở core chứ không phải ở `TmcutExportModal.vue`: một chỗ quyết ở UI sẽ là chỗ thứ hai nói "project này được" cho một
+project mà renderer không vẽ nổi.
+
+Điểm thiết kế quan trọng nhất: module **không tự viết lại** bất kỳ quy tắc phân loại nào. Nó đọc qua đúng các hàm mà
+preview và FFmpeg-export đang đọc, vì mỗi quy tắc viết lại là một quy tắc có cơ chế **lệch**:
+
+| Câu hỏi | Hàm được dùng (đã tồn tại) |
+|---|---|
+| Hàng nào là footage / overlay / audio? | `selectFileRows` — cùng phân loại theo **track** mà §44 dựng |
+| Clip nào thật sự sống tại tick này? | `evaluateTimeline` / `clipSpan` |
+| Blend mode thật của clip là gì? | `blendModeOf` (đã chuẩn hoá về `normal`) |
+| Mask có hiệu lực không? | `normalizeMask` (hình lạ trả `null`, tức không từ chối oan) |
+| Clip có ra tiếng không? | `isTrackMuted` + `makesSound` ([exportContent.mjs:133](file:///D:/Applications/tm-studio/packages/core/src/exportContent.mjs#L133)): volume mặc định 100, nên chỉ volume 0 **kèm** không keyframe volume dương mới là im lặng |
+| Fit nào vẽ được? | `resolveClipLayout`; `isPaintableFit` chỉ loại `smart` |
+| Lưới frame là bao nhiêu? | `createFrameScheduler` — **không** tính lại |
+
+Và ba thứ module **cố ý không** sở hữu: kích thước chẵn (đã thuộc `planEncodePresets`/`evenDimensionError`), lưới frame
+(đã thuộc `createFrameScheduler`), chọn row (đã thuộc `selectFileRows`). Test "a single footage row is eligible and
+reports the grid core already counts"
+([:52](file:///D:/Applications/tm-studio/packages/core/test/export-content-eligibility.test.mjs#L52)) khẳng định
+`verdict.totalFrames`/`contentEndTicks` **bằng đúng** `scheduler.frameCount`/`endTicks` của một lời gọi
+`createFrameScheduler` ngay trong test — một mutant tính lại lịch sẽ chết ở đó.
+
+`audio` của request là `ENCODE_AUDIO_REQUEST = { 48_000, 2 }`
+([:56](file:///D:/Applications/tm-studio/packages/core/src/exportContent.mjs#L56)) chứ không phải con số đẹp: đó là
+**cặp duy nhất** §52.1 đo là sống cho `mp4a.40.2` trên máy này (22 050 và 32 000 Hz: `supported: false`). Project không
+ra tiếng thì `audio: null`, nên một dự án chữ-trên-nền không phải trả giá hai kênh im lặng.
+
+Lý do `background-image` là **phát hiện** của lượt này, không phải lý do có sẵn: preview vẽ nó bằng
+`backgroundImage: url(...)` ([TmcutPreviewPlayer.vue:303](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L303))
+và FFmpeg đăng ký nó thành input loop ([render/index.ts:104](file:///D:/Applications/tm-studio/app/utils/tmcut/render/index.ts#L104)
+→ `buildBackgroundSource`). WebCodecs-export chưa có đường nào, nên nếu không từ chối thì file ra **đổi nền thành đen**
+ngay cả khi preview hiện ảnh — đúng loại lỗi im lặng mà §48 và §52 đã phải sửa bằng số đo.
+
+### 53.2 Luật thứ hai: chữ nhật plate lấy **nguyên văn** từ hai builder đang chạy
+
+`planEncodePlate` trả `{ source: {sx,sy,sw,sh}, dest: {dx,dy,dw,dh}, alpha }` cho một clip trên canvas. Nó không phải
+hình học tự nghĩ: từng dòng được đọc sang từ hai chỗ đã được chứng minh bằng pixel ở các slice trước —
+`computeFitObjectStyle` (CSS của preview) và `buildFfmpegFitFilters`/`buildFfmpegTransform` (filtergraph của FFmpeg),
+cả hai trong [canvas.mjs](file:///D:/Applications/tm-studio/packages/core/src/canvas.mjs).
+
+| Yếu tố | Luật, và chỗ nó được sao |
+|---|---|
+| Box canvas | `max(2, floor(x/2)*2)` — đúng `evenBox` của hai builder |
+| Tỉ lệ crop | `clamp01` từng thành phần; **điều kiện áp dụng** chép nguyên văn từ builder — `cw>0 && ch>0` **và** một trong bốn nhánh `cx>0`, `cy>0`, `cw<1`, `ch<1`; nếu không thì crop được coi là toàn khung |
+| `fill` | cắt giữa nguồn theo aspect canvas, **cả hai** nhánh (nguồn rộng hơn thì thu bề ngang; cao hơn thì thu bề dọc) |
+| `fit` | `k = min(boxW/sw, boxH/sh)` rồi **canh giữa** |
+| `stretch` | phủ kín box, không giữ aspect |
+| Vị trí | `dx = round((boxW - dw)/2 + x)` — đúng công thức overlay của `buildFfmpegTransform` |
+| `alpha` | opacity kẹp 0..1; giá trị không phải số thì 1 |
+| `smart` | trả `null` — core không có luật focus cho nó, và `planEncodeContent` đã từ chối clip đó rồi |
+| rotation | **không** áp dụng; thay vào đó là lời từ chối `rotation`. Một plate tự xoay nửa vời nguy hiểm hơn một lời từ chối |
+
+19 test trong [export-plate-rect.test.mjs](file:///D:/Applications/tm-studio/packages/core/test/export-plate-rect.test.mjs)
+khẳng định **chữ nhật thô**, không phải thuộc tính dẫn xuất — ví dụ nguồn 960×1920 trên canvas 1920×1080:
+`fit` cho `dest {690, 0, 540, 1080}`, `fill` cho `source {0, 690, 960, 540}`; `scaleX: 2, scaleY: 0.5` cho
+`dest {dx:-960, dy:270, dw:3840, dh:540}` (phóng **to** rồi offset **âm**, đúng như CSS/FFmpeg làm, không kẹp về canvas).
+
+### 53.3 Ba chỗ lượt này làm sai — ghi lại để không tin là sạch
+
+1. **`background-image` viết trước test.** Đúng thứ tự phải là RED rồi mới code, và lượt này đã phải làm lại điều đó
+   **hai lần**: lần đầu ở window trước (xoá nhánh, đo, dựng lại), lần thứ hai ở đây vì văn bản §53 dẫn chứng một log
+   **không tồn tại**. Log thật kini là `node_modules/.cache/tmcut-gates/h3d1-bg-RED.txt`, đo trên đúng blob
+   `903e0833ea726b8f922150d0c5b16f26f1676749` mà commit này chứa: **29 test → 28 pass / 1 fail**, fail đúng một cái
+   `an image canvas background is refused: the painter has no still-decode leg`, rồi restore **byte-identical** (hash
+   khớp lại từng byte) và 29/29. **Phát hiện phụ, đáng ghi hơn cả cái RED**: assertion thứ hai về nền ảnh — "giá trị
+   rỗng thì không phải lý do" — **không** canh nhánh luật đó, vì nó khớp cả khi nhánh tồn tại lẫn khi bị xoá (dự án đủ
+   điều kiện ở cả hai phía). Nó vẫn đáng giữ vì nó chặn một mutant *khác* (từ chối mọi nền ảnh), nhưng đừng đếm nó là
+   bằng chứng của luật. §52.8 đã phải nhận một lỗi cùng loại ("release-at-flush law written before its RED").
+2. **Fixture sai, không phải assertion sai.** Test "clip audio đứng một mình thì từ chối `empty`" ban đầu đặt clip
+   `type: 'audio'` trên **track video** và chờ `['empty']` — nó fail. Nguyên nhân thật: lane là thuộc tính của **track**
+   (`selectFileRows` chỉ đọc `track?.type`, [paintStack.mjs:148](file:///D:/Applications/tm-studio/packages/core/src/paintStack.mjs#L148));
+   `clip.type` chỉ là nhãn. Đã sửa **fixture** khai báo track `type: 'audio'`, **giữ nguyên** assertion. Sửa chiều
+   ngược lại thì test trở thành thứ bảo vệ một mô hình không tồn tại.
+3. **Hai expectation sai của chính test plate, bắt được trước khi code.** `scaleX: 2` ban đầu viết là `dw: 1920` (tưởng
+   kẹp về canvas); case `fill` mới chỉ có nguồn **dọc**. Cả hai sửa trước khi implement — nếu không thì 19 test xanh sẽ
+   mô tả một hình học không tồn tại.
+
+### 53.4 Chưa chứng minh (H3d còn tiếp)
+
+- Con số **±1 px**: `planEncodePlate` dùng `round`, FFmpeg dùng phép chẵn-hoá và `pad`, preview dùng CSS %. Đây là số
+  **duy nhất** không suy ra được từ builder; nó thuộc về lượt đo live (#156), không phải chỗ đoán.
+- Consumer thật: capability ask → `createEncodeSession`, `paint(index)`, mixer PCM offline (#154); dispatch + tải file +
+  copy từ chối (#155); file thật trên `:4003` và parity điểm ảnh với file FFmpeg (#156).
+- `planEncodeContent` chưa từng chạy trên **project người dùng thật** — mọi con số ở đây là từ fixture.
+
+### 53.5 Gates của increment H3d-1 (chạy trên cây sẽ commit)
+
+| Gate | Lệnh | Kết quả | Bằng chứng |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | exit 0, số `error TS` = 0; `.nuxt/eslint.config.mjs` tái sinh 28 605 B lúc 19:00 |
+| 2 Lint | `npx eslint` trên 5 file, **sau** gate 1 | PASS | exit 0, 0 problems. Lần lint trước đó bị loại vì chạy trước khi config tái sinh |
+| 3 Core types | `npm run typecheck:core` | PASS | exit 0 |
+| 4 Core tests | `npm run test:core` | PASS | 912 pass / 0 fail (tăng từ 864 của §52) |
+| 5 Core boundary | `npm run check:core` | PASS | "core imports nothing platform-specific" |
+| 6 Spec mới | `node --test` hai file mới | PASS | 48/48 (29 eligibility + 19 plate) |
+| 7 App suite | `npx tsx tests/unit/run-all.mts --smoke` | PASS | **130/130**, exit 0. Dòng chứa "FAIL" duy nhất là `0 FAILED` trong stdout của `tmcut_auth_refresh.spec.ts` |
+| 8 Doc citations | `tmcut_doc_citations.spec.ts` | PASS | exit 0, 5 pass. Ba chỗ phải bỏ nhãn `audit` — lệ đã ghi ở §52.7: trích trong repo là `§NN` trần |
+| 9 Docs guards | 6 spec `docs_*` / `tmcut_doc_*` | PASS | mỗi spec exit 0. `tmcut_doc_table_shape` **FAIL hai lần trước đó** vì chính văn bản §53 (§53.5) |
+| 10 Probe luật nền ảnh | xoá nhánh → `node --test` → restore | PASS | 28 pass / 1 fail trên blob `903e0833…`, restore byte-identical, 29/29 lại (§53.3) |
+
+Gate 4 và 6 đã **chạy lại sau** probe: 912/912 core và 19/19 plate trên đúng blob đã restore.
+
+**Nền của con số 130**: `run-all.mts` **không** có `--smoke` báo 127 spec, có `--smoke` báo 130. Hai số không so sánh được
+với nhau; §52 dùng nền có `--smoke` và lượt này giữ nguyên nền đó.
+
+**Hai gate docs đã bắt được lỗi của chính văn bản này**, và cả hai là lý do chúng tồn tại: `tmcut_doc_table_shape` từ chối
+một hàng bảng bị ngắt dòng (tôi chèn `\n` vào giữa hàng ADR-030 — markdown bảng là **một dòng một hàng**), và nó cũng từ
+chối một `|` trần trong cell (điều kiện crop có `||`). Sửa: viết lại điều kiện bằng lời, **không** nới guard.
+`tmcut_doc_line_length` thì lộ một trần thật: hàng ADR-030 đã dài **1 346 / 1 356 ký tự**, nên phần H3d-1 của nó **không
+đi vào bảng** mà nằm ở note ngày 2026-11-06 cuối file — và lượt H3d-5 muốn ghi vào bảng thì phải **cắt** chứ không thêm.
