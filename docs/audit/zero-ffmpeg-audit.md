@@ -5747,3 +5747,171 @@ phải bỏ vì **số phép close vẫn khớp**, chỉ thời điểm là sai 
 bằng chính các số giờ vừa đo → **một lần suite cuối cùng** chạy trên cây commit, và câu này tồn tại để nó được kiểm chứng:
 nếu nó không in ra 130/130 thì §51.6 sai và phải sửa.
 
+## 52. Slice H3c — encoder thật trả lời bằng số, và file mp4 đầu tiên có A/V offset 0,000 ms (đo ngày 2026-11-06)
+
+§51.7 đóng bằng một câu nợ: "**Lượt H3c là lượt consumer**". Trước khi viết consumer, lượt này trả **bằng số** hai câu
+mà seam đang giả định — `VideoEncoder` có reorder không, và `AUDIO_PACKET_FRAMES` (1024) là cỡ frame của chính
+`AudioEncoder` hay chỉ là luật của định dạng — rồi mới nối `createEncodeSession` vào một `Output` thật. Cách đo lấy theo
+§49.4: chạy trên đúng trang đang serve, ghi raw answer, **sau đó** mới sửa luật. Số liệu thô:
+`node_modules/.cache/tmcut-gates/h3c/probe-2026-11-06.md` (Chrome trên Windows, ngày 2026-11-06, trang `:4003`).
+
+### 52.1 Ma trận output của encoder thật
+
+Bảng này là câu trả lời của **máy này**, viết ra để lượt sau khỏi đoán; cột cuối là luật nó buộc.
+
+| Câu hỏi | Số đo | Luật nó buộc |
+|---|---|---|
+| `VideoEncoder` có đổi thứ tự output không? | 9 run (avc1.640028 ở 48 frame màu quét, 48 frame đặc, 120 frame nhiễu mỗi điểm ảnh 1080p, `latencyMode` bỏ trống / `realtime` / `quality`; vp09.00.50.08 48 frame; avc 1280x720): `chunks == frames`, `maxReorder 0`, `unknownTimestamps 0`, `maxSentAheadOfOutput 0`, output stamp khớp **từng µs** với stamp đã đưa | giữ luật khớp-theo-timestamp của §51 cho video, nhưng không được **dựa** vào nó: một runtime im lặng hôm nay không hứa gì cho ngày mai, nên stamp lạ vẫn phải là một lời từ chối (§52.2) |
+| `AudioEncoder` có echo timestamp không? | **Không.** Core grid đưa `[0, 21333, 42667, 64000, 85333, 106667]` → nhận `[0, 21333, 42666, 64000, 85333, 106666]`; 44,1 kHz đưa `[0, 23220, 46440]` → nhận `[0, 23219, 46439]`; **8 packet cùng stamp 12345** → `12345, 33678, 55011, 76345`; input **giảm dần** `170664, 149331, …` → `170664, 191997, 213330` | audio không có danh tính theo timestamp: encoder tự sinh clock của nó và chỉ packet **đầu** ăn theo input. `planEncodeChunk` ([exportEncode.mjs:764](file:///D:/Applications/tm-studio/packages/core/src/exportEncode.mjs#L764)) trả luôn danh tính, seam chỉ vâng |
+| Trần dưới của một luồng AAC | 1 hand (sine **hoặc** silence thuần) → `flush()` **ném** `EncodingError: Flushing error.`; 2 hand → flush sạch và trả đúng 2 output | số **hand** tối thiểu là một luật riêng (`AUDIO_MIN_HAND_PACKETS`, [:662](file:///D:/Applications/tm-studio/packages/core/src/exportEncode.mjs#L662)), không suy ra được từ số packet |
+| Bao nhiêu output cho N hand? | aac cỡ 1024: 2→2, 3→3, 4→4, 5→5, 8→8, 10→10, 47→47, 50→50; opus cỡ 960: 1→2, 3→4, 5→6, 25→26, 50→51, 100→101 | seam **đưa** `encodeAudioHandCount` ([:681](file:///D:/Applications/tm-studio/packages/core/src/exportEncode.mjs#L681)) nhưng **ghi** `encodeAudioPacketCount`: hai số khác nhau là chuyện thường của codec, không phải chỗ nào đó sai |
+| Phần đuôi thì sao? | 10 hand nguyên + remainder `R` trong `{1024, 1023, 1008, 960, 896, 512, 256, 128, 64, 1}` → **11 output cả 10 lần**, `lastTs` luôn bằng grid(10) = 213333, `lastDur` 21328..21504; 47 hand nguyên + 896 → 48 output, `lastDur` 21333 trong khi content chỉ 18667 µs | encoder trả một **frame nguyên**, không trả phần còn lại. Packet vượt lịch là packet thừa: audio thì **bỏ**, video thì **từ chối cả run** |
+| Cỡ hand có phải của encoder không? | aac nhận packet 960 sample → 20 in / 19 out, stamp vẫn nằm trên grid 1024; opus nhận packet 480 → 50 in / 26 out | **có**: `AUDIO_PACKET_FRAMES` ([:110](file:///D:/Applications/tm-studio/packages/core/src/exportEncode.mjs#L110)) đúng là cỡ frame của encoder. Đưa cỡ khác thì encoder tự chia lại và lịch không còn mô tả cái đã đưa |
+| Khai báo codec | `"aac"` @48 kHz 2 kênh → `supported: false`; `mp4a.40.2` → true; opus true ở 48/44,1/22,05 kHz; mp4a false ở 22 050 và 32 000 Hz, true ở 48 000 Hz mono và 6 kênh | §49.3 đã đúng khi hỏi **cả hai spelling**; với AAC trên máy này chỉ một spelling sống, nên thang preset phải là nơi sinh ra nó |
+| Keyframe và description | `keyCount` == số lần yêu cầu (4/48 frame, 1/120 frame); `decoderConfig` của avc **43 byte**, của vp09 là `description: null` | luật "description chỉ đi packet đầu của mỗi track" (§51) đứng nguyên; nhưng vp09 không description là một đường **chưa từng mở file** (§52.7) |
+| Chặng nào chậm? | 1080p30, 90 frame vẽ bằng canvas: avc @6 039 360 hết 1438 ms tính cả flush = **16,0 ms/frame** (1136 kbps); vp09 1182 ms = 13,1 ms/frame (4318 kbps); 720p avc @5 Mbps 762 ms = 8,5 ms/frame. Vòng gọi `encode()` thuần: 0,3 ms/frame | encode **không** phải chặng chậm nhất: con số 53,9 ms/frame đo cùng ngày thuộc về máy **sinh frame** (`ImageData` từng điểm ảnh), không thuộc encoder. Muốn nhanh thì lo chỗ vẽ trước |
+
+### 52.2 Ba luật phải viết lại vì số đo
+
+Cả ba đều là chỗ seam đã **giả định**, và giả định sai; cả ba đều có mutant riêng (§52.6).
+
+**(1) Audio không có danh tính theo timestamp.** §51 dựng luật "chunk khớp với sample nó sinh ra, theo timestamp" cho cả
+hai leg. Số đo ở bảng trên giết nó cho audio: encoder trả `42666` cho `42667` vừa đưa, nên tra theo timestamp rơi thẳng
+vào guard "stamp lạ" và **từ chối mọi export có tiếng**. Core trả luôn danh tính (`planEncodeChunk` → `identity` bằng
+`ordinal` cho audio, `timestamp` cho video), seam chỉ vâng:
+`release(who, step.identity === 'timestamp' ? chunk.timestamp : null)`
+([exportEncodeSession.ts:471](file:///D:/Applications/tm-studio/app/utils/tmcut/exportEncodeSession.ts#L471)).
+Test: `'an audio packet reaches the file on core's clock, matched by its order'`
+([spec:475](file:///D:/Applications/tm-studio/tests/unit/tmcut_export_encode_session.spec.ts#L475)).
+
+**(2) Packet vượt lịch: bỏ với audio, từ chối với video.** Opus đo được 50 in / 51 out, packet 51 là 3 byte im lặng
+không thuộc sample nào. `planEncodeChunk` trả `drop-tail` cho audio, và trần `packetTotal` được tính **theo leg**
+([:480](file:///D:/Applications/tm-studio/app/utils/tmcut/exportEncodeSession.ts#L480)) nên hai leg không thể dùng chung
+một con số — một video packet ở stamp lạ vẫn phải là `fail`. Test:
+`'the packet an encoder emits past the schedule stays out of the file'`
+([spec:516](file:///D:/Applications/tm-studio/tests/unit/tmcut_export_encode_session.spec.ts#L516)); mutant
+`tail-bound-by-frames` (dùng `who.queued` cho cả hai leg) chết ở câu
+`the packet at 18666 us has no place on core's audio clock`.
+
+**(3) Số hand không phải số packet.** `encodeAudioHandCount` là `max(packets, floor)`; với dự án 2 240 tick
+(= 896 sample, một packet) thì file nhận 1 packet mà encoder đòi 2 hand. Seam hỏi mixer theo **hand**
+([:675](file:///D:/Applications/tm-studio/app/utils/tmcut/exportEncodeSession.ts#L675)) và
+`planEncodeAudioPadding` ([:707](file:///D:/Applications/tm-studio/packages/core/src/exportEncode.mjs#L707)) cấp nguyên
+một frame 1024 sample im lặng, đặt đúng grid, cho cái hand mà file không nhận. Test:
+`'a one-packet AAC stream is handed a second packet the file never takes'`
+([spec:529](file:///D:/Applications/tm-studio/tests/unit/tmcut_export_encode_session.spec.ts#L529)).
+
+### 52.3 Luật thứ tư: một packet không có byte thì file vẫn "đủ packet"
+
+Ba luật trên là **số**; cái này là **chất**, và nó là lý do seam không được tự tay dựng packet. `TmcutMuxerPacket` mà
+seam đưa cho muxer phải mang **byte của chunk** và clock của core: `stamp()`
+([:566](file:///D:/Applications/tm-studio/app/utils/tmcut/exportEncodeSession.ts#L566)) dựng
+`{ type, timestamp, duration, source: chunk }`, còn `toEncodedPacket()`
+([:326](file:///D:/Applications/tm-studio/app/utils/tmcut/exportEncodeSession.ts#L326)) là cửa duy nhất sang
+`EncodedPacket` của mediabunny (`EncodedPacket.fromEncodedChunk`), quy µs→s và chỉ `clone` khi hai số thực sự khác nhau.
+Nó lọt được vì **mọi** counter của run (`videoPackets`, `audioPackets`, `progress`) vẫn xanh nguyên vẹn khi `source` rỗng:
+file vẫn là mp4 đúng hình thức, hai track không có dữ liệu, và export "thành công". Test:
+`'the packet the file is promised carries the encoder bytes'`
+([spec:497](file:///D:/Applications/tm-studio/tests/unit/tmcut_export_encode_session.spec.ts#L497)) so object đã write
+với đúng object encoder đã emit.
+
+### 52.4 Hợp đồng timing của `flush()`, và hai chỗ phải nhận là làm ngược thứ tự
+
+**Hợp đồng.** WebCodecs hứa mọi output đến trước khi `flush()` resolve. Fake runtime bản đầu giao packet *sau* khi flush
+resolve — một runtime **không tồn tại** — và làm seam tin rằng "còn hàng đang về". Bản hiện tại giao hết trong lúc flush
+còn pending rồi mới resolve; đó là điều kiện để mọi assertion về `inFlight` có nghĩa.
+
+**Hệ quả đo được.** Một hand mà encoder không bao giờ trả (đúng case AAC floor 2 với dự án một packet, §52.1) để lại một
+sample còn mở; `planEncodeFinish` chỉ còn cách nói `wait`, và export treo vĩnh viễn trong khi mọi counter đều báo đủ
+packet. Seam vì thế nhả những sample còn mở ngay tại flush (`while (release(who, null)) who.inFlight -= 1`), để bước kế
+tiếp là `stalled` → **từ chối run** thành tiếng. Test:
+`'a hand the encoder never answers refuses the run instead of hanging it'`
+([spec:554](file:///D:/Applications/tm-studio/tests/unit/tmcut_export_encode_session.spec.ts#L554)).
+
+**Hai chỗ phải nhận.**
+
+- Luật release-at-flush được viết **trước** khi có test đỏ cho nó; bản 27 check đã xanh khi nó tồn tại. Nó không có RED,
+  nó có **bằng chứng mutation**: mutant `no-release-at-flush` bị chính check `spec:554` bắt
+  (`the swallowed audio hand never settled in 2000ms`). §50.3 bắt loại đảo thứ tự này phải được ghi tên, nên nó đứng ở đây.
+- Mutant `hands-from-packets` **đã lọt một lần**, và lý do nó lọt đáng ghi hơn bản thân nó. Bản `probes.sh` đầu tiên
+  quyết định "caught" bằng `grep "All 27 export-encode-session checks passed"` — một con số hard-code. Khi check thứ 28
+  ra đời, chuỗi đó không còn được in ra nữa, nên **mọi** mutant đều bị báo là caught: con số 8/8 viết lúc 17:2x là
+  artifact của **marker**, không phải của phép đo. Đo lại bằng exit code của spec thì ra **7/8**, và mutant lọt không hề
+  in FAIL: seam nằm chờ một promise không ai resolve, event loop cạn handle, và **Node thoát 0 với 16 check chưa chạy**.
+  `specStatus()` ([helpers/spec_status.ts:34](file:///D:/Applications/tm-studio/tests/unit/helpers/spec_status.ts#L34))
+  chỉ nhìn exit code và một dòng SKIP, nên một run cụt như vậy là PASS ở cấp runner. Đã chặn bằng watchdog đầu `main()`
+  của spec (30 s, trong khi cả spec đo được 6,6 s): mutant giờ chết **có tên**, vì watchdog gọi đúng check bị kẹt
+  (`"a one-packet AAC stream is handed a second packet the file never takes" never settled after 12 checks`), tức
+  **8/8** trên đúng md5 sắp commit.
+
+### 52.5 File thật đầu tiên: 28 305 byte, A/V offset đo được 0,000 ms
+
+Content tự chọn để đo sync chứ không để đẹp: 90 frame đen cho tới index 30 rồi trắng (flash onset đúng 1,000 s), PCM im
+lặng kỹ thuật số với một impulse 0,9 tại sample 48 000 (click đúng 1,000 s). Config **không** do người viết chọn: chính
+`planEncodePresets` xếp thang và chấm trên `isConfigSupported` thật → mp4, `avc1.64001f`, 320x240 @ 30 fps,
+1 000 000 bps, `mp4a.40.2` 48 kHz stereo.
+
+| Đường đọc lại | Số đo |
+|---|---|
+| Run của seam | `paintCalls` 90, `pcmCalls` 141, outcome 90 video / 141 audio packet, `progress` 1, **336 ms** wall, blob **28 305 byte**, type `video/mp4; codecs="avc1.64001f, mp4a.40.2"` |
+| Core tự tính | 141 packet và 141 hand — sàn AAC 2 không kịp binding ở 3 s |
+| `mediabunny` `Input` | video track codec `avc`, audio track codec `aac`; `computeDuration()` = **3,000 s cho cả hai track** |
+| `AudioBufferSink` | buffer đầu tại 0,000 s; giải mã ra **144 384 sample = 3,008 s** (141 × 1024); click tại **1,000000 s**; peak 0,8982 cho impulse 0,9 |
+| `CanvasSink` | onset chia đôi qua 10 lần seek: luma 0 tới 0,99902 s, 255 từ **1,00000 s**; các stamp rơi đúng grid 1/30 |
+| **A/V offset** | **1,000000 − 1,000000 = 0,000 ms** |
+| Stack của trình duyệt (không phải thư viện đã ghi file) | `<video src=blob:>`: `loadedmetadata` duration 3, 320x240, `readyState` 4; seek 0,4 s luma 0, 1,2 s luma 255; chạy tới `ended` |
+
+Hai chi tiết nên đọc kỹ vì chúng *không* phải 0. Phần đuôi 384 sample nằm **sau** chỗ file hứa (141 packet nguyên 1024
+cho 144 000 sample nội dung) mà metadata vẫn nói 3,000 s — đó đúng là hệ quả "đuôi là một frame nguyên" ở §52.1, và cả
+hai reader chấp nhận. Peak 0,8982 thay vì 0,9 là AAC lossy, không phải lệch clock.
+
+### 52.6 Gate của lượt này
+
+| Gate | Lệnh | Kết quả | Bằng chứng |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | exit 0 và 0 × `error TS`; `.nuxt/eslint.config.mjs` regenerate trước khi lint |
+| 2 Lint | `npx eslint` trên 5 file chạm, chạy **sau** gate 1 | PASS | exit 0 |
+| 3 Core | `node --test "packages/core/test/*.test.mjs"`, `tsc --noEmit -p packages/core`, `check-boundaries` | PASS | **864/864**, exit 0, `check-boundaries: PASS` |
+| 3b Seam | `npx tsx tests/unit/tmcut_export_encode_session.spec.ts` | PASS | **28/28**, exit 0, 6,6 s |
+| 3c Mutation | `probes.sh` trên đúng md5 sắp commit | PASS | **8/8** caught, seam md5 `e33fda76cf708b3b8c8e52642762a953` restore byte-identical |
+| 4 Live | export thật trên trang `:4003` | PASS | các số ở §52.5 |
+| 5 Suite | `npx tsx tests/unit/run-all.mts --smoke` | PASS | **130/130**, exit 0 |
+
+### 52.7 Nợ còn lại
+
+- **Chưa có consumer.** Seam vẫn không được route hay composable nào import (`grep` chỉ ra nó trong hai allowlist holder
+  của spec). §51.7 hứa "lượt H3c là lượt consumer": phần **file** đã xong và đo, phần **UI** thì không — đó chính là H3d.
+- **Reorder thật vẫn chưa đo.** Chín run của §52.1 đều không reorder, nên `maxReorder` của máy này là 0; guard và mutant
+  `identity-by-timestamp` đang bảo vệ một tình huống **chưa từng quan sát** trên Chrome/Windows. Nó đáng giữ vì rẻ, không
+  phải vì đã thấy.
+- **Một bất đồng hands/packets treo run.** Seam tự chắn ở `:675`, còn core không bao giờ đòi quá số hand nó đã nhận qua
+  `counters()`. Mutant `hands-from-packets` chứng minh nếu hai bên lệch nhau thì hậu quả là **treo**, không phải một lời
+  lỗi; watchdog của spec nay nhìn thấy, nhưng đó vẫn là 30 s chờ chứ không phải một câu `throw`. Muốn lời lỗi to thì
+  core phải nói rõ số hand tối đa nó sẽ đòi.
+- **`specStatus` không thấy một run cụt.** Đây là vấn đề hạ tầng, chưa sửa ở đây vì nó chạm cả 130 spec: một spec exit
+  0 giữa chừng hiện vẫn được báo PASS. Hướng sửa: spec tự khai số check và runner so số in ra với số khai.
+- **Chưa mux:** opus/webm (sàn hand và luật tail đã đo nhưng chưa mở file), AAC 44,1 kHz, mono, và đường vp09 không
+  `decoderConfig`.
+- **Priming chỉ "không nhìn thấy".** 0,000 ms là số của *hai reader trên máy này* (mediabunny và `<video>`), không phải
+  cam đoan của một player phần cứng hay một NLE. Edit list và av sync offset trên file có B-frame vẫn chưa có số.
+- **Electron chưa đo.** Mọi con số ở §52 là Chromium của trình duyệt thường; `webEncodePorts` chưa chạy trong renderer
+  của app.
+- **Bitrate/level vẫn phỏng đoán theo chuẩn** (§49.7 còn nguyên); 16,0 ms/frame ở §52.1 là canvas bands, không phải
+  footage thật.
+- Write bị vòng lặp chặn chứ không bị chuỗi `chain` chặn (§51.7) — chưa có test chứng minh điều đó gây hại.
+
+### 52.8 Sequence thật của lượt này
+
+Đọc `.d.ts`/IDL → probe `isConfigSupported` (ma trận §49.4 nối dài sang audio: `"aac"` false, `mp4a.40.2` true) → probe
+output của `VideoEncoder` (9 run, không reorder) và `AudioEncoder` (stamp tự sinh, 8 hand cùng stamp 12345, AAC floor 2,
+đuôi frame nguyên, re-segment khi sai cỡ) → **sửa core**: `identity` trong `planEncodeChunk`, `encodeAudioHandCount`,
+`planEncodeAudioPadding`, test core **RED trước** (16:57) rồi green (16:58) và 864/864 → **sửa seam**: ordinal cho audio,
+tail drop, `packetTotal` per leg, hands khác packets, `TmcutMuxerPacket.source` + `toEncodedPacket` → 27/27 → live file
+trên `:4003` (28 305 byte, offset 0,000 ms) → typecheck exit 0 **nhưng 8 × TS18047** `'packet' is possibly 'null'` mà
+`tsx` không hề thấy (27 check vẫn xanh!) → `throw` có tên thay cho `!` → lint FAIL 3 lỗi style ở `mediabunnyMuxer`, do
+một lần sửa văn trước đó ghép hai statement vào một dòng → tách dòng, lint exit 0 → **mutant `unknown-timestamp-accepted`
+lọt**, nghĩa là guard "stamp lạ" không có test → RED check 28 với `videoBogusStamp` rồi 28/28 → mutation 8 mutant: bản
+`probes.sh` hard-code "All 27" báo 8/8 **sai** → đo lại bằng exit code ra 7/8, và mutant lọt exit 0 với 16 check chưa
+chạy → watchdog trong `main()` (mutant giờ chết **có tên**) → **8/8** → docs §52 + ADR → **một lần suite cuối cùng
+chạy trên cây commit**; câu này tồn tại để nó bị kiểm chứng: nếu lần đó không in ra 130/130 thì §52.6 sai và phải sửa.
+

@@ -33,14 +33,16 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { planEncodeAudioSample, planEncodeSample } from 'tmcut-core'
+import { AUDIO_PACKET_FRAMES, encodeAudioHandCount, planEncodeAudioSample, planEncodeSample } from 'tmcut-core'
 import { createEncodeSession, webEncodePorts } from '../../app/utils/tmcut/exportEncodeSession'
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..')
 const read = (rel: string) => readFileSync(join(root, rel), 'utf8')
 
+const LABELS: string[] = []
 let passed = 0
 async function check(label: string, fn: () => void | Promise<void>) {
+  LABELS.push(label)
   await fn()
   passed++
   console.log(`   ${label} PASSED`)
@@ -54,6 +56,12 @@ const VIDEO_CONFIG = { codec: 'avc1.640028', width: 640, height: 360, fps: RATE_
 const AUDIO_CONFIG = { codec: AAC, sampleRate: 48000, channelCount: 2 }
 
 type Chunk = { type: 'key' | 'delta', timestamp: number, duration: number }
+/**
+ * What the seam promises the container: core's clock beside the encoder's own
+ * chunk. A re-stamped packet that forgets the chunk is a packet of nothing, and
+ * only an identity comparison can tell the two apart without a real muxer.
+ */
+type Packet = Chunk & { source: Chunk }
 /**
  * WebCodecs hands the decoder description as the SECOND argument of `output`; an
  * `EncodedVideoChunk` has no `metadata` property to carry it. A seam that reads
@@ -77,12 +85,38 @@ function fakeRuntime(options: {
   failAddAt?: number
   /** Keep every frame until `flush()`, then give them back in decode order. */
   videoReorder?: boolean
+  /**
+   * The measured audio clock (§52): an `AudioEncoder` rebuilds its timestamps
+   * from the samples it has seen and TRUNCATES, so 42 666 comes back for the
+   * 42 667 that was handed it.
+   */
+  audioRegenerate?: boolean
+  /** Emit one packet more than was handed, the way Opus answers a whole-frame stream. */
+  audioExtraTail?: boolean
+  /** Refuse to flush a stream handed one packet, the way this runtime's AAC answers. */
+  audioFlushNeedsTwo?: boolean
+  /**
+   * Never answer the hand at this position. The API says an output arrives before
+   * `flush()` resolves and never after, so a hand still open when flush answers is
+   * one whose chunk is never coming. That is the difference between a short file
+   * the close order refuses out loud and an export that waits forever.
+   */
+  audioSwallowAt?: number
+  /**
+   * Answer each video chunk with a stamp one microsecond off the frame it was
+   * handed. Chrome was measured echoing exactly (§52), so this models the runtime
+   * that does not — the case the seam's own lookup exists for.
+   */
+  videoBogusStamp?: boolean
 } = {}) {
   const events: string[] = []
   const frames: { closed: number, timestamp: number, duration: number }[] = []
   const samples: { closed: number, init: Record<string, unknown> }[] = []
-  const video: { chunk: Chunk, meta: unknown }[] = []
-  const audio: { chunk: Chunk, meta: unknown }[] = []
+  const video: { chunk: Packet, meta: unknown }[] = []
+  const audio: { chunk: Packet, meta: unknown }[] = []
+  // The exact objects the encoders emitted, kept beside the file's copies so a
+  // re-stamped packet that lost its bytes cannot pass for one that kept them.
+  const emitted = { video: [] as Chunk[], audio: [] as Chunk[] }
   const configs: Record<string, unknown>[] = []
   const meta = { decoderConfig: { codec: 'avc1.640028' } }
   const audioMeta = { decoderConfig: { codec: AAC } }
@@ -99,7 +133,30 @@ function fakeRuntime(options: {
   const makeEncoder = (kind: 'video' | 'audio', config: Record<string, unknown>, handlers: Handlers): Handle => {
     configs.push({ kind, ...config })
     const pending: { timestamp: number, duration: number }[] = []
+    // The API's one hard promise about delivery timing: an output arrives before
+    // `flush()` resolves, never after. The encoder may take its time — this fake
+    // answers on a timer — but a flush that resolves with packets still owed would
+    // be a runtime no seam can be written against, and the close order reads the
+    // two states the same way.
+    const outstanding: Promise<void>[] = []
     let closed = false
+    // The measured audio runtime does not wait for a timer: it answers packets as
+    // it takes them and hands the rest back inside `flush()`. Copying that here is
+    // the only way this file can ask about a tail that arrives after every hand.
+    const measuredAudio = kind === 'audio'
+      && (options.audioRegenerate === true || options.audioExtraTail === true
+        || options.audioFlushNeedsTwo === true || options.audioSwallowAt !== undefined)
+    const sampleRate = Number(config.sampleRate) || 48_000
+    let audioHands = 0
+    let audioSamples = 0
+    /** Where the encoder's own truncated grid puts the sample at `position`. */
+    const regenStamp = (position: number) => Math.floor((position * 1_000_000) / sampleRate)
+    const emitAudio = (timestamp: number, duration: number) => {
+      const index = state.emittedAudio++
+      const chunk: Chunk = { type: index === 0 ? 'key' : 'delta', timestamp, duration }
+      emitted.audio.push(chunk)
+      handlers.output(chunk, index === 0 ? audioMeta : undefined)
+    }
     return {
       get queue() {
         return kind === 'video' ? state.videoOutstanding : 0
@@ -131,7 +188,19 @@ function fakeRuntime(options: {
           pending.push({ timestamp, duration })
           return
         }
-        setTimeout(() => {
+        if (measuredAudio) {
+          // Measured: the stamp an `AudioEncoder` answers is its own count of the
+          // samples it has taken, truncated — never the number it was handed.
+          const frames = Number((item as { init: Record<string, unknown> }).init.numberOfFrames)
+          const at = regenStamp(audioSamples)
+          audioSamples += frames
+          audioHands++
+          if (audioHands !== options.audioSwallowAt) {
+            emitAudio(at, regenStamp(audioSamples) - at)
+          }
+          return
+        }
+        outstanding.push(new Promise<void>(resolve => setTimeout(() => {
           if (kind === 'video') {
             state.videoOutstanding--
             held.delete(timestamp)
@@ -140,16 +209,34 @@ function fakeRuntime(options: {
           // session has managed to write: a session that holds a packet changes
           // nothing about what the runtime emits.
           const index = kind === 'video' ? state.emittedVideo++ : state.emittedAudio++
-          const chunk: Chunk = { type: index === 0 ? 'key' : 'delta', timestamp, duration }
+          const outStamp = kind === 'video' && options.videoBogusStamp ? timestamp + 1 : timestamp
+          const chunk: Chunk = { type: index === 0 ? 'key' : 'delta', timestamp: outStamp, duration }
           const carries = kind === 'audio'
             ? index === 0
             : !options.stripVideoMeta && index === (options.videoMetaAt ?? 0)
+          ;(kind === 'video' ? emitted.video : emitted.audio).push(chunk)
           handlers.output(chunk, carries ? (kind === 'video' ? meta : audioMeta) : undefined)
-        }, delay)
+          resolve()
+        }, delay)))
       },
       async flush() {
         events.push(`flush-${kind}`)
-        if (kind !== 'video' || pending.length === 0) return
+        await Promise.all(outstanding.splice(0, outstanding.length))
+        if (kind === 'audio') {
+          // Measured (§52): this runtime's AAC encoder answers `EncodingError:
+          // Flushing error.` when it was handed one packet — with a tone in the
+          // buffer and with digital silence alike — while two hands flush and
+          // answer two packets. A session that never makes the second hand dies
+          // here, and nothing before this point could see it.
+          if (options.audioFlushNeedsTwo && audioHands < 2) throw new Error('EncodingError: Flushing error.')
+          if (options.audioExtraTail) {
+            // Measured: opus answers 51 packets to 50 hands, the last 3 bytes of
+            // silence. It belongs to no sample and no packet the file was promised.
+            emitAudio(regenStamp(audioSamples), regenStamp(audioSamples + 1024) - regenStamp(audioSamples))
+          }
+          return
+        }
+        if (pending.length === 0) return
         // First the keyframe, then the frame the B-frame sits before, then the
         // frames between them: three presentation timestamps 0 / 33 333 / 66 667
         // come back as 0 / 66 667 / 33 333.
@@ -161,8 +248,10 @@ function fakeRuntime(options: {
           state.videoOutstanding--
           held.delete(item.timestamp)
           const index = state.emittedVideo++
+          const chunk: Chunk = { type: index === 0 ? 'key' : 'delta', timestamp: item.timestamp, duration: item.duration }
+          emitted.video.push(chunk)
           handlers.output(
-            { type: index === 0 ? 'key' : 'delta', timestamp: item.timestamp, duration: item.duration },
+            chunk,
             !options.stripVideoMeta && index === (options.videoMetaAt ?? 0) ? meta : undefined
           )
         }
@@ -187,12 +276,12 @@ function fakeRuntime(options: {
       events.push('start')
       this.state = 'started'
     },
-    async addVideo(chunk: Chunk, description?: unknown) {
+    async addVideo(chunk: Packet, description?: unknown) {
       rejectSlowWriter()
       events.push(`video-${chunk.timestamp}`)
       video.push({ chunk, meta: description })
     },
-    async addAudio(chunk: Chunk, description?: unknown) {
+    async addAudio(chunk: Packet, description?: unknown) {
       rejectSlowWriter()
       events.push(`audio-${chunk.timestamp}`)
       audio.push({ chunk, meta: description })
@@ -211,7 +300,7 @@ function fakeRuntime(options: {
   }
 
   return {
-    events, frames, samples, video, audio, configs, muxer, state, illegalCloses,
+    events, frames, samples, video, audio, configs, muxer, state, illegalCloses, emitted,
     ports: {
       createVideoEncoder: (config: Record<string, unknown>, handlers: Handlers) => makeEncoder('video', config, handlers),
       createAudioEncoder: (config: Record<string, unknown>, handlers: Handlers) => makeEncoder('audio', config, handlers),
@@ -277,6 +366,15 @@ async function settleWithin<T>(promise: Promise<T>, ms: number, what: string): P
 }
 
 async function main() {
+  // A session that cannot advance is a promise nobody resolves, and a pending
+  // promise is not a pending handle: once the last encoder timer fires, Node
+  // drains the loop and exits **0** with the remaining checks never run. Measured
+  // on a seam mutant — 12 of 28 lines printed, exit code success. This timer is
+  // the handle that keeps the process alive long enough to say which check stuck.
+  const watchdog = setTimeout(() => {
+    console.error(`\nFAILED: "${LABELS[LABELS.length - 1]}" never settled after ${passed} checks — a seam promise was left unresolved`)
+    process.exit(1)
+  }, 30_000)
   await check('the container is opened before a single packet is written', async () => {
     const { runtime } = await run()
     assert.equal(runtime.events[0], 'start', runtime.events.join(' '))
@@ -374,6 +472,111 @@ async function main() {
     assert.equal(sum, 1_000_000, 'the audio ends exactly where the content ends')
   })
 
+  await check('an audio packet reaches the file on core\'s clock, matched by its order', async () => {
+    // Measured §52: an `AudioEncoder` rebuilds its timestamps from the samples it
+    // has taken and truncates, so the third packet of a one-second 48 kHz
+    // timeline answers 42 666 for the 42 667 handed to it. A session that looks
+    // its packets up by timestamp therefore fails its own export on the third
+    // packet — with a message blaming the runtime — and a session that writes the
+    // encoder's numbers instead of core's ends the audio track a microsecond per
+    // rounded half-frame away from the video it was cut against.
+    const { runtime } = await run({ audioRegenerate: true })
+    const expected = [0, 1, 2].map(index => planEncodeAudioSample({
+      index, sampleRate: 48_000, framesPerPacket: 1024, contentEndTicks: ONE_SECOND_TICKS
+    })!)
+    assert.deepEqual(runtime.audio.map(entry => entry.chunk.timestamp).slice(0, 3), expected.map(packet => packet.timestamp))
+    assert.equal(runtime.audio.length, 47, 'every packet of the schedule arrived, though not one stamp matched')
+    assert.equal(
+      runtime.audio.reduce((total, entry) => total + entry.chunk.duration, 0),
+      1_000_000,
+      'the audio ends exactly where the content ends, not where the encoder counted to'
+    )
+    assert.ok(runtime.samples.every(sample => sample.closed === 1), 'and each packet gave back its own sample')
+  })
+
+  await check('the packet the file is promised carries the encoder bytes', async () => {
+    // A chunk IS its bytes: `EncodedPacket.fromEncodedChunk` reads them off the
+    // object the encoder emitted, and the clock is a field of that same object. So
+    // putting core's audio clock in the file means the encoder's packet with two
+    // numbers replaced — not a new object holding two numbers, which is a packet
+    // of nothing and a file that plays a black screen and a silent track while
+    // every counter in the run says it finished. This is the only place in the repo
+    // that can see the difference without a real muxer and a real encoder.
+    const reClocked = await run({ audioRegenerate: true })
+    assert.equal(reClocked.runtime.audio.length, 47)
+    assert.deepEqual(reClocked.runtime.audio.map(entry => entry.chunk.source), reClocked.runtime.emitted.audio,
+      'the audio packet written is the packet the encoder made, not a copy of its numbers')
+    assert.deepEqual(reClocked.runtime.audio.map(entry => entry.chunk.timestamp).slice(0, 3), [0, 21_333, 42_667],
+      'on core\'s grid, though the encoder answered 42 666')
+    const echoed = await run({ videoDelay: 1 })
+    assert.deepEqual(echoed.runtime.video.map(entry => entry.chunk.source), echoed.runtime.emitted.video,
+      'and the same for a video leg that never needed the clock changed')
+  })
+
+  await check('the packet an encoder emits past the schedule stays out of the file', async () => {
+    // Measured: an Opus stream whose samples fill whole frames answers one packet
+    // MORE than was handed — 50 in, 51 out, the last 3 bytes of silence — and the
+    // 51st belongs to no sample at all. Written, the audio track runs 20 ms past
+    // the video and past the length this export promised; looked up by timestamp,
+    // it looks like a runtime contradicting core and fails the whole run.
+    const { runtime, outcome } = await run({ audioRegenerate: true, audioExtraTail: true })
+    assert.equal(runtime.audio.length, 47, 'the file carries the schedule, not the encoder')
+    assert.equal(outcome.audioPackets, 47)
+    assert.ok(runtime.events.includes('finalize'), 'and the run closes instead of blaming the runtime')
+    assert.ok(runtime.samples.every(sample => sample.closed === 1), 'every hand is given back')
+  })
+
+  await check('a one-packet AAC stream is handed a second packet the file never takes', async () => {
+    // Measured §52: handed ONE packet, this runtime's AAC encoder throws
+    // `EncodingError: Flushing error.` at flush — 2240 ticks is 896 samples, which
+    // core schedules as exactly one packet, so the exporter owes the encoder a
+    // whole frame of nothing beside it. The file still carries the one packet.
+    const contentEndTicks = 2_240
+    const requested: { startSample: number, frames: number }[] = []
+    const { runtime, outcome } = await run(
+      { audioRegenerate: true, audioFlushNeedsTwo: true },
+      {
+        contentEndTicks,
+        pcm: async (packet: { startSample: number, frames: number }) => {
+          requested.push({ startSample: packet.startSample, frames: packet.frames })
+          return [new Float32Array(packet.frames), new Float32Array(packet.frames)]
+        }
+      }
+    )
+    assert.deepEqual(requested, [{ startSample: 0, frames: 896 }, { startSample: 1024, frames: 1024 }],
+      'the padding hand is the next whole frame on the same grid')
+    assert.equal(runtime.samples[1].init.numberOfFrames, 1024)
+    assert.equal(outcome.audioPackets, 1, 'and only the scheduled packet reaches the file')
+    assert.ok(runtime.samples.every(sample => sample.closed === 1), 'both hands are given back')
+    assert.ok(runtime.events.includes('finalize'))
+  })
+
+  await check('a hand the encoder never answers refuses the run instead of hanging it', async () => {
+    // The flush law read the other way: the API promises every output before
+    // `flush()` resolves, so a sample still open when flush answers is one whose
+    // packet is never coming. The padding hand of a short AAC stream is the case
+    // this covers for real — an encoder may answer it with silence, with a packet
+    // the file drops, or with nothing — and a session that waits on the nothing is
+    // an export that never ends. The deadline is the assertion: without the
+    // release at flush, this run sits in `wait` forever.
+    const hands = encodeAudioHandCount({
+      codec: AAC,
+      contentEndTicks: ONE_SECOND_TICKS,
+      sampleRate: AUDIO_CONFIG.sampleRate,
+      framesPerPacket: AUDIO_PACKET_FRAMES[AAC]
+    })!
+    const runtime = fakeRuntime({ audioSwallowAt: hands })
+    const session = createEncodeSession(BASE, runtime.ports as never)
+    await settleWithin(
+      assert.rejects(() => session.run(), /the encode stalled, still owing audio-packets/),
+      2_000,
+      'the swallowed audio hand'
+    )
+    assert.ok(!runtime.events.includes('finalize'), 'a short file is never closed as if it were whole')
+    assert.equal(runtime.samples.length, hands, 'the hand was made, the answer never came')
+    assert.ok(runtime.samples.every(sample => sample.closed === 1), 'and its buffer is still given back')
+  })
+
   await check('AudioData is promised seconds while its timestamp stays microseconds', async () => {
     const { runtime } = await run()
     const first = runtime.samples[0].init
@@ -413,6 +616,25 @@ async function main() {
       'the container is fed decode order, not presentation order')
     assert.deepEqual(runtime.illegalCloses, [], 'each chunk closed its own frame')
     assert.ok(runtime.frames.every(frame => frame.closed === 1), 'and every frame exactly once')
+  })
+
+  await check('a video packet at a stamp this run never handed refuses the run', async () => {
+    // Measured: this Chrome echoes the stamp it is handed exactly (§52), so nine
+    // runs never exercised the lookup below. `planEncodeChunk` answers 'write' for
+    // any video stamp at all — the counters, not the clock, are what core reads —
+    // so the only thing between a runtime that invents timestamps and a file whose
+    // packets point at frames nobody painted is this seam's own `handed` map.
+    // Without the lookup the run neither fails nor writes: it waits on a slot the
+    // unmatched chunk never pays for, and the export stalls.
+    const runtime = fakeRuntime({ videoBogusStamp: true })
+    const session = createEncodeSession(BASE, runtime.ports as never)
+    await settleWithin(
+      assert.rejects(() => session.run(), /the encoder returned a packet at \d+ us that this run never handed it/),
+      2_000,
+      'a video packet at an invented stamp'
+    )
+    assert.equal(runtime.video.length, 0, 'nothing invented reaches the file')
+    assert.ok(!runtime.events.includes('finalize'), 'and a refused run is never closed as if it were whole')
   })
 
   await check('the in-flight bound is the one core names', async () => {
@@ -581,7 +803,8 @@ async function main() {
     const source = read('app/utils/tmcut/exportEncodeSession.ts')
     for (const law of [
       'planEncodeSample', 'planEncodeAudioSample', 'encodeAudioPacketCount', 'planEncodeFinish',
-      'planEncodePacketMeta', 'planEncodeProgress', 'planEncodeQueue', 'AUDIO_PACKET_FRAMES'
+      'planEncodePacketMeta', 'planEncodeProgress', 'planEncodeQueue', 'AUDIO_PACKET_FRAMES',
+      'planEncodeChunk', 'encodeAudioHandCount', 'planEncodeAudioPadding'
     ]) {
       assert.match(source, new RegExp(law), `${law} is core's decision`)
     }
@@ -603,13 +826,14 @@ async function main() {
     // on a slot that nothing will ever release again.
     for (const field of [
       'totalFrames', 'framesQueued', 'videoPackets', 'totalAudioPackets', 'audioPacketsQueued',
-      'audioPackets', 'videoInFlight', 'audioInFlight', 'videoParked', 'audioParked',
+      'totalAudioHands', 'audioPackets', 'videoInFlight', 'audioInFlight', 'videoParked', 'audioParked',
       'videoFlushed', 'audioFlushed', 'outputState'
     ]) {
       assert.ok(reported.has(field), `planEncodeFinish reads ${field}, so this run has to report it`)
     }
   })
 
+  clearTimeout(watchdog)
   console.log(`\n=== All ${passed} export-encode-session checks passed ===`)
 }
 

@@ -33,6 +33,14 @@
 //    the remainder, so the audio end and the video end are the same number.
 //  * `encodeAudioPacketCount` is that schedule counted up front, because a total
 //    measured from packets as they arrive can only ever agree with itself.
+//  * `planEncodeChunk`, `encodeAudioHandCount` and `planEncodeAudioPadding` are
+//    H3c's, and all three say what a RUNTIME answers rather than what a spec
+//    allows (the numbers are in §52): the video leg names its packets by the
+//    timestamp it was handed, the audio leg has no such name because an
+//    `AudioEncoder` rebuilds its own clock, a packet past the schedule is the
+//    encoder's own padding and must not reach the file, and one packet of AAC is
+//    not enough for this runtime to flush — so the exporter hands a second, on
+//    the same grid, and drops what it answers.
 //  * `planEncodeFinish` owns the order the file is closed in — feed both legs,
 //    flush both encoders, drain, finalize — since every way to get it wrong writes
 //    a short or unreadable file without an error, and a shortfall with nothing
@@ -518,6 +526,7 @@ export function encodeAudioPacketCount(input = {}) {
  *
  * @param {{ totalFrames?: number, framesQueued?: number, videoPackets?: number,
  *           audioPackets?: number, totalAudioPackets?: number, audioPacketsQueued?: number,
+ *           totalAudioHands?: number,
  *           videoInFlight?: number, audioInFlight?: number, videoParked?: number,
  *           audioParked?: number, videoFlushed?: boolean,
  *           audioFlushed?: boolean, outputState?: string, hasVideo?: boolean,
@@ -525,10 +534,13 @@ export function encodeAudioPacketCount(input = {}) {
  *   the counters of one running export; a leg the project does not have is
  *   named by `hasVideo` / `hasAudio` and never blocks on numbers it lacks.
  *   `audioPacketsQueued` counts samples handed to the audio encoder, which is
- *   what the close order waits on before it flushes that leg. `videoParked` /
- *   `audioParked` count packets that have left the encoder but are held back from
- *   the file for want of a decoder description; they default to zero because a
- *   driver with no such pile has nothing to report.
+ *   what the close order waits on before it flushes that leg, and
+ *   `totalAudioHands` is how many samples that leg must be handed — which an
+ *   encoder measured to need more than the file needs (§52) and which defaults to
+ *   the packet count. `videoParked` / `audioParked` count packets that have left
+ *   the encoder but are held back from the file for want of a decoder
+ *   description; they default to zero because a driver with no such pile has
+ *   nothing to report.
  * @returns {{ action: 'start'|'paint'|'pump'|'flush-video'|'flush-audio'|'wait'|'stalled'|'finalize'|'stop'|'done',
  *             ready: boolean, blocking: string[] } | null}
  *   `action` is the first thing still owed, `blocking` names everything owed;
@@ -538,12 +550,13 @@ export function encodeAudioPacketCount(input = {}) {
 export function planEncodeFinish(input = {}) {
   const {
     totalFrames, framesQueued, videoPackets, audioPackets, totalAudioPackets, audioPacketsQueued,
+    totalAudioHands = totalAudioPackets,
     videoInFlight, audioInFlight, videoParked = 0, audioParked = 0, videoFlushed, audioFlushed, outputState,
     hasVideo = true, hasAudio = true
   } = input
   const counters = [
     totalFrames, framesQueued, videoPackets, audioPackets, totalAudioPackets, audioPacketsQueued,
-    videoInFlight, audioInFlight, videoParked, audioParked
+    totalAudioHands, videoInFlight, audioInFlight, videoParked, audioParked
   ]
   if (counters.some(value => !isInteger(value) || value < 0)) return null
   if (typeof videoFlushed !== 'boolean' || typeof audioFlushed !== 'boolean') return null
@@ -562,7 +575,7 @@ export function planEncodeFinish(input = {}) {
 
   const blocking = []
   if (hasVideo && framesQueued < totalFrames) blocking.push('frames-queued')
-  if (hasAudio && audioPacketsQueued < totalAudioPackets) blocking.push('audio-not-queued')
+  if (hasAudio && audioPacketsQueued < totalAudioHands) blocking.push('audio-not-queued')
   if (hasVideo && !videoFlushed) blocking.push('video-not-flushed')
   if (hasAudio && !audioFlushed) blocking.push('audio-not-flushed')
   if (hasVideo && videoInFlight > 0) blocking.push('video-in-flight')
@@ -633,6 +646,141 @@ export function planEncodePacketMeta(input = {}) {
   return hasMeta
     ? Object.freeze({ action: 'with-meta', reason: 'first-packet' })
     : Object.freeze({ action: 'hold', reason: 'no-description' })
+}
+
+/**
+ * How many packets one audio encoder must be handed before it can flush.
+ *
+ * This is a measurement, not a preference (§52). Handed one packet and asked to
+ * flush, this runtime's AAC encoder throws `EncodingError: Flushing error.` —
+ * with a tone in the buffer and with digital silence alike, and whether the
+ * packet is whole or a remainder. Two packets flush and answer two packets.
+ * Opus flushes on one, so it is named with its own floor rather than borrowing
+ * AAC's, and a codec this file has not measured gets 1: an unmeasured number is
+ * no reason to hand the encoder a packet the schedule never asked for.
+ */
+export const AUDIO_MIN_HAND_PACKETS = Object.freeze({
+  'mp4a.40.2': 2,
+  'aac': 2,
+  'opus': 1
+})
+
+/**
+ * How many packets the exporter must hand the encoder, which is never fewer than
+ * {@link encodeAudioPacketCount} says belong in the file.
+ *
+ * The two numbers differ only at the bottom of a very short stream: a project
+ * one frame long has one AAC packet and needs two hands. The extra hand is a
+ * whole frame of nothing, and {@link planEncodeChunk} keeps it out of the file —
+ * padding the encoder, not padding the export.
+ *
+ * @param {{ codec?: string, contentEndTicks?: number, sampleRate?: number, framesPerPacket?: number }} input
+ *   {@link encodeAudioPacketCount}'s clock plus the codec spelling the ladder answered with
+ * @returns {number | null} the hands to make, or null when the schedule itself is unreadable
+ */
+export function encodeAudioHandCount(input = {}) {
+  const packets = encodeAudioPacketCount(input)
+  if (packets === null) return null
+  const floor = AUDIO_MIN_HAND_PACKETS[input.codec] ?? 1
+  return Math.max(packets, floor)
+}
+
+/**
+ * The hand the file never asked for: the next whole frame, past the schedule.
+ *
+ * {@link encodeAudioHandCount} says a stream may need more hands than it has
+ * packets; this is what to put in the extra one. It is the same clock as the
+ * schedule, one position further along, so a padding hand lands on the grid the
+ * muxer was promised instead of beside it. The frames are a whole frame — not
+ * the remainder, because the encoder was measured answering a partial tail as a
+ * whole frame anyway (§52) — and the mixer is expected to answer samples past the
+ * content with silence, which is what a file that ends early is made of.
+ *
+ * Null for every index the schedule owns, so a driver can ask after the schedule
+ * without knowing which number it is standing at.
+ *
+ * @param {{ index?: number, codec?: string, contentEndTicks?: number,
+ *           sampleRate?: number, framesPerPacket?: number }} input
+ *   the hand position, and the clock {@link encodeAudioHandCount} was given
+ * @returns {{ startSample: number, frames: number, timestamp: number, duration: number } | null}
+ */
+export function planEncodeAudioPadding(input = {}) {
+  const { index, framesPerPacket } = input
+  if (!isInteger(index) || index < 0) return null
+  if (!isInteger(framesPerPacket) || framesPerPacket <= 0) return null
+  const packets = encodeAudioPacketCount(input)
+  if (packets === null) return null
+  const hands = encodeAudioHandCount(input)
+  if (index < packets || index >= hands) return null
+
+  const { sampleRate } = input
+  /** The same one rounding the schedule uses, from the count of samples. */
+  const startsAt = position => Math.round((position * 1_000_000) / sampleRate)
+  const startSample = index * framesPerPacket
+  const timestamp = startsAt(startSample)
+  return Object.freeze({
+    startSample,
+    frames: framesPerPacket,
+    timestamp,
+    duration: startsAt(startSample + framesPerPacket) - timestamp
+  })
+}
+
+/**
+ * What to do with one packet leaving an encoder.
+ *
+ * Two questions have one answer here because a real runtime ties them together.
+ *
+ * WHICH SAMPLE. A `VideoEncoder` echoes the timestamp of the frame it was given:
+ * measured over nine runs of 48 to 120 frames, H.264 and VP9 at three sizes, on
+ * solid colour, sweeping bands and per-pixel noise alike, every chunk arrived at
+ * the number this run painted — so the timestamp is a name and the name is safe
+ * to look up (§51's reorder law stays: the encoder is allowed to hand packets
+ * back out of order, and matching by name is what survives that). An
+ * `AudioEncoder` has no such name. It rebuilds its clock from the first timestamp
+ * it is given plus the samples it has seen: 42 666 us comes back for the 42 667
+ * that was handed it at 48 kHz, 23 219 for 23 220 at 44.1 kHz, and handing eight
+ * packets all stamped 12 345 answers eight packets on a steady 21 333 grid. Its
+ * packets are therefore the samples in the order they went in, and nothing else.
+ *
+ * WHETHER THE FILE MAY HAVE IT. The encoder emits what its format needs, not what
+ * this run scheduled: an Opus stream whose total fills whole frames answers one
+ * packet MORE than it was handed (50 in, 51 out, 3 bytes of silence), and a short
+ * AAC stream needs a hand the file never asked for. A packet past the schedule is
+ * padding and stays out of the file, because writing it puts the audio track 20
+ * ms past the video — and past the end the exporter promised. A video packet in
+ * that position is not padding: it is a frame nobody painted, so it fails.
+ *
+ * @param {{ kind?: 'video'|'audio', openSamples?: number, packetsAdmitted?: number,
+ *           packetTotal?: number }} input
+ *   `openSamples` is what the leg has handed the encoder and not got back,
+ *   `packetsAdmitted` counts the packets this leg has already been told to reach
+ *   the file — admitted, not written, because writes are awaited and a tail that
+ *   arrives while a write is in flight is still a tail — and `packetTotal` is the
+ *   number the schedule promises
+ * @returns {{ identity: 'timestamp'|'ordinal', action: 'write'|'drop-tail'|'fail', reason: string } | null}
+ *   null when the kind is unknown or a counter cannot be read
+ */
+export function planEncodeChunk(input = {}) {
+  const { kind, openSamples, packetsAdmitted, packetTotal } = input
+  if (kind !== 'video' && kind !== 'audio') return null
+  const counters = [openSamples, packetsAdmitted, packetTotal]
+  if (counters.some(value => !isInteger(value) || value < 0)) return null
+
+  const identity = kind === 'audio' ? 'ordinal' : 'timestamp'
+  if (packetsAdmitted >= packetTotal) {
+    return kind === 'audio'
+      ? Object.freeze({ identity, action: 'drop-tail', reason: 'encoder-tail' })
+      : Object.freeze({ identity, action: 'fail', reason: 'packet-past-the-schedule' })
+  }
+  if (openSamples === 0) {
+    return Object.freeze({ identity, action: 'fail', reason: 'no-sample-behind-packet' })
+  }
+  return Object.freeze({
+    identity,
+    action: 'write',
+    reason: kind === 'audio' ? 'measured-order-only' : 'measured-timestamp-echo'
+  })
 }
 
 /**

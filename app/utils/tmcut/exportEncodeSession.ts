@@ -1,16 +1,21 @@
 /**
- * The encode session (zero-FFmpeg slice H3b, ADR-029 and ADR-030) — the loop that
- * turns painted frames and mixed PCM into one muxed file with no FFmpeg in it.
+ * The encode session (zero-FFmpeg slices H3b and H3c, ADR-029 and ADR-030) — the
+ * loop that turns painted frames and mixed PCM into one muxed file with no
+ * FFmpeg in it.
  *
  * Every decision is already core's: which config to encode with (H2), where a
  * frame sits (`planEncodeSample`), where a packet of audio sits
  * (`planEncodeAudioSample`), how many packets the file must carry
- * (`encodeAudioPacketCount`), how much may be in flight (`planEncodeQueue`),
- * whether the file may be closed and in what order (`planEncodeFinish`), what
- * rides with a packet (`planEncodePacketMeta`) and what a progress bar may
- * promise (`planEncodeProgress`). What lives here is the part that cannot be a
- * pure function: the calls themselves, and the bookkeeping a browser forces on a
- * loop that holds real buffers.
+ * (`encodeAudioPacketCount`), how many hands the encoder must be given
+ * (`encodeAudioHandCount`, and `planEncodeAudioPadding` for the one the file
+ * never asked for), which sample an arriving packet releases and whether the
+ * file may have it at all (`planEncodeChunk`), how much may be in flight
+ * (`planEncodeQueue`), whether the file may be closed and in what order
+ * (`planEncodeFinish`), what rides with a packet (`planEncodePacketMeta`) and
+ * what a progress bar may promise (`planEncodeProgress`). What lives here is the
+ * part that cannot be a pure function: the calls themselves, the packets handed
+ * to the container with the encoder's bytes and core's clock in one object, and
+ * the bookkeeping a browser forces on a loop that holds real buffers.
  *
  * One loop, one awaited step per iteration, no timers. The version this replaces
  * in every exporter that ever shipped — two concurrent legs and a closer racing
@@ -26,8 +31,11 @@
  */
 import {
   AUDIO_PACKET_FRAMES,
+  encodeAudioHandCount,
   encodeAudioPacketCount,
+  planEncodeAudioPadding,
   planEncodeAudioSample,
+  planEncodeChunk,
   planEncodeFinish,
   planEncodePacketMeta,
   planEncodeProgress,
@@ -57,6 +65,22 @@ export interface TmcutEncodeChunk {
   /** Microseconds, from core's clock. */
   timestamp: number
   duration: number | null
+}
+
+/**
+ * One packet as the container is promised it: the encoder's own chunk, on core's
+ * clock. The bytes only ever live in the chunk, so a re-stamped packet is the same
+ * packet with two numbers replaced — and an object holding only those two numbers
+ * is a packet of nothing, which muxes into a file that opens, plays, and shows no
+ * picture (§52).
+ */
+export interface TmcutMuxerPacket {
+  type: 'key' | 'delta'
+  /** Microseconds, on the grid core scheduled this track against. */
+  timestamp: number
+  duration: number
+  /** The chunk the encoder emitted — the only place this packet's bytes are. */
+  source: TmcutEncodeChunk
 }
 
 /**
@@ -102,8 +126,8 @@ export interface TmcutAudioDataInit {
 export interface TmcutMuxer {
   readonly state: TmcutEncodeOutputState
   start: () => Promise<void>
-  addVideo: (chunk: TmcutEncodeChunk, description?: unknown) => Promise<void>
-  addAudio: (chunk: TmcutEncodeChunk, description?: unknown) => Promise<void>
+  addVideo: (packet: TmcutMuxerPacket, description?: unknown) => Promise<void>
+  addAudio: (packet: TmcutMuxerPacket, description?: unknown) => Promise<void>
   finalize: () => Promise<void>
   cancel: () => Promise<void>
   result: () => Promise<unknown>
@@ -174,16 +198,24 @@ interface Leg {
   queued: number
   /** Packets the muxer has taken. */
   packets: number
+  /**
+   * Packets core has accepted for this track — parked or written, never dropped.
+   * Writes are awaited, so the count that answers a packet arriving has to be the
+   * one taken when it was accepted, not the one the muxer has finished taking.
+   */
+  admitted: number
   flushed: boolean
   /** The decoder description, once this track's encoder has reported one. */
   description: unknown
-  /** Chunks parked because the first packet must not be written without it. */
-  parked: TmcutEncodeChunk[]
+  /** Packets parked because the first packet must not be written without it. */
+  parked: TmcutMuxerPacket[]
   /**
-   * Samples the encoder has not returned yet, keyed by the timestamp it was
-   * handed with. An encoder may reorder, so the chunk that comes back is not
-   * necessarily the oldest sample still open, and closing the wrong one closes
-   * a buffer the encoder still owns.
+   * Samples the encoder has not returned yet, in the order they were handed.
+   * `planEncodeChunk` says which name releases one: a video chunk is looked up by
+   * the timestamp it echoes, an audio chunk is the oldest sample still open,
+   * because an `AudioEncoder` rebuilds its own clock and its stamps name nothing
+   * (§52). The key stays the timestamp so that two samples of one run can never
+   * collapse into one and be closed twice.
    */
   handed: Map<number, TmcutCloseable>
   chain: Promise<void>
@@ -282,6 +314,23 @@ function audioFamily(codec: string): 'aac' | 'opus' {
   throw new Error(`the muxer has no codec family for ${codec}`)
 }
 
+/**
+ * The packet the container is given: the encoder's bytes, on the clock the
+ * exporter promised. `EncodedPacket.fromEncodedChunk` is the only door from a
+ * WebCodecs chunk to a muxable packet and it reads the stamp off the chunk, so a
+ * clock the encoder did not carry has to be put on the packet beside them — in
+ * seconds, which is the one unit the container and the laws disagree about. The
+ * clone is taken only when the two clocks actually differ: a video leg measured to
+ * echo its stamps pays for nothing it does not need.
+ */
+function toEncodedPacket(packet: TmcutMuxerPacket): EncodedPacket {
+  const encoded = EncodedPacket.fromEncodedChunk(packet.source as unknown as EncodedAudioChunk)
+  const startsAt = packet.timestamp / 1_000_000
+  const lasts = packet.duration / 1_000_000
+  if (encoded.timestamp === startsAt && encoded.duration === lasts) return encoded
+  return encoded.clone({ timestamp: startsAt, duration: lasts })
+}
+
 /** The default muxer: pre-encoded packets, straight into an MP4 or a WebM. */
 function mediabunnyMuxer(target: TmcutMuxerTarget): TmcutMuxer {
   const format = target.container === 'webm' ? new WebMOutputFormat() : new Mp4OutputFormat()
@@ -304,17 +353,17 @@ function mediabunnyMuxer(target: TmcutMuxerTarget): TmcutMuxer {
     // in the metadata they accept, and a shared helper would have to pretend they
     // do not. Both awaits are the writer's backpressure, not a receipt — ignoring
     // one is how an export outruns its own file.
-    addVideo: async (chunk, description) => {
+    addVideo: async (packet, description) => {
       if (!videoSource) return
       await videoSource.add(
-        EncodedPacket.fromEncodedChunk(chunk as unknown as EncodedVideoChunk),
+        toEncodedPacket(packet),
         description as EncodedVideoChunkMetadata | undefined
       )
     },
-    addAudio: async (chunk, description) => {
+    addAudio: async (packet, description) => {
       if (!audioSource) return
       await audioSource.add(
-        EncodedPacket.fromEncodedChunk(chunk as unknown as EncodedAudioChunk),
+        toEncodedPacket(packet),
         description as EncodedAudioChunkMetadata | undefined
       )
     },
@@ -364,6 +413,7 @@ export function createEncodeSession(
   let muxer: TmcutMuxer | null = null
   let totalFrames = ask.totalFrames
   let totalAudioPackets = 0
+  let totalAudioHands = 0
 
   let failure: Error | null = null
   let cancelled = false
@@ -414,14 +464,26 @@ export function createEncodeSession(
   }
 
   /**
-   * One chunk leaving an encoder: give back the sample it was made from, take the
-   * description the browser passed beside it, then ask core whether the muxer may
-   * have the packet yet.
+   * One chunk leaving an encoder: ask core which sample it releases and whether
+   * the file may have it, take the description the browser passed beside it, then
+   * hand the muxer a packet carrying core's own clock.
    */
   function onChunk(who: Leg, chunk: TmcutEncodeChunk, meta?: TmcutEncodeMeta) {
     if (settled) return
-    const sample = who.handed.get(chunk.timestamp)
-    if (sample === undefined) {
+    const step = planEncodeChunk({
+      kind: who.kind,
+      openSamples: who.handed.size,
+      packetsAdmitted: who.admitted,
+      // The audio file is bounded by its schedule; a video leg is bounded by the
+      // frames it was actually handed, because a video packet past those is not
+      // the encoder's padding and never can be.
+      packetTotal: who.kind === 'audio' ? totalAudioPackets : who.queued
+    })
+    if (step === null) {
+      fail(new Error(`${who.kind}: core could not read the packet counters`))
+      return
+    }
+    if (step.identity === 'timestamp' && !who.handed.has(chunk.timestamp)) {
       // The chunk's timestamp is the media timestamp of the sample it came from,
       // so one that matches nothing handed is a runtime contradicting core's
       // clock. Guessing which sample it owns would close a buffer another packet
@@ -429,24 +491,45 @@ export function createEncodeSession(
       fail(new Error(`${who.kind}: the encoder returned a packet at ${chunk.timestamp} us that this run never handed it`))
       return
     }
-    who.handed.delete(chunk.timestamp)
-    sample.close()
+    if (step.action === 'fail') {
+      fail(new Error(`${who.kind}: ${step.reason} at ${chunk.timestamp} us with ${who.handed.size} samples open`))
+      return
+    }
+    // Video is named by the stamp its encoder echoes; audio has no name to look at
+    // and belongs to the oldest sample still open (§52). A tail may own a sample —
+    // the padding hand of a short AAC stream — or own nothing at all, which is how
+    // an Opus encoder answers one packet more than it was handed.
+    const owned = release(who, step.identity === 'timestamp' ? chunk.timestamp : null)
     // Any chunk may carry it, and most runtimes put it on the first. Whatever
     // arrives first is the description this track will be pointed at.
     if (meta?.decoderConfig !== undefined && who.description === undefined) who.description = meta
+    if (step.action === 'drop-tail') {
+      // The encoder's own padding stays out of the file: written, the audio track
+      // would end past the video and past the length this export promised. Its
+      // slot is given back with the sample it was made from, if it owns one.
+      if (owned) who.inFlight -= 1
+      notify()
+      return
+    }
 
-    const step = planEncodePacketMeta({ packetsAdded: who.packets, hasMeta: who.description !== undefined })
-    if (step === null) {
+    const packet = stamp(who, chunk)
+    if (packet === null) {
+      fail(new Error(`${who.kind}: the packet at ${chunk.timestamp} us has no place on core's audio clock`))
+      return
+    }
+    who.admitted += 1
+    const step2 = planEncodePacketMeta({ packetsAdded: who.packets, hasMeta: who.description !== undefined })
+    if (step2 === null) {
       fail(new Error(`${who.kind}: core could not read the packet counters`))
       return
     }
-    if (step.action === 'hold') {
+    if (step2.action === 'hold') {
       // Held, not written bare: a track whose first packet carries no description is
       // a track no decoder can be pointed at. Its queue is released with it,
       // because the only thing that can change a hold is a description arriving —
       // and a slot kept by a packet that has already left the encoder is a count
       // nothing can ever lower again, which core now answers by refusing.
-      who.parked.push(chunk)
+      who.parked.push(packet)
       who.inFlight -= 1
       notify()
       return
@@ -455,14 +538,58 @@ export function createEncodeSession(
     // again here — a double release puts `inFlight` below zero and the close order
     // rightly refuses to read counters that cannot both be true.
     const parked = who.parked.splice(0, who.parked.length)
-    write(who, [...parked.map(parkedChunk => ({ chunk: parkedChunk, credit: false })), { chunk, credit: true }])
+    write(who, [...parked.map(chunk => ({ chunk, credit: false })), { chunk: packet, credit: true }])
+  }
+
+  /**
+   * Give the encoder's sample back. `null` names the oldest one still open, which
+   * is the only thing an audio chunk can be traced to. False when the leg owns
+   * nothing, which a tail chunk is allowed to do and an encoder that swallowed a
+   * hand is not.
+   */
+  function release(who: Leg, timestamp: number | null): boolean {
+    const key = timestamp ?? who.handed.keys().next().value
+    if (key === undefined) return false
+    const sample = who.handed.get(key)
+    if (sample === undefined) return false
+    who.handed.delete(key)
+    sample.close()
+    return true
+  }
+
+  /**
+   * The packet the muxer is promised. Video already carries the timestamp this
+   * run painted; audio carries the encoder's own rebuild of the clock, so its
+   * stamp and its length are replaced with core's, which is what lets both tracks
+   * end on the same number (§52).
+   */
+  function stamp(who: Leg, chunk: TmcutEncodeChunk): TmcutMuxerPacket | null {
+    // A video chunk carries this run's own paint stamp, so the clock written into
+    // the file is the one the encoder was handed (§52 measured the echo). Audio is
+    // the leg whose encoder rebuilds the clock: its stamps are a truncation of the
+    // same grid and its last packet is a WHOLE frame where the content is a
+    // remainder, so the file would end milliseconds past the video it was cut
+    // against. The bytes stay the encoder's; the clock becomes core's.
+    if (who.kind === 'video') {
+      return { type: chunk.type, timestamp: chunk.timestamp, duration: chunk.duration ?? 0, source: chunk }
+    }
+    const audio = ask.audio
+    if (!audio) return null
+    const packet = planEncodeAudioSample({
+      index: who.admitted,
+      sampleRate: audio.sampleRate,
+      framesPerPacket: framesPerPacket ?? 0,
+      contentEndTicks: ask.contentEndTicks
+    })
+    if (packet === null) return null
+    return { type: chunk.type, timestamp: packet.timestamp, duration: packet.duration, source: chunk }
   }
 
   /**
    * Serialize one leg's writes: a container takes packets in decode order, and the
    * promise `add()` returns is backpressure rather than a receipt.
    */
-  function write(who: Leg, items: { chunk: TmcutEncodeChunk, credit: boolean }[]) {
+  function write(who: Leg, items: { chunk: TmcutMuxerPacket, credit: boolean }[]) {
     for (const item of items) {
       who.chain = who.chain.then(async () => {
         if (settled || !muxer) return
@@ -495,6 +622,7 @@ export function createEncodeSession(
       inFlight: 0,
       queued: 0,
       packets: 0,
+      admitted: 0,
       flushed: false,
       description: undefined,
       parked: [],
@@ -541,7 +669,10 @@ export function createEncodeSession(
     const audio = ask.audio
     if (!audio || !hasAudio) return false
     const who = leg('audio')
-    if (who.queued >= totalAudioPackets) return false
+    // The hands, not the packets: this runtime's AAC encoder will not flush on the
+    // number the file was promised (§52), and the extra hand is dropped by
+    // `planEncodeChunk` rather than written.
+    if (who.queued >= totalAudioHands) return false
     if (planEncodeQueue({ inFlight: who.inFlight, limit: ask.inFlight }).action === 'wait') return false
 
     const packet = planEncodeAudioSample({
@@ -549,11 +680,17 @@ export function createEncodeSession(
       sampleRate: audio.sampleRate,
       framesPerPacket: framesPerPacket ?? 0,
       contentEndTicks: ask.contentEndTicks
+    }) ?? planEncodeAudioPadding({
+      index: who.queued,
+      codec: audio.codec,
+      sampleRate: audio.sampleRate,
+      framesPerPacket: framesPerPacket ?? 0,
+      contentEndTicks: ask.contentEndTicks
     })
-    if (packet === null) {
-      totalAudioPackets = who.queued
-      return false
-    }
+    // Both laws answer null outside their own range, and together they cover every
+    // position the gate above lets through. Landing here means the hand count and
+    // the packet laws disagree about this codec.
+    if (!packet) throw new Error(`the audio schedule has no packet at hand ${who.queued}`)
     const planes = await ask.pcm({
       index: who.queued,
       startSample: packet.startSample,
@@ -604,6 +741,7 @@ export function createEncodeSession(
       framesQueued: video?.queued ?? 0,
       videoPackets: video?.packets ?? 0,
       totalAudioPackets,
+      totalAudioHands,
       audioPacketsQueued: audio?.queued ?? 0,
       audioPackets: audio?.packets ?? 0,
       videoInFlight: video?.inFlight ?? 0,
@@ -643,7 +781,15 @@ export function createEncodeSession(
     const encoder = encoders.get(kind)
     if (!encoder) throw new Error(`this export has no ${kind} encoder`)
     await encoder.flush()
-    leg(kind).flushed = true
+    const who = leg(kind)
+    // A flush that resolved leaves the encoder holding nothing, so a sample still
+    // open is one whose chunk will never come — the padding hand most of all, since
+    // an encoder is free to answer it with silence, with nothing, or with a packet
+    // the file drops. Giving the buffer and the slot back here is what turns that
+    // runtime into a short file the close order refuses out loud, instead of an
+    // export that waits forever on a callback that cannot arrive.
+    while (release(who, null)) who.inFlight -= 1
+    who.flushed = true
     notify()
   }
 
@@ -687,14 +833,21 @@ export function createEncodeSession(
     if (hasAudio && !framesPerPacket) {
       throw new Error(`core has no packet size for audio codec ${ask.audio?.codec ?? '?'}, so its clock cannot be scheduled`)
     }
+    const audioClock = {
+      codec: ask.audio?.codec ?? '',
+      contentEndTicks: ask.contentEndTicks,
+      sampleRate: ask.audio?.sampleRate ?? 0,
+      framesPerPacket
+    }
     if (hasAudio) {
-      const packets = encodeAudioPacketCount({
-        contentEndTicks: ask.contentEndTicks,
-        sampleRate: ask.audio?.sampleRate ?? 0,
-        framesPerPacket
-      })
+      const packets = encodeAudioPacketCount(audioClock)
       if (packets === null) throw new Error('the audio clock could not be counted')
       totalAudioPackets = packets
+      // The file and the encoder want different numbers, and only the second one
+      // is a runtime answer: this AAC cannot flush on a one-packet schedule (§52).
+      const hands = encodeAudioHandCount(audioClock)
+      if (hands === null) throw new Error('the audio hands could not be counted')
+      totalAudioHands = hands
     }
 
     muxer = makeMuxer({

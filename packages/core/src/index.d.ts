@@ -2404,6 +2404,41 @@ export function encodeAudioPacketCount(input: {
   framesPerPacket?: number
 }): number | null
 
+/** How many packets one encoder must be handed to flush, keyed by codec spelling. */
+export const AUDIO_MIN_HAND_PACKETS: Record<string, number>
+
+/** Hands to make: what the file promises, floored by what the encoder needs. */
+export function encodeAudioHandCount(input: {
+  codec?: string
+  contentEndTicks?: number
+  sampleRate?: number
+  framesPerPacket?: number
+}): number | null
+
+/**
+ * The hand past the schedule: one whole frame on the same grid, for a codec
+ * measured to need more hands than the file has packets. Null for every position
+ * the schedule owns (§52).
+ */
+export function planEncodeAudioPadding(input: {
+  index?: number
+  codec?: string
+  contentEndTicks?: number
+  sampleRate?: number
+  framesPerPacket?: number
+}): { startSample: number, frames: number, timestamp: number, duration: number } | null
+
+/**
+ * Which sample one arriving packet releases, and whether the file may have it.
+ * Video is named by its timestamp; audio by the order it was handed in (§52).
+ */
+export function planEncodeChunk(input: {
+  kind?: 'video' | 'audio'
+  openSamples?: number
+  packetsAdmitted?: number
+  packetTotal?: number
+}): { identity: 'timestamp' | 'ordinal', action: 'write' | 'drop-tail' | 'fail', reason: string } | null
+
 /** The order the exporter must close a file in, from the counters of one run. */
 export function planEncodeFinish(input: {
   totalFrames?: number
@@ -2412,6 +2447,8 @@ export function planEncodeFinish(input: {
   audioPackets?: number
   totalAudioPackets?: number
   audioPacketsQueued?: number
+  /** The hands the encoder is owed, which an encoder may need more of than the file. */
+  totalAudioHands?: number
   videoInFlight?: number
   audioInFlight?: number
   videoParked?: number
