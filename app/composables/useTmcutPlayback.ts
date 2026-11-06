@@ -1,31 +1,11 @@
 import { ref, computed } from 'vue'
-import { TICKS_PER_SECOND, audioMixAt, compositePlan, createFramePace, createFrameScheduler, elementRate, renderAt, ticksToSec } from 'tmcut-core'
-import type { CoreEvaluatedLayer, CoreFramePace, TmcutClock } from 'tmcut-core'
+import { TICKS_PER_SECOND, audioMixAt, createFramePace, createFrameScheduler, elementRate, renderAt, ticksToSec } from 'tmcut-core'
+import type { CoreFramePace, TmcutClock } from 'tmcut-core'
 import { useTmcutProject } from './useTmcutProject'
 import type { TmcutTimelineItem } from './useTmcutProject'
+import { surfacesAt } from '~/utils/tmcut/paintSurfaces'
+import type { PaintSurface, TextSurface } from '~/utils/tmcut/paintSurfaces'
 import { clipStartSec } from '~/utils/tmcut/clipTime'
-
-// One surface the canvas paints at this tick, straight from core's plan.
-export type PaintSurface = {
-  key: string
-  role: 'paint' | 'outgoing'
-  trackId: string | null
-  trackIndex: number
-  clip: TmcutTimelineItem
-  layer: CoreEvaluatedLayer
-  mediaTimeSec: number
-  ownsAudio: boolean
-  /** True when this surface's crossfade partner is on screen with it. */
-  crossfades: boolean
-}
-
-// One text overlay the canvas paints at this tick. Same shape rule as a footage
-// surface: the authored clip rides along for editing (drag, selection, the
-// Inspector), and every painted number comes from the layer BY REFERENCE.
-export type TextSurface = {
-  clip: TmcutTimelineItem
-  layer: CoreEvaluatedLayer
-}
 
 // Shared playback state across TMCut editor
 const playhead = ref(0) // Playhead position in seconds
@@ -114,74 +94,28 @@ export function useTmcutPlayback() {
     Math.round(playhead.value * TICKS_PER_SECOND)
   ))
 
-  // Every surface the canvas must paint at this tick, in core's stack order
-  // (Zero-FFmpeg slice F1/F2): `compositePlan` answers which layer of which row
-  // is the picture, which is a transition's outgoing partner, and what overlays
-  // the footage. The app used to answer all three itself — a `footageRow`
-  // lookup, a pair scan over the layers, a "top layer" filter — while the
-  // exporter answered them a second way, and that pair of answers is the drift
-  // F1 retired the single-row law for.
+  // Every surface the canvas must paint at this tick, plus the overlays on top
+  // of it — one read of the shared law, in core's stack order (Zero-FFmpeg slice
+  // F1/F2). `surfacesAt` is where the join from a core slot back to an authored
+  // clip lives now, and it used to live right here: a `computed` welded to the
+  // playhead, which left the exporter with nothing it could call, because an
+  // export paints at a frame index and asks for the plan at that tick. A modal
+  // that re-implemented the mapping instead would be a second answer to what the
+  // file looks like — the drift class §53 has been closing for four increments.
   //
-  // A re-read of the clip is a THIRD answer, which is why a surface's media time
-  // has exactly one source here: `layer.sourceTicks`. Core answers `null` when a
-  // live clip carries no source range at all — the DSL shape (`timeline.start` /
-  // `timeline.duration`, no `source`, no numeric `in`) is live to `clipSpan` but
-  // has nothing for `sourceRangeOf` to read. The app used to fall back to its own
-  // map in that case, and that map is `clip.in + local * speed`: with no `in` the
-  // arithmetic is NaN and `ticksToSec` folds NaN to 0, so the element sat parked
-  // at the first source frame while the drift check re-seeked it every frame. No
-  // position means no picture, so such a slot contributes no surface.
-  //
-  // A surface joins back to the authored clip through `trackIndex`, the row's
-  // position in `evaluateTimeline`'s own track list, and carries the evaluator's
-  // layer BY REFERENCE: opacity, transform and source position must be the ones
-  // core computed for this tick, never a second reading of the clip.
-  //
-  // `ownsAudio` marks the BOTTOM row's picture — the surface whose sound the
-  // file carries, because the export's audio is one concat of that row. During
-  // a crossfade that is the incoming clip, which is the simplification the
-  // player already documents on the outgoing element.
-  const paintPlan = computed(() => compositePlan(playheadEvaluation.value))
-  const paintSurfaces = computed<PaintSurface[]>(() => {
-    const tracks = currentProject.value?.timeline?.tracks
-    if (!tracks) return []
-    const surfaces: PaintSurface[] = []
-    let audioClaimed = false
-    for (const slot of paintPlan.value.slots) {
-      if (slot.kind !== 'footage') continue
-      if (slot.layer.sourceTicks === null) continue
-      const clip = tracks[slot.trackIndex]?.items?.find(item => item.id === slot.clipId)
-      if (!clip) continue
-      const ownsAudio = slot.role === 'paint' && !audioClaimed
-      if (ownsAudio) audioClaimed = true
-      surfaces.push({
-        key: `${slot.trackId}:${slot.clipId}:${slot.role}`,
-        role: slot.role,
-        trackId: slot.trackId,
-        trackIndex: slot.trackIndex,
-        clip,
-        layer: slot.layer,
-        mediaTimeSec: ticksToSec(slot.layer.sourceTicks),
-        ownsAudio,
-        crossfades: false
-      })
-    }
-    // A crossfade only exists when BOTH of its layers are on screen. The plan
-    // hands the outgoing slot directly under its picture, so that adjacency IS
-    // the pair; a layer whose partner was trimmed away keeps painting as the
-    // plain cut `compositePlan` decided, with no ramp on it.
-    for (let index = 1; index < surfaces.length; index++) {
-      const below = surfaces[index - 1]
-      const above = surfaces[index]
-      if (!below || !above) continue
-      if (below.role === 'outgoing' && above.role === 'paint'
-        && below.trackIndex === above.trackIndex) {
-        below.crossfades = true
-        above.crossfades = true
-      }
-    }
-    return surfaces
-  })
+  // What core still owns, and what the law only passes through: which layer of
+  // which row is the picture, which is a transition's outgoing partner, and what
+  // overlays the footage (`compositePlan`, built on the row law
+  // `selectPaintRows`). And the rule the app once got wrong on its own: a live
+  // clip with no source range gets no surface, because `clip.in + local * speed`
+  // is NaN without an `in`, `ticksToSec` folds NaN to 0, and the element sat
+  // parked on the first source frame while the drift check re-seeked it every
+  // tick. No position means no picture.
+  const surfaceAnswer = computed(() => surfacesAt(
+    currentProject.value?.timeline?.tracks,
+    playheadEvaluation.value
+  ))
+  const paintSurfaces = computed<PaintSurface[]>(() => surfaceAnswer.value.footage)
 
   // Which layers sound at the playhead, and how loudly — core's answer, read
   // from the same evaluation the picture is painted from (`evaluateTimeline`
@@ -268,21 +202,11 @@ export function useTmcutPlayback() {
   // track, so parallel caption/watermark tracks all render (R122). The plan
   // places them after all footage, which is also the DOM's paint order.
   //
-  // The slot already carries the layer core evaluated at this tick. Joining back
-  // to the clip is only for editing; painting from the clip would re-run
-  // `evalKeyframe` and `textAnimationAt` in the DOM — a third answer to where a
-  // caption sits, while the export reads core's.
-  const activeTextSurfaces = computed<TextSurface[]>(() => {
-    const tracks = currentProject.value?.timeline?.tracks
-    if (!tracks) return []
-    const out: TextSurface[] = []
-    for (const slot of paintPlan.value.slots) {
-      if (slot.kind !== 'overlay') continue
-      const clip = tracks[slot.trackIndex]?.items?.find(item => item.id === slot.clipId)
-      if (clip) out.push({ clip, layer: slot.layer })
-    }
-    return out
-  })
+  // The law already joined each overlay slot back to its clip and kept the
+  // layer core evaluated at this tick. Painting from the clip instead would
+  // re-run `evalKeyframe` and `textAnimationAt` in the DOM — a third answer to
+  // where a caption sits, while the export reads core's.
+  const activeTextSurfaces = computed<TextSurface[]>(() => surfaceAnswer.value.text)
 
   // Seek playhead to specific time in seconds
   function seek(timeInSec: number) {

@@ -26,6 +26,7 @@ import { evaluateTimeline, compositePlan } from 'tmcut-core'
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..')
 const COMPOSABLE = 'app/composables/useTmcutPlayback.ts'
+const SURFACE_LAW = 'app/utils/tmcut/paintSurfaces.ts'
 const read = (rel: string) => readFileSync(join(root, rel), 'utf8')
 const tk = (sec: number) => Math.round(sec * TICKS)
 
@@ -147,14 +148,20 @@ async function main() {
     assert.equal(second.mediaTimeSec, Number(second.layer.sourceTicks) / TICKS)
   })
 
-  // 6. No second copy of the plan in the app: the composable asks core, and it
-  // no longer reads transition roles off the layers itself.
-  await check('the composable reads the plan and keeps no local window law', () => {
-    const source = read(COMPOSABLE)
-    assert.match(source, /import \{[^}]*compositePlan[^}]*\} from 'tmcut-core'/,
+  // 6. No second copy of the plan in the app. H3d-2d moved the slot→surface join
+  // out of the playhead `computed` into the law both callers share, so the name
+  // that must come from tmcut-core is now read there, and the host is read for
+  // what it is allowed to keep: the call, not the window math.
+  await check('the law reads the plan and the host keeps no local window law', () => {
+    const law = read(SURFACE_LAW)
+    assert.match(law, /import \{[^}]*compositePlan[^}]*\} from 'tmcut-core'/,
       'the name comes from tmcut-core, not a local helper')
-    assert.doesNotMatch(source, /transition\??\.role/,
+    assert.doesNotMatch(law, /transition\??\.role/,
       'pair detection belongs to core; reading layer.transition.role here is the drift F1 removed')
+    const source = read(COMPOSABLE)
+    assert.match(source, /surfacesAt/, 'the preview reads the shared law')
+    assert.doesNotMatch(source, /transition\??\.role/,
+      'and re-detects a crossfade in neither place')
     assert.match(source, /paintSurfaces/, 'the surface list is what the DOM will bind to')
   })
 

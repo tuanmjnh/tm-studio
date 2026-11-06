@@ -6071,7 +6071,7 @@ Bốn thứ cần browser hoặc mixer **đi vào làm tham số**, không nằm
 |---|---|---|
 | `readPlate` | giải **một** khoảnh khắc của **một** file ra một ảnh | `frameDecode.ts` (#154, chưa nối) |
 | `createCanvas` | tấm nền mà painter vẽ lên, và `dispose()` khi xong | caller của modal (#155) |
-| `surfaces` | từ `evaluation` của core, kế hoạch paint là những surface nào | `useTmcutPlayback.ts` — xem đoạn nợ bên dưới |
+| `surfaces` | từ `evaluation` của core, kế hoạch paint là những surface nào | `paintSurfaces.ts` — tách ra từ `useTmcutPlayback.ts` ở §53.7 |
 | `pcm` | mixer offline, packet audio đến từ đây | `audioDecode.ts` (#154, chưa nối) |
 
 Nhờ đó spec chạy **plain Node, không DOM, không encoder**: 18 check trong
@@ -6135,3 +6135,85 @@ còn `/tmcut/editor` (4 lần), `/tmcut/templates` (2 lần), `/tmcut/factory` (
 buộc của phase này cấm tôi chạm, nên phần **authed** của sweep là **BLOCKED**, không phải PASS được viết lại lời.
 Bằng chứng rằng 401 không phải do keo: diff core là **54 thêm / 0 xoá** và **9 thêm / 0 xoá**, module mới **chưa có ai
 import trong `app/`** (`grep webCodecsExport app/` trả về rỗng), và route gây lỗi tôi không đụng.
+
+### 53.7 Increment H3d-2d — luật surface ra khỏi playhead: một chỗ trả lời cho cả preview lẫn export
+
+§53.6 để lại một món nợ **có tên**: port `surfaces` tồn tại vì luật surface chung vẫn nằm trong `useTmcutPlayback.ts`,
+tức là preview và export trả lời từ hai chỗ. Luật đó giờ là [paintSurfaces.ts](file:///D:/Applications/tm-studio/app/utils/tmcut/paintSurfaces.ts) —
+`surfacesAt(tracks, evaluation)` ([:69](file:///D:/Applications/tm-studio/app/utils/tmcut/paintSurfaces.ts#L69)) trả
+`{ footage, text }`. Lý do nó **phải** là một hàm thay vì một `computed`: export vẽ theo **chỉ số frame**, không theo
+playhead, nên nó cần hỏi "tại tick này vẽ gì" với đúng tick đó; để luật trong `computed` nghĩa là modal hoặc tự viết lại
+phép ánh xạ (thành chỗ thứ hai), hoặc không export được. Composable bây giờ chỉ còn một dòng gọi luật
+([useTmcutPlayback.ts:114](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L114)); mọi con số vẽ
+được vẫn đến từ core **nguyên trạng** (`compositePlan` ở
+[:19](file:///D:/Applications/tm-studio/app/utils/tmcut/paintSurfaces.ts#L19), ô hàng trả về theo index của core ở
+[:80](file:///D:/Applications/tm-studio/app/utils/tmcut/paintSurfaces.ts#L80), từ chối layer không có vị trí nguồn ở
+[:87](file:///D:/Applications/tm-studio/app/utils/tmcut/paintSurfaces.ts#L87), cặp crossfade là **sự liền kề** ở
+[:107](file:///D:/Applications/tm-studio/app/utils/tmcut/paintSurfaces.ts#L107)).
+
+Luật mới có spec riêng: [tmcut_paint_surfaces.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_paint_surfaces.spec.ts),
+12 check, chạy plain Node không DOM. Ba check mang tải nặng nhất:
+
+1. **Census, không phải đọc một file**: `compositePlan(` chỉ được xuất hiện trong **đúng một** file của `app/`
+   ([:130](file:///D:/Applications/tm-studio/tests/unit/tmcut_paint_surfaces.spec.ts#L130)). Đây là cách giữ lời hứa
+   "một chỗ hỏi core" mà không cần tin người sau chỉ sửa file tôi đang nhìn.
+2. **Preview == luật, từng tick** ([:271](file:///D:/Applications/tm-studio/tests/unit/tmcut_paint_surfaces.spec.ts#L271)):
+   drive composable thật, so từng surface với `surfacesAt` ở cùng `at`, kể cả `crossfades` — nên một lần di chuyển luật
+   làm lệch **cặp** (ramp bật khi partner không ở trên màn hình) đỏ ngay, thay vì đỏ ở export ba increment sau.
+3. **Keo thật, không phải bản chép** ([:302](file:///D:/Applications/tm-studio/tests/unit/tmcut_paint_surfaces.spec.ts#L302)):
+   `createWebCodecsExport` được nối `surfaces = surfacesAt` thật, fake `readPlate` ghi lại từng lời gọi, và expected là
+   `ticksToSec(frame.startTicks)` do chính `createFrameScheduler` sinh ra. Nói cách khác: **frame export giải mã đúng
+   khoảnh khắc preview đang hiển thị** — điều §53.4 còn để trống — đã được chứng minh ở tầng luật, trên máy không encoder.
+
+**Ba guard cũ phải đổi chỗ, không đổi độ mạnh.** Đây là phần phải đọc kỹ, vì "sửa test" luôn là chỗ dễ tự lừa:
+
+| Guard | Trước | Sau | Vì sao vẫn cùng độ mạnh |
+|---|---|---|---|
+| `tmcut_paint_stack.spec.ts` check 2 ([:198](file:///D:/Applications/tm-studio/tests/unit/tmcut_paint_stack.spec.ts#L198)) | đọc `useTmcutPlayback.ts`: có `compositePlan`, không `selectPaintRows`, không `videoEvaluations`, có `tracks[slot.trackIndex]` | đọc **luật** đúng bốn điều đó, **thêm** ba điều lên host: gọi `surfacesAt(`, không gọi `compositePlan(`, không giữ `tracks[slot.trackIndex]` | thêm chứ không bớt; host giờ bị giữ ở chỗ **không có** luật |
+| `tmcut_preview_paint_plan.spec.ts` check 6 ([:155](file:///D:/Applications/tm-studio/tests/unit/tmcut_preview_paint_plan.spec.ts#L155)) | `import { ... compositePlan ... } from 'tmcut-core'` phải có trong composable | assertion đó chuyển sang **file luật**; composable bị giữ `surfacesAt` và **không** được đọc `transition?.role` | cùng một câu hỏi, hỏi đúng file trả lời |
+| `tmcut_surface_media_time.spec.ts` check 5 ([:143](file:///D:/Applications/tm-studio/tests/unit/tmcut_surface_media_time.spec.ts#L143)) | `match(composable, /sourceTicks/)` | `match(law, /sourceTicks/)` **và** `match(law, /sourceTicks === null/)`, **và** `doesNotMatch(composable, /sourceTicks/)` | 1 assertion → 3; chỗ đọc số của core bị siết chặt hơn trước |
+
+Một regex **có** nới, và đó là nới đúng: `doesNotMatch(/selectPaintRows/)` thành `doesNotMatch(/selectPaintRows\s*\(/)`.
+Lý do: comment của luật **gọi tên** luật hàng mà nó không được tự quyết, nên dạng thô bắt cả văn giải thích. Cái guard
+cần bắt là **lời gọi** đứng cạnh plan — tức câu trả lời thứ hai — chứ không phải cái tên trong prose. Sức mạnh thật của
+"không có chỗ thứ hai" giờ do census (check 1 ở trên) gánh, và census chỉ đếm code, không đếm comment.
+
+**Một expectation sửa ở phía test, nói rõ là phía test.** Check 11 của spec mới ban đầu khẳng định
+`transitionCrossfade` **still non-null** ở `tk(5)`. Sai: `tk(5)` đã ra ngoài cửa sổ transition, production **đúng**, nên
+claim của tôi sai. Assertion được thay bằng điều mạnh hơn và không tự do: với **mỗi** tick được probe,
+`transitionCrossfade !== null` phải **bằng** `some(s => s.crossfades)` của luật. Không có assertion nào bị bỏ.
+
+**Mutation probe trên cây sẽ commit** (host md5 `fd787449010b9e1393e3366ba934759e`): chèn lại một
+bản sao luật vào composable — `compositePlan(...)`, `tracks[slot.trackIndex]`, `slot.layer.sourceTicks`,
+`slot.layer.transition?.role` — và chạy bốn spec. Kết quả: `tmcut_paint_stack` đỏ ở *"the plan is read once, in the law"*,
+`tmcut_surface_media_time` đỏ ở *"the host reads no source position of its own"*, `tmcut_paint_surfaces` đỏ ở *"expected
+only app/utils/tmcut/paintSurfaces.ts to call the plan, got app/composables/useTmcutPlayback.ts, ..."*,
+`tmcut_preview_paint_plan` đỏ ở *"and re-detects a crossfade in neither place"*. Bốn guard, bốn lời bắt. Host sau đó được
+khôi phục **byte-identical** (md5 khớp) và bốn spec xanh lại.
+
+Gates của increment này:
+
+| Gate | Lệnh | Kết quả | Bằng chứng |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | exit 0, `error TS` = 0; `.nuxt/eslint.config.mjs` tái sinh 28 576 B (`h3d2d-typecheck.txt`) |
+| 2 Lint | `npx eslint` trên **7 file** đã chạm, **sau** gate 1 | PASS | exit 0, 0 problem (`h3d2d-eslint.txt`); không `--fix` toàn repo |
+| 3 Core | `pnpm typecheck:core` + `pnpm check:core` | PASS | exit 0 cả hai (`h3d2d-coretc.txt`, `h3d2d-corecheck.txt`) |
+| 4 Core tests | `pnpm test:core` | PASS | **950 pass / 0 fail** — không đổi so với §53.6, vì lượt này **không** sửa core |
+| 5 App suite | `npx tsx tests/unit/run-all.mts` | PASS | **129/129**, exit 0 (`h3d2d-runall2.txt`); nền trước lượt này là 128/128, +1 là spec luật |
+| 6 App suite + smoke | `npx tsx tests/unit/run-all.mts --smoke` | PASS | **132/132**, exit 0 (`h3d2d-runall-smoke.txt`) |
+| 7 Electron | `node --test "electron/tools/*.test.mjs"` | PASS | 59 pass / 0 fail, exit 0 (`h3d2d-electron.txt`) |
+| 8 Live sweep | 5 route `:4003`, console `error`/`warn`/`issue` | **KHÔNG PASS** (như §53.6) | xem đoạn dưới |
+
+Gate 8: `/tmcut` và `/tmcut/autocut` **0 dòng**; `/tmcut/editor` **4 × `401`**, `/tmcut/templates` **1 ×**,
+`/tmcut/factory` **1 ×** — tất cả trên cùng `GET /api/v1/ai/relay/catalog`, vẫn đúng một nguyên nhân như §53.6 đã quy
+([catalog.get.ts:12](file:///D:/Applications/tm-studio/server/api/v1/ai/relay/catalog.get.ts#L12): trình drive không có
+phiên hub ở origin `localhost`). Phần **authed** của sweep tiếp tục là **BLOCKED**, không viết lại thành PASS. Cái mới ở
+lượt này là nửa **không** cần auth đã mạnh hơn: route editor render một project thật (2 clip, `f4b-probe.mp4`), bấm Play,
+`blob:` media đọc 206/200, và canvas **vẽ ra frame thật** (screenshot SMPTE bars, playhead 00:01.05) — tức luật mới chạy
+trên đường DOM thật, không chỉ trong spec.
+
+**Chưa chứng minh, vẫn còn nguyên**: hai chân browser của #154 (`readPlate` trong `frameDecode.ts`, PCM trong
+`audioDecode.ts`), modal nối vào luật và dispatch (#155), và **parity điểm ảnh với file FFmpeg trên một file xuất thật**
+(#156) — `surfaces` giờ là luật chung nên #156 không còn phải trả lời câu "hai chỗ có lệch không", nhưng số ±1 px vẫn chưa
+tồn tại ở đâu cả. `deps.createCanvas` **throw** vẫn thoát thành rejection và vẫn **không có RED**: khoảng trống có tên từ
+§53.6, chưa được lấp.

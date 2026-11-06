@@ -34,6 +34,7 @@ import { compositePlan, evaluateTimeline } from 'tmcut-core'
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..')
 const read = (rel: string) => readFileSync(join(root, rel), 'utf8')
 const COMPOSABLE = 'app/composables/useTmcutPlayback.ts'
+const SURFACE_LAW = 'app/utils/tmcut/paintSurfaces.ts'
 const tk = (sec: number) => Math.round(sec * TICKS)
 
 let passed = 0
@@ -135,16 +136,21 @@ async function main() {
       'and there is no ramp to a partner the canvas cannot seek')
   })
 
-  // 5. The law is in one place: the composable keeps no media-time map of its
-  // own. The app copy of the map still exists for the audio row (slice G owns
-  // that leg); what ends here is the footage branch reading it.
-  await check('the composable keeps no media-time map for footage', () => {
+  // 5. The law is in one place: no media-time map of its own, and core's number
+  // read where the surface is built. H3d-2d moved that build out of the
+  // playhead `computed` into the shared law, so `sourceTicks` lives there now —
+  // and the host that binds the DOM keeps no copy of the reading either.
+  await check('the law reads core sourceTicks and the host keeps no media-time map', () => {
+    const law = read(SURFACE_LAW)
+    assert.match(law, /sourceTicks/, 'the surface still reads core\'s number')
+    assert.match(law, /sourceTicks === null/,
+      'and the refusal of a position-less layer is stated once, in the law')
     const source = read(COMPOSABLE)
     assert.doesNotMatch(source, /clipMediaTimeSec/,
       'the second copy of the source-position law is not the preview\'s to keep')
     assert.doesNotMatch(source, /function mediaTimeAt/,
       'and no local wrapper stands in for core\'s answer')
-    assert.match(source, /sourceTicks/, 'the surface still reads core\'s number')
+    assert.doesNotMatch(source, /sourceTicks/, 'the host reads no source position of its own')
   })
 
   console.log(`\n=== All ${passed} surface-media-time checks passed ===`)

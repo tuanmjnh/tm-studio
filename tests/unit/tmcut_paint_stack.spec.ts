@@ -47,6 +47,7 @@ import type { TmcutProject, TmcutTimelineItem, TmcutTrack } from '../../app/comp
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const PREVIEW_HOST = 'app/composables/useTmcutPlayback.ts'
+const SURFACE_LAW = 'app/utils/tmcut/paintSurfaces.ts'
 const EXPORT_HOST = 'app/utils/tmcut/render/clip.ts'
 
 let passed = 0
@@ -191,13 +192,22 @@ async function main() {
   // 2. No second copy of the rule in the app. F2a moved the preview behind
   //    `compositePlan`, so the row law is reached through the plan — and must
   //    not be called beside it, which would be a second answer to keep in sync.
+  //    H3d-2d moved the join out of the playhead `computed` into a plain module
+  //    the exporter can call too, so the law is asserted where it now lives and
+  //    the host is asserted to delegate — the same claim, one file further down.
   await check('the preview reaches the row through the plan, not its own loop', () => {
-    const source = readFileSync(join(ROOT, PREVIEW_HOST), 'utf8')
-    assert.match(source, /compositePlan/, 'the preview asks core for the plan')
-    assert.doesNotMatch(source, /selectPaintRows/,
+    const law = readFileSync(join(ROOT, SURFACE_LAW), 'utf8')
+    assert.match(law, /compositePlan/, 'the app asks core for the plan')
+    // The name in prose is documentation; the call beside it is the drift.
+    assert.doesNotMatch(law, /selectPaintRows\s*\(/,
       'the row law is cores, reached once through the plan')
-    assert.ok(!source.includes('videoEvaluations'), 'no second copy of the pairing loop in the preview')
-    assert.match(source, /tracks\[slot\.trackIndex\]/, 'the row joins back by the core index')
+    assert.ok(!law.includes('videoEvaluations'), 'no second copy of the pairing loop in the law')
+    assert.match(law, /tracks\[slot\.trackIndex\]/, 'the row joins back by the core index')
+
+    const host = readFileSync(join(ROOT, PREVIEW_HOST), 'utf8')
+    assert.match(host, /surfacesAt\(/, 'the preview asks the shared law for its surfaces')
+    assert.doesNotMatch(host, /compositePlan\s*\(/, 'the plan is read once, in the law')
+    assert.doesNotMatch(host, /tracks\[slot\.trackIndex\]/, 'the join is not kept a second time')
   })
 
   // 3. The composable that ships is the one measured here (the store harness
