@@ -115,6 +115,165 @@ export async function decodeFrame(ask: TmcutFrameDecodeAsk): Promise<Blob | null
   }
 }
 
+/** A canvas the sink holds: the only geometry a plate can report truthfully. */
+interface PlateCanvas {
+  width: number
+  height: number
+}
+
+/**
+ * One decoded picture, at the size the media really is.
+ *
+ * There is no `release` on a plate, on purpose: the canvas belongs to the sink,
+ * the sink and the container belong to the reader, and the reader lets go only
+ * when the export ends. A plate that could close its own container would put a
+ * per-frame demux back into a run that asks for thousands of frames.
+ */
+export interface TmcutPlate {
+  width: number
+  height: number
+  /** The sink's own canvas: the caller must draw it before this file's next read. */
+  image: PlateCanvas
+}
+
+export interface TmcutPlateAsk {
+  /** Where the clip's bytes come from; null when the clip has no source. */
+  src: string | null
+  /** Seconds inside the media, exactly as core named them — never re-rounded. */
+  atSec: number
+  /** The export's signal: obeyed per frame, and the container is opened with it. */
+  signal: AbortSignal
+}
+
+/** The two questions a plate read asks a container; Mediabunny's `Input` answers them. */
+interface PlateInput {
+  canRead(): Promise<boolean>
+  getVideoTracks(): Promise<unknown[]>
+}
+
+/**
+ * The track a real container reports. Mediabunny keeps the class name private, so
+ * it is read off `Input` rather than guessed at — the seam above erases the type
+ * so a spec can hand back `{}`, and this is the one place that puts it back.
+ */
+type MediaVideoTrack = Awaited<ReturnType<Input['getVideoTracks']>>[number]
+
+/** The pixels leg: `CanvasSink` answers it, and nothing else needs to. */
+interface PlateSink {
+  getCanvas(atSec: number): Promise<{ canvas: PlateCanvas } | null>
+}
+
+export interface TmcutPlateReaderDeps {
+  open?: (read: TmcutMediaRead) => { input: PlateInput, close: () => void } | null
+  /** The seam erases the track type, so the real builder below casts it back. */
+  makeSink?: (track: unknown) => PlateSink
+  hasDecoder?: () => boolean
+}
+
+/** One file the reader holds open, plus the turn-taking that serializes its reads. */
+interface PlateHolder {
+  opened: { input: PlateInput, close: () => void }
+  sink: PlateSink | null
+  queue: Promise<unknown>
+  dead: boolean
+}
+
+/**
+ * The export's plate leg: one container per file, for the whole run.
+ *
+ * `decodeFrame` above answers a thumbnail question — one instant, one PNG, one
+ * `Input` opened and thrown away. An export asks the same question thousands of
+ * times, in ascending order, for the same handful of files, and re-opening per
+ * frame would demux from the first keyframe every time. So this is a reader with
+ * a lifecycle its caller owns: `read` for every frame, `close` in the export's
+ * `finally`.
+ *
+ * Three rules are the reason it is a module rather than a call site:
+ *  - the instant goes to the sink verbatim, because core owns the clock;
+ *  - the sink is built with no width, because `planEncodePlate` places a source
+ *    whose geometry it is told truthfully — a proxy-sized plate would place
+ *    correctly and encode a soft file;
+ *  - one file's frames are read one at a time, because every frame of a file
+ *    paints into that sink's ONE canvas and the encode session keeps more than
+ *    one frame in flight (`planEncodeQueue`).
+ */
+export function createPlateReader(deps: TmcutPlateReaderDeps = {}) {
+  const open = deps.open ?? openMedia
+  const makeSink = deps.makeSink ?? ((track: unknown) => new CanvasSink(track as MediaVideoTrack))
+  const canDecode = deps.hasDecoder ?? hasFrameDecoder
+  const holders = new Map<string, PlateHolder>()
+  let done = false
+
+  /** Give a container back and stop ever reading it again. */
+  function retire(src: string, holder: PlateHolder) {
+    holder.dead = true
+    if (holders.get(src) === holder) holders.delete(src)
+    holder.opened.close()
+  }
+
+  async function readOne(src: string, holder: PlateHolder, ask: TmcutPlateAsk): Promise<TmcutPlate | null> {
+    if (holder.dead || ask.signal.aborted) return null
+    const input = holder.opened.input
+    // A container that cannot answer, or holds no video, is not worth keeping:
+    // a leak per failed frame is how an export dies at frame 900. The next frame
+    // may still try the file, because a dropped location is not a dropped read.
+    if (!(await input.canRead())) {
+      retire(src, holder)
+      return null
+    }
+    const [track] = await input.getVideoTracks()
+    if (!track) {
+      retire(src, holder)
+      return null
+    }
+    if (!holder.sink) holder.sink = makeSink(track)
+    const drawn = await holder.sink.getCanvas(ask.atSec)
+    if (ask.signal.aborted || !drawn) {
+      // A hole at one instant is a hole, not a broken file: only a cancel takes
+      // the container down with it.
+      if (ask.signal.aborted) retire(src, holder)
+      return null
+    }
+    return { width: drawn.canvas.width, height: drawn.canvas.height, image: drawn.canvas }
+  }
+
+  async function read(ask: TmcutPlateAsk): Promise<TmcutPlate | null> {
+    if (done || ask.signal.aborted || !ask.src || !canDecode()) return null
+    const src = ask.src
+    let holder = holders.get(src)
+    if (!holder) {
+      // No client bytes yet: the export reads its location, and the byte-cache
+      // leg is a named gap in §53, not a decision this file forgot.
+      const opened = open({ bytes: null, src, signal: ask.signal })
+      if (!opened) return null
+      holder = { opened, sink: null, queue: Promise.resolve(), dead: false }
+      holders.set(src, holder)
+      // `openMedia` releases the input when this signal fires; the reader also
+      // has to stop handing that dead container to the frame after the cancel.
+      const owned = holder
+      ask.signal.addEventListener('abort', () => {
+        owned.dead = true
+      }, { once: true })
+    }
+    if (holder.dead) return null
+    const owned = holder
+    // The queue is never a rejected one: a failed read must not cost the next
+    // frame its turn at the same container.
+    const work = owned.queue.then(() => readOne(src, owned, ask))
+    owned.queue = work.then(() => null, () => null)
+    return await work
+  }
+
+  function close() {
+    if (done) return
+    done = true
+    for (const [src, holder] of holders) retire(src, holder)
+    holders.clear()
+  }
+
+  return { read, close }
+}
+
 /** The RGBA of a canvas the sink just painted, or null when 2D is unavailable. */
 function rgbaOf(canvas: HTMLCanvasElement | OffscreenCanvas): Uint8ClampedArray | null {
   const context = (canvas as HTMLCanvasElement).getContext('2d', { willReadFrequently: true }) as

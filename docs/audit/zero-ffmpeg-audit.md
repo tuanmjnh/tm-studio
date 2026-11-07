@@ -6069,7 +6069,7 @@ Bốn thứ cần browser hoặc mixer **đi vào làm tham số**, không nằm
 
 | Port | Nhiệm vụ | Ai sở hữu bản thật |
 |---|---|---|
-| `readPlate` | giải **một** khoảnh khắc của **một** file ra một ảnh | `frameDecode.ts` (#154, chưa nối) |
+| `readPlate` | giải **một** khoảnh khắc của **một** file ra một ảnh | `frameDecode.ts` — `createPlateReader` ở §53.8 |
 | `createCanvas` | tấm nền mà painter vẽ lên, và `dispose()` khi xong | caller của modal (#155) |
 | `surfaces` | từ `evaluation` của core, kế hoạch paint là những surface nào | `paintSurfaces.ts` — tách ra từ `useTmcutPlayback.ts` ở §53.7 |
 | `pcm` | mixer offline, packet audio đến từ đây | `audioDecode.ts` (#154, chưa nối) |
@@ -6212,8 +6212,91 @@ lượt này là nửa **không** cần auth đã mạnh hơn: route editor rend
 `blob:` media đọc 206/200, và canvas **vẽ ra frame thật** (screenshot SMPTE bars, playhead 00:01.05) — tức luật mới chạy
 trên đường DOM thật, không chỉ trong spec.
 
-**Chưa chứng minh, vẫn còn nguyên**: hai chân browser của #154 (`readPlate` trong `frameDecode.ts`, PCM trong
-`audioDecode.ts`), modal nối vào luật và dispatch (#155), và **parity điểm ảnh với file FFmpeg trên một file xuất thật**
-(#156) — `surfaces` giờ là luật chung nên #156 không còn phải trả lời câu "hai chỗ có lệch không", nhưng số ±1 px vẫn chưa
-tồn tại ở đâu cả. `deps.createCanvas` **throw** vẫn thoát thành rejection và vẫn **không có RED**: khoảng trống có tên từ
-§53.6, chưa được lấp.
+**Chưa chứng minh, vẫn còn nguyên**: chân PCM của #154 (`audioDecode.ts`), modal nối vào luật và dispatch (#155), và
+**parity điểm ảnh với file FFmpeg trên một file xuất thật** (#156) — `surfaces` giờ là luật chung nên #156 không còn phải
+trả lời câu "hai chỗ có lệch không", nhưng số ±1 px vẫn chưa tồn tại ở đâu cả. `deps.createCanvas` **throw** vẫn thoát
+thành rejection và vẫn **không có RED**: khoảng trống có tên từ §53.6, chưa được lấp. `readPlate` giờ **đã có** bản thật
+(§53.8) nhưng **chưa ai gọi nó** trong `app/` cho tới #155.
+
+### 53.8 Increment H3d-2e — chân plate: một container cho một file, và một hàng đợi cho một container
+
+`decodeFrame` trả lời câu hỏi **thumbnail**: một khoảnh khắc, một PNG, một `Input` mở rồi bỏ. Export hỏi **cùng câu đó
+hàng nghìn lần**, theo thứ tự tăng, trên cùng vài file. Mở lại container mỗi frame nghĩa là demux lại từ keyframe đầu mỗi
+lần — nên chân mà exporter cần là một **reader**, không phải một hàm. Nó nằm trong
+[frameDecode.ts](file:///D:/Applications/tm-studio/app/utils/tmcut/frameDecode.ts) như một export mới,
+`createPlateReader(deps)` → `{ read(ask), close() }`; vòng đời do caller sở hữu: `read` cho mọi frame, `close` trong
+`finally` của export (#155).
+
+Ba port nhỏ để spec chạy được không cần WebCodecs: `open` (mặc định `openMedia`), `makeSink` (mặc định
+`new CanvasSink(track)`), `hasDecoder` (mặc định `hasFrameDecoder`). Không có `width` trong sink: plate là **kích thước
+thật của media**, vì `planEncodePlate` đặt một nguồn mà nó được kể đúng hình học — plate cỡ proxy sẽ đặt đúng và encode
+một file mềm, không ai thấy cho tới khi nhìn.
+
+Ba luật là lý do nó là module chứ không phải một call site:
+
+1. **Một file là một container VÀ một sink**, không phải một lần mỗi frame. Sink dựng lại mỗi frame là cùng một sự lãng
+   phí ở chỗ khác. Plate **không có** `release`: container là của reader, canvas là của sink; một plate có thể đóng
+   container sẽ đưa demux-theo-từng-frame trở lại.
+2. **Khoảnh khắc đến sink nguyên văn.** `Math.round(atSec * 1000) / 1000` ở đây là đồng hồ thứ hai — đúng lớp bug §52 và
+   §53 dành cả chương trình để đóng.
+3. **Frame của một file được đọc lần lượt.** Session giữ nhiều frame in-flight (`planEncodeQueue`,
+   [exportEncodeSession.ts:661](file:///D:/Applications/tm-studio/app/utils/tmcut/exportEncodeSession.ts#L661)), và mọi
+   frame của một file vẽ vào **cùng một** canvas của sink đó. Hai lượt đọc chồng nhau là một frame bị xé, không phải một
+   export chậm hơn. Vì vậy mỗi container có một hàng đợi, và hàng đợi **không bao giờ** là một promise bị reject: một lượt
+   đọc hỏng không được lấy mất lượt của frame sau.
+
+Cùng các luật đó, ở dạng phủ định: không decoder → `null` và **không mở** container; container không đọc được hoặc không
+có track video → đóng và **bỏ khỏi cache**, frame sau vẫn được thử lại; `src: null` → không mở gì; signal đã abort →
+`null` trước khi mở, và chính signal của export là signal được mở container với (để `openMedia` đóng khi abort); reader đã
+`close()` → `null`, không mở sau lưng caller; `close()` đóng mỗi container đúng một lần.
+
+**Một phát hiện thật của lượt này**: fixture hai hàng footage bị `planEncodeContent` từ chối (`stacked-rows` là luật của
+§53.1/H3d-1). Nên check tích hợp dùng **một hàng, hai clip nối tiếp** (`a` 0–1 s, `b` 1–2 s) — vừa hợp luật, vừa là đường
+đi khó hơn cho reader: lượt chạy mở `a.mp4`, **bước qua chỗ cắt** sang `b.mp4`, và không được mở lại file đã rời. Expected
+`atSec` được tính từ lưới của core (`createFrameScheduler`) và offset tác giả, không từ luật và không từ reader.
+
+**11 check** trong [tmcut_plate_reader.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_plate_reader.spec.ts):
+10 check hành vi trên fake container (mở/đóng/khoảnh khắc/kích thước/lỗi/abort/serialize/close) + 1 check chạy **keo thật,
+luật thật, reader thật**, chỉ mediabunny bị fake. RED đúng lý do: `SyntaxError: ... does not provide an export named
+'createPlateReader'`, trước khi có một dòng implementation nào.
+
+Mutation probe (chạy trên đúng `md5 747fa8c0a46ca5d264444cc058a94a35` sẽ commit, restore **byte-identical**):
+
+| # | Đột biến | Kết quả | Check giết nó |
+|---|---|---|---|
+| M1 | bỏ hàng đợi, hai frame một file dùng chung canvas | CAUGHT | "the second frame of the same file waits" |
+| M2 | `Math.round(atSec * 1000) / 1000` trước sink | CAUGHT | "the sink is asked for the authored instant, not a rounded one" |
+| M3 | `new CanvasSink(track, { width: 64 })` | CAUGHT | "the export sink takes the track and no option" |
+| M4 | bỏ cache container, một `open` mỗi frame | CAUGHT | "one open, got 4" |
+| M5 | `canRead()` false không `retire` | CAUGHT | "canRead false still closes" |
+
+Hai **defect của chính probe**, ghi lại vì cùng lý do §52.7/§53.6 đã ghi nợ loại này: M2 ban đầu `NOT CAUGHT` vì marker
+`getCanvas(ask.atSec)` khớp **lần xuất hiện đầu tiên** — trong `decodeFrame`, không phải trong reader; sửa marker thành
+`holder.sink.getCanvas(ask.atSec)`. M3 ban đầu `NOT CAUGHT` vì **fake thay thế đúng cái builder đang bị đột biến**, nên
+không runtime check nào thấy được — và một typechecker cũng không: `{ width: 64 }` hợp lệ. Nửa đó được pin ở source
+(`assert.match` vào `new CanvasSink(track as MediaVideoTrack))`), và sau đó M3 bị giết. Đây là ví dụ đúng của luật "sửa
+phía nào cũng phải nói rõ".
+
+Gates của increment này (trên cây sẽ commit):
+
+| Gate | Lệnh | Kết quả | Bằng chứng |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | exit 0, `error TS` = 0; config tái sinh 28 576 B (`h3d2e-typecheck.txt`) |
+| 2 Lint | `npx eslint` trên 2 file, **sau** gate 1 | PASS | exit 0 (`h3d2e-eslint.txt`); 3 lỗi style lần đầu đều ở dòng tôi mới viết, sửa trong file đó |
+| 3 Core | `pnpm typecheck:core` + `pnpm check:core` | PASS | exit 0; "core imports nothing platform-specific" |
+| 4 Core tests | `pnpm test:core` | PASS | **950 pass / 0 fail** (không đổi: lượt này không chạm core) |
+| 5 Spec plate | `tsx --tsconfig tsconfig.test.json` spec mới | PASS | **11/11**, exit 0 (`h3d2e-green.txt`) |
+| 6 App suite | `npx tsx tests/unit/run-all.mts` | PASS | **130/130**, exit 0 (`h3d2e-appsuite.txt`) — 128 → 129 → **130** là spec này |
+| 7 Electron | `node --test "electron/tools/*.test.mjs"` | PASS | 59 pass / 0 fail, exit 0 (`h3d2e-electron.txt`) |
+| 8 Mutation | 5 đột biến trên md5 sẽ commit | PASS | 5/5 CAUGHT, restore byte-identical (`h3d2e-mutate.txt`) |
+
+Gate live sweep của §53.6/#156 **không chạy lại ở lượt này**: module mới chưa được `app/` import (nó là chân của #154, nối
+ở #155), nên không route nào đi qua nó và một sweep chỉ lặp lại đúng 401 đã có nguyên nhân. Điều đó là **N/A — module
+chưa có caller**, không phải một PASS được viết lại lời.
+
+**Còn lại của #154**: chân PCM trong `audioDecode.ts` + mixer offline đi vào port `pcm`; và khi có module mới import
+`frameDecode.ts`, danh sách caller trong
+[tmcut_frame_service.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_frame_service.spec.ts#L421) phải được mở
+rộng **kèm lý do** — lượt này chưa có ai import nên danh sách không đổi. Chân plate **chưa đọc byte cache**: nó mở
+location, và đó là một khoảng trống có tên (ghi ngay trong `read`), không phải một quyết định bị bỏ quên.
+
