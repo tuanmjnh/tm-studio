@@ -6614,3 +6614,87 @@ code giữ nguyên hình dạng đã thiết kế.
   `bytesForAsset` chưa được đo đầu-cuối trong cùng một phiên, chỉ từng mắt một (spec của `cacheAssetBytes` và check
   `bytesForAsset` ở trên);
 - một project **có cảnh báo cache trượt** (một file có, một file không) chưa được đo: cả hai harness chỉ có một file.
+
+### 53.13 Increment H3e — exit gate của slice H có **ba** vế, và vế thứ ba chưa ai gác
+
+Bảng migration (§8) ghi exit gate của slice H là "output play được, A/V sync, **0 spawn**". Hai vế đầu đã được đo: §52 đo
+file thật cùng offset A/V, §53.11 đo điểm ảnh so với FFmpeg. Vế thứ ba chỉ từng được **nói**, chưa từng được **gác** —
+và "module này hôm nay không import ffmpeg" là một câu về import, đúng thứ một slice sau sửa lúc đi ngang.
+
+**Gác bằng đồ thị, không bằng grep một từ.** Spec mới `tmcut_export_process_census.spec.ts` đi từ đúng entry mà modal
+gọi (`webExportHost.ts`), theo **cạnh runtime** của từng module cục bộ, và **đóng băng cả tập** kết quả. Một import mới
+vào đồ thị làm spec đỏ **cho tới khi** ai đó sửa danh sách — đúng lúc người đó phải trả lời "module mới này có mở tiến
+trình không?". `import type` bị loại khỏi phép đi: nó bị compiler xoá và không kéo gì vào bundle, nên tính nó là mô tả
+một đồ thị không hề chạy. Cạnh đó có thật: `paintSurfaces.ts` khai kiểu clip của store bằng `import type`.
+
+**Bản nháp của spec sai hai chỗ, và lượt chạy nói ra.** Danh sách đầu tiên tôi viết có **6** module; phép đo trả về
+**8** — thiếu `audioDecode.ts` (seam PCM của chân tiếng, §53.9) và `paintSurfaces.ts` (luật surface dùng chung, §53.7).
+Lần chạy thứ hai lộ thêm một sai nữa ở check cuối: tôi giả định `electron/tools/video-generation/controller.mjs` là nơi
+spawn FFmpeg, nhưng file đó **không** nhắc tới ffmpeg — chỗ spawn thật là `electron/tools/ffmpeg.controller.cjs`
+(`require('child_process')`, `spawn`, `execFile`). Cả hai đều là lỗi của spec, không phải của code, nên sửa **spec**:
+danh sách lấy theo số đo, và check cuối chỉ vào đúng file. Không có dòng sản phẩm nào bị sửa để làm spec xanh.
+
+**Đồ thị đo được** (8 module, tất cả dưới `app/utils/tmcut/`):
+
+| Module | Vai trò trong lần xuất |
+|---|---|
+| `webExportHost.ts` | entry: lắp bốn port, `bytesFor` dùng chung hai chân (§53.12) |
+| `webCodecsExport.ts` | keo: hỏi capability, gọi session, một kết quả trong năm loại |
+| `exportEncodeSession.ts` | vòng encode thật (`VideoEncoder`/`AudioEncoder` + mediabunny) |
+| `exportEncodePlan.ts` | thang preset và câu hỏi capability |
+| `exportMixLeg.ts` | chân tiếng: một decode cho một file, cộng bằng luật core |
+| `audioDecode.ts` | seam PCM (`AudioBufferSink`), mượn `openMedia` |
+| `frameDecode.ts` | chân plate (`CanvasSink` + `openMedia`) |
+| `paintSurfaces.ts` | luật surface dùng chung preview/export (chỉ import runtime `compositePlan`, `ticksToSec`) |
+
+**Bảy check:**
+
+1. entry đúng là module modal gọi, và modal import nó từ **một** chỗ;
+2. đồ thị **bằng đúng** tám module trên (so cả tập, không `includes`);
+3. không module nào trong đồ thị gọi `node:child_process`, `spawn`, `spawnSync`, `execFile`, `execSync` — đọc **code**
+   sau khi bỏ dòng comment, vì chính spec này nhắc chữ `spawn` trong prose;
+4. đồ thị **không chạm được** phía FFmpeg: `ffmpegHelper.ts`, `compiler.ts`, `render/index.ts`, `hostBridge.ts` đều
+   không có mặt; và chiều ngược lại được ghi tên — `compiler.ts` vẫn là chỗ sinh args FFmpeg, slice I xoá nó;
+5. package duy nhất được phép là `tmcut-core` và `mediabunny`; một package chỉ-Node ở đây là một tiến trình dưới tên khác;
+6. nhánh web trong modal **return** trước `enqueueJob`, nên đồ thị sạch không thể bị vô hiệu bằng một lần rơi xuống queue;
+7. chỗ spawn thật là `electron/tools/ffmpeg.controller.cjs`, **không** module `electron/` nào nằm trong đồ thị.
+
+**Ba mutation trên đúng cây sẽ commit, restore byte-identical** (`webExportHost.ts 2ae10512`, `TmcutExportModal.vue
+32aae6f6`):
+
+| # | Đột biến | Kết quả | Check chết |
+|---|---|---|---|
+| C1 | export host import `hostBridge` (IPC) | CAUGHT | `the export pulls in exactly the modules this spec names` |
+| C2 | export host `import { spawnSync } from 'node:child_process'` và gọi nó | CAUGHT | `webExportHost.ts uses node:child_process` |
+| C3 | nhánh web mất `return`, rơi xuống `enqueueJob` | CAUGHT | `the web branch returns…` |
+
+Một mutation thử lần đầu (gọi `runWebExport()` hai lần) **sống** — nhưng nó không phải phép thử đúng: nó thêm một lời
+gọi chứ không bỏ `return`. Làm lại đúng phép thử thì chết. Ghi lại vì "mutation sống" chỉ có nghĩa khi mutation thật sự
+tấn công điều spec tuyên bố.
+
+**Gates của increment này:**
+
+| Gate | Lệnh | Kết quả | Bằng chứng |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | exit 0, `error TS` = 0; config tái sinh 28 576 B |
+| 2 Lint | `npx eslint tests/unit/tmcut_export_process_census.spec.ts` | PASS | exit 0 (1 lỗi `arrow-parens` do chính lượt này, sửa tay) |
+| 3 Core types | `pnpm typecheck:core` | PASS | exit 0 |
+| 4 Core boundary | `pnpm check:core` | PASS | "core imports nothing platform-specific" |
+| 5 Core tests | `pnpm test:core` | PASS | **957 pass / 0 fail** |
+| 6 App suite | `npx tsx tests/unit/run-all.mts` | PASS | **134/134**, exit 0 (133 → 134) |
+| 7 Electron | `node --test "electron/tools/*.test.mjs"` | PASS | **59 pass / 0 fail**, exit 0 |
+| 8 Live | 5 route TMCut trên `:4003` | N/A | lượt này chỉ chạm `tests/` + `docs/`: không có đường render nào đổi, nên không có gì để quét |
+| 9 Docs guards | 6 spec `docs_*` / `tmcut_doc_*` | PASS | cả sáu exit 0 |
+| 10 Mutation | 3 đột biến trên md5 sẽ commit | PASS | 3/3 CAUGHT |
+
+**Chưa chứng minh, và đây là chỗ dễ tự lừa nhất:**
+
+- "0 spawn" ở đây là **0 spawn trong đồ thị module của lần xuất trình duyệt**. Nó **không** đo số tiến trình thật trên
+  máy lúc bấm nút: một lời gọi `fetch` tới route server, một service worker, hay một lần Electron main khởi động ffmpeg
+  vì lý do khác đều nằm ngoài phép đếm này. Phép đo tiến trình thật (đếm `ffmpeg.exe` trong Task Manager quanh một lần
+  xuất) vẫn chưa làm;
+- vế "output play được" và "A/V sync" **không** được chạy lại lượt này; chúng vẫn đứng trên số của §52 và §53.11, và
+  cả hai đều là fixture, không phải footage quay;
+- đường **desktop** (`nativeFFmpeg`) vẫn spawn, đúng thiết kế và đúng thứ slice I xoá; lượt này không đo nó;
+- spec đọc import bằng regex trên `from '…'`, nên một `import('…')` động sẽ không hiện ra trong đồ thị. Chưa có call
+  site động nào trong tám module, nhưng đó là giới hạn của phép đo, không phải một bảo đảm.
