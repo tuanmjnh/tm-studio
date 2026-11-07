@@ -6613,7 +6613,7 @@ code giữ nguyên hình dạng đã thiết kế.
 - cache được **gieo bằng tay** trong harness, không phải bằng `importWebFiles`; chuỗi import → `cacheAssetBytes` →
   `bytesForAsset` chưa được đo đầu-cuối trong cùng một phiên, chỉ từng mắt một (spec của `cacheAssetBytes` và check
   `bytesForAsset` ở trên);
-- một project **có cảnh báo cache trượt** (một file có, một file không) chưa được đo: cả hai harness chỉ có một file.
+- ~~một project có cảnh báo cache trượt (một file có, một file không) chưa được đo~~ — **đã đo ở lượt sau**, xem §53.12.1.
 
 ### 53.13 Increment H3e — exit gate của slice H có **ba** vế, và vế thứ ba chưa ai gác
 
@@ -6698,3 +6698,47 @@ tấn công điều spec tuyên bố.
 - đường **desktop** (`nativeFFmpeg`) vẫn spawn, đúng thiết kế và đúng thứ slice I xoá; lượt này không đo nó;
 - spec đọc import bằng regex trên `from '…'`, nên một `import('…')` động sẽ không hiện ra trong đồ thị. Chưa có call
   site động nào trong tám module, nhưng đó là giới hạn của phép đo, không phải một bảo đảm.
+
+### 53.12.1 Nửa còn lại của §53.12 — một lần xuất, **một file có cache và một file không**
+
+§53.12 ghi đúng một câu nợ về chính harness của nó: cả hai lượt đo chỉ có **một** file, nên "cache trượt thì rơi về location"
+mới chỉ được chứng minh bằng unit check chứ chưa bằng một lần xuất thật. Lượt này đóng câu đó bằng một project **hai clip
+nối tiếp** — clip đầu chỉ có trong cache (URL 404), clip sau chỉ có trên đĩa (không có trong cache) — nên một lần xuất đi qua
+cả nhánh **hit** lẫn **miss** của cùng một port.
+
+**Fixture phải khác nhau về nội dung, và đây là chỗ harness đầu tiên của tôi sai.** Bản đầu dùng **cùng một file** cho cả hai
+clip. Khi mutation "một câu trả lời cache dùng cho cả lượt" được thử, nó **sống**: leg vẽ đúng bytes của file cache cho cả
+hai clip, và vì hai clip giống hệt nhau nên bức tranh ra **đúng** — trong khi code đã sai. Sửa fixture: file thứ hai là một
+màu teal phẳng (`0x20A0A0`) hoàn toàn khác bốn màu của file cache, nên câu hỏi "khung này từ file nào" trả lời được bằng
+cách **đọc khung**, không bằng cách tin code đang được đo.
+
+**Cùng lúc lộ ra một lỗi thứ hai, cũng của harness:** port `bytesFor` trong bản đầu **bỏ qua** đối số `src` và luôn trả blob
+đã cache — trong khi `bytesForAsset` thật tra asset theo `clip.src`. Một port như vậy khiến chính phép đối chứng của harness
+trở nên vô nghĩa. Sửa: port trả cache **chỉ cho đúng path** đã gieo, `null` cho mọi path khác.
+
+**Số đo trên cây sẽ commit** (`:4003`, 320x180 @ 30 fps):
+
+| Phép đo | Kết quả |
+|---|---|
+| Lượt một file, chỉ cache | **exported** 20 336 B, 60 frame, bốn màu đúng trị |
+| Lượt đối chứng, không port | **failed**, không ghi file — hành vi trước §53.12 |
+| Lượt hai file (cache + đĩa) | **exported** 19 700 B, **60 frame** |
+| Nửa đầu (clip trong cache) | `239/50/32` — đỏ của file cache |
+| Nửa sau (clip trên đĩa) | `21/147/159` — teal của file đĩa, **không phải** màu của file cache |
+| Console trang | 0 `error` trong cả ba lượt |
+
+**Hai mutation, cả hai CAUGHT sau khi sửa fixture** (`frameDecode.ts e0d86187`, harness `ad9b…`):
+
+| # | Đột biến | Kết quả | Check chết |
+|---|---|---|---|
+| M8 | một câu trả lời cache dùng cho **mọi** file trong lượt | **SỐNG** với fixture cũ → CAUGHT với fixture mới | `each half shows ITS OWN file…` |
+| M9 | port của harness bỏ qua `src`, luôn trả blob cache | **SỐNG** với fixture cũ → CAUGHT với fixture mới | `each half shows ITS OWN file…` |
+
+Đây là lần thứ hai trong hai lượt liên tiếp mà một mutation sống chỉ ra một **lỗ hổng của phép đo**, không phải của code
+(lần trước là M4 ở §53.12). Ghi lại vì nó là mẫu: một harness dùng **một** fixture không bao giờ phân biệt được "đọc đúng
+file" với "đọc file đầu tiên cho mọi clip", và một port giả bỏ qua tham số sẽ đồng ý với bất kỳ cách gọi nào.
+
+**Chưa chứng minh:** cả hai file vẫn là fixture sinh bằng `ffmpeg` (màu phẳng), không phải footage quay; lượt này đo nhánh
+**plate** với hai file, **không** đo nhánh **tiếng** với một file có/ một file không (chân tiếng có unit check cho cả hai
+trường hợp, nhưng chưa có lần xuất thật nào trộn hai file âm thanh); và mutation chỉ được thử trên `frameDecode.ts`, chưa thử
+một biến thể "gọi `bytesFor` một lần cho cả chân tiếng".

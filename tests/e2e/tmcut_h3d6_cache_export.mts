@@ -36,6 +36,7 @@ const ROOT = path.resolve(import.meta.dirname, '..', '..')
 const DEV_URL = process.env.TMCUT_DEV_URL || 'http://localhost:4003'
 const FFMPEG = path.join(ROOT, 'resources', process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg')
 const FFPROBE = path.join(ROOT, 'resources', process.platform === 'win32' ? 'ffprobe.exe' : 'ffprobe')
+const UPLOADS = path.join(ROOT, '.data', 'uploads')
 const WORK = fs.mkdtempSync(path.join(ROOT, '.golden-render-h3d6-'))
 const T = 120_000
 const W = 320
@@ -149,6 +150,41 @@ function projectFor(src: string, id: string) {
   }
 }
 
+/**
+ * Two clips after each other: the FIRST is only in the cache, the SECOND is only
+ * on disk. One export therefore exercises the hit and the fallback in the same
+ * run — the case §53.12 recorded as unmeasured, and the one a leg that answered
+ * the cache once for the whole run (instead of once per file) would get wrong.
+ *
+ * `planEncodeContent` refuses stacked rows, so two FILES have to be two clips in
+ * sequence, which is exactly the walk a per-file holder has to make.
+ *
+ * The two files MUST look different, or the check below cannot tell a correct
+ * read from a wrong one: a leg that painted the cached bytes for BOTH files would
+ * produce the same picture as a correct one. `SECOND` is that difference.
+ */
+const SECOND = '0x20A0A0'
+
+function mixedProject(cachedSrc: string, diskSrc: string, id: string) {
+  return {
+    id,
+    version: 1,
+    name: 'h3d-6 mixed sources',
+    canvas: { width: W, height: H, fps: FPS, background: { type: 'color', value: BG } },
+    timeline: {
+      tracks: [{
+        id: 't1',
+        type: 'video',
+        name: 'base',
+        items: [
+          { id: 'c1', trackId: 't1', src: cachedSrc, offset: 0, in: 0, out: T, effects: [], type: 'video' },
+          { id: 'c2', trackId: 't1', src: diskSrc, offset: T, in: 0, out: T, effects: [], type: 'video' }
+        ]
+      }]
+    }
+  }
+}
+
 function findBrowserExe(): string {
   const candidates = [
     process.env.CHROME_EXE,
@@ -177,12 +213,20 @@ async function seedCache(page: import('playwright-core').Page, base64: string, k
   return (await page.evaluate(script)) as never
 }
 
-/** Run the app's own export host in the live page, with or without the cache port. */
+/**
+ * Run the app's own export host in the live page, with or without the cache port.
+ *
+ * `cachedKey` names the ONE path the cache holds, and the port answers by path —
+ * exactly what `bytesForAsset` does in the app (look the asset up by `clip.src`,
+ * read its revision). A port that returned the same blob for every src would let
+ * a two-file export paint one file twice and still "pass", which is the bug this
+ * harness's own first draft had.
+ */
 async function browserExport(
   page: import('playwright-core').Page,
   project: unknown,
   file: string,
-  key: string | null
+  cached: { src: string, key: string } | null
 ): Promise<{ kind: string, size?: number, message?: string }> {
   const sink = await receiver(file)
   try {
@@ -190,9 +234,11 @@ async function browserExport(
     const storeUrl = '/_nuxt/@fs/' + path.join(ROOT, 'app', 'utils', 'tmcut', 'byteStore.ts').replace(/\\/g, '/')
     // A self-contained expression: tsx compiles a closure with esbuild's `__name`
     // helper, which the page has never defined.
-    const bytesFor = key === null
+    const bytesFor = cached === null
       ? 'undefined'
-      : `async () => (await import(${JSON.stringify(storeUrl)})).readCachedBytes(${JSON.stringify(key)})`
+      : `async (src) => (src === ${JSON.stringify(cached.src)}
+          ? (await import(${JSON.stringify(storeUrl)})).readCachedBytes(${JSON.stringify(cached.key)})
+          : null)`
     const script = `(async () => {
       const mod = await import(${JSON.stringify(hostUrl)})
       const res = await mod.createWebExportHost().run({
@@ -287,7 +333,7 @@ async function main() {
       )
 
       const served = path.join(WORK, 'cached-attempt.mp4')
-      const result = await browserExport(page, project, served, key)
+      const result = await browserExport(page, project, served, { src, key })
       check(
         'the export is written from the cached copy, with no server file to fall back to',
         result.kind === 'exported' && fs.existsSync(served) && fs.statSync(served).size > 0,
@@ -328,6 +374,50 @@ async function main() {
         control.kind === 'failed' && !fs.existsSync(path.join(WORK, 'control.mp4')),
         `${control.kind} — ${String(control.message).slice(0, 110)}`
       )
+
+      // One export, one hit, one miss. A leg that asked the cache once per run
+      // would paint the first clip and refuse the second; a leg that never asks
+      // would refuse the first. Only a per-file answer exports both.
+      const diskName = `h3d6-disk-${process.pid}.mp4`
+      const diskFile = path.join(UPLOADS, diskName)
+      // The disk-only file is ONE flat teal for two seconds: nothing like the four
+      // cached colours, so "which file did this frame come from" is answerable by
+      // reading the frame, not by trusting the code under test.
+      const second = run(FFMPEG, [
+        '-hide_banner', '-loglevel', 'error',
+        '-f', 'lavfi', '-i', `color=c=${SECOND}:s=${W}x${H}:r=${FPS}:d=2`,
+        '-t', '2', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-g', '30',
+        ...tag, '-y', diskFile.replace(/\\/g, '/')
+      ])
+      if (second.code !== 0) throw new Error(`could not generate the second fixture: ${second.out}`)
+      try {
+        const mixed = await browserExport(
+          page,
+          mixedProject(src, `/uploads/${diskName}`, 'h3d-6-mixed'),
+          path.join(WORK, 'mixed.mp4'),
+          { src, key }
+        )
+        check(
+          'one export paints a cached file and a streamed file in the same run',
+          mixed.kind === 'exported' && fs.existsSync(path.join(WORK, 'mixed.mp4')),
+          `${mixed.kind} ${mixed.size ?? 0} bytes${mixed.message ? ' — ' + mixed.message : ''}`
+        )
+        if (mixed.kind === 'exported') {
+          const frames = rgbFrames(path.join(WORK, 'mixed.mp4'))
+          const teal = [0x20, 0xA0, 0xA0] as const
+          const near = (rgb: number[], target: readonly number[], slack: number) =>
+            rgb.every((value, index) => Math.abs(value - target[index]!) <= slack)
+          const firstHalf = pixel(frames, 10, 160, 90)
+          const secondHalf = pixel(frames, 50, 160, 90)
+          check(
+            'each half shows ITS OWN file: the cached clip, then the disk clip',
+            near(firstHalf, [0xE0, 0x20, 0x20], 24) && near(secondHalf, teal, 24),
+            `cached half ${firstHalf.join('/')} (want red), disk half ${secondHalf.join('/')} (want teal)`
+          )
+        }
+      } finally {
+        fs.rmSync(diskFile, { force: true })
+      }
 
       check('the live page raised no error while exporting', pageErrors.length === 0, pageErrors.join(' | '))
     } finally {
