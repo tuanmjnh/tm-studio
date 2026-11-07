@@ -6072,7 +6072,7 @@ Bốn thứ cần browser hoặc mixer **đi vào làm tham số**, không nằm
 | `readPlate` | giải **một** khoảnh khắc của **một** file ra một ảnh | `frameDecode.ts` — `createPlateReader` ở §53.8 |
 | `createCanvas` | tấm nền mà painter vẽ lên, và `dispose()` khi xong | caller của modal (#155) |
 | `surfaces` | từ `evaluation` của core, kế hoạch paint là những surface nào | `paintSurfaces.ts` — tách ra từ `useTmcutPlayback.ts` ở §53.7 |
-| `pcm` | mixer offline, packet audio đến từ đây | `audioDecode.ts` (#154, chưa nối) |
+| `pcm` | mixer offline, packet audio đến từ đây | `exportMixLeg.ts` — decode seam + core's mix law (§53.9) |
 
 Nhờ đó spec chạy **plain Node, không DOM, không encoder**: 18 check trong
 [tmcut_web_codecs_export.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_web_codecs_export.spec.ts),
@@ -6212,11 +6212,11 @@ lượt này là nửa **không** cần auth đã mạnh hơn: route editor rend
 `blob:` media đọc 206/200, và canvas **vẽ ra frame thật** (screenshot SMPTE bars, playhead 00:01.05) — tức luật mới chạy
 trên đường DOM thật, không chỉ trong spec.
 
-**Chưa chứng minh, vẫn còn nguyên**: chân PCM của #154 (`audioDecode.ts`), modal nối vào luật và dispatch (#155), và
-**parity điểm ảnh với file FFmpeg trên một file xuất thật** (#156) — `surfaces` giờ là luật chung nên #156 không còn phải
-trả lời câu "hai chỗ có lệch không", nhưng số ±1 px vẫn chưa tồn tại ở đâu cả. `deps.createCanvas` **throw** vẫn thoát
-thành rejection và vẫn **không có RED**: khoảng trống có tên từ §53.6, chưa được lấp. `readPlate` giờ **đã có** bản thật
-(§53.8) nhưng **chưa ai gọi nó** trong `app/` cho tới #155.
+**Chưa chứng minh, vẫn còn nguyên**: modal nối vào luật và dispatch (#155), và **parity điểm ảnh với file FFmpeg trên
+một file xuất thật** (#156) — `surfaces` giờ là luật chung nên #156 không còn phải trả lời câu "hai chỗ có lệch không",
+nhưng số ±1 px vẫn chưa tồn tại ở đâu cả. `deps.createCanvas` **throw** vẫn thoát thành rejection và vẫn **không có RED**:
+khoảng trống có tên từ §53.6, chưa được lấp. `readPlate` **đã có** bản thật (§53.8) và `pcm` **đã có** bản thật (§53.9),
+nhưng **chưa ai gọi chúng** trong `app/` cho tới #155 — hai chân đứng sẵn, còn cánh cửa thì chưa.
 
 ### 53.8 Increment H3d-2e — chân plate: một container cho một file, và một hàng đợi cho một container
 
@@ -6300,3 +6300,78 @@ chưa có caller**, không phải một PASS được viết lại lời.
 rộng **kèm lý do** — lượt này chưa có ai import nên danh sách không đổi. Chân plate **chưa đọc byte cache**: nó mở
 location, và đó là một khoảng trống có tên (ghi ngay trong `read`), không phải một quyết định bị bỏ quên.
 
+
+### 53.9 Increment H3d-2f — chân tiếng: một lần decode cho một file, và con số vẫn là của core
+
+`pcm` là port cuối cùng của §53.6 chưa có bản thật. Câu trả lời trung thực là **hai việc khác nhau**, và chỉ một việc
+thuộc về seam đọc byte: **giải mã** một file là `decodePcm` (E3), còn **cộng các run thành một packet** là
+`planExportMixPacket` (H3d-2a) — luật đã sở hữu vị trí, resample, gain và danh sách từ chối. Phần còn lại là bước đi giữa
+hai cái đó, và nó không phải keo vô nghĩa: session hỏi ~47 lần mỗi giây của file, cho cùng vài clip, nên một leg decode
+theo từng packet sẽ mở lại container mỗi ~21 ms — bản sinh đôi về âm thanh của lần mở container mỗi frame mà §53.8 vừa
+nghỉ hưu.
+
+Module là [exportMixLeg.ts](file:///D:/Applications/tm-studio/app/utils/tmcut/exportMixLeg.ts),
+`createExportMixLeg(deps)` → `{ mix(ask), close(), refused() }`. Port: `decode` (mặc định `decodePcm`) và `hasDecoder`
+(mặc định `hasAudioDecoder`); `mix` nhận đúng hình dạng mà session gọi (`index`, `startSample`, `frames`, `timestamp`,
+`duration`) cộng `project` và `target`, và trả `Float32Array[]` — một plane mỗi kênh, đúng `frames` sample.
+
+**Căn hàng là phần chịu lực.** `planExportMixPacket` đọc một nguồn tại `mediaSeconds * sampleRate` — một chỉ số **tuyệt
+đối** trong file. Nên run mà một nguồn mang theo phải bắt đầu ở media giây 0, không bao giờ ở điểm in của clip: một bed bị
+cắt bắt đầu ở 30 s mà run mở đầu ở đó sẽ đọc 30 s vào một buffer 30 giây và xuất ra **im lặng**. Vì vậy mỗi file được giải
+một lần, từ 0 tới giây xa nhất mà bất kỳ clip nào dùng của nó, và luật tự trả lời im lặng ở chỗ vượt quá run.
+
+Hai luật nhỏ đi kèm, mỗi cái đều có check riêng:
+
+1. **Host không có audio decoder thì fail, không xuất im lặng.** Một file im lặng viết ra như một lần xuất thành công là
+   bản sinh đôi về âm thanh của một frame đen: timeline phát ra tiếng mà file thì không.
+2. **Hàng bị mute không tốn một lần decode.** Core vẫn kể tên layer đó ở gain 0 và luật mix bỏ nó — bỏ qua ở đây không
+   đổi một sample nào và tiết kiệm cả một lần đọc file.
+
+Một **luật core mới** xuất hiện trong lượt này: `clipSourceRange(clip)` trong
+[evaluate.mjs](file:///D:/Applications/tm-studio/packages/core/src/evaluate.mjs), cùng file đã có `sourceRangeOf` dạng
+private. Nó đọc cả hai hình dạng đã lưu — DSL v3 `source.{in,out}` và flat `in`/`out` của store — vì leg cần biết "file
+này bị dùng tới giây nào". Một bản copy thứ hai của luật hai-hình-dạng đó trong `app/` chính là kiểu trôi mà cả chương
+trình này đang đóng; nên nó được export (kèm khai báo trong `index.d.ts`, tay-maintained) thay vì viết lại. Ba test core
+mới đi cùng, và suite core từ **950 → 953**.
+
+**8 check** trong [tmcut_export_mix_leg.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_export_mix_leg.spec.ts).
+RED đúng lý do: `Cannot find module '.../exportMixLeg'`, trước khi có một dòng implementation nào. Check cuối so **sample
+theo sample** với `planExportMixPacket` gọi trực tiếp từ core cho cùng packet.
+
+Mutation probe (trên đúng các md5 sẽ commit: `exportMixLeg.ts d1fd234bf1a82dd8d2a8738c2b4e258b`, spec
+`3db7557f8fd63fd2825e0824c883e885`, `evaluate.mjs 418800634364044bd049af8b5286c48a`, `index.d.ts
+70a4a8968f0c9ae8f9d15f87762c9277`, test core `6d123b11e921266fe414b7c1a3235336`), restore **byte-identical**:
+
+| # | Đột biến | Kết quả | Check giết nó |
+|---|---|---|---|
+| M1 | decode mỗi packet thay vì mỗi file | CAUGHT | "each sounding file read once" |
+| M2 | hỏi từ điểm in của clip thay vì media 0 | CAUGHT | "from the first sample of the file" |
+| M3 | decode cả hàng bị mute | CAUGHT | "the muted bed was never opened" |
+| M4 | lặng lẽ bỏ file không decode được | CAUGHT | "the missing file is named by its clip" |
+| M5 | viết im lặng như thành công khi host không có decoder | CAUGHT | "the refusal names the host" |
+| M6 | trả 0 thay vì hỏi core | CAUGHT | "the leg is core's answer plus the decode" |
+
+**M6 và hai defect của probe, ghi lại vì cùng lý do §52.7/§53.6/§53.8:** M6 thoạt đầu `NOT CAUGHT` vì fixture của check 8
+trả **toàn số 0** — một leg trả 0 cũng bằng core. Đây là lỗi của **spec**, không phải của code: fixture được đổi thành một
+sóng không-im-lặng, và M6 chết ngay. Hai marker M1/M4 `MARKER_NOT_FOUND` vì probe viết LF trong khi file đã CRLF; probe
+được sửa để so trên bản LF và ghi lại đúng EOL gốc — không sửa file nguồn để chiều probe.
+
+Gates của increment này (trên cây sẽ commit):
+
+| Gate | Lệnh | Kết quả | Bằng chứng |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | exit 0, `error TS` = 0; config tái sinh 28 576 B (`h3d2f-typecheck.txt`) |
+| 2 Lint | `npx eslint` trên 4 file, **sau** gate 1 | PASS | exit 0 (`h3d2f-eslint.txt`) |
+| 3 Core | `pnpm typecheck:core` + `pnpm check:core` | PASS | exit 0; "core imports nothing platform-specific" |
+| 4 Core tests | `pnpm test:core` | PASS | **953 pass / 0 fail** (950 → 953: ba test cho `clipSourceRange`) |
+| 5 Spec tiếng | `tsx` spec mới | PASS | **8/8**, exit 0 (`h3d2f-green.txt`) |
+| 6 App suite | `npx tsx tests/unit/run-all.mts` | PASS | **131/131**, exit 0 (130 → 131 là spec này) |
+| 7 Electron | `node --test "electron/tools/*.test.mjs"` | PASS | 59 pass / 0 fail, exit 0 (`h3d2f-electron.txt`) |
+| 8 Mutation | 6 đột biến trên md5 sẽ commit | PASS | 6/6 CAUGHT, restore byte-identical (`h3d2f-mutate.txt`) |
+
+Live sweep: **N/A — module chưa có caller trong `app/`**. `exportMixLeg.ts` được nối ở #155; lượt này chỉ đứng sẵn ở đầu
+kia của cánh cửa.
+
+**Chưa chứng minh, vẫn còn nguyên**: chân tiếng **chưa đọc byte cache** (nó mở location qua `decodePcm`, và đó là khoảng
+trống có tên, giống chân plate ở §53.8); chưa có số đo nào cho chất lượng resample tuyến tính so với FFmpeg trên nhạc thật
+(việc của #156); và cả hai chân đều **chưa được gọi** cho tới khi modal của #155 nối chúng.

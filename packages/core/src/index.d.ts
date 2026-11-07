@@ -207,6 +207,13 @@ export interface CoreClipSpan {
 export function clipSpan(
   clip: TmcutTimelineClip | { offset?: number, in?: number, out?: number, speed?: number } | null | undefined
 ): CoreClipSpan
+/**
+ * The media range a clip reads, in source ticks: DSL v3 `source.{in,out}` or the
+ * app store's flat `in`/`out`. Null for a clip that carries no media (text).
+ */
+export function clipSourceRange(
+  clip: TmcutTimelineClip | { in?: number, out?: number, source?: { in?: number, out?: number } } | null | undefined
+): { in: number, out: number } | null
 export function totalDurationTicks(timeline: TmcutTimeline): number
 export function findClip(timeline: TmcutTimeline, clipId: string): { track: TmcutTrack, index: number, clip: TmcutTimelineClip } | null
 export function findTrack(timeline: TmcutTimeline, trackId: string): TmcutTrack | null

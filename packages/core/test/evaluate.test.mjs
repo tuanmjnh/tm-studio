@@ -1,7 +1,7 @@
 // tmcut-core — timeline evaluation tests. Run: node --test test/
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { evaluateClip, evaluateTimeline, textAnimationAt } from '../src/evaluate.mjs'
+import { clipSourceRange, evaluateClip, evaluateTimeline, textAnimationAt } from '../src/evaluate.mjs'
 import { maskAlphaExpr, maskCssMaskImage } from '../src/mask.mjs'
 import { TICKS_PER_SECOND } from '../src/time.mjs'
 
@@ -536,5 +536,21 @@ describe('evaluateTimeline — media layout', () => {
     assert.equal(layer.layout.fit, 'crop')
     assert.equal(layer.layout.focusY, 0.25)
     assert.equal(layer.layout.focusX, 0.5)
+  })
+})
+
+describe('clipSourceRange — the media range a clip reads, in both stored shapes', () => {
+  it('reads DSL v3 source.{in,out} in ticks', () => {
+    const range = clipSourceRange({ source: { in: 2 * T, out: 5 * T } })
+    assert.deepEqual(range, { in: 2 * T, out: 5 * T })
+  })
+
+  it('reads the app store flat in/out ticks', () => {
+    const range = clipSourceRange({ in: 1 * T, out: 3 * T, offset: 4 * T })
+    assert.deepEqual(range, { in: 1 * T, out: 3 * T })
+  })
+
+  it('answers null for a clip that carries no media range', () => {
+    assert.equal(clipSourceRange({ id: 't1', type: 'text', text: 'hi' }), null)
   })
 })

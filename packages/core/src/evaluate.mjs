@@ -52,8 +52,13 @@ function spanOf(clip) {
 /**
  * Source range of a clip in ticks: DSL v3 `source.{in,out}` or the app's
  * flat `in`/`out`. Null when the clip carries neither (text/sticker layers).
+ *
+ * Exported because a caller that reads a file's samples needs to know how far
+ * into it any clip reaches (the export's mix leg decodes from media 0 to the
+ * furthest out-point). A second copy of this two-shape rule in `app/` is the
+ * drift this module exists to prevent.
  */
-function sourceRangeOf(clip) {
+export function clipSourceRange(clip) {
   if (clip?.source) {
     const inT = finiteOr(clip.source.in, 0)
     return { in: inT, out: finiteOr(clip.source.out, inT) }
@@ -63,6 +68,9 @@ function sourceRangeOf(clip) {
   }
   return null
 }
+
+/** The internal name, kept so the evaluator reads what callers now share. */
+const sourceRangeOf = clipSourceRange
 
 /** Clip-local timeline ticks -> source ticks (speed, ramp and reverse aware). */
 function sourceAt(clip, localTicks, duration) {
