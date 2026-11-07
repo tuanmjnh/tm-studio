@@ -124,6 +124,30 @@ function rgbFrames(file: string): Buffer {
   return r.stdout
 }
 
+/**
+ * The dominant frequency of one window of a file's sound, by zero crossings.
+ *
+ * A pure sine is the one signal a zero-crossing count measures reliably, which is
+ * why the fixtures carry one: an FFT would answer the same question with more
+ * code and more ways to be subtly wrong. `-ac 1` downmixes the stereo pair to the
+ * same tone, so the count is not doubled by two channels' phases.
+ */
+function toneHz(file: string, fromSec: number, seconds = 0.7): number {
+  const r = spawnSync(FFMPEG, [
+    '-hide_banner', '-loglevel', 'error',
+    '-ss', String(fromSec), '-t', String(seconds), '-i', file,
+    '-vn', '-ac', '1', '-ar', '48000',
+    '-f', 'f32le', '-acodec', 'pcm_f32le', 'pipe:1'
+  ], { maxBuffer: 1 << 26 })
+  if (r.status !== 0) throw new Error(`could not decode audio of ${path.basename(file)}: ${r.stderr}`)
+  const samples = new Float32Array(r.stdout.buffer, r.stdout.byteOffset, Math.floor(r.stdout.byteLength / 4))
+  let crossings = 0
+  for (let i = 1; i < samples.length; i++) {
+    if ((samples[i - 1]! <= 0 && samples[i]! > 0) || (samples[i - 1]! >= 0 && samples[i]! < 0)) crossings++
+  }
+  return crossings / 2 / (samples.length / 48_000)
+}
+
 function pixel(frames: Buffer, frame: number, x: number, y: number): [number, number, number] {
   const i = frame * STRIDE + (y * W + x) * 3
   return [frames[i]!, frames[i + 1]!, frames[i + 2]!]
@@ -164,6 +188,9 @@ function projectFor(src: string, id: string) {
  * produce the same picture as a correct one. `SECOND` is that difference.
  */
 const SECOND = '0x20A0A0'
+/** The two tones the mixed fixtures carry — see the generator in `main()`. */
+const CACHED_HZ = 440
+const DISK_HZ = 880
 
 function mixedProject(cachedSrc: string, diskSrc: string, id: string) {
   return {
@@ -274,13 +301,20 @@ async function main() {
   const tag = ['-x264-params', 'colorprim=bt709:transfer=bt709:colormatrix=bt709:range=tv']
   const source = path.join(WORK, 'flat.mp4')
   // Generated into WORK, never into `.data/uploads`: the server must not have it.
+  //
+  // Both fixtures carry a tone, and the two tones differ (CACHED_HZ / DISK_HZ).
+  // The sound leg has its own cache port, and a tone makes its answer readable:
+  // the exported first second must carry the cached file's frequency and the
+  // second second the disk file's. Two identical tones — the first attempt —
+  // would let a leg that decoded one file twice pass.
   const made = run(FFMPEG, [
     '-hide_banner', '-loglevel', 'error',
     ...FLAT.flatMap(c => ['-f', 'lavfi', '-i', `color=c=${c.hex}:s=${W}x${H}:r=${FPS}:d=0.5`]),
+    '-f', 'lavfi', '-i', `sine=frequency=${CACHED_HZ}:duration=2:sample_rate=48000`,
     '-filter_complex', '[0:v][1:v][2:v][3:v]concat=n=4:v=1:a=0[v]',
-    '-map', '[v]', '-t', '2',
+    '-map', '[v]', '-map', '4:a', '-t', '2', '-ac', '2',
     '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-g', '30',
-    ...tag, '-y', source.replace(/\\/g, '/')
+    ...tag, '-c:a', 'aac', '-b:a', '128k', '-y', source.replace(/\\/g, '/')
   ])
   if (made.code !== 0) throw new Error(`could not generate the fixture: ${made.out}`)
 
@@ -386,8 +420,10 @@ async function main() {
       const second = run(FFMPEG, [
         '-hide_banner', '-loglevel', 'error',
         '-f', 'lavfi', '-i', `color=c=${SECOND}:s=${W}x${H}:r=${FPS}:d=2`,
-        '-t', '2', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-g', '30',
-        ...tag, '-y', diskFile.replace(/\\/g, '/')
+        '-f', 'lavfi', '-i', `sine=frequency=${DISK_HZ}:duration=2:sample_rate=48000`,
+        '-map', '0:v', '-map', '1:a', '-t', '2', '-ac', '2',
+        '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-g', '30',
+        ...tag, '-c:a', 'aac', '-b:a', '128k', '-y', diskFile.replace(/\\/g, '/')
       ])
       if (second.code !== 0) throw new Error(`could not generate the second fixture: ${second.out}`)
       try {
@@ -413,6 +449,19 @@ async function main() {
             'each half shows ITS OWN file: the cached clip, then the disk clip',
             near(firstHalf, [0xE0, 0x20, 0x20], 24) && near(secondHalf, teal, 24),
             `cached half ${firstHalf.join('/')} (want red), disk half ${secondHalf.join('/')} (want teal)`
+          )
+          // The same two files, read by the SOUND leg. Its cache port is a second
+          // call site (§53.9's `runFor`), so a picture that proves the plate leg
+          // says nothing about it: the tone is what makes the second leg's answer
+          // readable. ±12 % is generous for zero-crossing counting on an AAC codec
+          // and still nowhere near the 2× between 440 and 880.
+          const near2 = (hz: number, want: number) => Math.abs(hz - want) / want <= 0.12
+          const firstHz = toneHz(path.join(WORK, 'mixed.mp4'), 0.15)
+          const secondHz = toneHz(path.join(WORK, 'mixed.mp4'), 1.15)
+          check(
+            'each half SOUNDS its own file: the cached tone, then the disk tone',
+            near2(firstHz, CACHED_HZ) && near2(secondHz, DISK_HZ),
+            `cached half ${firstHz.toFixed(1)} Hz (want ${CACHED_HZ}), disk half ${secondHz.toFixed(1)} Hz (want ${DISK_HZ})`
           )
         }
       } finally {

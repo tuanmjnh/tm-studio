@@ -6738,7 +6738,34 @@ trở nên vô nghĩa. Sửa: port trả cache **chỉ cho đúng path** đã gi
 (lần trước là M4 ở §53.12). Ghi lại vì nó là mẫu: một harness dùng **một** fixture không bao giờ phân biệt được "đọc đúng
 file" với "đọc file đầu tiên cho mọi clip", và một port giả bỏ qua tham số sẽ đồng ý với bất kỳ cách gọi nào.
 
-**Chưa chứng minh:** cả hai file vẫn là fixture sinh bằng `ffmpeg` (màu phẳng), không phải footage quay; lượt này đo nhánh
-**plate** với hai file, **không** đo nhánh **tiếng** với một file có/ một file không (chân tiếng có unit check cho cả hai
-trường hợp, nhưng chưa có lần xuất thật nào trộn hai file âm thanh); và mutation chỉ được thử trên `frameDecode.ts`, chưa thử
-một biến thể "gọi `bytesFor` một lần cho cả chân tiếng".
+**Chưa chứng minh:** cả hai file vẫn là fixture sinh bằng `ffmpeg` (màu phẳng + sine), không phải footage quay.
+
+### 53.12.2 Chân **tiếng** cũng có hai file, và một tần số đọc ra được
+
+§53.12.1 đo nhánh **plate**. Chân tiếng là **call site thứ hai** của cùng port (`runFor` ở `exportMixLeg.ts`), nên một bức
+tranh đúng không nói gì về nó. Lượt này thêm **tone** vào hai fixture và đo lại, cùng một lần xuất:
+
+| Phép đo | Kết quả |
+|---|---|
+| File cache (chỉ trong OPFS, URL 404) | sine **440 Hz**, 19 904 B trong cache |
+| File đĩa (chỉ trên đĩa, không trong cache) | sine **880 Hz** |
+| Lượt hai file | **exported** 24 647 B, 60 frame |
+| Nửa đầu — **hình** | `239/50/32` (đỏ của file cache) |
+| Nửa sau — **hình** | `21/147/159` (teal của file đĩa) |
+| Nửa đầu — **tiếng** | **440,0 Hz** (zero-crossing, cửa sổ 0,7 s từ 0,15 s) |
+| Nửa sau — **tiếng** | **879,3 Hz** (cùng cách đo, từ 1,15 s) |
+| Console trang | 0 `error` |
+
+Đo tần số bằng **đếm zero-crossing**, không FFT: fixture là sine thuần — đúng loại tín hiệu mà phép đếm này đo chắc chắn —
+nên FFT chỉ thêm code và thêm cách sai. Ngưỡng ±12 % rộng rãi cho AAC, và vẫn cách xa hệ số **2×** giữa 440 và 880, nên
+"đọc nhầm file" không thể lọt.
+
+**Hai mutation, ghi cả cái sống:**
+
+| # | Đột biến | Kết quả | Vì sao |
+|---|---|---|---|
+| M10 | chân tiếng **bỏ qua** cache hoàn toàn | CAUGHT | lượt một-file `failed` vì location 404 — chân tiếng chính là thứ đọc file đó |
+| M11 | chân tiếng chỉ hỏi cache cho **file đầu** | **SỐNG** | đây là **mutant tương đương** trong phạm vi harness này: file thứ hai chỉ có trên đĩa, nên bỏ lần hỏi cache của nó trả về đúng bytes. Muốn giết nó phải có một file thứ hai **cũng** nằm trong cache — điều harness hai-file cố tình không có |
+
+Ghi M11 lại vì "mutation sống" luôn cần một câu giải thích: ở đây nó **không** chỉ ra lỗ hổng của phép đo, mà chỉ ra giới hạn
+của fixture — và giới hạn đó là chủ ý (một hit + một miss là điều §53.12.1 cần chứng minh).
