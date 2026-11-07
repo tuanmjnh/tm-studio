@@ -6457,3 +6457,78 @@ Một allowlist phải sửa và **không** phải nới guard: `tmcut_frame_ser
 **chưa đọc byte cache** (mở theo location), nên một project có asset chỉ nằm trong IndexedDB vẫn là "no plate". Đường
 desktop vẫn đi queue cũ, và lượt này **không** đo nó. Và `planEncodeContent` giờ đã chạy trên một project thật có vignette
 (lần từ chối) cùng một project thật không vignette (lần xuất) — nhưng chưa trên project nhiều hàng video thật.
+
+### 53.11 Increment H3d-4 — hai file, hai encoder, và một hạt lỗi thuộc về chính cái thước (#156)
+
+§53.10 khép lại bằng đúng một câu nợ: file 123 212 byte là **file thật, codec thật**, nhưng **không khung nào của nó được
+so với FFmpeg**. Lượt này trả câu đó bằng cách so **hai file** thay vì hai model: trình duyệt xuất một project, FFmpeg xuất
+**cùng project đó** qua `compileTimelineToFfmpeg`, rồi hai file được decode và chấm trên **cùng một thang**.
+
+**Fixture chọn theo thứ có thể che lỗi.** Bốn dải màu phẳng (đỏ/lục/lam/vàng, mỗi dải 0,5 s) đứng trước, vì màu phẳng
+rơi đúng trị RGB qua bất kỳ encoder hợp lý nào — một ma trận màu sai hay một nền sai **không thể** trốn trong "nhiễu
+nén". Theo sau là `testsrc2` có kết cấu, nơi sai lệch lớn hơn một cách chính đáng nên chỉ **chặn trên**, không đòi triệt
+tiêu. Cả hai source đều mang tag bt709 đầy đủ: source **không tag** bị mỗi decoder đọc theo mặc định riêng — đo được,
+chỉ riêng chuyện đó đã đẩy mặt phẳng chroma lệch |dU| 4,5 / |dV| 7,6 trong khi luma đứng yên.
+
+**Hai lần FAIL đầu là lỗi của cái thước, không phải của bức tranh.** Harness bản đầu decode **cả hai** file bằng
+`in_range=tv`; đo ra `pc` cho file của trình duyệt (`Mp4OutputFormat` của mediabunny ghi full-range + transfer sRGB) và
+`tv` cho file FFmpeg, nên phép so **so tag chứ không so hình**: luma PSNR 26,94 dB trong khi sai số RGB chỉ 1,78. Sửa
+đúng chỗ: decode mỗi file **theo tag của chính nó** (`format=rgb24` để phép chuyển tự chuẩn hoá range), và mặt phẳng YUV
+được chuẩn hoá về **một** range/ma trận trước khi tách luma/chroma. Sau khi sửa: Y 37,42 dB, U 34,73, V 31,12 — đúng
+hình dạng một vòng 4:2:0 → RGB → 4:2:0.
+
+**Hạt lỗi thứ hai cũng thuộc cái thước.** Bốn màu phẳng lệch tới 11/255, nhưng toàn bộ nằm ở **hai hàng cuối** (178–179):
+180 không chia hết 16, nên cả hai encoder pad macroblock cuối khác nhau trước DCT. Ngoài hai hàng đó, **0,00 %** mẫu vượt
+ngưỡng. Harness bỏ đúng hai hàng đó và **ghi tên lý do**, thay vì nới tolerance cho cả khung — cùng nguyên tắc với `mask`
+của `compareFrames`.
+
+**Số đo trên cây sẽ commit** (`:4003`, 320x180 @ 30 fps, 2 s, cùng một project):
+
+| Phép đo | Kết quả |
+|---|---|
+| Hình dạng file | cả hai đều 320x180 @ 30/1, **60 frame**; browser 20 336 B (phẳng) / 268 800 B (kết cấu) |
+| Màu phẳng (RGB, trừ 2 hàng pad) | meanAbs **2,170**, worst **11**, tỉ lệ lệch **0,00 %**, **4/4** màu phân biệt |
+| Bốn màu đọc ra | `239/50/32`, `19/168/61`, `25/68/221`, `247/186/33` — không màu nào gần nền `#101820` |
+| Căn frame | offset 0 thắng rõ: `-2: 8,22  -1: 5,32  0: 1,78  +1: 5,32  +2: 8,25` |
+| Kết cấu (RGB) | PSNR **36,36 dB**, meanAbs **1,783**, lệch **4,22 %** |
+| Tách mặt phẳng | Y **37,42** dB / U **34,73** dB / V **31,12** dB |
+| Lặp lại | hai lần xuất **giống từng pixel**: meanAbs 0, worst 0, cùng 268 800 B |
+| Console trang | 0 `error` trong suốt lượt xuất |
+
+**Ba đột biến trên đúng cây sẽ commit, restore byte-identical** (`webExportHost.ts ea71db12`, `webCodecsExport.ts
+930c6883`):
+
+| # | Đột biến | Kết quả | Số check chết |
+|---|---|---|---|
+| M1 | plate decode xong nhưng **không vẽ** | CAUGHT | 4 |
+| M2 | mọi plate vẽ với `opacity: 0.5` | CAUGHT | 4 |
+| M3 | dịch đích vẽ **+8 px sang phải** | CAUGHT | 4 |
+
+**Gates của increment này:**
+
+| Gate | Lệnh | Kết quả | Bằng chứng |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | exit 0, `error TS` = 0; config tái sinh 28 576 B lúc 10:19 |
+| 2 Lint | `npx eslint tests/e2e/tmcut_h3d4_pixel_parity.mts`, **sau** gate 1 | PASS | exit 0, 0 problems (5 lỗi style đầu tiên do chính file mới, sửa tay) |
+| 3 Core types | `pnpm typecheck:core` | PASS | exit 0 |
+| 4 Core boundary | `pnpm check:core` | PASS | "core imports nothing platform-specific" |
+| 5 Core tests | `pnpm test:core` | PASS | **957 pass / 0 fail** |
+| 6 App suite | `npx tsx tests/unit/run-all.mts` | PASS | **133/133**, exit 0 |
+| 7 Electron | `node --test "electron/tools/*.test.mjs"` | PASS | **59 pass / 0 fail**, exit 0 |
+| 8 Live | 5 route TMCut trên `:4003` | PASS | chỉ `[info] <Suspense>`, không `error`/`warn` |
+| 9 Docs guards | 6 spec `docs_*` / `tmcut_doc_*` | PASS | cả sáu exit 0 |
+| 10 Parity | `tests/e2e/tmcut_h3d4_pixel_parity.mts` | PASS | **8/8 check**, exit 0 |
+| 11 Mutation | 3 đột biến trên md5 sẽ commit | PASS | 3/3 CAUGHT, restore byte-identical |
+
+Một guard **bắt được chính lượt này** và đúng như thiết kế: `tmcut_doc_citations` từ chối header `audit §53.10` vì
+`audit` không phải một family đã khai (bảy family đăng ký không có nó). Sửa **câu chữ trong spec mới**, không sửa guard —
+bản ghi trích dẫn trần (`§53.10`) là dạng các spec anh em đang dùng.
+
+**Chưa chứng minh, vẫn còn nguyên:** parity này là **fixture tự sinh** (màu phẳng + `testsrc2`), không phải footage quay
+thật, không có chuyển cảnh, hiệu ứng, chữ hay nhiều hàng video — §53.4 vẫn giữ nguyên câu đó cho project thật. Sai lệch
+4,22 % ở kết cấu **chưa được quy hết**: bitrate đã bị loại (ba mức 726k/2000k/6000k của FFmpeg cho cùng MAE), và một
+vòng YUV→RGB→YUV mô phỏng trên chính file FFmpeg thu hẹp khoảng chroma (Y 37,4 → 39,5, V 28,3 → 33,9) nhưng **không**
+khớp tuyệt đối, nên phần còn lại là khác biệt giữa hai encoder chroma chứ không phải một con số đã giải thích xong. Tag
+màu hai bên **khác nhau có chủ đích** (`pc`/sRGB so với `tv`/bt709): người chơi đọc đúng tag thì hình đúng, nhưng một
+công cụ bỏ qua tag sẽ thấy hai file "khác hệ màu" — đáng ghi vào slice I khi quyết định tag đầu ra. Và lượt này **không**
+đo Electron: toàn bộ số ở trên là Chromium của trình duyệt thường.
