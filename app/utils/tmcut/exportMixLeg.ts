@@ -41,6 +41,12 @@ export interface ExportMixDecodeAsk {
 export interface ExportMixLegDeps {
   decode?: (ask: ExportMixDecodeAsk & { bytes?: Blob | null }) => Promise<ExportMixRun | null>
   hasDecoder?: () => boolean
+  /**
+   * The client cache's answer for one file, asked once per run. A miss or a
+   * refused storage layer falls back to the location: a thin cache must not
+   * turn a file the timeline plays into silence in the exported file.
+   */
+  bytesFor?: (src: string) => Promise<Blob | null>
 }
 
 /** The request the encode session makes — `TmcutPcmRequest`, structurally. */
@@ -74,6 +80,7 @@ function clipIdOf(value: unknown): string | null {
 export function createExportMixLeg(deps: ExportMixLegDeps = {}) {
   const decode = deps.decode ?? decodePcm
   const canDecode = deps.hasDecoder ?? hasAudioDecoder
+  const bytesFor = deps.bytesFor
   const runs = new Map<string, Promise<ExportMixRun | null>>()
   const refusals: ExportMixRefusal[] = []
   let done = false
@@ -100,7 +107,17 @@ export function createExportMixLeg(deps: ExportMixLegDeps = {}) {
   function runFor(src: string, tracks: readonly TmcutTrack[], signal: AbortSignal) {
     const held = runs.get(src)
     if (held) return held
-    const work = decode({ src, inSec: 0, outSec: mediaEndOf(tracks, src), signal, bytes: null })
+    const work = (async () => {
+      let bytes: Blob | null = null
+      if (bytesFor) {
+        try {
+          bytes = await bytesFor(src)
+        } catch {
+          bytes = null
+        }
+      }
+      return decode({ src, inSec: 0, outSec: mediaEndOf(tracks, src), signal, bytes })
+    })()
     runs.set(src, work)
     return work
   }

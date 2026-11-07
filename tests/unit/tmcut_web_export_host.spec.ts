@@ -96,35 +96,43 @@ function storedProject() {
 function fixture(options: { silent?: boolean, plates?: boolean } = {}) {
   const log: string[] = []
   const draws: Array<{ fill?: string, sx?: number, dest?: unknown }> = []
-  const readAsks: Array<{ src: string, atSec: number }> = []
+  const readAsks: Array<{ src: string, atSec: number, authoredSrc?: string | null }> = []
   const mixAsks: Array<Record<string, unknown>> = []
   const sessions: Array<Record<string, unknown>> = []
   const canvases: Array<{ width: number, height: number, disposed: boolean }> = []
   const reader = { closed: 0 }
   const mixer = { closed: 0 }
+  const readerPorts: Array<Record<string, unknown>> = []
+  const mixerPorts: Array<Record<string, unknown>> = []
 
   const host = createWebExportHost({
-    createReader: () => ({
-      read: async (ask: { src: string | null, atSec: number }) => {
-        readAsks.push({ src: String(ask.src), atSec: ask.atSec })
-        return options.plates === false ? null : { width: 1920, height: 1080, image: { marker: 'plate' } }
-      },
-      close: () => {
-        reader.closed += 1
-        log.push('reader:close')
+    createReader: (ports: Record<string, unknown> = {}) => {
+      readerPorts.push(ports)
+      return {
+        read: async (ask: { src: string | null, atSec: number, authoredSrc?: string | null }) => {
+          readAsks.push({ src: String(ask.src), atSec: ask.atSec, authoredSrc: ask.authoredSrc ?? null })
+          return options.plates === false ? null : { width: 1920, height: 1080, image: { marker: 'plate' } }
+        },
+        close: () => {
+          reader.closed += 1
+          log.push('reader:close')
+        }
       }
-    }),
-    createMixer: () => ({
-      mix: async (ask: Record<string, unknown>) => {
-        mixAsks.push(ask)
-        return [new Float32Array(1024), new Float32Array(1024)]
-      },
-      close: () => {
-        mixer.closed += 1
-        log.push('mixer:close')
-      },
-      refused: () => []
-    }),
+    },
+    createMixer: (_project?: unknown, ports: Record<string, unknown> = {}) => {
+      mixerPorts.push(ports)
+      return {
+        mix: async (ask: Record<string, unknown>) => {
+          mixAsks.push(ask)
+          return [new Float32Array(1024), new Float32Array(1024)]
+        },
+        close: () => {
+          mixer.closed += 1
+          log.push('mixer:close')
+        },
+        refused: () => []
+      }
+    },
     createCanvas: (width: number, height: number) => {
       const canvas = { width, height, disposed: false }
       canvases.push(canvas)
@@ -168,7 +176,7 @@ function fixture(options: { silent?: boolean, plates?: boolean } = {}) {
     }
   })
 
-  return { host, log, draws, readAsks, mixAsks, sessions, canvases, reader, mixer }
+  return { host, log, draws, readAsks, mixAsks, sessions, canvases, reader, mixer, readerPorts, mixerPorts }
 }
 
 async function main() {
@@ -286,6 +294,39 @@ async function main() {
     assert.deepEqual(result.output, { marker: 'blob' }, 'the muxer\'s output comes back untouched')
     assert.equal(result.progress, 1)
     assert.deepEqual(seen, [], 'no progress was invented by the host')
+  })
+
+  await check('the client cache is the first copy both legs read', async () => {
+    const f = fixture()
+    const blob = new Blob([new Uint8Array(8)])
+    const result = await f.host.run({
+      project: projectOf() as never,
+      resolveSrc: (src: string) => `media://local?file=${src}`,
+      bytesFor: async () => blob
+    })
+    assert.equal(result.kind, 'exported', `the export ran: ${result.message ?? ''}`)
+    assert.deepEqual([...new Set(f.readAsks.map(ask => ask.authoredSrc))], ['C:/media/v.mp4'],
+      'the plate ask carries the AUTHORED path, so the reader can key the cache by it')
+    assert.deepEqual([...new Set(f.readAsks.map(ask => ask.src))], ['media://local?file=C:/media/v.mp4'],
+      'and the location is still resolved: a cache miss has to be able to fall back')
+    assert.deepEqual(f.readerPorts.map(ports => typeof ports.bytesFor), ['function'],
+      'the reader factory was handed the port it opens its containers with')
+    assert.deepEqual(f.mixerPorts.map(ports => typeof ports.bytesFor), ['function'],
+      'the sound leg was handed the same answer, so the two legs cannot disagree')
+    const source = read('app/utils/tmcut/webExportHost.ts')
+    assert.match(source, /createPlateReader\(ports\)/, 'the real reader is built with the port, not without it')
+    assert.match(source, /createExportMixLeg\(ports\)/, 'and so is the real sound leg')
+  })
+
+  await check('no byte port means the export reads by location, as it always did', async () => {
+    const f = fixture()
+    await f.host.run({ project: projectOf() as never, resolveSrc: (src: string) => src })
+    assert.deepEqual(f.readerPorts.map(ports => ports.bytesFor ?? null), [null],
+      'the reader was created without a cache port')
+    assert.deepEqual(f.mixerPorts.map(ports => ports.bytesFor ?? null), [null],
+      'and so was the mixer')
+    assert.deepEqual(f.readAsks.map(ask => ask.authoredSrc), ['C:/media/v.mp4', 'C:/media/v.mp4'],
+      'the authored path is still named, so a caller that adds a cache later needs no change here')
   })
 
   console.log(`\n=== All ${passed} web-export-host checks passed ===`)

@@ -18,6 +18,7 @@ import {
   clearCachedBytes,
   pruneByteCache,
   putCachedBytes,
+  readCachedBytes,
   type TmcutByteCacheInfo
 } from '~/utils/tmcut/byteStore'
 import { readStoredFlag, writeStored } from '~/utils/tmcut/localStore'
@@ -124,6 +125,18 @@ async function cacheAssetBytes(asset: TmcutAsset, bytes: Blob): Promise<void> {
   if (!asset.fingerprint) return
   await putCachedBytes(asset.fingerprint, bytes, liveByteKeys())
   await refreshByteCache()
+}
+
+/**
+ * The cache's answer for one authored path, as the export's two legs want it
+ * (slice H3d-6, §53.12). A path the library does not name, a record with no
+ * revision, or a revision the browser reclaimed all answer `null` — the legs then
+ * read the location, because a thin cache is not a missing file.
+ */
+async function bytesForAsset(src: string): Promise<Blob | null> {
+  const fingerprint = assetKeyIndex.value.get(mediaFileKey(src))?.fingerprint
+  if (!fingerprint) return null
+  return readCachedBytes(fingerprint)
 }
 
 async function clearMediaByteCache() {
@@ -1086,6 +1099,7 @@ export function useTmcutMedia() {
     byteCache,
     clearMediaByteCache,
     cacheAssetBytes,
+    bytesForAsset,
     relink,
     removeAsset,
     linkAssetToProject,

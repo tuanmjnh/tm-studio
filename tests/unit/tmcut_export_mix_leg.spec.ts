@@ -340,6 +340,83 @@ async function main() {
     leg.close()
   })
 
+  // 10. The sound leg has the same hole the plate leg had until §53.12: it asked
+  //     the location for samples and never the client cache, so a project whose
+  //     upload was reclaimed mixed silence into a file core called eligible.
+  //     One cache read per file — a per-packet read would hit storage ~47 times
+  //     a second — and the cached copy is the one handed to the decoder.
+  await check('the cached copy of a file is what the sound leg decodes', async () => {
+    const asked: string[] = []
+    const seen: Array<Blob | null> = []
+    const blob = new Blob([new Uint8Array(24)])
+    const leg = createExportMixLeg({
+      hasDecoder: () => true,
+      bytesFor: async (src: string) => {
+        asked.push(src)
+        return src.endsWith('.wav') ? blob : null
+      },
+      decode: async (ask: { src: string, bytes?: Blob | null }) => {
+        seen.push(ask.bytes ?? null)
+        return SILENCE()
+      }
+    })
+    const project = projectOf({
+      video: [clip('v1', 'video', 'C:/media/v.mp4')],
+      audio: [clip('a1', 'audio', 'C:/media/a.wav')]
+    })
+    for (const index of [0, 1, 2]) await leg.mix({ project, request: packet(index), target: TARGET })
+    assert.deepEqual(asked.sort(), ['C:/media/a.wav', 'C:/media/v.mp4'],
+      'one cache read per sounding file, however many packets asked')
+    assert.deepEqual(seen.map(entry => entry === blob).sort(), [false, true],
+      'the wav was decoded from its cached copy and the mp4 from its location')
+    leg.close()
+  })
+
+  // 11. Storage that throws is a miss, not the end of the export: the location is
+  //     still a way to decode, and a thin cache must not silence a file.
+  await check('a cache read that throws falls back to the location', async () => {
+    const seen: Array<Blob | null> = []
+    const leg = createExportMixLeg({
+      hasDecoder: () => true,
+      bytesFor: async () => {
+        throw new Error('the storage layer refused this read')
+      },
+      decode: async (ask: { src: string, bytes?: Blob | null }) => {
+        seen.push(ask.bytes ?? null)
+        return SILENCE()
+      }
+    })
+    const planes = await leg.mix({
+      project: projectOf({ video: [clip('v1', 'video', 'C:/media/v.mp4')] }),
+      request: packet(0),
+      target: TARGET
+    })
+    assert.deepEqual(seen, [null], 'the decoder was handed a location, not a failure')
+    assert.equal(planes.length, 2, 'and the packet kept the shape the encoder was promised')
+    assert.deepEqual(leg.refused(), [], 'a thin cache is not a refusal')
+    leg.close()
+  })
+
+  // 12. No byte port at all is the leg §53.9 shipped, so the desktop path keeps
+  //     working without being handed a browser storage API.
+  await check('a leg with no byte port decodes each file from its location', async () => {
+    const seen: Array<Blob | null> = []
+    const leg = createExportMixLeg({
+      hasDecoder: () => true,
+      decode: async (ask: { src: string, bytes?: Blob | null }) => {
+        seen.push(ask.bytes ?? null)
+        return SILENCE()
+      }
+    })
+    await leg.mix({
+      project: projectOf({ video: [clip('v1', 'video', 'C:/media/v.mp4')] }),
+      request: packet(0),
+      target: TARGET
+    })
+    assert.deepEqual(seen, [null], 'no bytes were invented for a host that has no cache')
+    leg.close()
+  })
+
   console.log(`\n=== All ${passed} export-mix-leg checks passed ===`)
 }
 

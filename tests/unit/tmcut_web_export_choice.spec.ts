@@ -162,6 +162,19 @@ function main() {
     assert.match(modal, /WEB_CONTENT_REFUSAL_KEYS\[/, 'and the mapping is what the refusal path reads')
   })
 
+  // §53.12: the export button's run must hand the host the cache port, because a
+  // project whose upload was reclaimed still has a copy in the browser — and the
+  // host cannot invent one without being told where it is.
+  check('the modal hands the host a cache port keyed by the authored path', () => {
+    const modal = read('app/components/tmcut/TmcutExportModal.vue')
+    assert.match(modal, /bytesFor:/, 'the run passes the port')
+    assert.match(modal, /readCachedBytes|bytesForAsset|readAssetBytes/,
+      'and the port reads the client byte cache, not a second copy rule')
+    const media = read('app/composables/useTmcutMedia.ts')
+    assert.match(media, /readCachedBytes/, 'the media library is where the byte read lives')
+    assert.match(media, /bytesForAsset|readAssetBytes/, 'exposed as one call the modal can hand over')
+  })
+
   console.log(`\n=== All ${passed} web-export-choice checks passed ===`)
 }
 

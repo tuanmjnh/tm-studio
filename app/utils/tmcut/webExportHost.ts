@@ -50,8 +50,11 @@ export interface WebExportMixer {
 }
 
 export interface WebExportHostDeps {
-  createReader?: () => WebExportReader
-  createMixer?: (project: { tracks?: unknown[] }) => WebExportMixer
+  createReader?: (ports: { bytesFor?: (src: string) => Promise<Blob | null> }) => WebExportReader
+  createMixer?: (
+    project: { tracks?: unknown[] },
+    ports: { bytesFor?: (src: string) => Promise<Blob | null> }
+  ) => WebExportMixer
   createCanvas?: (width: number, height: number) => WebExportCanvas
   capability?: Parameters<typeof createWebCodecsExport>[0]['capability']
   session?: Parameters<typeof createWebCodecsExport>[0]['session']
@@ -74,6 +77,14 @@ export interface WebExportAsk {
   project: TmcutProject | { canvas?: TmcutCanvas, tracks?: never[] }
   /** The host's own path -> location rule (`resolveMediaSrc` in the app). */
   resolveSrc: (src: string) => string
+  /**
+   * The client byte cache's answer for ONE authored path, when the assembly has
+   * a cache to ask. Keyed by the authored path and not by the resolved URL: the
+   * cache names revisions of files the user imported, and `media://local?file=…`
+   * is not one of them. Both legs share this answer, so the picture and the
+   * sound can never come from two different copies of one file.
+   */
+  bytesFor?: (src: string) => Promise<Blob | null>
   signal?: AbortSignal
   onProgress?: (value: number) => void
 }
@@ -137,8 +148,8 @@ export interface WebExportHost {
 }
 
 export function createWebExportHost(deps: WebExportHostDeps = {}): WebExportHost {
-  const makeReader = deps.createReader ?? (() => createPlateReader())
-  const makeMixer = deps.createMixer ?? (() => createExportMixLeg())
+  const makeReader = deps.createReader ?? (ports => createPlateReader(ports))
+  const makeMixer = deps.createMixer ?? ((_project, ports) => createExportMixLeg(ports))
   const makeCanvas = deps.createCanvas ?? createExportCanvas
   let refusals: Array<{ clipId: string | null, reason: string }> = []
 
@@ -149,8 +160,11 @@ export function createWebExportHost(deps: WebExportHostDeps = {}): WebExportHost
     // project core refuses never reaches a decoder: the loop below is inside the
     // try, but the legs are lazy in everything they open.
     const content = planEncodeContent(ask.project)
-    const reader = makeReader()
-    const mixer = makeMixer(ask.project as { tracks?: unknown[] })
+    // One port, two legs: the same answer about where a file's bytes live, so a
+    // cached picture cannot be paired with a streamed sound from a different copy.
+    const ports = ask.bytesFor ? { bytesFor: ask.bytesFor } : {}
+    const reader = makeReader(ports)
+    const mixer = makeMixer(ask.project as { tracks?: unknown[] }, ports)
     try {
       const audio = content.kind === 'eligible' && content.request?.audio
         ? content.request.audio
@@ -159,6 +173,9 @@ export function createWebExportHost(deps: WebExportHostDeps = {}): WebExportHost
         readPlate: async (plateAsk) => {
           const plate = await reader.read({
             src: plateAsk.src ? ask.resolveSrc(plateAsk.src) : null,
+            // The cache is keyed by the authored path; the container still opens
+            // the resolved location when the copy is not there.
+            authoredSrc: plateAsk.src ?? null,
             atSec: plateAsk.atSec,
             signal: plateAsk.signal
           })

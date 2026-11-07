@@ -139,6 +139,13 @@ export interface TmcutPlate {
 export interface TmcutPlateAsk {
   /** Where the clip's bytes come from; null when the clip has no source. */
   src: string | null
+  /**
+   * The authored path the client cache names this file by, when the caller knows
+   * it. A resolved URL is a location, not an identity: the cache is keyed by the
+   * revision of the file the user imported, and a `media://` URL only matches it
+   * through this. Absent means "`src` is also the author's path".
+   */
+  authoredSrc?: string | null
   /** Seconds inside the media, exactly as core named them — never re-rounded. */
   atSec: number
   /** The export's signal: obeyed per frame, and the container is opened with it. */
@@ -168,11 +175,20 @@ export interface TmcutPlateReaderDeps {
   /** The seam erases the track type, so the real builder below casts it back. */
   makeSink?: (track: unknown) => PlateSink
   hasDecoder?: () => boolean
+  /**
+   * The client cache's own answer for one location, asked once per file. A miss
+   * is a fallback to the location, never a refusal: a project whose upload was
+   * reclaimed still reads the picture from the copy the preview played.
+   */
+  bytesFor?: (src: string) => Promise<Blob | null>
 }
 
 /** One file the reader holds open, plus the turn-taking that serializes its reads. */
 interface PlateHolder {
-  opened: { input: PlateInput, close: () => void }
+  /** Null until the cache answered and the container is actually open. */
+  opened: { input: PlateInput, close: () => void } | null
+  /** Resolves once `opened` is settled either way; never rejects. */
+  opening: Promise<void>
   sink: PlateSink | null
   queue: Promise<unknown>
   dead: boolean
@@ -201,6 +217,7 @@ export function createPlateReader(deps: TmcutPlateReaderDeps = {}) {
   const open = deps.open ?? openMedia
   const makeSink = deps.makeSink ?? ((track: unknown) => new CanvasSink(track as MediaVideoTrack))
   const canDecode = deps.hasDecoder ?? hasFrameDecoder
+  const bytesFor = deps.bytesFor
   const holders = new Map<string, PlateHolder>()
   let done = false
 
@@ -208,12 +225,38 @@ export function createPlateReader(deps: TmcutPlateReaderDeps = {}) {
   function retire(src: string, holder: PlateHolder) {
     holder.dead = true
     if (holders.get(src) === holder) holders.delete(src)
-    holder.opened.close()
+    holder.opened?.close()
+  }
+
+  /**
+   * The cache is asked once per file, before any container is opened, and a miss
+   * or a refused storage layer is the location — never a failure. This is the
+   * same order `frameStore` and `autocutDetect` already use, and it is why the
+   * export can paint a project whose upload the server no longer has.
+   */
+  async function fillHolder(owned: PlateHolder, src: string, authored: string | null, signal: AbortSignal) {
+    let bytes: Blob | null = null
+    if (bytesFor) {
+      try {
+        bytes = await bytesFor(authored ?? src)
+      } catch {
+        bytes = null
+      }
+    }
+    if (owned.dead || signal.aborted) return
+    owned.opened = open({ bytes, src, signal })
   }
 
   async function readOne(src: string, holder: PlateHolder, ask: TmcutPlateAsk): Promise<TmcutPlate | null> {
     if (holder.dead || ask.signal.aborted) return null
-    const input = holder.opened.input
+    const opened = holder.opened
+    // Nothing opened: no cache copy and no location. The next frame may still
+    // try the file, because a dropped location is not a dropped read.
+    if (!opened) {
+      retire(src, holder)
+      return null
+    }
+    const input = opened.input
     // A container that cannot answer, or holds no video, is not worth keeping:
     // a leak per failed frame is how an export dies at frame 900. The next frame
     // may still try the file, because a dropped location is not a dropped read.
@@ -242,24 +285,34 @@ export function createPlateReader(deps: TmcutPlateReaderDeps = {}) {
     const src = ask.src
     let holder = holders.get(src)
     if (!holder) {
-      // No client bytes yet: the export reads its location, and the byte-cache
-      // leg is a named gap in §53, not a decision this file forgot.
-      const opened = open({ bytes: null, src, signal: ask.signal })
-      if (!opened) return null
-      holder = { opened, sink: null, queue: Promise.resolve(), dead: false }
+      // The decision where a file's bytes come from is taken ONCE per file, and
+      // the answer is the container this reader keeps for the whole run. Asking
+      // per frame would put a storage read in front of every frame of a 30 fps
+      // export, for an answer that cannot change mid-run.
+      const created: PlateHolder = {
+        opened: null,
+        opening: Promise.resolve(),
+        sink: null,
+        queue: Promise.resolve(),
+        dead: false
+      }
+      created.opening = fillHolder(created, src, ask.authoredSrc ?? null, ask.signal)
+      holder = created
       holders.set(src, holder)
       // `openMedia` releases the input when this signal fires; the reader also
       // has to stop handing that dead container to the frame after the cancel.
-      const owned = holder
       ask.signal.addEventListener('abort', () => {
-        owned.dead = true
+        created.dead = true
       }, { once: true })
     }
     if (holder.dead) return null
     const owned = holder
     // The queue is never a rejected one: a failed read must not cost the next
     // frame its turn at the same container.
-    const work = owned.queue.then(() => readOne(src, owned, ask))
+    const work = owned.queue.then(async () => {
+      await owned.opening
+      return readOne(src, owned, ask)
+    })
     owned.queue = work.then(() => null, () => null)
     return await work
   }

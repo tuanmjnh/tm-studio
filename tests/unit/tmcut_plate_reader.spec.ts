@@ -63,7 +63,7 @@ const B = 'C:/media/b.mp4'
 function makeFixture(options: { hasDecoder?: boolean } = {}) {
   const canvas = { width: 1920, height: 1080 }
   const answers = { canRead: true, tracks: [{}] as unknown[] }
-  const opens: Array<{ src: string | null, signal: AbortSignal }> = []
+  const opens: Array<{ src: string | null, signal: AbortSignal, bytes: Blob | null }> = []
   const closes: Array<string | null> = []
   const sinkArgCounts: number[] = []
   const sinkCalls: number[] = []
@@ -71,8 +71,8 @@ function makeFixture(options: { hasDecoder?: boolean } = {}) {
   const pending: Array<() => void> = []
   let held = 0
 
-  const open = (readAsk: { src: string | null, signal: AbortSignal }) => {
-    opens.push({ src: readAsk.src, signal: readAsk.signal })
+  const open = (readAsk: { src: string | null, bytes?: Blob | null, signal: AbortSignal }) => {
+    opens.push({ src: readAsk.src, bytes: readAsk.bytes ?? null, signal: readAsk.signal })
     let closed = false
     return {
       input: {
@@ -436,6 +436,88 @@ async function main() {
     assert.equal(fixture.closes.length, 0, 'and none of it released before the export ends')
     reader.close()
     assert.equal(fixture.closes.length, 2, 'given back once each, at the end')
+  })
+
+  // 12. The plate's bytes and the plate's location are two different questions,
+  //     and the export has asked only the second one since §53.8. A revision the
+  //     client cache holds is the copy the preview played, so it is the copy the
+  //     file must be painted from — a project whose upload was reclaimed still
+  //     exports its picture instead of refusing every frame.
+  await check('the cached copy of a file is what the plate is decoded from', async () => {
+    const fixture = makeFixture()
+    const blob = new Blob([new Uint8Array(16)])
+    const asked: string[] = []
+    const reader = createPlateReader({
+      ...fixture.deps,
+      bytesFor: async (src: string) => {
+        asked.push(src)
+        return src === A ? blob : null
+      }
+    } as never)
+    await reader.read({ src: A, atSec: 0, signal: liveSignal() })
+    await reader.read({ src: A, atSec: 0.5, signal: liveSignal() })
+    await reader.read({ src: B, atSec: 0.5, signal: liveSignal() })
+    assert.deepEqual(asked, [A, B], 'one cache read per file, never one per frame')
+    assert.equal(fixture.opens[0]!.bytes, blob, 'the container was opened from the cached copy')
+    assert.equal(fixture.opens[1]!.bytes, null, 'and a file the cache does not hold was not')
+    reader.close()
+  })
+
+  // 13. The cache is keyed by the AUTHORED path, not by the location the container
+  //     opens. A revision names the file the user imported; `media://local?file=…`
+  //     is not one, so keying by the resolved URL would ask for a revision that
+  //     can never exist and silently fall back to the stream on every file.
+  await check('the cache is asked with the authored path, the container with the location', async () => {
+    const fixture = makeFixture()
+    const asked: string[] = []
+    const reader = createPlateReader({
+      ...fixture.deps,
+      bytesFor: async (src: string) => {
+        asked.push(src)
+        return null
+      }
+    } as never)
+    await reader.read({
+      src: 'media://local?file=C:/media/a.mp4',
+      authoredSrc: 'C:/media/a.mp4',
+      atSec: 0,
+      signal: liveSignal()
+    })
+    assert.deepEqual(asked, ['C:/media/a.mp4'],
+      'the cache saw the path the library names, not the URL the decoder opens')
+    assert.equal(fixture.opens[0]!.src, 'media://local?file=C:/media/a.mp4',
+      'and the container still opened the resolved location')
+    reader.close()
+  })
+
+  // 14. A miss is a fallback, not a refusal: the location is still there, and the
+  //     two legs must not turn a thin cache into a black export.
+  await check('a cache miss falls back to the location, and a throwing read is a miss', async () => {
+    const fixture = makeFixture()
+    const reader = createPlateReader({
+      ...fixture.deps,
+      bytesFor: async (src: string) => {
+        if (src === A) throw new Error('the storage layer refused this read')
+        return null
+      }
+    } as never)
+    assert.ok(await reader.read({ src: A, atSec: 0, signal: liveSignal() }),
+      'a storage layer that throws still paints from the location')
+    assert.equal(fixture.opens[0]!.bytes, null, 'no bytes were handed to the container')
+    assert.equal(fixture.opens[0]!.src, A, 'the location was, and it is the authored file')
+    reader.close()
+  })
+
+  // 15. A reader with no byte port is still the location reader §53.8 shipped, so
+  //     the desktop assembly — which has no client cache — is not forced through
+  //     a browser storage API it does not have.
+  await check('a reader with no byte port reads the location, as before', async () => {
+    const fixture = makeFixture()
+    const reader = createPlateReader(fixture.deps as never)
+    await reader.read({ src: A, atSec: 0, signal: liveSignal() })
+    assert.equal(fixture.opens[0]!.bytes, null)
+    assert.equal(fixture.opens[0]!.src, A)
+    reader.close()
   })
 
   console.log(`\n=== All ${passed} plate-reader checks passed ===`)

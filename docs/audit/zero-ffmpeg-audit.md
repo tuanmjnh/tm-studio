@@ -6532,3 +6532,85 @@ khớp tuyệt đối, nên phần còn lại là khác biệt giữa hai encode
 màu hai bên **khác nhau có chủ đích** (`pc`/sRGB so với `tv`/bt709): người chơi đọc đúng tag thì hình đúng, nhưng một
 công cụ bỏ qua tag sẽ thấy hai file "khác hệ màu" — đáng ghi vào slice I khi quyết định tag đầu ra. Và lượt này **không**
 đo Electron: toàn bộ số ở trên là Chromium của trình duyệt thường.
+
+### 53.12 Increment H3d-6 — chân xuất đọc **bản sao trong browser**, và một mutation sống đã chỉ ra chỗ chưa ai gác
+
+§53.11 khép lại bằng một câu nợ nêu đích danh: **chân plate và chân tiếng vẫn mở file theo location** (`bytes: null` ở
+`frameDecode.ts` và `exportMixLeg.ts`), nên một project có asset chỉ nằm trong IndexedDB/OPFS — đúng thứ slice C2b đã
+giữ lại — vẫn xuất ra "no plate" dù preview phát được. Lượt này đóng đúng cái lỗ đó, không mở rộng gì khác.
+
+**Một port, hai chân, một câu trả lời.** `createWebExportHost` nhận `bytesFor(src)` ở `run`, và **không** tự gọi nó:
+cùng một object port được đưa cho cả `createPlateReader` lẫn `createExportMixLeg`. Hai chân mà tự đọc cache riêng thì
+hình và tiếng của **một** file có thể đến từ hai bản khác nhau — loại lệch chương trình này dành cả mùa để dẹp.
+
+**Hai đường khoá khác nhau, và đó là chỗ dễ sai nhất.** Cache được đánh khoá bằng **fingerprint của revision**, mà
+revision chỉ có nghĩa với **path tác giả** (`C:/media/a.mp4`), không có nghĩa với location decoder mở
+(`media://local?file=…`). Nên `TmcutPlateAsk` mang thêm `authoredSrc`: cache hỏi bằng `authoredSrc ?? src`, còn container
+vẫn mở `src` đã resolve. Không có trường đó thì mọi lần đọc cache đều trượt và rơi về stream — im lặng, đúng kiểu lỗi
+mà cả bảng mutation bên dưới phải bắt được.
+
+**Một lần hỏi cho mỗi file, không phải mỗi frame.** `PlateHolder` giờ có `opened: … | null` và một `opening` promise
+không bao giờ reject: cache được hỏi lúc dựng holder, và mọi frame sau đó `await opening` rồi mới đọc. Hỏi theo frame là
+~30 lượt đọc storage mỗi giây của một lần xuất, cho một câu trả lời không thể đổi giữa chừng. Chân tiếng đã có sẵn
+`runs` keyed theo file từ §53.9, nên ở đó chỉ thêm một `await bytesFor(src)` bên trong promise đã chia sẻ.
+
+**Trượt là fallback, không phải từ chối.** Cache không giữ revision này, thư viện không biết path này, hoặc chính
+storage ném lỗi (private mode, quota) — cả ba đều là `null` và chân đọc location như trước. Lượt này chứng minh cả ba
+bằng unit check; nếu không, một máy cache mỏng sẽ **mất** hình chứ không chỉ chậm.
+
+**Số đo trên cây sẽ commit** (`:4003`, 320x180 @ 30 fps, 2 s; fixture sinh vào thư mục tạm, **không** vào
+`.data/uploads`, và project trỏ tới `/uploads/h3d6-<pid>.mp4` — URL đó 404):
+
+| Phép đo | Kết quả |
+|---|---|
+| Khoá revision dùng để gieo cache | `2d847832` — đúng dạng `^[0-9a-f]{8}$` mà `isByteCacheKey` chấp nhận |
+| Server có file đó không | **404** — nên chỉ cache mới vẽ được, đây là điều kiện của cả harness |
+| Gieo vào cache | backend **opfs**, **3 305 byte** đọc lại được |
+| Xuất **có** port | **exported**, 20 336 byte, 320x180 @ 30/1, **60 frame** |
+| Màu đọc ra | `239/50/32`, `19/168/61`, `25/68/221`, `247/186/33` — 4/4 phân biệt, không màu nào gần nền `#101820` |
+| Xuất **không** port (đối chứng) | **failed**, không có file nào được ghi — đúng hành vi trước lượt này |
+| Console trang | 0 `error` trong cả ba lượt xuất |
+
+**Bảy mutation trên đúng cây sẽ commit, restore byte-identical:**
+
+| # | Đột biến | Kết quả | Check chết |
+|---|---|---|---|
+| M1 | plate reader **bỏ qua** port, luôn mở location | CAUGHT | `one cache read per file…` |
+| M2 | đọc cache nhưng vẫn `open({ bytes: null, … })` | CAUGHT | `the container was opened from the cached copy` |
+| M3 | bỏ `try/catch` quanh lần đọc cache | CAUGHT | ném lỗi ra ngoài (`the storage layer refused this read`) |
+| M4 | khoá cache bằng `src` (URL) thay vì `authoredSrc` | **SỐNG lần đầu** → thêm check → CAUGHT | `the cache saw the path the library names…` |
+| M5 | chân tiếng bỏ port, luôn `bytes: null` | CAUGHT | `one cache read per sounding file…` |
+| M6 | host không đưa port cho reader | CAUGHT | `the reader factory was handed the port…` |
+| M7 | reader có port, mixer thì không | CAUGHT | `the sound leg was handed the same answer…` |
+
+M4 là phần đáng ghi nhất: đột biến **sống** vì lúc đó chưa có check nào phân biệt "hỏi cache bằng path tác giả" với
+"hỏi bằng location". Một guard viết sau một mutation sống là guard thật; một guard viết trước rồi mutation chết cũng
+vậy, nhưng chỉ mutation mới nói được cái nào là cái nào. Không sửa spec nào để hợp với code — check mới được thêm, và
+code giữ nguyên hình dạng đã thiết kế.
+
+**Gates của increment này:**
+
+| Gate | Lệnh | Kết quả | Bằng chứng |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | exit 0, `error TS` = 0; config tái sinh 28 576 B |
+| 2 Lint | `npx eslint` 9 file chạm, **sau** gate 1 | PASS | exit 0 (1 lỗi `arrow-parens` do chính lượt này, sửa tay) |
+| 3 Core types | `pnpm typecheck:core` | PASS | exit 0 |
+| 4 Core boundary | `pnpm check:core` | PASS | "core imports nothing platform-specific" |
+| 5 Core tests | `pnpm test:core` | PASS | **957 pass / 0 fail** |
+| 6 App suite | `npx tsx tests/unit/run-all.mts` | PASS | **133/133**, exit 0 |
+| 7 Electron | `node --test "electron/tools/*.test.mjs"` | PASS | **59 pass / 0 fail**, exit 0 |
+| 8 Live | 5 route TMCut trên `:4003` | PASS | 0 `error` / `warn` / `issue` trên cả năm |
+| 9 Cache export | `tests/e2e/tmcut_h3d6_cache_export.mts` | PASS | **8/8 check**, exit 0, gồm cả lượt đối chứng thất bại |
+| 10 Mutation | 7 đột biến trên md5 sẽ commit | PASS | 7/7 CAUGHT (M4 sau khi thêm check), restore byte-identical |
+
+**Chưa chứng minh, vẫn còn nguyên:**
+
+- cả hai harness đều chạy trên **Chromium của trình duyệt thường**; Electron chưa được đo lượt này, và §53.11 vẫn giữ
+  câu đó;
+- fixture là **màu phẳng tự sinh**, không phải footage quay thật, không chuyển cảnh, không hiệu ứng, không nhiều hàng
+  video — §53.4 giữ nguyên;
+- đường **desktop** vẫn đi queue cũ (`compileTimelineToFfmpeg`), không đi qua host này, nên lượt này không nói gì về nó;
+- cache được **gieo bằng tay** trong harness, không phải bằng `importWebFiles`; chuỗi import → `cacheAssetBytes` →
+  `bytesForAsset` chưa được đo đầu-cuối trong cùng một phiên, chỉ từng mắt một (spec của `cacheAssetBytes` và check
+  `bytesForAsset` ở trên);
+- một project **có cảnh báo cache trượt** (một file có, một file không) chưa được đo: cả hai harness chỉ có một file.

@@ -23,7 +23,7 @@ const open = defineModel<boolean>('open', { default: false })
 const { t } = useI18n()
 const { currentProject, contentDuration, timelineTransitionCount } = useTmcutProject()
 const { formatTimecode, renderRange } = useTmcutPlayback()
-const { findAssetBySrc, mediaUrl, resolveMediaSrc } = useTmcutMedia()
+const { findAssetBySrc, mediaUrl, resolveMediaSrc, bytesForAsset } = useTmcutMedia()
 const { pickFile, pickFolder } = useFileSystem()
 const taskManager = useToolTaskManager('ffmpeg')
 const { enqueueJob, activeJobsCount, queueModalOpen, activeJobId, cancelJob } = useTmcutExportQueue()
@@ -651,6 +651,10 @@ async function runWebExport(): Promise<void> {
     const result = await host.run({
       project: plan.project as never,
       resolveSrc: src => resolveMediaSrc(src),
+      // The browser's own copy first (slice H3d-6): a project whose upload the
+      // server no longer has still exports its picture and its sound, because
+      // the bytes the preview played are the bytes the file is written from.
+      bytesFor: bytesForAsset,
       signal: controller.signal,
       onProgress: (value) => {
         webProgress.value = Math.max(0, Math.min(99, Math.round(value * 100)))
