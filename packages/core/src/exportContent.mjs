@@ -40,6 +40,7 @@ import { resolveClipLayout } from './canvas.mjs'
 import { clipSpan } from './timeline.mjs'
 import { fpsToRational, TICKS_PER_SECOND } from './time.mjs'
 import { blendModeOf } from './blend.mjs'
+import { projectTracks } from './evaluate.mjs'
 import { normalizeMask } from './mask.mjs'
 import { selectFileRows } from './paintStack.mjs'
 import { createFrameScheduler } from './scheduler.mjs'
@@ -83,12 +84,6 @@ function isFiniteNumber(value) {
 
 function isPositiveInteger(value) {
   return typeof value === 'number' && Number.isInteger(value) && value > 0
-}
-
-/** The same timeline resolution `evaluateTimeline` and `selectFileRows` make. */
-function timelineOf(input) {
-  if (input && Array.isArray(input.tracks)) return input
-  return input?.timeline ?? null
 }
 
 /**
@@ -189,7 +184,7 @@ export function planEncodeContent(input) {
   // The rows the file actually uses: the footage the painter paints and the
   // audio the mixer mixes. Hidden rows are skipped by `selectFileRows` because
   // they paint nothing, so a mask on one is not a reason to refuse.
-  const tracks = Array.isArray(timelineOf(input)?.tracks) ? timelineOf(input).tracks : []
+  const tracks = projectTracks(input)
   const used = [...rows.rows, ...rows.audio].map(row => tracks[row.trackIndex]).filter(Boolean)
   for (const track of used) {
     const items = Array.isArray(track?.items) ? track.items : []

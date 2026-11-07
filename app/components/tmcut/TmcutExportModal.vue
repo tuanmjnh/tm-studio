@@ -12,6 +12,9 @@ import { tmcutHostBridge, tmcutHostIpc } from '~/utils/tmcut/hostBridge'
 import { useTmcutExportQueue } from '~/composables/useTmcutExportQueue'
 import { useTmcutPlatform } from '~/composables/useTmcutPlatform'
 import { useTmcutTelemetry } from '~/composables/useTmcutTelemetry'
+import { createWebExportHost } from '~/utils/tmcut/webExportHost'
+import { planWebExport } from '~/utils/tmcut/webExportChoice'
+import type { WebExportRefusalCode } from '~/utils/tmcut/webExportChoice'
 import { useTmcutUsageTracker } from '~/composables/useTmcutUsageTracker'
 import type { ToolTask } from '#shared/types/electron'
 
@@ -20,7 +23,7 @@ const open = defineModel<boolean>('open', { default: false })
 const { t } = useI18n()
 const { currentProject, contentDuration, timelineTransitionCount } = useTmcutProject()
 const { formatTimecode, renderRange } = useTmcutPlayback()
-const { findAssetBySrc, mediaUrl } = useTmcutMedia()
+const { findAssetBySrc, mediaUrl, resolveMediaSrc } = useTmcutMedia()
 const { pickFile, pickFolder } = useFileSystem()
 const taskManager = useToolTaskManager('ffmpeg')
 const { enqueueJob, activeJobsCount, queueModalOpen, activeJobId, cancelJob } = useTmcutExportQueue()
@@ -482,12 +485,15 @@ onMounted(() => {
 
 onUnmounted(() => {
   stopWatching()
+  webAbort.value?.abort()
+  releaseWebResult()
 })
 
 watch(open, (isOpen) => {
   if (isOpen) {
     exportDone.value = false
     exportError.value = ''
+    releaseWebResult()
     detectHardware()
     if (!outputPath.value) {
       const sanitizedName = (currentProject.value?.name || 'TMCut_Video').replace(/[/\\:*?"<>|]/g, '_')
@@ -574,47 +580,111 @@ const specsSummary = computed(() => {
   return `${outputW.value}x${outputH.value} · ${effectiveFps.value}fps · ${effectiveBitrateMbps.value}Mbps · ${activeEncoder.value}`
 })
 
-// Web export: POST the compiled ffmpeg args; the Nitro server starts a job and
-// runs ffmpeg in the background. We then poll the job for REAL progress
-// (ffmpeg's -progress output vs. the timeline span) until it finishes, and keep
-// the resulting /uploads/ URL for the download button.
-const WEB_POLL_MS = 700
-const WEB_POLL_LIMIT = Math.ceil((20 * 60 * 1000) / WEB_POLL_MS)
+// Web export (zero-FFmpeg H3d-3): the browser paints and encodes the file
+// itself. `createWebExportHost` owns the four ports — plate reader, offline
+// mixer, canvas and the shared surface law — so this function only turns one
+// honest result into UI: a file to download, or the refusal's own words.
+const webAbort = ref<AbortController | null>(null)
 
-async function runWebExport(compileResult: ReturnType<typeof buildCompileResult>): Promise<void> {
+function releaseWebResult() {
+  if (webResultUrl.value.startsWith('blob:')) URL.revokeObjectURL(webResultUrl.value)
+  webResultUrl.value = ''
+}
+
+/** One sentence per dialog choice this writer cannot honour. */
+const WEB_REFUSAL_KEYS: Record<WebExportRefusalCode, string> = {
+  mode: 'tmcut.export.webRefuseMode',
+  format: 'tmcut.export.webRefuseFormat',
+  range: 'tmcut.export.webRefuseRange',
+  effects: 'tmcut.export.webRefuseEffects'
+}
+
+/**
+ * One sentence per reason core can give. Core owns the vocabulary and the
+ * decision; this only answers "what does a person do about `mask`?". A missing
+ * entry is not a fallback to the raw code — the spec fails on it.
+ */
+const WEB_CONTENT_REFUSAL_KEYS: Record<string, string> = {
+  'bad-canvas': 'tmcut.export.webRefuseBadCanvas',
+  'background-image': 'tmcut.export.webRefuseBackgroundImage',
+  'background-transparent': 'tmcut.export.webRefuseBackgroundTransparent',
+  'empty': 'tmcut.export.webRefuseEmpty',
+  'stacked-rows': 'tmcut.export.webRefuseStackedRows',
+  'text': 'tmcut.export.webRefuseText',
+  'effects': 'tmcut.export.webRefuseContentEffects',
+  'mask': 'tmcut.export.webRefuseMask',
+  'blend': 'tmcut.export.webRefuseBlend',
+  'transition': 'tmcut.export.webRefuseTransition',
+  'reverse': 'tmcut.export.webRefuseReverse',
+  'stabilize': 'tmcut.export.webRefuseStabilize',
+  'fit-unsupported': 'tmcut.export.webRefuseFit',
+  'rotation': 'tmcut.export.webRefuseRotation'
+}
+
+function explainContentReasons(reasons: readonly string[]): string[] {
+  return reasons.map(reason => t(WEB_CONTENT_REFUSAL_KEYS[reason] ?? 'tmcut.export.webRefuseUnknown', { reason }))
+}
+
+async function runWebExport(): Promise<void> {
   isWebRendering.value = true
   webProgress.value = 0
+  releaseWebResult()
+  const controller = new AbortController()
+  webAbort.value = controller
   try {
-    // ADR-014: the server transport lives in the web encoder; this loop only
-    // decides how often to look and what to show.
-    const started = await platform.encoder.render({
-      args: compileResult.args,
-      outputName: fileName.value || `render.${ext.value}`,
-      duration: compileResult.duration
+    const plan = planWebExport((currentProject.value ?? {}) as { canvas?: { width?: number, height?: number, fps?: unknown } }, {
+      width: outputW.value,
+      height: outputH.value,
+      fps: effectiveFps.value,
+      mode: mode.value,
+      format: videoFormat.value,
+      range: activeRange.value,
+      denoise: denoise.value,
+      lut: lut3dPath.value
+    })
+    if (plan.refusals.length > 0) {
+      // Named, not dropped: a control that is quietly ignored is how the user
+      // asks for 9:16 and finds 16:9 in the file afterwards.
+      throw new Error(plan.refusals.map(code => t(WEB_REFUSAL_KEYS[code])).join(' · '))
+    }
+    const host = createWebExportHost()
+    const result = await host.run({
+      project: plan.project as never,
+      resolveSrc: src => resolveMediaSrc(src),
+      signal: controller.signal,
+      onProgress: (value) => {
+        webProgress.value = Math.max(0, Math.min(99, Math.round(value * 100)))
+      }
     })
 
-    for (let i = 0; i < WEB_POLL_LIMIT; i++) {
-      await new Promise(resolve => setTimeout(resolve, WEB_POLL_MS))
-      const job = await platform.refreshJob(started.id)
-      if (job?.status === 'running') {
-        webProgress.value = Math.max(0, Math.min(99, job.progress || 0))
-        continue
-      }
-      if (job?.status === 'done' && job.output?.url) {
-        webProgress.value = 100
-        webResultUrl.value = job.output.url
-        exportDone.value = true
-        recordExportCompleted()
-        toast.add({ title: t('tmcut.export.success'), color: 'success' })
-        return
-      }
-      throw new Error(job?.error || t('tmcut.export.errorDesc'))
+    if (result.kind === 'exported') {
+      const output = result.output
+      if (!(output instanceof Blob)) throw new Error(t('tmcut.export.webNoFile'))
+      webProgress.value = 100
+      webResultUrl.value = URL.createObjectURL(output)
+      exportDone.value = true
+      recordExportCompleted()
+      toast.add({ title: t('tmcut.export.success'), color: 'success' })
+      return
     }
-    throw new Error(t('tmcut.export.errorDesc'))
+    if (result.kind === 'canceled') {
+      webProgress.value = 0
+      return
+    }
+    // Refusals are the law's sentences, never a translation of them: the user
+    // is told which project or which runtime this host cannot paint.
+    // Core's reasons are codes; the capability's errors are already sentences.
+    const words = result.kind === 'content-refused'
+      ? explainContentReasons(result.reasons)
+      : result.kind === 'runtime-refused'
+        ? result.errors
+        : []
+    throw new Error(words.length > 0 ? words.join(' · ') : (result.message ?? t('tmcut.export.errorDesc')))
   } catch (err) {
     exportError.value = err instanceof Error ? err.message : String(err)
     toast.add({ title: t('tmcut.export.failed'), description: exportError.value, color: 'error' })
   } finally {
+    webAbort.value = null
     isWebRendering.value = false
     isExporting.value = false
   }
@@ -641,10 +711,10 @@ async function startExport() {
 
   try {
     const compileResult = buildCompileResult()
-    // A capability, not a global sniff: a host without its own ffmpeg hands the
-    // compiled args to the Nitro renderer instead of the local queue.
+    // A capability, not a global sniff: a host without its own ffmpeg paints and
+    // encodes in the browser instead of handing args to a local queue.
     if (!platform.info.capabilities.nativeFFmpeg) {
-      await runWebExport(compileResult)
+      await runWebExport()
       return
     }
     const task: ToolTask = {
@@ -719,6 +789,7 @@ function addToQueue() {
 }
 
 async function cancelExport() {
+  webAbort.value?.abort()
   if (activeJobId.value) {
     await cancelJob(activeJobId.value)
   } else {

@@ -19,17 +19,11 @@
 // =============================================================================
 
 import { createClock } from './clock.mjs'
-import { evaluateTimeline } from './evaluate.mjs'
+import { evaluateTimeline, projectTracks } from './evaluate.mjs'
 import { clipSpan } from './timeline.mjs'
 
 function isFiniteNumber(value) {
   return typeof value === 'number' && Number.isFinite(value)
-}
-
-/** The same timeline resolution evaluateTimeline makes, so both see one shape. */
-function timelineOf(input) {
-  if (input && Array.isArray(input.tracks)) return input
-  return input?.timeline ?? null
 }
 
 /**
@@ -37,9 +31,9 @@ function timelineOf(input) {
  * same reason evaluateTimeline skips them: an empty clip must not extend the
  * sequence it can never paint.
  */
-function contentEndTicks(timeline) {
+function contentEndTicks(tracks) {
   let max = 0
-  for (const track of timeline?.tracks ?? []) {
+  for (const track of tracks) {
     for (const clip of track?.items ?? []) {
       const span = clipSpan(clip)
       if (!(span.duration > 0)) continue
@@ -70,7 +64,7 @@ function contentEndTicks(timeline) {
  */
 export function createFrameScheduler(input, options = {}) {
   const clock = createClock(options?.rate ?? input?.canvas?.fps)
-  const endTicks = contentEndTicks(timelineOf(input))
+  const endTicks = contentEndTicks(projectTracks(input))
   const frameCount = clock.durationFrames(endTicks)
 
   /** One frame of the sequence, or null when the index is outside it. */

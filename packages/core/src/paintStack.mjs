@@ -48,7 +48,7 @@
 //  decision, not a move-the-law one.
 // =============================================================================
 
-import { evaluateTimeline } from './evaluate.mjs'
+import { evaluateTimeline, projectTracks } from './evaluate.mjs'
 import { clipSpan } from './timeline.mjs'
 
 /**
@@ -93,12 +93,6 @@ export function paintStackAt(input, atTicks) {
   return selectPaintRows(evaluateTimeline(input, atTicks))
 }
 
-/** The same timeline resolution `evaluateTimeline` makes, so both see one shape. */
-function timelineOf(input) {
-  if (input && Array.isArray(input.tracks)) return input
-  return input?.timeline ?? null
-}
-
 /**
  * Does this row hold a clip that can be live at some tick? Exactly the
  * condition `evaluateTimeline` applies to a clip (`span.duration > 0`), read
@@ -138,8 +132,7 @@ function hasLiveClip(track) {
  *   `audio` every audio row.
  */
 export function selectFileRows(input) {
-  const timeline = timelineOf(input)
-  const tracks = Array.isArray(timeline?.tracks) ? timeline.tracks : []
+  const tracks = projectTracks(input)
   const rows = []
   const overlays = []
   const audio = []

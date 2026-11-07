@@ -6375,3 +6375,85 @@ kia của cánh cửa.
 **Chưa chứng minh, vẫn còn nguyên**: chân tiếng **chưa đọc byte cache** (nó mở location qua `decodePcm`, và đó là khoảng
 trống có tên, giống chân plate ở §53.8); chưa có số đo nào cho chất lượng resample tuyến tính so với FFmpeg trên nhạc thật
 (việc của #156); và cả hai chân đều **chưa được gọi** cho tới khi modal của #155 nối chúng.
+### 53.10 Increment H3d-3 — nút bấm: một chỗ dispatch, một project đã đúng cỡ, và một câu cho mỗi lời từ chối
+
+Ba chân của §53.6 đã có: keo (H3d-2c), luật surface (H3d-2d), plate (H3d-2e), tiếng (H3d-2f). Nhưng cho tới lượt này
+**không ai gọi chúng**. `TmcutExportModal.vue` vẫn là đường cũ: nó POST `args` FFmpeg đã compile và poll một job Nitro —
+nghĩa là ở runtime web, một "lần xuất" là một lần nhờ server chạy x264, chứ không phải trình duyệt vẽ. Lượt này thay
+đúng nhánh đó bằng `createWebExportHost`, và giữ nguyên nhánh desktop.
+
+**Một defect thật lộ ra ngay ở lần chạy đầu của đầu nối mới, trước khi có UI.** Trình duyệt export một project **thật**
+(`tmcut_project_default` trong store) với host mới: kết quả `kind: 'exported'`, **0 plate đọc, 0 plate vẽ**, và file vẫn
+mở được. Nguyên nhân: `surfacesAt` và `exportMixLeg` join clip theo index hàng, mà cả hai nhận `tracks` từ nơi gọi; host
+đọc `project.tracks`, còn store giữ hàng ở `project.timeline.tracks`. Core thì đọc **cả hai** (`timelineOf` trong
+`evaluate`, `scheduler`, `paintStack`, `exportContent` — bốn bản copy private), nên `planEncodeContent` nói eligible, còn
+app join ra rỗng. Đó đúng là loại file "mở lên được là bằng chứng có nội dung" mà §52 dành cả chương để bác.
+
+**Luật core mới: `projectTracks(input)`** trong [evaluate.mjs](file:///D:/Applications/tm-studio/packages/core/src/evaluate.mjs),
+export kèm khai báo `index.d.ts` (generic, vì nó là pass-through: core không nhìn vào trong một hàng, và hàng của store
+không phải `TmcutTrack` của core). Bốn bản copy private được thay bằng nó — `evaluateTimeline` tự dùng nó luôn, nên
+"cùng một luật" là sự thật của code chứ không chỉ của comment. Bốn test core mới; suite **953 → 957**.
+
+**Luật thứ hai, ở app: những lựa chọn hộp thoại mà bản web ghi được.** `webExportChoice.ts` với `planWebExport(project,
+choice)` trả `{ project, refusals }`. Hai lựa chọn **được tôn trọng** là cỡ và frame rate — vì `planEncodeContent` đọc
+canvas và `createFrameScheduler` dựng lưới từ đúng hai con số đó; plan trả một **bản copy** của project với canvas đã đổi,
+không sửa document đang mở. Bốn lựa chọn còn lại bị **từ chối có tên**: `mode` (audio/GIF), `format` (HEVC/ProRes/VP9 —
+thang preset sẽ trả H.264 hoặc MP4, không phải file menu hứa), `range` (in/out chưa có đường), `effects` (denoise, LUT).
+Mã ở đây **không phải** `ENCODE_REFUSAL_REASONS`: từ vựng đó nói về thứ một *project* có và core tự trả lời; mã này nói về
+thứ một *hộp thoại* có, chỉ app biết.
+
+**Defect thứ hai, chỉ lộ ra khi chạy live.** Lần xuất thật trên `:4003` dừng bằng toast **"effects"** — từ vựng của core,
+không phải câu cho người đọc. Project mở sẵn có vignette trên cả hai clip, nên lời từ chối là **đúng**; cái sai là UI in mã
+trần. Sửa: `WEB_CONTENT_REFUSAL_KEYS`, một câu cho **cả 14** mã core in ra, cộng một câu `unknown` có `{reason}`; và spec
+duyệt `ENCODE_REFUSAL_REASONS` để một mã mới trong core **không thể** lọt qua mà không có câu. Đây là spec viết sau khi
+thấy lỗi bằng mắt — thứ tự Red/Green ghi lại đúng như nó xảy ra.
+
+Copy cũng sai sự thật sau khi đổi đường: "server cục bộ", "lưu trên server", "x264 software". Bốn chuỗi (cộng tiêu đề
+hardware) được viết lại thành "trình duyệt tự vẽ và mã hoá", `webNoFile` mới thêm cho trường hợp muxer trả về không phải
+`Blob` (gate i18n đã bắt key thiếu này ngay lần đầu chạy suite).
+
+**Chạy live, trên cây sẽ commit** (`:4003`, project thật 2 clip `f4b-probe.mp4`, 0.6 s):
+
+| Bước | Kết quả đo được |
+|---|---|
+| 5 route TMCut | `/tmcut` 0 message; `/tmcut/autocut` chỉ `<Suspense>` info; `/tmcut/editor` `401 ×4` trên `GET /api/v1/ai/relay/catalog`; `/tmcut/templates` `401 ×2`; `/tmcut/factory` `401 ×1` — cùng một nguyên nhân §53.6 |
+| Modal | copy mới hiện đúng: "Rendered in this browser — use Download when it finishes" |
+| Từ chối theo lựa chọn | chọn tab Audio only → "This browser export writes video files only…" |
+| Từ chối theo project | Start Export với vignette → "This browser export cannot bake clip effects — remove them, or export from the desktop app" |
+| Xuất thật | bỏ vignette (chỉ trong `localStorage`, đã khôi phục) → `Export Completed!` + nút Download; `URL.createObjectURL` bắt được `{ size: 123212, type: 'video/mp4; codecs="avc1.64001f, mp4a.40.2"' }` |
+
+**6 mutation trên đúng các md5 sẽ commit** (`evaluate.mjs 797d8218`, `webExportHost.ts ea71db12`, `exportMixLeg.ts
+0edc18ae`, `webExportChoice.ts b7d8d7bc`, `TmcutExportModal.vue 85362acf`), restore **byte-identical**:
+
+| # | Đột biến | Kết quả | Check giết nó |
+|---|---|---|---|
+| M1 | `projectTracks` chỉ đọc `tracks` phẳng | CAUGHT | "reads a project's timeline.tracks" |
+| M2 | host join hàng từ `project.tracks` | CAUGHT | "one plate per frame was read from the row under timeline.tracks" |
+| M3 | mix leg join hàng từ `project.tracks` | CAUGHT | "both rows under timeline.tracks were opened" |
+| M4 | bỏ im lặng một lời từ chối của hộp thoại | CAUGHT | "a mode or format this writer cannot produce" |
+| M5 | plan sửa canvas của chính project được truyền vào | CAUGHT | "the preview project is untouched" |
+| M6 | đọc lời từ chối sau khi đã dựng host | CAUGHT | "plan.refusals.length > 0" |
+
+**Gates của increment này (chạy lại toàn bộ sau mutation, trên cây đã restore):**
+
+| Gate | Lệnh | Kết quả | Bằng chứng |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | exit 0, `error TS` = 0; config tái sinh 28 576 B lúc 09:17 |
+| 2 Lint | `npx eslint` trên 8 file, **sau** gate 1 | PASS | exit 0, 0 problems |
+| 3 Core types | `pnpm typecheck:core` | PASS | exit 0 |
+| 4 Core boundary | `pnpm check:core` | PASS | "core imports nothing platform-specific" |
+| 5 Core tests | `pnpm test:core` | PASS | **957 pass / 0 fail** (953 → 957: bốn test `projectTracks`) |
+| 6 App suite | `npx tsx tests/unit/run-all.mts` | PASS | **133/133**, exit 0 (131 → 133: host + choice) |
+| 7 Electron | `node --test "electron/tools/*.test.mjs"` | PASS | 59 pass / 0 fail, exit 0 |
+| 8 Live | 5 route + modal + một lần xuất thật | PASS | bảng ở trên |
+| 9 Docs guards | 6 spec `docs_*` / `tmcut_doc_*` | PASS | cả sáu exit 0 |
+| 10 Mutation | 6 đột biến trên md5 sẽ commit | PASS | 6/6 CAUGHT, restore byte-identical |
+
+Một allowlist phải sửa và **không** phải nới guard: `tmcut_frame_service.spec.ts` đóng băng danh sách file được import
+`frameDecode`, và `webExportHost.ts` là nơi thứ tư — đúng chỗ §53.6 đã định trước ("host là chỗ duy nhất lắp bốn port").
+
+**Chưa chứng minh, vẫn còn nguyên:** parity **điểm ảnh** với file FFmpeg trên cùng project (#156) — lần xuất 123 212 byte
+ở trên là một **file thật, codec thật**, nhưng không có khung nào của nó được so với FFmpeg. Chân tiếng và chân plate vẫn
+**chưa đọc byte cache** (mở theo location), nên một project có asset chỉ nằm trong IndexedDB vẫn là "no plate". Đường
+desktop vẫn đi queue cũ, và lượt này **không** đo nó. Và `planEncodeContent` giờ đã chạy trên một project thật có vignette
+(lần từ chối) cùng một project thật không vignette (lần xuất) — nhưng chưa trên project nhiều hàng video thật.

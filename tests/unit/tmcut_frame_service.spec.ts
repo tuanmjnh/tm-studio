@@ -422,8 +422,10 @@ async function main() {
     assert.deepEqual(withDecodeImport, [
       'app/composables/useTmcutAutocut.ts',
       'app/utils/tmcut/audioDecode.ts',
-      'app/utils/tmcut/frameStore.ts'
-    ], 'slice E4 made the AutoCut composable a caller of the luma read; the audio seam still borrows only the container opener')
+      'app/utils/tmcut/frameStore.ts',
+      'app/utils/tmcut/webExportHost.ts'
+    ], 'slice E4 made the AutoCut composable a caller of the luma read; the audio seam still borrows only the container opener; '
+    + 'and H3d-3 made the export host the one place that assembles the plate reader (§53.10)')
     const audio = read('app/utils/tmcut/audioDecode.ts')
     assert.match(audio, /openMedia\(/, 'it borrows the opener and nothing else')
     assert.ok(!/decodeFrame\(|decodeLumaSeries\(/.test(audio),

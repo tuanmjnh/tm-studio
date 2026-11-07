@@ -317,6 +317,26 @@ function layerFor(clip, track, at, windows, clipsById) {
 }
 
 /**
+ * The rows of a project, a timeline, or a bare `{ tracks }` object.
+ *
+ * Three shapes reach this module and the ones that join it: the store's project
+ * (`project.timeline.tracks`), a DSL v3 timeline (`timeline.tracks`), and the
+ * flat `{ tracks }` shape core's own tests and callers build. Four private
+ * copies of this resolution already lived in core (`evaluate`, `scheduler`,
+ * `paintStack`, `exportContent`); it is exported because `app/` needs a fifth
+ * answer and a fifth copy is where the export stopped finding the row it was
+ * meant to paint.
+ *
+ * Always a list: a caller that walks the answer should not also have to answer
+ * "was there a project at all" before its `for` loop.
+ */
+export function projectTracks(input) {
+  if (input && Array.isArray(input.tracks)) return input.tracks
+  const timeline = input?.timeline
+  return Array.isArray(timeline?.tracks) ? timeline.tracks : []
+}
+
+/**
  * Resolve every clip that is live at `atTicks`.
  *
  * @param {{ timeline?: object } | { tracks: object[] }} input project or timeline
@@ -326,12 +346,11 @@ function layerFor(clip, track, at, windows, clipsById) {
  *   is a plain object so it can cross a worker/postMessage boundary.
  */
 export function evaluateTimeline(input, atTicks) {
-  const timeline = input && Array.isArray(input.tracks) ? input : input?.timeline
   const at = Math.max(0, Math.round(finiteOr(atTicks, 0)))
   const layers = []
   const tracks = []
 
-  for (const track of Array.isArray(timeline?.tracks) ? timeline.tracks : []) {
+  for (const track of projectTracks(input)) {
     const windows = transitionWindows(track)
     const items = (Array.isArray(track?.items) ? track.items : [])
       .map((clip, index) => ({ clip, index, start: spanOf(clip).start }))

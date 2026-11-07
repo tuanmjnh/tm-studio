@@ -214,6 +214,19 @@ export function clipSpan(
 export function clipSourceRange(
   clip: TmcutTimelineClip | { in?: number, out?: number, source?: { in?: number, out?: number } } | null | undefined
 ): { in: number, out: number } | null
+
+/**
+ * The rows of a project (`project.timeline.tracks`), a bare timeline, or a flat
+ * `{ tracks }` object. Always a list, so a caller's `for` loop needs no guard.
+ *
+ * Generic because it is a pure pass-through: core never looks inside a row here,
+ * and the store's rows are not core's `TmcutTrack` (they carry `src`, `in` and
+ * `offset`). A caller holding its own row type gets that type back.
+ */
+export function projectTracks<T = TmcutTrack>(
+  input: { timeline?: { tracks?: readonly T[] } | TmcutTimeline, tracks?: readonly T[] }
+    | TmcutProject | TmcutTimeline | null | undefined
+): T[]
 export function totalDurationTicks(timeline: TmcutTimeline): number
 export function findClip(timeline: TmcutTimeline, clipId: string): { track: TmcutTrack, index: number, clip: TmcutTimelineClip } | null
 export function findTrack(timeline: TmcutTimeline, trackId: string): TmcutTrack | null

@@ -21,7 +21,7 @@
 // furthest second any clip uses of it, and the law's own out-of-run tap answers
 // silence past the end.
 
-import { TICKS_PER_SECOND, audioMixAt, clipSourceRange, evaluateTimeline, planExportMixPacket } from 'tmcut-core'
+import { TICKS_PER_SECOND, audioMixAt, clipSourceRange, evaluateTimeline, planExportMixPacket, projectTracks } from 'tmcut-core'
 import type { TmcutTrack } from '~/composables/useTmcutProject'
 import { decodePcm, hasAudioDecoder } from './audioDecode'
 
@@ -54,7 +54,7 @@ export interface ExportMixPacketRequest {
 }
 
 export interface ExportMixPacketAsk {
-  project: { tracks?: TmcutTrack[] }
+  project: { tracks?: TmcutTrack[], timeline?: { tracks?: TmcutTrack[] } }
   request: ExportMixPacketRequest
   target: { sampleRate: number, channelCount: number }
   signal?: AbortSignal
@@ -83,9 +83,9 @@ export function createExportMixLeg(deps: ExportMixLegDeps = {}) {
    * indices, so the run has to cover every second a clip can play, not the span
    * the first packet happens to need.
    */
-  function mediaEndOf(tracks: readonly TmcutTrack[] | undefined, src: string): number {
+  function mediaEndOf(tracks: readonly TmcutTrack[], src: string): number {
     let end = 0
-    for (const track of tracks ?? []) {
+    for (const track of tracks) {
       for (const item of track?.items ?? []) {
         if (item.src !== src) continue
         const range = clipSourceRange(item)
@@ -97,7 +97,7 @@ export function createExportMixLeg(deps: ExportMixLegDeps = {}) {
   }
 
   /** One read per file, shared by every packet that asks for it. */
-  function runFor(src: string, tracks: readonly TmcutTrack[] | undefined, signal: AbortSignal) {
+  function runFor(src: string, tracks: readonly TmcutTrack[], signal: AbortSignal) {
     const held = runs.get(src)
     if (held) return held
     const work = decode({ src, inSec: 0, outSec: mediaEndOf(tracks, src), signal, bytes: null })
@@ -114,6 +114,11 @@ export function createExportMixLeg(deps: ExportMixLegDeps = {}) {
     const signal = ask.signal ?? new AbortController().signal
 
     const atTicks = Math.round((ask.request.timestamp / 1_000_000) * TICKS_PER_SECOND)
+    // `evaluateTimeline` and this join must see the same rows, in the same
+    // order: core resolves `project.timeline.tracks` and the store keeps rows
+    // there, so reading `project.tracks` here found no clip at all and wrote a
+    // silent file that core had already called eligible.
+    const tracks = projectTracks(ask.project)
     const planned = audioMixAt(evaluateTimeline(ask.project, atTicks)).sources
 
     const sources: Array<Record<string, unknown>> = []
@@ -121,12 +126,12 @@ export function createExportMixLeg(deps: ExportMixLegDeps = {}) {
       // Core names a muted layer too, at gain 0, and `planExportMixPacket` drops
       // it. Skipping it here changes no sample and saves a whole decode.
       if (!(Number(source.gain) > 0)) continue
-      const clip = ask.project.tracks
-        ?.flatMap(track => track?.items ?? [])
+      const clip = tracks
+        .flatMap(track => track?.items ?? [])
         .find(item => item.id === source.clipId)
       const src = clip?.src
       if (!src) continue
-      const run = await runFor(src, ask.project.tracks, signal)
+      const run = await runFor(src, tracks, signal)
       if (!run) {
         refusals.push({ clipId: clipIdOf(source.clipId), reason: 'no-pcm' })
         continue

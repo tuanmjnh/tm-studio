@@ -305,6 +305,41 @@ async function main() {
     leg.close()
   })
 
+  // 9. The store keeps rows under `project.timeline.tracks`; core reads both
+  //    shapes, so a leg that read only the top level found no clip, decoded
+  //    nothing, and wrote silence into a file core had called eligible.
+  await check('a store-shaped project is mixed, not silently silent', async () => {
+    const tone = () => {
+      const run = new Float32Array(48_000 * 4)
+      for (let index = 0; index < run.length; index++) run[index] = (index % 97) / 97
+      return { sampleRate: 48_000, channels: [run, run.slice()] }
+    }
+    const decodes: string[] = []
+    const leg = createExportMixLeg({
+      hasDecoder: () => true,
+      decode: async (ask: { src: string }) => {
+        decodes.push(ask.src)
+        return tone()
+      }
+    })
+    const flat = projectOf({
+      video: [clip('v1', 'video', 'C:/media/v.mp4')],
+      audio: [clip('a1', 'audio', 'C:/media/a.wav', { inSec: 0, outSec: 2, startSec: 0, durSec: 2 })]
+    })
+    const stored = {
+      version: flat.version,
+      canvas: flat.canvas,
+      timeline: { version: 3, durationMs: 2000, markers: [], tracks: flat.tracks }
+    }
+    const planes = await leg.mix({ project: stored, request: packet(0), target: TARGET })
+    // Both rows sound: a video clip carries its own audio, so core names two
+    // sources. What the check is about is WHERE the leg looked for them.
+    assert.deepEqual(decodes.sort(), ['C:/media/a.wav', 'C:/media/v.mp4'],
+      'both rows under timeline.tracks were opened')
+    assert.ok(planes[0]!.some(sample => sample !== 0), 'and their tone reached the packet')
+    leg.close()
+  })
+
   console.log(`\n=== All ${passed} export-mix-leg checks passed ===`)
 }
 

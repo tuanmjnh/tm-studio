@@ -1,7 +1,7 @@
 // tmcut-core — timeline evaluation tests. Run: node --test test/
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { clipSourceRange, evaluateClip, evaluateTimeline, textAnimationAt } from '../src/evaluate.mjs'
+import { clipSourceRange, evaluateClip, evaluateTimeline, projectTracks, textAnimationAt } from '../src/evaluate.mjs'
 import { maskAlphaExpr, maskCssMaskImage } from '../src/mask.mjs'
 import { TICKS_PER_SECOND } from '../src/time.mjs'
 
@@ -552,5 +552,30 @@ describe('clipSourceRange — the media range a clip reads, in both stored shape
 
   it('answers null for a clip that carries no media range', () => {
     assert.equal(clipSourceRange({ id: 't1', type: 'text', text: 'hi' }), null)
+  })
+})
+
+describe('projectTracks — one answer to "where are this project\'s rows"', () => {
+  const rows = [{ id: 't-video', type: 'video', items: [videoClip()] }]
+
+  it('reads a project\'s timeline.tracks (the store shape)', () => {
+    assert.equal(projectTracks({ version: 3, timeline: { tracks: rows } }), rows)
+  })
+
+  it('reads a bare timeline and a flat tracks array', () => {
+    assert.equal(projectTracks({ version: 3, tracks: rows }), rows)
+    assert.equal(projectTracks({ tracks: rows }), rows)
+  })
+
+  it('answers an empty list for a project with no rows, never undefined', () => {
+    assert.deepEqual(projectTracks(null), [])
+    assert.deepEqual(projectTracks({}), [])
+    assert.deepEqual(projectTracks({ timeline: {} }), [])
+  })
+
+  it('is the same resolution evaluateTimeline makes, on a project shape', () => {
+    const project = { version: 3, timeline: { tracks: rows } }
+    const layer = only(evaluateTimeline(project, 0).layers)
+    assert.equal(projectTracks(project)[0].items[0].id, layer.clipId)
   })
 })
