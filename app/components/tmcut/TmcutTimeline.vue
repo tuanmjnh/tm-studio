@@ -13,7 +13,6 @@ import { useTmcutUiPrefs } from '~/composables/useTmcutUiPrefs'
 import { TMCUT_ASSET_MIME } from '~/utils/tmcut/dnd'
 import type { TmcutAssetDragPayload } from '~/utils/tmcut/dnd'
 import { clipStartSec, clipEndSec, clipDurationSec, clipStartTicks, clipDurationTicks } from '~/utils/tmcut/clipTime'
-import { tmcutHostIpc } from '~/utils/tmcut/hostBridge'
 
 const { t } = useI18n()
 
@@ -796,7 +795,7 @@ const srtMenuItems = computed(() => [
 const captionBusy = ref(false)
 
 async function handleAutoCaptions() {
-  if (captionBusy.value || !isDesktop.value) return
+  if (captionBusy.value) return
   const tracks = currentProject.value?.timeline?.tracks || []
   // Core names the footage rows that paint at the playhead — visible, holding a
   // layer, in track order. The clip transcribed is one of those layers, so the
@@ -815,9 +814,11 @@ async function handleAutoCaptions() {
   }
   captionBusy.value = true
   try {
-    const audio = await tmcutHostIpc()?.extractAudio({ filePath: clip.src })
-    if (!audio?.ok || !audio.path) throw new Error(audio?.error || 'Audio extraction failed')
-    const data = await transcribe(audio.path, { format: 'verbose_json' })
+    // The FFmpeg mp3 extraction went with the engine (slice I). The gateway
+    // reads the media file itself and posts it as the upload, and every
+    // OpenAI-compatible transcription endpoint accepts the containers this
+    // editor imports, so a second transcode was never needed.
+    const data = await transcribe(clip.src, { format: 'verbose_json' })
     const cues = (data.segments || [])
       .map(segment => ({
         text: String(segment.text || '').trim(),

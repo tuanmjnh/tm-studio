@@ -10,18 +10,20 @@ publish:
   releaseType: release
 files:
   - electron/**/*
-  # The main process requires shared/utils/detection-args.cjs (the AutoCut
-  # ffmpeg argv, also used by server/api/v1/media/analyze.post.ts); without it
-  # the packaged app throws MODULE_NOT_FOUND on the first AutoCut analysis.
+  # The `#shared/*` tree (the imports map in package.json) that app/ and server/
+  # import. Slice I deleted its only `.cjs` — shared/utils/detection-args.cjs, the
+  # AutoCut ffmpeg argv — once both callers (the Electron controller and
+  # server/api/v1/media/analyze.post.ts) were gone: this entry ships the tree
+  # verbatim, so an uncalled argv builder would still be FFmpeg in the release.
   - shared/**/*
   # The main process reads the core from source: video-generation/controller.mjs
   # imports the adapter registries from packages/core/src — the same artifact
   # the alias `tmcut-core` gives the app and the tests. `dist/` is not shipped:
   # it is a gitignored build artifact that silently lags src, and a main
-  # process loading two copies of one engine is the bug (G13). src is 51
-  # files / 588 KB, so the whole tree is cheaper than tracking which leaves are
-  # leaves — the transitive closure of a require() must be here or the app
-  # throws MODULE_NOT_FOUND only in the packaged build.
+  # process loading two copies of one engine is the bug (G13). src is 65
+  # files / 732 KiB, so the whole tree is cheaper than tracking which leaves the
+  # require graph reaches — the transitive closure of a require() must be here or
+  # the app throws MODULE_NOT_FOUND only in the packaged build.
   - packages/core/src/**/*
   - .output/**/*
   - public/icon.ico
@@ -33,7 +35,9 @@ extraResources:
   - from: resources
     to: resources
     filter:
-      - "**/*.exe"
+      # Media work runs in WebCodecs/mediabunny (ADR-028); the only executable
+      # left in resources is the yt-dlp downloader, resolved at runtime.
+      - "yt-dlp.exe"
       - "**/*.json"
       - "**/*.node"
       # Asset Center starter catalog sample media:

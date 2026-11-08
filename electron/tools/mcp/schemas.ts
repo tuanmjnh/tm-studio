@@ -427,62 +427,6 @@ export const ExportTemplateParams = z.object({
 })
 
 // -----------------------------------------------------------------------------
-// Export Queue (Phase 4)
-// -----------------------------------------------------------------------------
-
-export const ExportJobSummary = z.object({
-  id: z.string(),
-  projectId: z.string().optional(),
-  projectName: z.string(),
-  outputPath: z.string(),
-  mode: z.enum(['video', 'audio', 'gif']),
-  specs: z.string(),
-  duration: z.number().nonnegative(),
-  status: z.enum(['waiting', 'running', 'done', 'failed', 'cancelled']),
-  progress: z.number().min(0).max(100),
-  speed: z.string().optional(),
-  downloaded: z.string().optional(),
-  error: z.string().optional(),
-  createdAt: z.number(),
-  startedAt: z.number().optional(),
-  completedAt: z.number().optional()
-})
-export type ExportJobSummary = z.infer<typeof ExportJobSummary>
-
-export const ListExportJobsParams = z.object({
-  status: z.enum(['waiting', 'running', 'done', 'failed', 'cancelled', 'all']).default('all'),
-  limit: z.number().int().positive().max(100).default(50)
-})
-
-export const AddExportJobParams = z.object({
-  projectId: z.string(),
-  outputPath: z.string(),
-  mode: z.enum(['video', 'audio', 'gif']),
-  specs: z.string(),
-  duration: z.number().positive()
-})
-
-export const PauseExportJobParams = z.object({
-  jobId: z.string()
-})
-
-export const ResumeExportJobParams = z.object({
-  jobId: z.string()
-})
-
-export const CancelExportJobParams = z.object({
-  jobId: z.string()
-})
-
-export const RetryExportJobParams = z.object({
-  jobId: z.string()
-})
-
-export const ClearExportHistoryParams = z.object({
-  status: z.enum(['done', 'failed', 'cancelled', 'all']).default('done')
-})
-
-// -----------------------------------------------------------------------------
 // Video Factory (Phase 7 — MCP Factory tools, roadmap v1 §4)
 // -----------------------------------------------------------------------------
 

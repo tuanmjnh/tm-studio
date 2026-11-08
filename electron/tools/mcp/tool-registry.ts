@@ -16,8 +16,6 @@ import {
   AssetListParams, InstallAssetParams, UninstallAssetParams, AssetInstallStatusParams,
   // Phase 4: Templates
   ListTemplatesParams, ApplyTemplateParams, SaveAsTemplateParams, DeleteTemplateParams, ImportTemplateParams, ExportTemplateParams,
-  // Phase 4: Export Queue
-  ListExportJobsParams, AddExportJobParams, PauseExportJobParams, ResumeExportJobParams, CancelExportJobParams, RetryExportJobParams, ClearExportHistoryParams,
   // Phase 7: Video Factory
   BatchEstimateParams, CreateBatchParams, GetBatchParams, BatchControlParams, GetJobParams, RetryJobParams, AssembleProjectParams,
   // Types
@@ -84,14 +82,6 @@ export interface McpIpc {
   importTemplate(projectId: string, filePath: string, name?: string): Promise<any>
   exportTemplate(projectId: string, templateId: string, filePath?: string): Promise<any>
 
-  // Phase 4: Export Queue
-  listExportJobs(projectId: string, params: any): Promise<any>
-  addExportJob(projectId: string, params: any): Promise<any>
-  pauseExportJob(projectId: string, jobId: string): Promise<void>
-  resumeExportJob(projectId: string, jobId: string): Promise<void>
-  cancelExportJob(projectId: string, jobId: string): Promise<void>
-  retryExportJob(projectId: string, jobId: string): Promise<any>
-  clearExportHistory(projectId: string, status: string): Promise<void>
 
   // Phase 7: Video Factory (roadmap v1 §4 factory.* tools)
   factoryEstimateBatch(projectId: string, params: any): Promise<any>
@@ -467,85 +457,6 @@ export const TOOL_REGISTRY: ToolDef[] = [
     handler: async (params, { projectId, ipc }) => {
       const result = await ipc.exportTemplate(projectId, params.templateId, params.filePath)
       return { ok: true, data: result }
-    }
-  },
-
-  // === Export Queue (Phase 4) ===
-  {
-    name: 'export.list_jobs',
-    description: 'List export jobs with optional status filter',
-    parameters: ListExportJobsParams,
-    risk: 'read',
-    requiresApproval: false,
-    handler: async (params, { projectId, ipc }) => ({
-      ok: true,
-      data: await ipc.listExportJobs(projectId, params)
-    })
-  },
-  {
-    name: 'export.add_job',
-    description: 'Add a new export job to the queue',
-    parameters: AddExportJobParams,
-    risk: 'cost',
-    requiresApproval: true,
-    handler: async (params, { projectId, ipc }) => {
-      const result = await ipc.addExportJob(projectId, params)
-      return { ok: true, data: result }
-    }
-  },
-  {
-    name: 'export.pause_job',
-    description: 'Pause a running or waiting export job',
-    parameters: PauseExportJobParams,
-    risk: 'reversible',
-    requiresApproval: false,
-    handler: async (params, { projectId, ipc }) => {
-      await ipc.pauseExportJob(projectId, params.jobId)
-      return { ok: true }
-    }
-  },
-  {
-    name: 'export.resume_job',
-    description: 'Resume a paused export job',
-    parameters: ResumeExportJobParams,
-    risk: 'reversible',
-    requiresApproval: false,
-    handler: async (params, { projectId, ipc }) => {
-      await ipc.resumeExportJob(projectId, params.jobId)
-      return { ok: true }
-    }
-  },
-  {
-    name: 'export.cancel_job',
-    description: 'Cancel a waiting or running export job',
-    parameters: CancelExportJobParams,
-    risk: 'destructive',
-    requiresApproval: true,
-    handler: async (params, { projectId, ipc }) => {
-      await ipc.cancelExportJob(projectId, params.jobId)
-      return { ok: true }
-    }
-  },
-  {
-    name: 'export.retry_job',
-    description: 'Retry a failed export job',
-    parameters: RetryExportJobParams,
-    risk: 'cost',
-    requiresApproval: true,
-    handler: async (params, { projectId, ipc }) => {
-      const result = await ipc.retryExportJob(projectId, params.jobId)
-      return { ok: true, data: result }
-    }
-  },
-  {
-    name: 'export.clear_history',
-    description: 'Clear export job history by status',
-    parameters: ClearExportHistoryParams,
-    risk: 'destructive',
-    requiresApproval: true,
-    handler: async (params, { projectId, ipc }) => {
-      await ipc.clearExportHistory(projectId, params.status)
-      return { ok: true }
     }
   },
 

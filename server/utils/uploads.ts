@@ -10,7 +10,7 @@ import { resolve, sep } from 'node:path'
  * paths look like "/uploads/<id>-<name>.<ext>" and stay relative on
  * purpose — an absolute origin URL would break whenever the dev port or
  * host changes, while a relative path keeps working (toURL passes it
- * through unchanged, see app/utils/ffmpegHelper.ts).
+ * through unchanged, see app/utils/tmcut/media.ts).
  */
 
 export type UploadKind = 'video' | 'audio' | 'image'

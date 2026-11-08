@@ -87,16 +87,16 @@ async function main() {
     assert.notEqual(core.frameRequestKey(FP, 3, 160), key, 'a different size is a different decode product')
     assert.notEqual(core.frameRequestKey('00000001', 3, 320), key, 'a different revision is a different file')
 
-    // The desktop names its PNG exactly this way today (electron/tools/
-    // tmcut.controller.cjs, extractFrameAt): `${cacheKeyFor()}-f${round(s*1000)}
-    // -w${px}`. Parity is asserted against the file, so a desktop key drift is
-    // a failing test rather than two caches that quietly stopped agreeing.
+    // Slice I deleted the desktop `extractFrame` IPC (it was an `-ss` FFmpeg
+    // spawn), so there is one frame producer left: the app's frame service. It
+    // must name the frame through core's key, and no host-side second builder
+    // may reappear.
+    const service = read('app/utils/tmcut/frameStore.ts')
+    assert.match(service, /frameRequestKey\(ask\.fingerprint, atSec, width\)/,
+      'the frame service names a frame by fingerprint, second and width through core')
     const controller = read('electron/tools/tmcut.controller.cjs')
-    assert.match(
-      controller,
-      /const key = `\$\{cacheKeyFor\(filePath, stat\)\}-f\$\{Math\.round\(wanted \* 1000\)\}-w\$\{px\}`/,
-      'the desktop names a frame by fingerprint, millisecond and width'
-    )
+    assert.doesNotMatch(controller, /cacheKeyFor\(|extractFrame/,
+      'the host-side frame key left with the FFmpeg `-ss` IPC')
   })
 
   await check('a frame key never carries a path or a bad fingerprint', () => {

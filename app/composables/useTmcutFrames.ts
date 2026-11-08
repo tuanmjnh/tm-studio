@@ -1,20 +1,20 @@
 /**
  * The frame legs the app uses (roadmap G-1/R42, zero-FFmpeg slice D).
  *
- * Two of them go through the shared pipeline (`~/utils/tmcut/frameStore` plus
- * `frameStrip`): a batch of instants and a per-clip filmstrip. Both hosts run
- * them — core plans the timestamps, the client byte cache supplies the bytes,
- * one decoder pool bounds the work — so a web session gets thumbnails for the
- * first time and Electron has no second answer to the same question. Both hand
- * back `blob:` object URLs, ready for `src`.
+ * Every leg goes through the shared pipeline (`~/utils/tmcut/frameStore` plus
+ * `frameStrip`): a batch of instants, a per-clip filmstrip, and the single
+ * snapshot the HUD takes. Both hosts run them — core plans the timestamps, the
+ * client byte cache supplies the bytes, one decoder pool bounds the work — so
+ * a web session gets thumbnails for the first time and Electron has no second
+ * answer to the same question. All three hand back `blob:` object URLs, ready
+ * for `src` or a download.
  *
- * The third leg is the desktop HUD snapshot, and it stays IPC: that button
- * reports the FILE it saved, which only the main process can hand out.
- * `available` lets the control hide itself on web instead of shipping dead.
+ * The snapshot used to be IPC because the FFmpeg leg reported the cache FILE
+ * it wrote. Slice I deleted that leg; the frame now arrives as an object URL,
+ * so the control is available on both hosts instead of hiding on web.
  */
 
-import { tmcutHostIpc } from '~/utils/tmcut/hostBridge'
-import { frameService, requestFrameBatch } from '~/utils/tmcut/frameStore'
+import { canDecodeFrames, frameService, requestFrameBatch } from '~/utils/tmcut/frameStore'
 import { createStripReader } from '~/utils/tmcut/frameStrip'
 import type { TmcutStripAsk } from '~/utils/tmcut/frameStrip'
 
@@ -36,18 +36,37 @@ export interface TmcutFrameJob {
 const clipStripReader = createStripReader(frameService)
 
 export function useTmcutFrames() {
-  const available = computed(() => !!tmcutHostIpc())
+  // Kept as a name callers already branch on; every host can now answer, so it
+  // reports the runtime's capability rather than the presence of a desktop IPC.
+  const available = computed(() => canDecodeFrames())
 
-  /** Desktop only: an FFmpeg cache file path, for controls that name a file. */
-  async function extractFrame(src: string, atSec: number, width = 320): Promise<string | null> {
-    const ipc = tmcutHostIpc()
-    if (!ipc || !src || !Number.isFinite(atSec)) return null
-    try {
-      const result = await ipc.extractFrame({ src, atSec, width })
-      return result?.ok && result.path ? result.path : null
-    } catch {
-      return null
-    }
+  /**
+   * One instant for the HUD snapshot. `fingerprint` is what the cache and the
+   * dedup ledger are keyed by, so a still of a revision already decoded is not
+   * decoded twice.
+   *
+   * A batch of one, not a single ask: the snapshot is shown once and nobody
+   * re-asks under its slot, so the slot has to come back with the answer. The
+   * long-lived `request` leg keeps its slot until `forget`/`dispose`, which for a
+   * one-shot would track one slot per distinct instant for the whole session.
+   */
+  async function extractFrame(
+    src: string,
+    atSec: number,
+    width = 320,
+    fingerprint?: string | null,
+    durationSec?: number | null
+  ): Promise<string | null> {
+    if (!src || !Number.isFinite(atSec)) return null
+    const [url] = await requestFrameBatch([{
+      slot: `snapshot:${src}:${atSec}:${width}`,
+      fingerprint: fingerprint ?? null,
+      src,
+      atSec,
+      width,
+      durationSec
+    }])
+    return url ?? null
   }
 
   /**

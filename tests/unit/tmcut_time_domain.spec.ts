@@ -15,7 +15,6 @@
 import assert from 'node:assert/strict'
 import { TICKS_PER_SECOND, secToTicks, ticksToSec, ticksClipToV3, v3ClipToTicks, v1ClipToV3 } from 'tmcut-core'
 import { clipDurationSec, clipEndSec, clipStartSec, clipSourceRange, clipDurationTicks, clipStartTicks, clipEndTicks } from '../../app/utils/tmcut/clipTime'
-import { toRenderClip } from '../../app/utils/tmcut/render/clip'
 import type { TmcutTimelineItem } from '../../app/composables/useTmcutProject'
 
 let passed = 0
@@ -70,17 +69,6 @@ function main() {
       assert.equal(clipStartSec(c), ticksToSec(c.offset || 0))
       assert.equal(clipEndSec(c), ticksToSec(c.offset || 0) + ticksToSec(expectedTicks))
     }
-  })
-
-  check('toRenderClip DECODES ticks to SECONDS — export trim must not receive ticks', () => {
-    const r = toRenderClip(clip({ in: TICKS_PER_SECOND, out: 5 * TICKS_PER_SECOND, offset: 2 * TICKS_PER_SECOND }))
-    assert.equal(r.inSec, 1)
-    assert.equal(r.outSec, 5)
-    assert.equal(r.offsetSec, 2)
-    assert.ok(r.inSec < 1000 && r.outSec < 1000, 'render clip looks like ticks')
-    // durationTicks is the EXACT store-unit span (core audio takes it
-    // through the v3 shape — never the flat legacy seconds branch).
-    assert.equal(r.durationTicks, 4 * TICKS_PER_SECOND)
   })
 
   check('ticks bridge is an identity on the store unit and round-trips exactly', () => {

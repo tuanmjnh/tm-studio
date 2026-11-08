@@ -1,5 +1,5 @@
 import { tmcutHostIpc } from '~/utils/tmcut/hostBridge'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import type { TmcutAsset, TmcutAssetKind, TmcutMediaFolder } from '~/types/tmcut'
 import type { DownloadProgressPayload } from '#shared/types/electron'
 import { createEmptyTmcutAssetMeta } from '~/types/tmcut'
@@ -8,7 +8,8 @@ import {
   classifyAssetKind,
   mediaFileName,
   mediaFileKey,
-  normalizeMediaPath
+  normalizeMediaPath,
+  toURL
 } from '~/utils/tmcut/media'
 import { assetFingerprint, assetStatusForImport, buildAssetRecord } from '~/utils/tmcut/assetImport'
 import { decodePcm } from '~/utils/tmcut/audioDecode'
@@ -21,14 +22,12 @@ import {
   readCachedBytes,
   type TmcutByteCacheInfo
 } from '~/utils/tmcut/byteStore'
-import { readStoredFlag, writeStored } from '~/utils/tmcut/localStore'
 import { withThrowawayMedia } from '~/utils/tmcut/mediaElement'
+import { readStoredFlag, writeStored } from '~/utils/tmcut/localStore'
 import { useTmcutProject } from '~/composables/useTmcutProject'
-import { toURL } from '~/utils/ffmpegHelper'
 import {
   cacheKeyForPath,
   mediaInfoToMetadata,
-  normalizeProbe,
   createFolder as coreCreateFolder,
   renameFolder as coreRenameFolder,
   updateFolderColor as coreUpdateFolderColor,
@@ -55,9 +54,12 @@ const importError = ref<string | null>(null)
 // Web upload throughput readout ({done}/{total}), shown by the media panel
 // banner while importWebFiles streams files to the local server.
 const webUpload = ref<{ done: number, total: number } | null>(null)
-const proxyPreview = ref(true)
 // What the browser byte store currently holds, for the library panel.
 const byteCache = ref<TmcutByteCacheInfo>({ backend: 'none', available: false, entries: 0, usedBytes: 0, budgetBytes: 0 })
+// Whether a surface prefers a ready proxy file over the source. This is a
+// viewing preference, not a generator: slice I removed the two writers that
+// could make a proxy, and an asset imported earlier may still carry one.
+const proxyPreview = ref(true)
 
 if (import.meta.client && typeof window !== 'undefined') {
   proxyPreview.value = readStoredFlag(PROXY_PREVIEW_KEY, true)
@@ -420,65 +422,37 @@ export function useTmcutMedia() {
   }
 
   async function analyzeAsset(asset: TmcutAsset) {
-    const ipc = tmcutHostIpc()
     asset.importStatus = 'probing'
     try {
-      if (!ipc || typeof ipc.analyzeAsset !== 'function') {
-        const info = await probeAssetInfo(asset)
-        applyMediaInfo(asset, info)
-        // A still's cover is the source itself, the same answer the desktop
-        // branch gives; the library streams it from the durable upload.
-        if (asset.kind === 'image') asset.thumbPath = asset.path
-        applyVerdict(asset, info ? info.importStatus : 'ready')
-        return
-      }
-
-      // Single IPC round-trip (Phase 3 ElectronMediaRuntime pipeline);
-      // probe normalization stays renderer-side via tmcut-core.
-      const result = await ipc.analyzeAsset({ filePath: asset.path, kind: asset.kind })
-      if (!result?.ok) {
-        // Nothing to read: the byte axis owns "missing", the probe axis only
-        // records that this attempt learned nothing.
-        asset.importStatus = 'error'
-        asset.status = 'missing'
-        asset.fingerprint = null
-        return
-      }
-      asset.meta.fileSize = result.stat?.size ?? 0
-      asset.meta.mtimeMs = result.stat?.mtimeMs ?? 0
-
-      let learned = asset.kind === 'image'
-      if (asset.kind === 'image') {
-        asset.thumbPath = asset.path
-      } else {
-        const meta = normalizeProbe(result.probe)
-        learned = !!meta && (meta.durationSec > 0 || meta.width > 0)
-        if (meta && (meta.durationSec > 0 || meta.width > 0)) {
-          asset.meta.durationSec = meta.durationSec
-          asset.meta.width = meta.width
-          asset.meta.height = meta.height
-          asset.meta.fps = meta.fps
-          // WebM audio-only (audio stream, no video stream) is the
-          // container that trips up the `kind === 'video'` guess. Record
-          // whether a video stream was actually found so routing to the
-          // audio track is unambiguous.
-          asset.meta.hasVideo = meta.width > 0
+      // The desktop host is the only one that can stat a path, and two facts
+      // come from it that no demuxer can answer: the byte count and the revision
+      // stamp the cache key is built from. A file that is not there is settled
+      // here too — handing a dead path to the probe would leave mediabunny's
+      // UrlSource retrying a fetch that can never succeed.
+      const ipc = tmcutHostIpc()
+      if (ipc && typeof ipc.statFiles === 'function') {
+        const stat = (await ipc.statFiles([asset.path]))[asset.path]
+        if (!stat?.exists) {
+          asset.importStatus = 'error'
+          asset.status = 'missing'
+          asset.fingerprint = null
+          return
         }
-
-        if (asset.kind === 'video' && result.thumbCachePath) {
-          asset.thumbPath = result.thumbCachePath
-          asset.filmstripPath = result.filmstripCachePath || null
-        }
-        // Waveform is kept for anything that carries audio: an
-        // audio-only container arriving as `kind: 'video'` still gets its
-        // strip (the controller extracts it from the probe, see R122).
-        if (result.waveCachePath) {
-          asset.waveformPath = result.waveCachePath
-        }
+        asset.meta.fileSize = stat.size
+        asset.meta.mtimeMs = stat.mtimeMs
       }
-
-      asset.fingerprint = assetFingerprint(asset.path, asset.meta)
-      applyVerdict(asset, learned ? 'ready' : 'error')
+      // One probe on both hosts (zero-FFmpeg slice I). The desktop branch used
+      // to take its numbers from `analyzeAsset`, whose single IPC round-trip
+      // also wrote the cover, filmstrip and waveform through FFmpeg; that
+      // handler is gone, and the three derived artifacts each have a decoder
+      // path now — the cover from the frame service, the strip from
+      // `frameStrip`, the waveform from `decodePcm`.
+      const info = await probeAssetInfo(asset)
+      applyMediaInfo(asset, info)
+      // A still's cover is the source itself; the library streams it from the
+      // durable upload (web) or the media protocol (desktop).
+      if (asset.kind === 'image') asset.thumbPath = asset.path
+      applyVerdict(asset, info ? info.importStatus : 'ready')
     } catch (error) {
       console.error('Media analysis failed:', asset.path, error)
       asset.importStatus = 'error'
@@ -830,7 +804,7 @@ export function useTmcutMedia() {
       // records analyzed under the retired schemes still
       // point at the old single-file thumbnail. Re-analyze
       // them so cover / filmstrip / waveform regenerate
-      // under the current layout (one ffmpeg pass per
+      // under the current layout (one decoder pass per
       // asset, then the names match and this becomes a
       // no-op).
       for (const asset of assets.value) {
@@ -996,78 +970,26 @@ export function useTmcutMedia() {
   }
 
   /**
-   * Which FILE a surface plays: the ready proxy when the toggle is on, the stored
-   * src otherwise. `resolveMediaSrc` builds its URL from this answer, and slice
-   * G4b asks the byte cache with it — so a proxy swap can never be keyed as the
-   * original revision it stands in for.
+   * Which FILE a surface plays: a ready proxy when the viewer prefers one,
+   * the stored src otherwise. `resolveMediaSrc` builds its URL from this
+   * answer, and slice G4b asks the byte cache with it — so a proxy can never
+   * be keyed as the original revision it stands in for.
+   *
+   * Zero-FFmpeg slice I removed both writers that could MAKE a proxy (the
+   * desktop channel and the Nitro route). This read path stays: an asset
+   * imported before slice I may still point at a proxy file on disk, and
+   * playing a file that exists is not a claim that a new one can be made.
    */
   function resolvePlayPath(src?: string | null): string {
     if (!src) return ''
-    if (proxyPreview.value) {
-      const asset = findAssetBySrc(src)
-      if (asset?.proxyPath && asset.proxyStatus === 'ready') return asset.proxyPath
-    }
+    const asset = findAssetBySrc(src)
+    if (proxyPreview.value && asset?.proxyPath && asset.proxyStatus === 'ready') return asset.proxyPath
     return src
   }
 
   function resolveMediaSrc(src?: string | null): string {
     const path = resolvePlayPath(src)
     return path ? mediaUrl(path) : ''
-  }
-
-  async function generateProxy(asset: TmcutAsset, width = 960): Promise<boolean> {
-    if (asset.kind !== 'video' || asset.status === 'missing') return false
-    const ipc = tmcutHostIpc()
-    asset.proxyStatus = 'generating'
-    asset.proxyPath = null
-    // Web: the local Nitro server runs ffmpeg itself and stores the proxy
-    // next to the uploads it streams — the same /uploads/ URL the media
-    // library uses, so `mediaUrl` streams it with zero extra plumbing.
-    if (!ipc || typeof ipc.generateProxy !== 'function') {
-      try {
-        const res = await $fetch<{ ok: boolean, path?: string, cached?: boolean }>('/api/v1/media/proxy', {
-          method: 'POST',
-          body: { path: asset.path, width }
-        })
-        if (res?.ok && res.path) {
-          asset.proxyPath = res.path
-          asset.proxyStatus = 'ready'
-          persistLibrary()
-          return true
-        }
-        asset.proxyStatus = 'error'
-        persistLibrary()
-        return false
-      } catch (err) {
-        console.error('generateProxy error:', err)
-        asset.proxyStatus = 'error'
-        persistLibrary()
-        return false
-      }
-    }
-    try {
-      const res = await ipc.generateProxy({ filePath: asset.path, width })
-      if (res?.ok && res.path) {
-        asset.proxyPath = res.path
-        asset.proxyStatus = 'ready'
-        persistLibrary()
-        return true
-      }
-      asset.proxyStatus = 'error'
-      persistLibrary()
-      return false
-    } catch (err) {
-      console.error('generateProxy error:', err)
-      asset.proxyStatus = 'error'
-      persistLibrary()
-      return false
-    }
-  }
-
-  function removeProxy(asset: TmcutAsset) {
-    asset.proxyPath = null
-    asset.proxyStatus = 'none'
-    persistLibrary()
   }
 
   return {
@@ -1080,11 +1002,9 @@ export function useTmcutMedia() {
     importError,
     webUpload,
     isDesktop,
-    proxyPreview,
     resolvePlayPath,
     resolveMediaSrc,
-    generateProxy,
-    removeProxy,
+    proxyPreview,
     loadLibrary,
     persistLibrary,
     importFiles,

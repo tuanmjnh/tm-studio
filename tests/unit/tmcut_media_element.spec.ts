@@ -29,7 +29,6 @@ import { fileURLToPath } from 'node:url'
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..')
 const read = (rel: string) => readFileSync(join(root, rel), 'utf8')
 const HELPER = 'app/utils/tmcut/mediaElement.ts'
-const PROBE = 'app/utils/tmcut/webProbe.ts'
 const MEDIA = 'app/composables/useTmcutMedia.ts'
 
 let passed = 0
@@ -340,28 +339,12 @@ async function main() {
     }
   })
 
-  // 7. The real consumer: the web probe is a caller of the law, not an owner.
-  await check('probeWebMetadata rides the release law', async () => {
-    const dom = installDom(['metadata'], { duration: 8, videoWidth: 1280, videoHeight: 720 })
-    try {
-      const { probeWebMetadata } = await import('../../app/utils/tmcut/webProbe')
-      const meta = await probeWebMetadata('/uploads/a.mp4')
-      assert.deepEqual(meta, { durationSec: 8, width: 1280, height: 720, fps: 0, hasAudio: false })
-      assert.equal(dom.created.length, 1, 'the probe still builds exactly one element')
-      assertReleased(dom.created[0]!, 'after the probe answered')
-    } finally {
-      dom.restore()
-    }
-  })
-
-  // 8. And the wiring, so a later edit cannot quietly grow a second watchdog.
-  await check('the two sites call the law instead of re-inventing it', () => {
-    const probe = read(PROBE)
+  // 7. The real consumer: the thumbnail capture is a caller of the law, not an
+  //    owner. The web metadata probe that used to be the second caller went
+  //    with the ffprobe leg (zero-FFmpeg slice I) — a demuxer answers both
+  //    hosts now, so there is exactly one DOM reader left to police.
+  await check('the thumbnail capture is the only DOM reader the law has to serve', () => {
     const media = read(MEDIA)
-    assert.match(probe, /withThrowawayMedia[<(]/, 'the probe reads through the shared release law')
-    assert.doesNotMatch(probe, /setTimeout\(/, 'the probe owns no watchdog of its own')
-    assert.doesNotMatch(probe, /document\.createElement\('video'\)|new Audio\(\)/,
-      'the probe builds no element of its own')
     assert.match(media, /withThrowawayMedia[<(]/, 'the thumb capture reads through the shared release law')
     assert.doesNotMatch(media, /document\.createElement\('video'\)/,
       'the thumb capture builds no element of its own')

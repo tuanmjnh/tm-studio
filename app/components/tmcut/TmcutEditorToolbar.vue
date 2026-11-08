@@ -10,7 +10,6 @@ defineProps<{
   saveStatus: 'idle' | 'saving' | 'saved' | 'error'
   lastSavedAt: string | null
   staleRevision: boolean
-  activeJobsCount: number
   pendingAgentOps: number
   extraActions: DropdownMenuItem[][]
 }>()
@@ -18,7 +17,6 @@ defineProps<{
 const emit = defineEmits<{
   togglePanel: [panel: 'media' | 'inspector']
   shortcuts: []
-  queue: []
   aiScript: []
   aiEditor: []
   agent: []
@@ -110,25 +108,6 @@ const { t } = useI18n()
     @click="emit('save')"
   >
     <span class="sr-only 2xl:not-sr-only">{{ t('global.save') }}</span>
-  </UButton>
-  <UButton
-    icon="i-lucide-list-checks"
-    size="sm"
-    variant="soft"
-    :color="activeJobsCount > 0 ? 'primary' : 'neutral'"
-    :title="t('tmcut.queue.title')"
-    @click="emit('queue')"
-  >
-    <span class="sr-only 2xl:not-sr-only">{{ t('tmcut.queue.title') }}</span>
-    <UBadge
-      v-if="activeJobsCount > 0"
-      color="primary"
-      variant="solid"
-      size="xs"
-      class="ml-0.5"
-    >
-      {{ activeJobsCount }}
-    </UBadge>
   </UButton>
   <!-- AI tools share one violet "intelligence" family; Export stays the
        only solid primary action in the bar. -->

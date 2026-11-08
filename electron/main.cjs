@@ -3,7 +3,6 @@ const path = require('path')
 const fs = require('fs')
 const http = require('http')
 const { pathToFileURL } = require('url')
-const { registerFfmpegController } = require('./tools/ffmpeg.controller.cjs')
 const { registerDialogController } = require('./tools/dialog.cjs')
 const { registerFileManagerController } = require('./tools/file-manager.cjs')
 const { registerAppUpdaterController } = require('./tools/app-updater.cjs')
@@ -449,112 +448,6 @@ ipcMain.handle('show-item-in-folder', async (event, fullPath) => {
   return true
 })
 
-// Watch-folder for render outputs (TMCut export). Watches the output
-// directory and notifies the renderer once the file appears and stays
-// stable (2s idle), so the export modal can toast + offer instant
-// preview without polling.
-const outputWatchers = new Map()
-
-function stopOutputWatcher(key) {
-  const entry = outputWatchers.get(key)
-  if (!entry) return
-  outputWatchers.delete(key)
-  try {
-    if (entry.timer) clearTimeout(entry.timer)
-  } catch {
-    // ignore
-  }
-  try {
-    entry.watcher.close()
-  } catch {
-    // ignore
-  }
-}
-
-function notifyRenderDone(filePath) {
-  let size = 0
-  try {
-    size = fs.statSync(filePath).size
-  } catch {
-    // ignore
-  }
-  if (win && !win.isDestroyed()) {
-    win.webContents.send('tmcut:renderDone', { filePath, size })
-  }
-}
-
-function readOutputStat(key) {
-  try {
-    const stat = fs.statSync(key)
-    return { mtimeMs: stat.mtimeMs, size: stat.size }
-  } catch {
-    return null
-  }
-}
-
-function scheduleRenderNotify(key) {
-  const entry = outputWatchers.get(key)
-  if (!entry) return
-  const current = readOutputStat(key)
-  if (!current || current.size === 0) return
-  // Ignore the stale file that already existed when watching started.
-  if (current.mtimeMs === entry.baseMtime && current.size === entry.baseSize) return
-  try {
-    if (entry.timer) clearTimeout(entry.timer)
-  } catch {
-    // ignore
-  }
-  entry.timer = setTimeout(() => {
-    const latest = readOutputStat(key)
-    stopOutputWatcher(key)
-    if (latest && latest.size > 0) notifyRenderDone(key)
-  }, 2000)
-}
-
-// The channel names are camelCase because that is how the preload builds them
-// from its `tmcut` invoke list; `tmcut:watch-output` was a second convention
-// nothing invoked, so the export modal's output watcher silently never started.
-ipcMain.handle('tmcut:watchOutput', (_event, { filePath }) => {
-  if (typeof filePath !== 'string' || !filePath) return false
-  // Path traversal protection: resolve and check against allowed roots
-  try {
-    const resolved = path.resolve(filePath)
-    const userDataRoot = path.resolve(app.getPath('userData'))
-    if (!resolved.startsWith(userDataRoot + path.sep) && resolved !== userDataRoot) {
-      return false
-    }
-  } catch {
-    return false
-  }
-  const key = path.normalize(filePath)
-  stopOutputWatcher(key)
-  const dir = path.dirname(key)
-  const base = path.basename(key)
-  try {
-    if (!fs.existsSync(dir)) return false
-    const baseline = readOutputStat(key)
-    const watcher = fs.watch(dir, (eventType, filename) => {
-      if (filename && filename !== base) return
-      scheduleRenderNotify(key)
-    })
-    watcher.on('error', () => stopOutputWatcher(key))
-    outputWatchers.set(key, {
-      watcher,
-      timer: null,
-      baseMtime: baseline ? baseline.mtimeMs : -1,
-      baseSize: baseline ? baseline.size : -1
-    })
-    return true
-  } catch {
-    return false
-  }
-})
-
-ipcMain.handle('tmcut:unwatchOutput', (_event, { filePath }) => {
-  stopOutputWatcher(typeof filePath === 'string' ? path.normalize(filePath) : '')
-  return true
-})
-
 ipcMain.handle('verify-path', async (_event, { filePath, type }) => {
   const { verifyExecutable } = require('./tools/paths.cjs')
   try {
@@ -579,7 +472,6 @@ app.whenReady().then(() => {
   migrateStoredKeysToSecureStorage()
   protocol.handle('media', createMediaHandler(appOrigins))
 
-  registerFfmpegController()
   registerDialogController()
   // The filesystem surface requires the same app-origin check as the
   // privileged root handlers.
@@ -743,49 +635,6 @@ app.whenReady().then(() => {
     if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
     if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
     return forwardToRenderer('template.export', { params, projectId })
-  })
-
-  // Export Queue
-  ipcMain.handle('mcp:export:list_jobs', async (event, { projectId, params }) => {
-    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
-    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('export.list_jobs', { params, projectId })
-  })
-
-  ipcMain.handle('mcp:export:add_job', async (event, { projectId, params }) => {
-    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
-    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('export.add_job', { params, projectId })
-  })
-
-  ipcMain.handle('mcp:export:pause_job', async (event, { projectId, params }) => {
-    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
-    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('export.pause_job', { params, projectId })
-  })
-
-  ipcMain.handle('mcp:export:resume_job', async (event, { projectId, params }) => {
-    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
-    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('export.resume_job', { params, projectId })
-  })
-
-  ipcMain.handle('mcp:export:cancel_job', async (event, { projectId, params }) => {
-    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
-    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('export.cancel_job', { params, projectId })
-  })
-
-  ipcMain.handle('mcp:export:retry_job', async (event, { projectId, params }) => {
-    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
-    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('export.retry_job', { params, projectId })
-  })
-
-  ipcMain.handle('mcp:export:clear_history', async (event, { projectId, params }) => {
-    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
-    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('export.clear_history', { params, projectId })
   })
 
   // Forward helper: sends mcp:forward to renderer, waits for mcp:forward:respond

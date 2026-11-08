@@ -27,7 +27,6 @@
     "test": "tsx tests/unit/run-all.mts && node --test \"electron/tools/*.test.mjs\"",
     "test:unit": "tsx tests/unit/run-all.mts",
     "test:electron": "node --test \"electron/tools/*.test.mjs\"",
-    "test:smoke": "tsx tests/unit/run-all.mts --smoke",
     "test:tmcut": "tsx tests/unit/run-all.mts"
   },
   "dependencies": {
@@ -54,7 +53,7 @@
     "sortablejs": "^1.15.2",
     "striptags": "^3.2.0",
     "tailwindcss": "^4.3.3",
-    "tm-hub-client": "1.0.9",
+    "tm-hub-client": "1.1.0",
     "uuid": "^14.0.2",
     "vue": "^3.5.44",
     "zod": "^4.4.3"

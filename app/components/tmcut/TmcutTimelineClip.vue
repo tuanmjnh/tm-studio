@@ -24,7 +24,7 @@ const props = withDefaults(defineProps<{
 const { t } = useI18n()
 const { selectedClipId, selectClip, updateClip, pushHistory, snapTimeSec, relatedOffsetsFor, checkClipTransition, applyClipTransition, clearClipTransition, saveProject, gesturePreview, setGesturePreview, clearGesturePreview, currentProject, clipboard, splitClip, removeClip, copySelectedClips, pasteClipboardAt, duplicateSelectedClips, rippleDeleteSelected, toggleTrackLock } = useTmcutProject()
 const { zoom, playhead } = useTmcutPlayback()
-const { findAssetBySrc, loadWaveform, mediaUrl, isDesktop } = useTmcutMedia()
+const { findAssetBySrc, loadWaveform, mediaUrl } = useTmcutMedia()
 const { snapOn } = useTmcutUiPrefs()
 const { clipFilmstrip, forgetStrip } = useTmcutFrames()
 const { relinkWithPicker } = useTmcutRelink()
@@ -849,8 +849,11 @@ function runToggleLock() {
             >
               {{ t('tmcut.clipMenu.none') }}
             </button>
-            <span v-if="!isDesktop" class="text-right text-[9px] leading-tight text-muted">
-              {{ t('tmcut.clipMenu.previewOnly') }}
+            <!-- The writer refuses transitions on BOTH hosts now (slice I made
+                 it one in-process WebCodecs session), so this hint is not a
+                 web-only caveat any more. -->
+            <span class="text-right text-[9px] leading-tight text-muted">
+              {{ t('tmcut.clipMenu.transitionExportNote') }}
             </span>
           </div>
 

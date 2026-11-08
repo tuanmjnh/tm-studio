@@ -7,7 +7,6 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron')
 // drift silently.
 const PUSH_CHANNELS = [
   'app-updater:status-changed',
-  'tmcut:renderDone',
   'tmcut:assetCenter:progress',
   'tmcut:downloadProgress',
   // MCP server channels
@@ -16,9 +15,7 @@ const PUSH_CHANNELS = [
   'mcp:server:session:close',
   'mcp:server:event:proposal_changed',
   'mcp:server:event:project_changed',
-  'mcp:server:event:job_status',
-  'tools:ffmpeg:managerInitialized', 'tools:ffmpeg:beforeRunTask', 'tools:ffmpeg:progressTask', 'tools:ffmpeg:allTasksDone',
-  'tools:ffmpeg:stoppedTask', 'tools:ffmpeg:stoppedTasks', 'tools:ffmpeg:errorTask', 'tools:ffmpeg:taskRetry', 'tools:ffmpeg:taskTimeout', 'tools:ffmpeg:updateProgress'
+  'mcp:server:event:job_status'
 ]
 // Nothing legitimately uses ipcRenderer.send today (all handlers are
 // invoke-based). Adding a channel here is a deliberate act, reviewed like
@@ -55,21 +52,6 @@ function exposeNamespace(namespace, channels) {
 function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1)
 }
-
-const ffmpeg = exposeNamespace('tools:ffmpeg', {
-  invoke: [
-    'checkExecutable', 'getStatus', 'getTasks', 'initTaskManager', 'setTasks', 'setGroupTasks',
-    'startTasks', 'pauseTasks', 'continueTasks', 'stopTask', 'stopTasks', 'getMediaInfo',
-    'listFfmpegConfigs', 'createFfmpegConfig', 'updateFfmpegConfig', 'deleteFfmpegConfig',
-    'listFfmpegBatchConfigs', 'createFfmpegBatchConfig', 'updateFfmpegBatchConfig', 'deleteFfmpegBatchConfig',
-    'listFfmpegHistory', 'deleteFfmpegHistory', 'detectGpuSupport', 'globFiles', 'scanImageSubfolders',
-    'probeMedia', 'scanJoinFolders', 'getVersion', 'checkUpdate', 'performUpdate'
-  ],
-  on: [
-    'managerInitialized', 'beforeRunTask', 'progressTask', 'allTasksDone',
-    'stoppedTask', 'stoppedTasks', 'errorTask', 'taskRetry', 'taskTimeout', 'updateProgress'
-  ]
-})
 
 const aiGateway = exposeNamespace('tools:ai-gateway', {
   invoke: ['complete', 'transcribe', 'getStatus', 'models', 'presets', 'tasks'],
@@ -116,12 +98,11 @@ const tmcut = exposeNamespace('tmcut', {
     'readProject', 'writeProject', 'listProjectFiles', 'readProjectMeta',
     'writeRecovery', 'readRecovery', 'deleteRecovery', 'deleteProject',
     'listSnapshots', 'saveSnapshot', 'readSnapshot', 'deleteSnapshot',
-    'statFiles', 'extractThumbnail', 'extractFrame', 'extractAudio', 'saveRecording', 'extractWaveform', 'generateProxy', 'stabilizeVideo', 'analyzeAsset', 'probeMedia', 'downloadMedia', 'cancelDownload', 'stockSearch',
+    'statFiles', 'saveRecording', 'downloadMedia', 'cancelDownload', 'stockSearch',
     'voiceStatus', 'enrollVoice', 'listManagedVoices', 'addManagedVoice', 'deleteManagedVoice', 'syncManagedVoice', 'synthesizeVoice', 'synthesizeGeminiVoice',
-    'analyzeScenes', 'analyzeSilence', 'listFonts',
-    'watchOutput', 'unwatchOutput'
+    'listFonts'
   ],
-  on: ['renderDone', 'downloadProgress']
+  on: ['downloadProgress']
 })
 
 // On-demand Asset Center I/O (registry + verified downloads). The queue/
@@ -211,7 +192,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on(channel, listener)
     return () => ipcRenderer.removeListener(channel, listener)
   },
-  tools: { ffmpeg, aiGateway, videoGeneration },
+  tools: { aiGateway, videoGeneration },
   dialog,
   fileManager,
   tmcut: { ...tmcut, assetCenter: tmcutAssetCenter },

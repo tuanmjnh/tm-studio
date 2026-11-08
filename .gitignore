@@ -36,13 +36,9 @@ node_modules
 
 # Private
 private
-ffmpeg.exe
-ffplay.exe
-ffprobe.exe
 yt-dlp.exe
 
-# TMCut render smoke work dir (R79)
-.smoke-render/
+# Work dirs the H3d e2e measurements create and delete in `finally`
 .golden-render-*/
 
 # Dev Electron profile (dev:electron --user-data-dir)

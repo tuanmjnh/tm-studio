@@ -171,11 +171,9 @@ function main() {
       assert.ok(!reachable.includes(file),
         `${file} is on the FFmpeg/IPC side and must not be reachable from the export`)
     }
-    // The reverse direction matters too: the compiler is what spawns FFmpeg on
-    // the desktop, so it is named here as the thing this census is about.
-    const compiler = read('app/utils/tmcut/compiler.ts')
-    assert.match(compiler, /compileTimelineToFfmpeg/,
-      'the FFmpeg path is still the compiler — slice I deletes it, not this slice')
+    // The reverse direction mattered while both paths existed. Slice I deleted
+    // the compiler with the queue, so the names above are now proof of absence:
+    // a file that came back would fail the reachability check, not pass it.
   })
 
   // 3. The packages the graph may use are the browser's. `mediabunny` demuxes
@@ -193,42 +191,55 @@ function main() {
     }
   })
 
-  // 4. The modal's own dispatch is the only place the two paths meet, and the
-  //    web branch is chosen by the platform answer, not by a second sniff. This
-  //    is what keeps the census above meaningful: if the modal could fall
-  //    through to `enqueueJob` after `runWebExport`, the graph would be clean
-  //    while the export still spawned.
-  check('a web export cannot fall through to the desktop queue', () => {
+  // 4. There is exactly one writer. The desktop queue and the server render
+  //    route were deleted with the engine (slice I), so the modal cannot fall
+  //    through to a second path even if someone re-adds a button.
+  check('the modal has one writer and no fall-through path', () => {
     const modal = read('app/components/tmcut/TmcutExportModal.vue')
-    const webAt = modal.indexOf('await runWebExport()')
-    assert.ok(webAt > 0, 'the web branch calls the browser exporter')
-    const guardAt = modal.indexOf('if (!platform.info.capabilities.nativeFFmpeg)')
-    assert.ok(guardAt > 0 && webAt > guardAt, 'and it runs under the capability answer')
-    const after = modal.slice(webAt, webAt + 400)
-    assert.match(after, /return\b/,
-      'the web branch returns, so the desktop enqueue below it cannot run in the same call')
-    const enqueueAt = modal.indexOf('enqueueJob({', webAt)
-    assert.ok(enqueueAt > webAt, 'the queue call for the desktop sits after the web branch')
+    assert.match(modal, /await runWebExport()/, 'the browser exporter is the export')
+    assert.doesNotMatch(modal, /enqueueJob|useToolTaskManager|useTmcutExportQueue/,
+      'no queue call survives in the modal')
+    assert.doesNotMatch(modal, /platform.encoder/, 'and no host encoder is asked')
+    assert.equal(existsSync(join(ROOT, 'app/composables/useTmcutExportQueue.ts')), false,
+      'the queue module is deleted, not merely unused')
   })
 
-  // 5. The process count is a fact about this repo, not a hope. The spawns that
-  //    slice I retires are in the Electron main process, and none of them is
-  //    reachable from the browser export — a different process with no require
-  //    of its own. Recorded by file so slice I knows exactly what it deletes.
-  check('the FFmpeg spawns this census counts are the desktop ones, untouched', () => {
-    const controller = 'electron/tools/ffmpeg.controller.cjs'
-    assert.ok(existsSync(join(ROOT, controller)), 'the FFmpeg controller is the desktop path')
-    const source = read(controller)
-    assert.match(source, /require\('child_process'\)/, 'it is the module that can start a process')
-    assert.match(source, /\bspawn\(/, 'and it does')
+  // 5. Slice I deleted every spawn site this census was written to keep out of
+  //    the export. The list below is the assertion now: if one of them comes
+  //    back, the zero-spawn claim has to be re-measured rather than re-worded.
+  check('the FFmpeg spawn sites are gone from the repo', () => {
+    const deleted = [
+      'electron/tools/ffmpeg.controller.cjs',
+      'electron/tools/task-manager.cjs',
+      'app/utils/ffmpegHelper.ts',
+      'app/utils/tmcut/compiler.ts',
+      'app/utils/tmcut/render/index.ts',
+      'server/api/v1/media/render.post.ts',
+      'server/api/v1/media/render/[jobId].get.ts',
+      'server/utils/htmlVideoRender.ts',
+      'server/utils/renderJobs.ts'
+    ]
+    for (const file of deleted) {
+      assert.equal(existsSync(join(ROOT, file)), false, `${file} must be deleted with the engine`)
+    }
     // The renderer cannot import a `.cjs` in `electron/`: it has no `node:`
     // require at all, which is why "the export spawns nothing" is structural
-    // rather than a promise. This asserts the export graph never names it.
-    const reachable = graph(ENTRY)
+    // rather than a promise. This asserts the export graph never names one.
     assert.deepEqual(reachable.filter(file => file.startsWith('electron/')), [],
       'no Electron module is in the browser export graph')
     assert.ok(!reachable.some(file => file.includes('ffmpegHelper') || file.includes('/render/index.ts')),
       'and neither is any app-side FFmpeg helper')
+  })
+
+  // 6. `electron-builder.yml` ships `shared/**/*` verbatim, so a dead argv
+  //    builder left in that tree is FFmpeg in the release even with no caller.
+  //    Slice I deleted both callers (the Electron controller's AutoCut pass and
+  //    server/api/v1/media/analyze.post.ts); the file goes with them.
+  check('the shipped shared tree carries no FFmpeg argv', () => {
+    assert.equal(existsSync(join(ROOT, 'shared/utils/detection-args.cjs')), false,
+      'the AutoCut argv builder must be deleted, not merely uncalled')
+    const builder = read('electron-builder.yml')
+    assert.match(builder, /- shared\/\*\*\/\*/, 'this check only means something while shared/ ships')
   })
 
   console.log(`\n=== All ${passed} export-process-census checks passed ===`)

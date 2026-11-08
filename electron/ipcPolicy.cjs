@@ -20,16 +20,11 @@
 
 // Channels main may PUSH to the renderer via the generic electronAPI.on.
 // Derived from the actual webContents.send() call sites: app-updater
-// (status-changed), tmcut renderDone, and the ffmpeg task-manager
-// controller's event family.
-const TASK_EVENT_NAMES = [
-  'managerInitialized', 'beforeRunTask', 'progressTask', 'allTasksDone',
-  'stoppedTask', 'stoppedTasks', 'errorTask', 'taskRetry', 'taskTimeout', 'updateProgress'
-]
-
+// (status-changed), the asset download progress, and the MCP server events.
+// The TMCut renderDone push left with the FFmpeg queue (zero-FFmpeg slice I):
+// the exporter now finishes in the renderer that started it.
 const PUSH_CHANNELS = [
   'app-updater:status-changed',
-  'tmcut:renderDone',
   // Roadmap v3 PART A: asset download progress pushes (jobId/entryId/
   // loaded/total) — the Asset Center queue's only main->renderer channel.
   'tmcut:assetCenter:progress',
@@ -41,8 +36,7 @@ const PUSH_CHANNELS = [
   'mcp:server:session:close',
   'mcp:server:event:proposal_changed',
   'mcp:server:event:project_changed',
-  'mcp:server:event:job_status',
-  ...TASK_EVENT_NAMES.map(n => `tools:ffmpeg:${n}`)
+  'mcp:server:event:job_status'
 ]
 
 // Channels the renderer may send() into the main process through the
@@ -104,8 +98,8 @@ function createSenderGate({ isDev, port, devPort = 4003 }) {
 /**
  * R134 — ONE choke-point for every privileged invoke channel in the
  * app. Replaces ipcMain.handle with a gated version at startup, so ALL
- * controllers (youtube/ffmpeg/dialog/file-manager/app-updater/profiles/
- * tmcut/ai-gateway), the platform layer's ipcHelper registrations, and
+ * controllers (dialog/file-manager/app-updater/tmcut/ai-gateway/asset
+ * center/video-generation), the platform layer's ipcHelper registrations, and
  * any handler added in the future are gated by default — instead of
  * relying on each of ~150 registration sites remembering to check.
  *
@@ -139,7 +133,6 @@ function gateIpcMainHandle(ipcMain, isTrustedSender) {
 module.exports = {
   PUSH_CHANNELS,
   OUTBOUND_CHANNELS,
-  TASK_EVENT_NAMES,
   isAllowedPushChannel,
   isAllowedOutboundChannel,
   createSenderGate,

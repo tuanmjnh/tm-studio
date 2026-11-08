@@ -31,7 +31,7 @@ export {
 /**
  * C16: numeric fps from a canvas (FrameRate rational or legacy number).
  * Returns the exact ratio (e.g. 29.97 for 30000/1001) — 3-decimal rounding
- * keeps FFmpeg args and UI labels clean.
+ * keeps the legacy numeric fps fields and UI labels clean.
  */
 export function canvasFpsValue(canvas?: { fps?: FrameRate | number } | null): number {
   if (!canvas || !canvas.fps) return 30

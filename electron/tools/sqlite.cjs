@@ -183,90 +183,18 @@ function init() {
       flag INTEGER DEFAULT 1,
       created_at TEXT DEFAULT (datetime('now'))
     );
-    CREATE TABLE IF NOT EXISTS ffmpeg_configs (
-      id TEXT PRIMARY KEY,
-      user_id TEXT,
-      title TEXT,
-      aspect_ratio INTEGER,
-      background_type TEXT CHECK(background_type IN ('color','boxblur','file')),
-      background_color TEXT DEFAULT '#000000',
-      background_boxblur REAL DEFAULT 10,
-      background_file TEXT,
-      center INTEGER DEFAULT 1,
-      speed REAL DEFAULT 1,
-      volume REAL DEFAULT 1,
-      zoom_enable INTEGER DEFAULT 0,
-      zoom_ratio REAL DEFAULT 1.1,
-      zoom_time_start REAL DEFAULT 0,
-      zoom_time_duration REAL DEFAULT 0,
-      zoom_time_loop REAL DEFAULT 0,
-      hflip_enable INTEGER DEFAULT 0,
-      hflip_all INTEGER DEFAULT 1,
-      hflip_time_start REAL DEFAULT 0,
-      hflip_time_duration REAL DEFAULT 0,
-      hflip_time_loop REAL DEFAULT 0,
-      vflip_enable INTEGER DEFAULT 0,
-      vflip_all INTEGER DEFAULT 1,
-      vflip_time_start REAL DEFAULT 0,
-      vflip_time_duration REAL DEFAULT 0,
-      vflip_time_loop REAL DEFAULT 0,
-      scale_x INTEGER DEFAULT 0,
-      scale_y INTEGER DEFAULT 0,
-      scale_w INTEGER DEFAULT 0,
-      scale_h INTEGER DEFAULT 0,
-      labels TEXT,
-      files TEXT,
-      subtitle TEXT,
-      render_code TEXT,
-      flag INTEGER DEFAULT 1,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT
-    );
-    CREATE TABLE IF NOT EXISTS ffmpeg_batch_configs (
-      id TEXT PRIMARY KEY,
-      title TEXT NOT NULL,
-      items TEXT NOT NULL,
-      threads INTEGER DEFAULT 1,
-      output_path TEXT,
-      flag INTEGER DEFAULT 1,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT
-    );
-    CREATE TABLE IF NOT EXISTS ffmpeg_history (
-      id TEXT PRIMARY KEY,
-      config_id TEXT,
-      config_title TEXT,
-      batch_config_id TEXT,
-      batch_config_title TEXT,
-      input_file TEXT,
-      input_files TEXT,
-      output_file TEXT,
-      output_path TEXT,
-      operation TEXT CHECK(operation IN ('render','split','join','split_render','join_render')),
-      duration REAL,
-      file_size INTEGER,
-      status TEXT CHECK(status IN ('completed','failed','cancelled')),
-      error_message TEXT,
-      threads INTEGER,
-      started_at TEXT,
-      completed_at TEXT,
-      flag INTEGER DEFAULT 1,
-      created_at TEXT DEFAULT (datetime('now'))
-    );
   `)
 
   const tryAddHistoryCol = (table, colDef) => {
     try { db.exec(`ALTER TABLE ${table} ADD COLUMN ${colDef};`) } catch { /* ignore */ }
   }
   tryAddHistoryCol('youtube_history', 'flag INTEGER DEFAULT 1')
-  tryAddHistoryCol('ffmpeg_history', 'flag INTEGER DEFAULT 1')
 
   // Repair any broken flags from previous updates
   try {
     db.prepare('UPDATE youtube_configs SET flag = 1 WHERE flag IS NULL').run()
     db.prepare('UPDATE youtube_formats SET flag = 1 WHERE flag IS NULL').run()
     db.prepare('UPDATE youtube_history SET flag = 1 WHERE flag IS NULL').run()
-    db.prepare('UPDATE ffmpeg_history SET flag = 1 WHERE flag IS NULL').run()
   } catch (e) {
     console.error('[SQLite] Failed to repair flags:', e)
   }
@@ -466,56 +394,4 @@ module.exports = {
     }
     return db.prepare('UPDATE youtube_history SET flag=0 WHERE id=?').run(idOrIds)
   },
-
-  // ffmpeg_configs
-  listFfmpegConfigs: () => db.prepare('SELECT * FROM ffmpeg_configs WHERE flag=1 ORDER BY created_at DESC').all(),
-  getFfmpegConfig: id => db.prepare('SELECT * FROM ffmpeg_configs WHERE id=?').get(id),
-  createFfmpegConfig: (data) => {
-    const id = uuid()
-    db.prepare(`INSERT INTO ffmpeg_configs (id,user_id,title,aspect_ratio,background_type,background_color,background_boxblur,background_file,center,speed,volume,zoom_enable,zoom_ratio,zoom_time_start,zoom_time_duration,zoom_time_loop,hflip_enable,hflip_all,hflip_time_start,hflip_time_duration,hflip_time_loop,vflip_enable,vflip_all,vflip_time_start,vflip_time_duration,vflip_time_loop,scale_x,scale_y,scale_w,scale_h,labels,files,subtitle,render_code,flag,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-      .run(id, data.user_id, data.title, data.aspect_ratio, data.background_type, data.background_color, data.background_boxblur, data.background_file, data.center, data.speed, data.volume, data.zoom_enable, data.zoom_ratio, data.zoom_time_start, data.zoom_time_duration, data.zoom_time_loop, data.hflip_enable, data.hflip_all, data.hflip_time_start, data.hflip_time_duration, data.hflip_time_loop, data.vflip_enable, data.vflip_all, data.vflip_time_start, data.vflip_time_duration, data.vflip_time_loop, data.scale_x, data.scale_y, data.scale_w, data.scale_h, typeof data.labels === 'string' ? data.labels : JSON.stringify(data.labels || []), typeof data.files === 'string' ? data.files : JSON.stringify(data.files || []), data.subtitle, typeof data.render_code === 'string' ? data.render_code : JSON.stringify(data.render_code || null), data.flag ?? 1, now(), now())
-    return id
-  },
-  updateFfmpegConfig: (id, data) => {
-    db.prepare(`UPDATE ffmpeg_configs SET user_id=?,title=?,aspect_ratio=?,background_type=?,background_color=?,background_boxblur=?,background_file=?,center=?,speed=?,volume=?,zoom_enable=?,zoom_ratio=?,zoom_time_start=?,zoom_time_duration=?,zoom_time_loop=?,hflip_enable=?,hflip_all=?,hflip_time_start=?,hflip_time_duration=?,hflip_time_loop=?,vflip_enable=?,vflip_all=?,vflip_time_start=?,vflip_time_duration=?,vflip_time_loop=?,scale_x=?,scale_y=?,scale_w=?,scale_h=?,labels=?,files=?,subtitle=?,render_code=?,updated_at=? WHERE id=?`)
-      .run(data.user_id, data.title, data.aspect_ratio, data.background_type, data.background_color, data.background_boxblur, data.background_file, data.center, data.speed, data.volume, data.zoom_enable, data.zoom_ratio, data.zoom_time_start, data.zoom_time_duration, data.zoom_time_loop, data.hflip_enable, data.hflip_all, data.hflip_time_start, data.hflip_time_duration, data.hflip_time_loop, data.vflip_enable, data.vflip_all, data.vflip_time_start, data.vflip_time_duration, data.vflip_time_loop, data.scale_x, data.scale_y, data.scale_w, data.scale_h, typeof data.labels === 'string' ? data.labels : JSON.stringify(data.labels || []), typeof data.files === 'string' ? data.files : JSON.stringify(data.files || []), data.subtitle, typeof data.render_code === 'string' ? data.render_code : JSON.stringify(data.render_code || null), now(), id)
-  },
-  deleteFfmpegConfig: id => db.prepare('UPDATE ffmpeg_configs SET flag=0 WHERE id=?').run(id),
-
-  // ffmpeg_batch_configs
-  listFfmpegBatchConfigs: () => db.prepare('SELECT * FROM ffmpeg_batch_configs WHERE flag=1 ORDER BY created_at DESC').all(),
-  createFfmpegBatchConfig: (data) => {
-    const id = uuid()
-    db.prepare(`INSERT INTO ffmpeg_batch_configs (id,title,items,threads,output_path,flag,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)`)
-      .run(id, data.title, typeof data.items === 'string' ? data.items : JSON.stringify(data.items || []), data.threads, data.output_path, data.flag ?? 1, now(), now())
-    return id
-  },
-  updateFfmpegBatchConfig: (id, data) => {
-    db.prepare(`UPDATE ffmpeg_batch_configs SET title=?,items=?,threads=?,output_path=?,updated_at=? WHERE id=?`)
-      .run(data.title, typeof data.items === 'string' ? data.items : JSON.stringify(data.items || []), data.threads, data.output_path, now(), id)
-  },
-  deleteFfmpegBatchConfig: id => db.prepare('UPDATE ffmpeg_batch_configs SET flag=0 WHERE id=?').run(id),
-
-  // ffmpeg_history
-  addFfmpegHistory: (data) => {
-    const id = uuid()
-    db.prepare(`INSERT INTO ffmpeg_history (id,config_id,config_title,batch_config_id,batch_config_title,input_file,input_files,output_file,output_path,operation,duration,file_size,status,error_message,threads,started_at,completed_at,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-      .run(id, data.config_id, data.config_title, data.batch_config_id, data.batch_config_title, data.input_file, typeof data.input_files === 'string' ? data.input_files : JSON.stringify(data.input_files || []), data.output_file, data.output_path, data.operation, data.duration, data.file_size, data.status, data.error_message, data.threads, data.started_at, data.completed_at, now())
-    return id
-  },
-  listFfmpegHistory: (limit = 100) => db.prepare('SELECT * FROM ffmpeg_history WHERE flag=1 ORDER BY created_at DESC LIMIT ?').all(limit),
-  deleteFfmpegHistory: (idOrIds) => {
-    if (Array.isArray(idOrIds)) {
-      if (idOrIds.length === 0) return { changes: 0 }
-      const placeholders = idOrIds.map(() => '?').join(',')
-      return db.prepare(`UPDATE ffmpeg_history SET flag=0 WHERE id IN (${placeholders})`).run(...idOrIds)
-    }
-    if (typeof idOrIds === 'string' && idOrIds.includes(',')) {
-      const ids = idOrIds.split(',').map(s => s.trim()).filter(Boolean)
-      if (ids.length === 0) return { changes: 0 }
-      const placeholders = ids.map(() => '?').join(',')
-      return db.prepare(`UPDATE ffmpeg_history SET flag=0 WHERE id IN (${placeholders})`).run(...ids)
-    }
-    return db.prepare('UPDATE ffmpeg_history SET flag=0 WHERE id=?').run(idOrIds)
-  }
 }

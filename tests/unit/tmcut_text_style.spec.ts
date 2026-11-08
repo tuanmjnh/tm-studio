@@ -1,24 +1,28 @@
 /**
  * One text style law, read by both hosts (V4 Phase 2, DOM-renderer item).
  *
- * The preview paints a caption with CSS; the export paints it with drawtext
- * options. Before this slice the numbers that make both sides agree lived in
- * an app helper, so a second host had to copy them and copied arithmetic
- * drifts. They now live in `tmcut-core` (`textStyle.mjs`), which is also where
- * `addClip` and the v1 migration seed a clip's font size and colour.
+ * The preview paints a caption with CSS; the FFmpeg export used to paint it
+ * with drawtext options. Before this slice the numbers that make both sides
+ * agree lived in an app helper, so a second host had to copy them and copied
+ * arithmetic drifts. They now live in `tmcut-core` (`textStyle.mjs`), which is
+ * also where `addClip` and the v1 migration seed a clip's font size and colour.
  *
- * What is asserted, and how:
+ * Slice I deleted the drawtext emitter with the rest of the engine, so the
+ * export leg of this law is gone rather than copied. What remains is the
+ * single-source claim, and it is worth keeping: the FFmpeg branch had 4
+ * separate metrics pinned per font size, and a re-added painter would have to
+ * answer those same four from core.
+ *
  *  1. the app no longer carries a local copy — the helper file is gone and no
  *     source imports it (a reintroduced copy is the regression this guards).
- *  2. both hosts read the names off `tmcut-core` (source-level: an import can
- *     only prove intent, so 3 carries the behaviour).
- *  3. the compiled drawtext string carries the core numbers for real font
- *     sizes — measured, not restated: the expected substrings come from the
- *     same core functions the compiler calls.
- *  4. the preview applies the same functions to the same clip field, and keeps
- *     no literal fallback of its own.
- *  5. the export's `white` and the core's `#ffffff` are the same colour, not
- *     two colours that happen to look alike in a test.
+ *  2. the preview reads the numbers off `tmcut-core` and applies them to the
+ *     same clip field the store seeds.
+ *  3. the export's answer about a caption is a NAMED refusal, so a project
+ *     with text cannot be silently rendered without it.
+ *  4. the seeded defaults are core's, not a literal in the store or a migration.
+ *
+ * Run: node node_modules/tsx/dist/cli.mjs --tsconfig tsconfig.test.json \
+ *        tests/unit/tmcut_text_style.spec.ts
  */
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -28,33 +32,18 @@ import { fileURLToPath } from 'node:url'
 import {
   DEFAULT_TEXT_COLOR,
   DEFAULT_TEXT_FONT_SIZE,
+  planEncodeContent,
   textBoxPadding,
   textShadowOffset,
   textStrokeWidth
 } from 'tmcut-core'
-import { textOverlayFilter } from '../../app/utils/tmcut/render/text'
-import type { TextOverlayClip } from '../../app/utils/tmcut/render/types'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
-const EXPORT_HOST = 'app/utils/tmcut/render/text.ts'
 const PREVIEW_HOST = 'app/components/tmcut/TmcutPreviewPlayer.vue'
+const STORE = 'app/composables/useTmcutProject.ts'
 
 function read(relative: string): string {
   return readFileSync(join(ROOT, relative), 'utf8')
-}
-
-function styledClip(fontSize: number): TextOverlayClip {
-  return {
-    text: 'hello',
-    fontSize,
-    offset: 0,
-    in: 0,
-    out: 2,
-    speed: 1,
-    shadow: true,
-    stroke: true,
-    bgColor: '#101010'
-  } as TextOverlayClip
 }
 
 describe('the text style law has one home', () => {
@@ -63,57 +52,33 @@ describe('the text style law has one home', () => {
       !existsSync(join(ROOT, 'app', 'utils', 'tmcut', 'textStyle.ts')),
       'app/utils/tmcut/textStyle.ts came back — the numbers belong to tmcut-core'
     )
-    for (const file of [EXPORT_HOST, PREVIEW_HOST]) {
+    for (const file of [PREVIEW_HOST, STORE]) {
       assert.ok(!read(file).includes('tmcut/textStyle'), `${file} still imports the retired helper`)
     }
   })
 
-  it('both hosts take the numbers from tmcut-core', () => {
-    for (const file of [EXPORT_HOST, PREVIEW_HOST]) {
-      const source = read(file)
-      const fromCore = /import\s*\{([^}]*)\}\s*from\s*'tmcut-core'/gs.exec(source)
-        ?? /import\s*\{([^}]*)\}\s*from\s*'tmcut-core'/.exec(source)
-      assert.ok(fromCore, `${file} has no tmcut-core import to read the law from`)
-      const names = fromCore[1].split(',').map(part => part.trim()).filter(Boolean)
-      for (const needed of ['textBoxPadding', 'textStrokeWidth', 'textShadowOffset', 'DEFAULT_TEXT_FONT_SIZE']) {
-        assert.ok(names.includes(needed), `${file} does not import ${needed} from tmcut-core`)
-      }
+  it('the preview takes the numbers from tmcut-core', () => {
+    const source = read(PREVIEW_HOST)
+    const fromCore = /import\s*\{([^}]*)\}\s*from\s*'tmcut-core'/s.exec(source)
+    assert.ok(fromCore, `${PREVIEW_HOST} has no tmcut-core import to read the law from`)
+    const names = fromCore![1]!.split(',').map(part => part.trim()).filter(Boolean)
+    for (const needed of ['textBoxPadding', 'textStrokeWidth', 'textShadowOffset', 'DEFAULT_TEXT_FONT_SIZE']) {
+      assert.ok(names.includes(needed), `${PREVIEW_HOST} does not import ${needed} from tmcut-core`)
     }
   })
-})
 
-describe('the export paints the core numbers', () => {
-  for (const fontSize of [24, 36, 54, 72]) {
-    it(`drawtext carries the core metrics at ${fontSize}px`, () => {
-      const filter = textOverlayFilter(styledClip(fontSize))
-      assert.ok(filter.includes(`fontsize=${fontSize}`), filter)
-      assert.ok(
-        filter.includes(`shadowx=${textShadowOffset(fontSize)}:shadowy=${textShadowOffset(fontSize)}`),
-        `shadow offset is not the core number at ${fontSize}px: ${filter}`
-      )
-      assert.ok(
-        filter.includes(`borderw=${textStrokeWidth(fontSize)}`),
-        `stroke width is not the core number at ${fontSize}px: ${filter}`
-      )
-      assert.ok(
-        filter.includes(`boxborderw=${textBoxPadding(fontSize)}`),
-        `plate padding is not the core number at ${fontSize}px: ${filter}`
-      )
-    })
-  }
-
-  it('a clip with no style falls back to the core default size', () => {
-    const filter = textOverlayFilter({ text: 'plain', offset: 0, in: 0, out: 1 } as TextOverlayClip)
-    assert.ok(filter.includes(`fontsize=${DEFAULT_TEXT_FONT_SIZE}`), filter)
-  })
-
-  it('the export spells the core colour in FFmpeg syntax, same value', () => {
-    // FFmpeg takes a colour name; CSS takes the hex. The law is the RGB, so
-    // decode both spellings instead of trusting that "white" looks like "#ffffff".
-    const filter = textOverlayFilter({ text: 'plain', offset: 0, in: 0, out: 1 } as TextOverlayClip)
-    const [, spelled] = /fontcolor=(\w+)/.exec(filter) ?? []
-    assert.equal(spelled, 'white')
-    assert.equal(namedColorToHex(spelled), DEFAULT_TEXT_COLOR.toLowerCase())
+  it('the four metrics stay a real function of the font size', () => {
+    // The drawtext branch pinned these numbers per size (24/36/54/72). The law
+    // still owes them; nothing may flatten them into constants.
+    for (const fontSize of [24, 36, 54, 72]) {
+      assert.ok(textStrokeWidth(fontSize) > 0, `stroke at ${fontSize}px`)
+      assert.ok(textShadowOffset(fontSize) > 0, `shadow at ${fontSize}px`)
+      assert.ok(textBoxPadding(fontSize) > 0, `plate padding at ${fontSize}px`)
+    }
+    assert.ok(textStrokeWidth(72) > textStrokeWidth(24), 'the stroke scales with the type')
+    assert.ok(textBoxPadding(72) > textBoxPadding(24), 'so does the plate')
+    assert.equal(DEFAULT_TEXT_FONT_SIZE, 36)
+    assert.equal(DEFAULT_TEXT_COLOR.toLowerCase(), '#ffffff')
   })
 })
 
@@ -136,22 +101,21 @@ describe('the preview reads the same law', () => {
     assert.ok(source.includes('text.fontSize || DEFAULT_TEXT_FONT_SIZE'), 'the size fallback is not the core constant')
     assert.ok(source.includes('text.color || DEFAULT_TEXT_COLOR'), 'the colour fallback is not the core constant')
   })
-
-  it('one clip field feeds both hosts', () => {
-    // The export reads clip.fontSize, the preview reads textClip.fontSize — and
-    // both default the same way, so an unsigned project cannot disagree.
-    assert.ok(read(EXPORT_HOST).includes('clip.fontSize || DEFAULT_TEXT_FONT_SIZE'))
-  })
 })
 
-/** The CSS named colours this repo's text defaults can land on. */
-const CSS_NAMED_COLORS: Record<string, string> = {
-  white: '#ffffff',
-  black: '#000000'
-}
-
-function namedColorToHex(name: string): string {
-  const hex = CSS_NAMED_COLORS[name.toLowerCase()]
-  assert.ok(hex, `unknown colour spelling in the export filter: ${name}`)
-  return hex
-}
+describe('the export names a caption instead of dropping it', () => {
+  it('a project with a text row is refused as `text`', () => {
+    const project = {
+      canvas: { width: 64, height: 36, fps: 30 },
+      timeline: {
+        tracks: [
+          { id: 'v1', type: 'video', items: [{ id: 'a', src: 'a.mp4', in: 0, out: 120000, offset: 0, speed: 1 }] },
+          { id: 't1', type: 'text', items: [{ id: 'cap', text: 'hello', in: 0, out: 120000, offset: 0 }] }
+        ]
+      }
+    }
+    const verdict = planEncodeContent(project)
+    assert.equal(verdict.kind, 'refused')
+    assert.deepEqual([...verdict.reasons], ['text'], 'a caption the painter cannot draw is a named refusal')
+  })
+})

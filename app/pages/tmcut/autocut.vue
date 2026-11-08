@@ -5,8 +5,7 @@ import { useTmcutMedia } from '~/composables/useTmcutMedia'
 import { useTmcutAutocut } from '~/composables/useTmcutAutocut'
 import type { AutocutProfile, AutocutAnalysis } from '~/composables/useTmcutAutocut'
 import type { TmcutAsset } from '~/types/tmcut'
-import { classifyAssetKind, formatDurationSec } from '~/utils/tmcut/media'
-import { toURL } from '~/utils/ffmpegHelper'
+import { classifyAssetKind, formatDurationSec, toURL } from '~/utils/tmcut/media'
 import { AUTOCUT_PREFS_KEY, AUTOCUT_PREFS_DEFAULT, parseAutocutPrefs, serializeAutocutPrefs, splitKeywords, joinKeywords } from '~/utils/tmcut/autocutPrefs'
 import { readStored } from '~/utils/tmcut/localStore'
 import { nextActiveIndex } from '~/utils/tmcut/autocutReview'
@@ -376,7 +375,7 @@ async function loadSegmentThumbs() {
 
 async function startAnalysis() {
   // Re-entrancy guard: a second click while the first run is still piping
-  // ffmpeg + AI output would start a duplicate pipeline for the same source.
+  // decoder + AI output would start a duplicate pipeline for the same source.
   if (!sourceAsset.value || analyzing.value) return
   analyzing.value = true
   currentStep.value = 3

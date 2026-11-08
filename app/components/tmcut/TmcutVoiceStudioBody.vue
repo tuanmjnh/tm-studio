@@ -259,14 +259,14 @@ async function makeGeminiVoiceover() {
 }
 
 async function addAutomaticCaptions(audioPath: string, offsetSec: number) {
-  const ipc = tmcutHostIpc()
-  if (!autoCaptions.value || !ipc?.extractAudio || !currentProject.value) return
+  if (!autoCaptions.value || !currentProject.value) return
   try {
-    const audio = await ipc.extractAudio({ filePath: audioPath })
-    if (!audio?.ok || !audio.path) throw new Error(audio?.error || t('tmcut.voice.captionFailed'))
     const gateway = tmcutHostBridge()?.tools?.aiGateway
     if (!gateway?.transcribe) throw new Error(t('tmcut.voice.captionNeedsWhisper'))
-    const response = await gateway.transcribe({ filePath: audio.path, format: 'verbose_json' })
+    // The FFmpeg mp3 extraction went with the engine (slice I). The gateway
+    // uploads the media file itself, so the take is transcribed without a
+    // second transcode.
+    const response = await gateway.transcribe({ filePath: audioPath, format: 'verbose_json' })
     if (!response?.ok || !response.data) throw new Error(response?.error || t('tmcut.voice.captionFailed'))
     const cues = (response.data.segments || []).filter(cue => cue.text.trim() && cue.end > cue.start)
     for (const cue of cues) {

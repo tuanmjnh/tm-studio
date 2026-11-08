@@ -91,12 +91,14 @@ function pct(fraction: number) {
 // selector is a deliberate step-DOWN tool for heavy timelines, matching
 // the mock's performance intent. The source always decodes at full
 // resolution (no re-encoding) — honest preview sizing, export untouched.
-const previewQuality = ref<'full' | 'half' | 'quarter' | 'proxy'>('full')
+// The fourth step used to be labelled "Proxy 720p"; slice I removed the
+// re-encode that could make one, so it is named for what it actually does.
+const previewQuality = ref<'full' | 'half' | 'quarter' | 'third'>('full')
 const qualityFactor = computed(() => {
   switch (previewQuality.value) {
     case 'half': return 0.5
     case 'quarter': return 0.25
-    case 'proxy': return 0.33
+    case 'third': return 0.33
     default: return 1
   }
 })
@@ -109,11 +111,11 @@ const qualityItems = computed(() => [
   { label: t('tmcut.player.qualityFull'), value: 'full' },
   { label: t('tmcut.player.qualityHalf'), value: 'half' },
   { label: t('tmcut.player.qualityQuarter'), value: 'quarter' },
-  { label: t('tmcut.player.qualityProxy'), value: 'proxy' }
+  { label: t('tmcut.player.qualityThird'), value: 'third' }
 ])
 
 function onQualityChange(value: unknown) {
-  if (value === 'full' || value === 'half' || value === 'quarter' || value === 'proxy') {
+  if (value === 'full' || value === 'half' || value === 'quarter' || value === 'third') {
     previewQuality.value = value
   }
 }
@@ -142,23 +144,40 @@ const ratioGuideItems = computed(() => [
   }))
 ])
 
-// HUD snapshot (roadmap G-1, core C14 plans the timestamp): grab the
-// active clip's frame at the current media time through the Electron
-// extractor and report the cached PNG path. Hidden on web sessions —
-// there is no IPC there, so the button would be dead.
+// HUD snapshot (roadmap G-1, core C14 plans the timestamp): grab the active
+// clip's frame at the current media time. The frame arrives as an object URL
+// from the shared decode service, so the same control works on both hosts and
+// the download names the instant the user actually saw.
 const snapshotBusy = ref(false)
+
+function snapshotFileName(clipId: string, atSec: number): string {
+  const stamp = `${Math.floor(atSec / 60).toString().padStart(2, '0')}-${(atSec % 60).toFixed(2).padStart(5, '0')}`
+  return `${clipId.replace(/[^\w-]+/g, '-')}-${stamp}.png`
+}
 
 async function snapshotFrame() {
   const active = activeVideoClip.value
   if (!active || snapshotBusy.value) return
   snapshotBusy.value = true
   try {
-    const path = await extractFrame(active.clip.src ?? '', active.mediaCurrentTime, 1280)
-    if (path) {
-      toast.add({ title: t('tmcut.player.snapshotSaved'), description: path, color: 'success' })
-    } else {
+    const src = active.clip.src ?? ''
+    const asset = findAssetBySrc(src)
+    const url = await extractFrame(
+      src,
+      active.mediaCurrentTime,
+      1280,
+      asset?.fingerprint ?? null,
+      asset?.meta.durationSec ?? null
+    )
+    if (!url) {
       toast.add({ title: t('tmcut.player.snapshotFailed'), color: 'warning' })
+      return
     }
+    const link = document.createElement('a')
+    link.href = url
+    link.download = snapshotFileName(String(active.clip.id), active.mediaCurrentTime)
+    link.click()
+    toast.add({ title: t('tmcut.player.snapshotSaved'), color: 'success' })
   } finally {
     snapshotBusy.value = false
   }
@@ -311,23 +330,23 @@ const monitorBoxStyle = computed(() => {
   }
 })
 
-// Current media URL for active video clip (with proxy preview and video stabilizer support, roadmap F-4/E-5).
-// When proxy preview is enabled and an asset proxy exists, resolveMediaSrc
-// serves the lightweight 540p proxy. When video stabilization is enabled, the
-// footage is loaded seamlessly. (Engine seam: resolveSrc is proxy-aware on
-// the electron engine; the web engine has neither pipeline, so those clip
-// fields never exist there — roadmap Phase 5, R90.)
+// Current media URL for the active video clip.
 //
 // Slice F2b put the URL question in one function of a CLIP, because the
 // monitor now points as many elements at as many clips as core stacks: three
-// copies of the stabilize/proxy ladder (main, crossfade, stacked) was a drift
-// waiting to happen.
+// copies of the ladder (main, crossfade, stacked) was a drift waiting to
+// happen.
 //
 // G4b puts the FILE question in one function too, and the wanted-list below
 // reads it: a stabilized clip plays a rendered file the byte cache has never
-// seen, and a proxy clip plays a 960px copy that is not the revision the clip
+// seen, and a proxy clip plays a 540p copy that is not the revision the clip
 // names. Asking the cache with `clip.src` for either would mount a url nothing
 // uses while the plate streams the one that matters.
+//
+// Zero-FFmpeg slice I removed the writers behind both legs (the vidstab render
+// and the proxy re-encode). The legs stay as READ paths: a project saved before
+// slice I can still name a rendered file that exists, and playing it is not a
+// claim that a new one can be made. The inspector no longer offers either job.
 function sourcePathOf(clip: TmcutTimelineItem | null | undefined): string {
   if (!clip) return ''
   if (clip.stabilize && clip.stabilizedPath) return clip.stabilizedPath
@@ -345,16 +364,22 @@ const currentMediaSrc = computed(() => playableSrc(activeVideoClip.value?.clip))
 // Media URL for the OUTGOING crossfade layer (roadmap B3).
 const outgoingMediaSrc = computed(() => playableSrc(crossfadeSurface.value?.clip))
 
-// Whether the active clip currently renders via proxy
-const isCurrentClipProxy = computed(() => {
-  if (!proxyPreview.value) return false
+// Whether the active clip's asset carries a ready proxy FILE. This is the fact
+// the toggle is offered on: slice I removed the writers, so a proxy can only
+// ever be one an earlier import made, and a clip without one has nothing to
+// switch between.
+const activeClipHasProxy = computed(() => {
   const src = activeVideoClip.value?.clip?.src
   if (!src) return false
   const asset = findAssetBySrc(src)
   return !!(asset?.proxyPath && asset.proxyStatus === 'ready')
 })
 
-// Whether the active clip currently renders via stabilized footage (roadmap E-5)
+// Whether the active clip currently renders via that proxy
+const isCurrentClipProxy = computed(() => proxyPreview.value && activeClipHasProxy.value)
+
+// Whether the active clip currently renders via stabilized footage. Read-only
+// for the same reason: the vidstab render is gone, an old project's file is not.
 const isCurrentClipStabilized = computed(() => {
   const clip = activeVideoClip.value?.clip
   return !!(clip?.stabilize && clip?.stabilizedPath)
@@ -926,10 +951,10 @@ function surfaceStyle(surface: PaintSurface | null | undefined): Record<string, 
   if (effectStyle.transform) {
     style.transform = `${style.transform} ${effectStyle.transform}`
   }
-  // Blend mode (R116): CSS mix-blend-mode is the preview counterpart of
-  // the FFmpeg `blend` filter the export uses — same mode names, and since F6d
-  // the same core law. In the DOM it blends against the layer below, which is
-  // exactly the row order core gives.
+  // Blend mode (R116): CSS mix-blend-mode paints core's `blendModeOf` answer —
+  // since F6d the layer carries the normalized mode, not the authored clip.
+  // In the DOM it blends against the layer below, which is exactly the row
+  // order core gives; the WebCodecs export refuses a non-normal blend by name.
   if (layer.blend !== 'normal') {
     style.mixBlendMode = layer.blend
   }
@@ -1603,10 +1628,10 @@ onUnmounted(() => {
           </span>
         </span>
 
-        <!-- Preview quality (mock #2): Full Res / 1/2 Res / 1/4 Res / Proxy
-             720p. Plain Nuxt UI USelect defaults so the trigger and the menu
-             follow the theme in light and dark exactly like every other
-             control; it resizes the monitor only — the trays never move. -->
+        <!-- Preview quality (mock #2): Full Res / 1/2 / 1/4 / 1/3. Plain
+             Nuxt UI USelect defaults so the trigger and the menu follow the
+             theme in light and dark exactly like every other control; it
+             resizes the monitor only — the trays never move. -->
         <USelect
           id="tmcut-preview-quality"
           :model-value="previewQuality"
@@ -1622,7 +1647,7 @@ onUnmounted(() => {
           @update:model-value="onQualityChange"
         />
 
-        <div v-if="activeVideoClip || previewEngine.capabilities.proxyPreview" class="flex items-center gap-1">
+        <div v-if="activeVideoClip || activeClipHasProxy" class="flex items-center gap-1">
           <UButton
             v-if="activeVideoClip"
             icon="i-lucide-crop"
@@ -1634,11 +1659,11 @@ onUnmounted(() => {
             @click="triggerCropTool"
           />
           <UButton
-            v-if="previewEngine.capabilities.proxyPreview"
+            v-if="activeClipHasProxy"
             :icon="proxyPreview ? 'i-lucide-zap' : 'i-lucide-zap-off'"
             size="xs"
             variant="soft"
-            :color="proxyPreview ? (isCurrentClipProxy ? 'warning' : 'primary') : 'neutral'"
+            :color="proxyPreview ? 'warning' : 'neutral'"
             :aria-label="proxyPreview ? t('tmcut.proxy.disable') : t('tmcut.proxy.enable')"
             :title="proxyPreview ? t('tmcut.proxy.disable') : t('tmcut.proxy.enable')"
             @click="proxyPreview = !proxyPreview"

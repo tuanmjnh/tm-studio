@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { tmcutHostBridge } from '~/utils/tmcut/hostBridge'
 import { useTmcutPlatform } from '~/composables/useTmcutPlatform'
-import { toURL } from '~/utils/ffmpegHelper'
+import { toURL } from '~/utils/tmcut/media'
 
 const props = defineProps<{
   filePath?: string

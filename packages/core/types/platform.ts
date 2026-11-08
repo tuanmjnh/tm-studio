@@ -6,9 +6,8 @@
 // Clock is NOT a host service: createClock() in tmcut-core owns the tick ->
 // frame math so every host agrees on frame boundaries.
 import type { FrameRate } from './dsl.js'
-import type { TmcutMediaMetadata } from './media.js'
 import type { TmcutMediaInfo, TmcutProbeHints } from './mediaInfo.js'
-import type { TmcutRenderEngine, TmcutRuntimeInfo } from './runtime.js'
+import type { TmcutRuntimeInfo } from './runtime.js'
 
 export type TmcutPlatformName = TmcutRuntimeInfo['name']
 export type TmcutPlatformInfo = TmcutRuntimeInfo
@@ -28,34 +27,20 @@ export interface TmcutClock {
 }
 
 /**
- * Stored locator -> playable URL, plus the read-only metadata questions.
+ * Stored locator -> playable URL, plus the one read-only metadata question.
  *
- * ADR-020: `probe` is required because both shipping hosts can answer it —
- * Electron through ffprobe, a browser tab through a metadata element. It asks
- * about a file and writes nothing: thumbnails, waveforms and the persisted
- * asset record stay with the host's asset pipeline (`analyzeAsset` on desktop),
- * which consumes the same core normalization rather than a second copy.
- *
- * `src` is the stored locator, and each host maps it the way it plays it: a
- * filesystem path for ffprobe, a URL for the media element. Null means "this
- * host could not read it" — a missing pipeline, an unreadable file, a document
- * without streams — and callers must keep their own fallback.
- *
- * Field trust differs per host: ffprobe reports every field, while a browser
- * reports duration and intrinsic size only, so a web probe leaves `fps` at 0
- * and infers `hasAudio` from the absence of a video track. That asymmetry is
- * exactly why `probeInfo` exists: one demuxing service answers both hosts, so
- * `probe` is the legacy shape the FFmpeg engine still feeds, and new callers
- * should ask `probeInfo` and read `durationSource` instead of a guessed zero.
+ * Zero-FFmpeg slice I deleted the ffprobe leg, so `probe` (the raw-JSON
+ * counterpart, answered by a host binary) is gone with it. `probeInfo` is the
+ * single answer on both hosts: one demuxing service, one set of warnings, and
+ * no second shape for a caller to prefer.
  */
 export interface TmcutPlatformMedia {
   resolveSrc(src?: string | null): string
-  probe(src: string): Promise<TmcutMediaMetadata | null>
   /**
    * The §4.1 answer for a stored locator: tracks, durations with their source,
-   * warnings, the compatibility report and the import status. Where `probe`
-   * answers "how long and how big", this answers "can this runtime really work
-   * with this file", and it is the reason the app needs no second probe.
+   * warnings, the compatibility report and the import status. It answers "how
+   * long and how big" and "can this runtime really work with this file" in one
+   * round-trip, which is why the app carries no second probe shape.
    *
    * `hints` carries facts the caller already holds (an asset record's byte size,
    * a MIME type from a picker) so the probe never asks for them again. A host
@@ -96,10 +81,14 @@ export interface TmcutPlatformCapture {
   supportsFps(fps: FrameRate): boolean
 }
 
-/** Everything the renderer needs from its host, behind one object. */
+/** Everything the renderer needs from its host, behind one object.
+ *
+ * There is no `encoder` here (zero-FFmpeg slice I): both hosts paint and encode
+ * in-process through the WebCodecs export session, so a host has no render job
+ * to queue and no path to poll.
+ */
 export interface TmcutPlatformAdapter {
   info: TmcutPlatformInfo
   media: TmcutPlatformMedia
   capture: TmcutPlatformCapture
-  encoder: TmcutRenderEngine
 }

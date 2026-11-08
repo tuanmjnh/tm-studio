@@ -214,20 +214,20 @@ describe('editor MCP bridge is initialized during setup (R148)', () => {
     const end = body.indexOf('\n})')
     const hook = body.slice(0, end === -1 ? body.length : end)
     assert.ok(!hook.includes('useMcpRendererBridge()'),
-      'after an await the instance context is gone: inject() warns and onBeforeUnmount(teardown) is dropped')
-    // The event-emitter wiring stays where it was — it needs the loaded project.
-    assert.ok(hook.includes('setMcpEventEmitter'), 'the export-queue event emitter must still be wired on mount')
+      'after an await the instance context is gone: onBeforeUnmount(teardown) is dropped and the IPC listener leaks')
+    // The hook still carries the work that needs a loaded project.
+    assert.ok(hook.includes('loadProject('), 'the editor still loads its project inside the mount hook')
   })
 
-  it('the bridge needs setup scope (inject + a real unmount hook) — the reason for the rule', () => {
+  it('the bridge needs setup scope (a real unmount hook) — the reason for the rule', () => {
     const bridge = read('app/composables/useMcpRendererBridge.ts')
-    // useTmcutExportQueue() injects the toast provider...
-    assert.ok(bridge.includes('useTmcutExportQueue()'), 'bridge builds the export queue (which injects)')
-    assert.ok(read('app/composables/useTmcutExportQueue.ts').includes('useToast()'),
-      'the export queue injects the toast provider — setup scope required')
-    // ...and teardown is registered through a lifecycle hook.
+    // The IPC subscription is torn down by a lifecycle hook, so the composable
+    // must run while an instance is active — slice I removed the export queue
+    // (and with it the toast injection), not the rule.
+    assert.ok(bridge.includes('bridge.mcp.onToolInvoke('), 'bridge subscribes to forwarded tool calls')
     assert.ok(bridge.includes('onBeforeUnmount('), 'bridge must register its own teardown')
     assert.ok(bridge.includes('teardown()'), 'that hook must call teardown')
+    assert.doesNotMatch(bridge, /useTmcutExportQueue/, 'the export queue left with the engine')
   })
 })
 
@@ -438,7 +438,7 @@ describe('editor dialogs live in their own dock', () => {
   })
 
   it('the dock renders every dialog the editor can open', () => {
-    const lazy = ['ExportModal', 'VoiceStudio', 'ExportQueueModal', 'AiScriptModal', 'AiEditor', 'AgentPanel', 'AudioOrchestrationModal']
+    const lazy = ['ExportModal', 'VoiceStudio', 'AiScriptModal', 'AiEditor', 'AgentPanel', 'AudioOrchestrationModal']
     for (const name of lazy) {
       assert.ok(overlays.includes(`<LazyTmcut${name} `), `Tmcut${name} must be rendered by the dock`)
     }

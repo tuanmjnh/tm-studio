@@ -24,15 +24,16 @@
  *    the source resolver that must ignore the playback proxy;
  *  - the timeline's two desktop pickers taking a clip's length from this
  *    service, which is how the ruler and the bin stop disagreeing;
- *  - rule 12 structurally: exactly two files in `app/` may open a container —
- *    one to describe it, one to draw a frame of it.
+ *  - rule 12 structurally: four services in `app/` may open a container — to
+ *    describe it, draw a frame of it, read its sound, or write a new one —
+ *    and no component reaches past them.
  *
  * Run: node node_modules/tsx/dist/cli.mjs --tsconfig tsconfig.test.json \
  *        tests/unit/tmcut_media_probe.spec.ts
  */
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 // Installs the Nuxt auto-import shims: importing the adapter reaches the store,
@@ -358,9 +359,21 @@ async function main() {
     // The contract carries the rich question, so a feature asks the host and
     // never a library.
     assert.match(read('packages/core/types/platform.ts'), /probeInfo\(src: string, hints\?: TmcutProbeHints\)/)
-    // The element probe stays only while FFmpeg still answers `probe`; §4
-    // replaces both, and a second MediaInfo collector would be the drift.
-    assert.doesNotMatch(read('app/utils/tmcut/webProbe.ts'), /buildMediaInfo|TmcutMediaInfo/)
+    // Slice I deleted the element probe (`webProbe.ts`) along with the ffprobe
+    // leg it mirrored, so this service is now the only MediaInfo collector on
+    // either host. A file that came back would be the second answer.
+    assert.ok(!existsSync(join(root, 'app/utils/tmcut/webProbe.ts')), 'the retired element probe must not come back')
+    const collectors: string[] = []
+    const walkCollectors = (dir: string) => {
+      for (const entry of readdirSync(join(root, dir), { withFileTypes: true })) {
+        const rel = `${dir}/${entry.name}`
+        if (entry.isDirectory()) walkCollectors(rel)
+        else if (/\.(ts|vue|mjs)$/.test(entry.name) && /\bbuildMediaInfo\(/.test(read(rel))) collectors.push(rel)
+      }
+    }
+    walkCollectors('app')
+    assert.deepEqual(collectors, ['app/utils/tmcut/mediaProbe.ts'],
+      'exactly one module turns demuxed facts into a TmcutMediaInfo')
     assert.match(read('package.json'), /"mediabunny"/, 'and the demuxer is a declared dependency')
   })
 

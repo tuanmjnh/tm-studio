@@ -12,7 +12,7 @@ import { useTmcutAi } from '~/composables/useTmcutAi'
 import { createAutocutDetect } from '~/utils/tmcut/autocutDetect'
 import { decodeLumaSeries, hasFrameDecoder } from '~/utils/tmcut/frameDecode'
 import { decodePcm } from '~/utils/tmcut/audioDecode'
-import { toURL } from '~/utils/ffmpegHelper'
+import { toURL } from '~/utils/tmcut/media'
 import {
   buildTriageSpans,
   triageSystemPrompt,

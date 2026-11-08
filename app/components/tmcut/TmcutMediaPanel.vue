@@ -38,7 +38,6 @@ const {
   isDesktop,
   byteCache,
   clearMediaByteCache,
-  generateProxy,
   importFiles,
   importWebFiles,
   removeAsset,
@@ -314,7 +313,7 @@ function handleAddTextPreset(preset: { text: string, fontSize: number, color: st
 // ===== Voiceover recording (roadmap D-4) =====
 // Mic button in the media bin header: getUserMedia + MediaRecorder
 // (web + desktop); the blob lands through the normal import pipeline
-// (desktop writes a real file via IPC — FFmpeg export needs paths).
+// (desktop writes a real file via IPC so the asset has a path to stat).
 async function handleVoiceoverToggle() {
   if (recordingVoiceover.value) {
     const result = await stopVoiceover()
@@ -447,57 +446,11 @@ function handleAddToTimeline(asset: TmcutAsset) {
   }
 }
 
-const unproxiedVideos = computed(() =>
-  projectAssets.value.filter(a => effectiveAssetKind(a) === 'video' && a.status === 'ready' && a.proxyStatus !== 'ready')
-)
-
-const batchProxyBusy = ref(false)
-
-async function handleGenerateAllProxies() {
-  if (batchProxyBusy.value || unproxiedVideos.value.length === 0) return
-  batchProxyBusy.value = true
-  let successCount = 0
-  const targets = [...unproxiedVideos.value]
-  for (const asset of targets) {
-    const ok = await generateProxy(asset)
-    if (ok) successCount++
-  }
-  batchProxyBusy.value = false
-  toast.add({
-    title: t('tmcut.proxy.allGenerated', { count: successCount }),
-    color: 'success'
-  })
-}
-
-async function handleProxyAction(asset: TmcutAsset) {
-  if (asset.proxyStatus === 'generating') return
-  if (asset.proxyStatus === 'ready') {
-    toast.add({
-      title: t('tmcut.proxy.ready'),
-      description: t('tmcut.proxy.readyDesc'),
-      color: 'success'
-    })
-    return
-  }
-  toast.add({
-    title: t('tmcut.proxy.generating'),
-    description: asset.name,
-    color: 'neutral'
-  })
-  const ok = await generateProxy(asset)
-  if (ok) {
-    toast.add({
-      title: t('tmcut.proxy.ready'),
-      description: t('tmcut.proxy.generated', { name: asset.name }),
-      color: 'success'
-    })
-  } else {
-    toast.add({
-      title: t('tmcut.proxy.failed', { name: asset.name }),
-      color: 'error'
-    })
-  }
-}
+// Proxy GENERATION is gone with the FFmpeg engine (zero-FFmpeg slice I): the
+// desktop channel and the Nitro route that re-encoded a 540p copy no longer
+// exist, so the two buttons that offered it are retired rather than left to
+// reject at runtime. An asset imported before slice I can still carry a ready
+// proxy file, and the PXY badge below keeps reporting that read-only fact.
 
 // Media card → timeline drag payload (Roadmap A4): click keeps appending
 // at the end, dragging lets the timeline place the clip at the drop
@@ -594,22 +547,6 @@ function showInFolder(filePath?: string) {
           color="neutral"
           :aria-label="t('tmcut.hotkeys.close')"
           @click="emit('close')"
-        />
-        <!-- Batch proxy button when video assets need proxies (roadmap
-             F-4). Web-parity: the local server runs the ffmpeg pass
-             (POST /api/v1/media/proxy), so it is no longer
-             desktop-only. -->
-        <UButton
-          v-if="unproxiedVideos.length > 0"
-          icon="i-lucide-zap"
-          size="xs"
-          variant="soft"
-          color="warning"
-          :loading="batchProxyBusy"
-          :disabled="batchProxyBusy"
-          :aria-label="t('tmcut.proxy.generateAll')"
-          :title="t('tmcut.proxy.generateAll')"
-          @click="handleGenerateAllProxies"
         />
         <UButton
           icon="i-lucide-plus"
@@ -942,7 +879,8 @@ function showInFolder(filePath?: string) {
               >
                 {{ t('tmcut.media.addedBadge') }}
               </span>
-              <!-- Proxy badge (roadmap F-4) -->
+              <!-- Proxy badge: read-only. Slice I removed the writers, so a
+                   ready proxy is only ever a file an earlier import made. -->
               <span
                 v-if="asset.proxyStatus === 'ready'"
                 class="absolute px-1 rounded bg-warning-500/90 text-[9px] font-bold text-black flex items-center gap-0.5"
@@ -950,14 +888,6 @@ function showInFolder(filePath?: string) {
                 :title="t('tmcut.proxy.readyDesc')"
               >
                 <UIcon name="i-lucide-zap" class="size-2.5 text-black" />
-                <span>PXY</span>
-              </span>
-              <span
-                v-else-if="asset.proxyStatus === 'generating'"
-                class="absolute px-1 rounded bg-warning-500/30 border border-warning-500/50 text-[9px] font-medium text-warning-200 flex items-center gap-0.5"
-                :class="isAssetOnTimeline(asset) ? 'top-4 left-0.5' : 'top-0.5 left-0.5'"
-              >
-                <UIcon name="i-lucide-loader-circle" class="size-2.5 animate-spin" />
                 <span>PXY</span>
               </span>
             </div>
@@ -1031,18 +961,6 @@ function showInFolder(filePath?: string) {
                 :title="t('tmcut.media.addToTimeline')"
                 class="pointer-events-none group-hover/thumb:pointer-events-auto"
                 @click.stop="handleAddToTimeline(asset)"
-              />
-              <UButton
-                v-if="isDesktop && assetKind(asset) === 'video' && asset.status !== 'missing'"
-                :icon="asset.proxyStatus === 'generating' ? 'i-lucide-loader-circle' : 'i-lucide-zap'"
-                size="xs"
-                variant="ghost"
-                :color="asset.proxyStatus === 'ready' ? 'warning' : 'neutral'"
-                :loading="asset.proxyStatus === 'generating'"
-                :aria-label="asset.proxyStatus === 'ready' ? t('tmcut.proxy.ready') : t('tmcut.proxy.generate')"
-                :title="asset.proxyStatus === 'ready' ? t('tmcut.proxy.ready') : t('tmcut.proxy.generate')"
-                class="pointer-events-none group-hover/thumb:pointer-events-auto"
-                @click.stop="handleProxyAction(asset)"
               />
               <UButton
                 icon="i-lucide-folder-input"
@@ -1175,18 +1093,6 @@ function showInFolder(filePath?: string) {
                   :title="t('tmcut.folders.moveToFolder')"
                   class="pointer-events-auto hidden @[530px]:flex"
                   @click.stop="openMoveAssetModal(asset)"
-                />
-                <UButton
-                  v-if="assetKind(asset) === 'video' && asset.status !== 'missing'"
-                  :icon="asset.proxyStatus === 'generating' ? 'i-lucide-loader-circle' : 'i-lucide-zap'"
-                  size="xs"
-                  variant="solid"
-                  :color="asset.proxyStatus === 'ready' ? 'warning' : 'neutral'"
-                  :loading="asset.proxyStatus === 'generating'"
-                  :aria-label="asset.proxyStatus === 'ready' ? t('tmcut.proxy.ready') : t('tmcut.proxy.generate')"
-                  :title="asset.proxyStatus === 'ready' ? t('tmcut.proxy.ready') : t('tmcut.proxy.generate')"
-                  class="pointer-events-auto"
-                  @click.stop="handleProxyAction(asset)"
                 />
                 <UButton
                   icon="i-lucide-trash"

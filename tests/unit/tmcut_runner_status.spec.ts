@@ -5,11 +5,15 @@
  *
  * Measured before this slice: `run-all.mts` decided PASS from `res.status === 0`
  * alone. Four pixel specs (`tmcut_render_parity`, `tmcut_text_pixel`,
- * `tmcut_golden_frame`, `tmcut_export_paint_stack`) already print a `SKIP` line
- * when no FFmpeg binary is on the box, exit 0, and the runner printed
+ * `tmcut_golden_frame`, `tmcut_export_paint_stack`) already printed a `SKIP`
+ * line when no FFmpeg binary is on the box, exit 0, and the runner printed
  * `PASS tmcut_render_parity.spec.ts` with an empty tail. On a host without
  * FFmpeg the suite would say "119/119 specs passed" having compared zero
- * pixels — the exact report this queue is built on.
+ * pixels — the exact report this queue is built on. Zero-FFmpeg slice I deleted
+ * those specs with the engine, and retired the last conditional binary leg
+ * (`tmcut_fx_catalog`'s `ffmpeg -h filter=xfade` comparison) because no resolver
+ * reads `TOOLS_FFMPEG_PATH` any more: the classification rule they motivated
+ * stays, and no spec in the tree may wait for a binary that cannot exist.
  *
  * The distinction that matters is not skip/no-skip, it is *how much* ran:
  *  - SKIP     — the spec bailed; nothing of it was measured.
@@ -32,9 +36,11 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 const source = (rel: string) => fs.readFileSync(path.join(here, '..', '..', rel), 'utf8')
 
 let failures = 0
+let passed = 0
 async function check(name: string, fn: () => void | Promise<void>): Promise<void> {
   try {
     await fn()
+    passed++
     console.log(`   ${name} PASSED`)
   } catch (error) {
     failures++
@@ -86,34 +92,43 @@ async function main(): Promise<void> {
     assert.doesNotMatch(runner, /const ok = res\.status === 0/, 'the old one-line decision is back')
   })
 
-  await check('every FFmpeg gate announces its skip out loud', () => {
-    // The complete set of specs that can bail on a missing binary or a missing
-    // system font. A gate that skips in silence is a PASS the suite did not earn.
-    for (const spec of [
-      'tmcut_render_parity',
-      'tmcut_text_pixel',
-      'tmcut_golden_frame',
-      'tmcut_export_paint_stack',
-      'tmcut_preview_export_pixel_parity',
-      'tmcut_export_gap_placement',
-      'tmcut_svg_still',
-      'tmcut_transition_preview',
-      'tmcut_fx_catalog'
-    ]) {
-      // The line must START with the word (after any leading newline), which is
-      // exactly what `specStatus` keys on.
-      assert.match(
-        source(`tests/unit/${spec}.spec.ts`),
-        /console\.log\(['"`](?:\\n)?SKIP/,
-        `${spec} no longer prints the line the runner classifies`)
-    }
+  await check('no spec gates on an FFmpeg binary any more', () => {
+    // Slice I deleted the binary and every resolver that could point at one:
+    // `TOOLS_FFMPEG_PATH` is read by no production config left in the tree, so a
+    // spec waiting for it can only ever print SKIP. A gate that cannot run on any
+    // supported host is not a gate — it is a permanent PARTIAL telling the reader
+    // a measurement is still pending when nothing will ever perform it.
+    // This spec names the variable in its own classifier fixtures and in the
+    // regex below, so it is excluded by name, not by shape. The pattern matches a
+    // *read* — `process.env.…` or the bundled-binary package — so a spec may still
+    // record in prose that the gate retired; what it may not do is wait for one.
+    const binaryGates = fs.readdirSync(path.join(here))
+      .filter(name => name.endsWith('.spec.ts') && name !== 'tmcut_runner_status.spec.ts')
+      .filter(name => /process\.env\.TOOLS_FFMPEG_PATH|imageio-ffmpeg/.test(fs.readFileSync(path.join(here, name), 'utf8')))
+      .sort()
+    assert.deepEqual(binaryGates, [],
+      'a spec gating on a deleted binary can only skip forever')
+  })
+
+  await check('the smoke mode is retired with the engines it rendered', () => {
+    // Slice I deleted the FFmpeg binary, `app/utils/tmcut/render` and the
+    // server's HTML-video renderer. The three opt-in smoke specs imported or
+    // spawned exactly those, so `--smoke` could only crash at import: a mode
+    // that cannot run is not a gate, and advertising one invites a green report
+    // nobody earned.
+    const runner = source('tests/unit/run-all.mts')
+    assert.doesNotMatch(runner, /--smoke/, 'the runner still advertises a mode whose specs cannot run')
+    const scripts = (JSON.parse(source('package.json')) as { scripts: Record<string, string> }).scripts
+    assert.equal(scripts['test:smoke'], undefined, 'and package.json still points at it')
+    const smoke = fs.readdirSync(here).filter(name => name.includes('smoke')).sort()
+    assert.deepEqual(smoke, [], 'a smoke spec for a deleted engine is a crash, not a measurement')
   })
 
   if (failures > 0) {
     console.error(`\n${failures} runner-status check(s) failed`)
     process.exit(1)
   }
-  console.log('\n=== All 6 runner-status checks passed ===')
+  console.log(`\n=== All ${passed} runner-status checks passed ===`)
 }
 
 void main()

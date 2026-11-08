@@ -3,13 +3,17 @@
  * (`pnpm test`). Each spec is a standalone script (they install
  * global shims and import the store as a module-level singleton, so one
  * process per spec keeps them independent). Every spec runs; the exit code is
- * non-zero if any of them FAILED. The FFmpeg smoke spec is opt-in via --smoke
- * because it renders real media.
+ * non-zero if any of them FAILED.
  *
- * Status comes from `specStatus`, not from the exit code alone: four pixel
- * specs print `SKIP …: no FFmpeg binary` and exit 0, and reporting those as
- * PASS is how a host without FFmpeg claims it compared frames. `passed` in the
- * summary counts PASS only; skips and partials are named.
+ * There is no opt-in smoke mode any more: slice I deleted the FFmpeg binary, the
+ * render graph compiler and the server's HTML-video renderer, so the three specs
+ * that mode ran could only crash at import. Real-media measurement now lives in
+ * the browser gates (WebCodecs encode, decoder frames), not in a spawned binary.
+ *
+ * Status comes from `specStatus`, not from the exit code alone: a spec can print
+ * `SKIP …` and exit 0, and reporting that as PASS is how a host without the
+ * thing being measured claims it measured it. `passed` in the summary counts
+ * PASS only; skips and partials are named.
  */
 import { readdirSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
@@ -21,10 +25,8 @@ const here = dirname(fileURLToPath(import.meta.url))
 const root = join(here, '..', '..')
 const unit = join(here)
 
-const includeSmoke = process.argv.includes('--smoke')
 const specs = readdirSync(unit)
   .filter(f => (f.startsWith('tmcut_') || f.startsWith('docs_')) && f.endsWith('.spec.ts'))
-  .filter(f => includeSmoke || !f.includes('smoke'))
   .sort()
 
 let failed = 0
@@ -52,5 +54,5 @@ for (const spec of specs) {
   if (status === 'FAIL') console.log((res.stdout || '') + (res.stderr || ''))
 }
 
-console.log(`\n${summarize({ passed, skipped, partial, failed, total: specs.length })}${includeSmoke ? '' : '  (smoke not run; run with --smoke)'}`)
+console.log(`\n${summarize({ passed, skipped, partial, failed, total: specs.length })}`)
 process.exit(failed === 0 ? 0 : 1)

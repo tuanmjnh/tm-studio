@@ -3,9 +3,8 @@ import { computed, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useTmcutProject, TMCUT_DEFAULT_FADE_SEC } from '~/composables/useTmcutProject'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
-import { useTmcutMedia } from '~/composables/useTmcutMedia'
 import { keyframeAt, setKeyframe, removeKeyframe, propsWithKeyframes, TICKS_PER_SECOND, secToTicks, ticksToSec, withSpeed, isRamped, buildRampPreset, SPEED_RAMP_PRESETS, EFFECT_REGISTRY, normalizeEffects, clampEffectParam, blendModeOf } from 'tmcut-core'
-import type { CoreBlendMode, TmcutTextAnimationType, TmcutStabilizeLevel } from 'tmcut-core'
+import type { CoreBlendMode, TmcutTextAnimationType } from 'tmcut-core'
 import { canvasFpsValue } from '~/utils/tmcut/canvas'
 import { clipDurationSec, clipDurationTicks, clipStartTicks } from '~/utils/tmcut/clipTime'
 import { applyMediaAnimPreset, effectDefaultParams, groupEffectsByCategory, registryEntries, humanizeKey, filterPresets, setLutPresetOnClip, activeLutPreset } from '~/utils/tmcut/fxLibrary'
@@ -13,8 +12,6 @@ import type { MediaAnimPreset } from '~/utils/tmcut/fxLibrary'
 import { tmcutHostIpc } from '~/utils/tmcut/hostBridge'
 
 const { t } = useI18n()
-const toast = useToast()
-const { isDesktop } = useTmcutMedia()
 const { selectedClip, selectedClipId, selectClip, updateClip, removeClip, pushHistory, pushHistoryCoalesced, isCropEditing, toggleCropEditing } = useTmcutProject()
 const { currentProject, contentDuration, saveStatus, lastSavedAt } = useTmcutProject()
 const { choices: fontChoices, ensureFonts, resolveFace } = useTmcutFonts()
@@ -305,93 +302,11 @@ const alignOptions = [
   { key: 'right', icon: 'i-lucide-align-right', title: 'alignRight' }
 ] as const
 
-// Video Stabilizer (Roadmap E-5)
-const stabilizeLevelOptions = computed(() => [
-  { label: t('tmcut.stabilize.mild'), value: 'mild' },
-  { label: t('tmcut.stabilize.medium'), value: 'medium' },
-  { label: t('tmcut.stabilize.aggressive'), value: 'aggressive' }
-])
-
-async function handleStabilizeToggle(enabled: boolean) {
-  if (!selectedClipId.value || !clip.value) return
-  pushHistory()
-  if (!enabled) {
-    updateClip(selectedClipId.value, {
-      stabilize: false
-    })
-    return
-  }
-  const currentLevel = clip.value.stabilizeLevel || 'medium'
-  updateClip(selectedClipId.value, {
-    stabilize: true,
-    stabilizeLevel: currentLevel
-  })
-  if (!clip.value.stabilizedPath || clip.value.stabilizeStatus !== 'ready') {
-    await runStabilization(currentLevel)
-  }
-}
-
-async function handleStabilizeLevelChange(level: TmcutStabilizeLevel) {
-  if (!selectedClipId.value || !clip.value) return
-  pushHistory()
-  updateClip(selectedClipId.value, {
-    stabilizeLevel: level,
-    stabilizeStatus: 'none',
-    stabilizedPath: null
-  })
-  await runStabilization(level)
-}
-
-async function runStabilization(forcedLevel?: TmcutStabilizeLevel) {
-  if (!selectedClipId.value || !clip.value || !clip.value.src) return
-  if (!isDesktop.value) return
-  const clipId = selectedClipId.value
-  const src = clip.value.src
-  const level = forcedLevel || clip.value.stabilizeLevel || 'medium'
-
-  const ipc = tmcutHostIpc()
-  if (!ipc) return
-  updateClip(clipId, {
-    stabilizeStatus: 'processing'
-  })
-
-  try {
-    const res = await ipc.stabilizeVideo({
-      filePath: src,
-      options: { level }
-    })
-    if (res.ok && res.path) {
-      updateClip(clipId, {
-        stabilizedPath: res.path,
-        stabilizeStatus: 'ready'
-      })
-      toast.add({
-        title: t('tmcut.stabilize.ready'),
-        description: t('tmcut.stabilize.readyDesc'),
-        color: 'success'
-      })
-    } else {
-      updateClip(clipId, {
-        stabilizeStatus: 'error'
-      })
-      toast.add({
-        title: t('tmcut.stabilize.error'),
-        description: res.error || 'Stabilization failed',
-        color: 'error'
-      })
-    }
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Stabilization failed'
-    updateClip(clipId, {
-      stabilizeStatus: 'error'
-    })
-    toast.add({
-      title: t('tmcut.stabilize.error'),
-      description: msg,
-      color: 'error'
-    })
-  }
-}
+// Video Stabilizer (roadmap E-5) retired with the FFmpeg engine: Q1 in
+// docs/adr/zero-ffmpeg-decisions.md decided the feature goes away rather than
+// being re-expressed, because vidstab's two-pass motion analysis has no
+// WebCodecs equivalent. Old projects keep their `stabilize` fields untouched;
+// the inspector no longer offers a control that cannot do anything.
 
 // Keyframes (roadmap B1): the ⏱ buttons toggle a keyframe of the
 // CURRENT field value at the playhead. Times are clip-local ticks
@@ -455,13 +370,11 @@ function handleBlendUpdate(value: string) {
   updateClip(id, { blend: value as CoreBlendMode })
 }
 
-// Desktop export renders keyframes (keyframeExpr in the render builders);
-// the tooltip spells out which channels so users can trust the label.
-const keyframesExportedHint = computed(() =>
-  isDesktop.value
-    ? t('tmcut.inspectorProps.keyframesExportedHintDesktop')
-    : t('tmcut.inspectorProps.keyframesExportedHintWeb')
-)
+// One hint for both hosts: slice I made export a single in-process WebCodecs
+// writer, so there is no "desktop renders it, browser only previews it" split
+// left to describe. Core's evaluator drives the preview; the export dialog
+// lists whatever this writer refuses to bake.
+const keyframesExportedHint = computed(() => t('tmcut.inspectorProps.keyframesExportedHint'))
 
 function hasKfAtPlayhead(prop: KfProp): boolean {
   return !!keyframeAt(clip.value, prop, clipLocalTicks.value)
@@ -1512,66 +1425,6 @@ const saveStateLabel = computed(() => {
       </template>
     </div>
 
-    <!-- Video Stabilizer (Roadmap E-5, desktop only) -->
-    <div v-if="currentTab === 'visual' && trackType === 'video' && isDesktop" class="space-y-3 pt-2 border-t border-default">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-1.5">
-          <UIcon name="i-lucide-activity" class="size-3.5 text-primary" />
-          <span class="font-semibold text-muted uppercase tracking-wider text-[10px]">
-            {{ t('tmcut.stabilize.title') }}
-          </span>
-        </div>
-        <USwitch
-          :model-value="!!clip.stabilize"
-          :aria-label="t('tmcut.stabilize.title')"
-          size="sm"
-          @update:model-value="handleStabilizeToggle"
-        />
-      </div>
-
-      <div v-if="clip.stabilize" class="space-y-2.5 p-2.5 rounded-lg flat-subpanel">
-        <div class="flex items-center justify-between text-[11px]">
-          <span class="text-muted">{{ t('tmcut.stabilize.level') }}</span>
-          <span v-if="clip.stabilizeStatus === 'ready'" class="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-medium">
-            <UIcon name="i-lucide-check-circle" class="size-3" />
-            {{ t('tmcut.stabilize.ready') }}
-          </span>
-          <span v-else-if="clip.stabilizeStatus === 'processing'" class="inline-flex items-center gap-1 text-[10px] text-warning-400 font-medium">
-            <UIcon name="i-lucide-loader-2" class="size-3 animate-spin" />
-            {{ t('tmcut.stabilize.processing') }}
-          </span>
-          <span v-else-if="clip.stabilizeStatus === 'error'" class="inline-flex items-center gap-1 text-[10px] text-error-400 font-medium">
-            <UIcon name="i-lucide-alert-circle" class="size-3" />
-            {{ t('tmcut.stabilize.error') }}
-          </span>
-        </div>
-
-        <USelect
-          :aria-label="t('tmcut.stabilize.level')"
-          :model-value="clip.stabilizeLevel || 'medium'"
-          :items="stabilizeLevelOptions"
-          :disabled="clip.stabilizeStatus === 'processing'"
-          size="xs"
-          class="w-full"
-          @update:model-value="handleStabilizeLevelChange($event as TmcutStabilizeLevel)"
-        />
-
-        <UButton
-          v-if="clip.stabilizeStatus !== 'ready' || !clip.stabilizedPath"
-          icon="i-lucide-play"
-          size="xs"
-          variant="soft"
-          color="primary"
-          block
-          :loading="clip.stabilizeStatus === 'processing'"
-          :disabled="clip.stabilizeStatus === 'processing'"
-          @click="runStabilization()"
-        >
-          {{ t('tmcut.stabilize.apply') }}
-        </UButton>
-      </div>
-    </div>
-
     <!-- Transform Settings (Video & Text) -->
     <div v-if="currentTab === 'visual' && trackType !== 'audio'" class="space-y-3 pt-2 border-t border-default">
       <div class="flex items-center justify-between mb-1">
@@ -1658,9 +1511,10 @@ const saveStateLabel = computed(() => {
       </div>
 
       <!-- Blend mode (mock #2 "Hòa trộn"): how a clip composites over the
-           track below it — the render pipeline maps it to FFmpeg blend
-           (R116); 'normal' keeps the classic overlay. Video clips only:
-           a text clip already composites via drawtext/overlay. -->
+           track below it. Core's `blendModeOf` owns the legal set (R116) and
+           the preview paints it as CSS mix-blend-mode; a WebCodecs export
+           refuses a non-normal blend by name ('blend') instead of dropping it.
+           Video clips only: a text clip composites through its own layer. -->
       <div v-if="trackType === 'video'">
         <span class="text-[10px] text-muted block mb-1">
           {{ t('tmcut.inspectorProps.blendMode') }}
@@ -1772,8 +1626,9 @@ const saveStateLabel = computed(() => {
           >
         </div>
         <!-- Color Temp (mock #2: "-12 (Lạnh)"): negative = cooler (blue),
-             positive = warmer (amber); export maps it to FFmpeg
-             colorbalance (core), preview approximates with sepia/hue. -->
+             positive = warmer (amber). It writes the `eq-grade` effect's
+             `temp` param: the preview approximates it with sepia/hue, and a
+             WebCodecs export refuses the graded clip by name ('effects'). -->
         <div>
           <div class="flex justify-between text-[10px] text-muted mb-1">
             <label for="tmcut-eq-colorTemp">{{ t('tmcut.inspectorProps.colorTemp') }}</label>
@@ -1870,12 +1725,6 @@ const saveStateLabel = computed(() => {
           >
             <UIcon name="i-lucide-sparkles" class="w-3 h-3" />
             {{ t('tmcut.inspectorProps.keyframesExported') }}
-          </span>
-          <span
-            v-if="!isDesktop"
-            class="text-[9px] leading-none rounded bg-warning-500/15 text-warning-600 dark:text-warning-300 px-1.5 py-0.5"
-          >
-            {{ t('tmcut.inspectorProps.webPreviewOnly') }}
           </span>
           <!-- Keyframe toggle: only for VIDEO clips — a timeline audio
                clip has no preview engine yet, so a keyframe there would
@@ -2052,10 +1901,10 @@ const saveStateLabel = computed(() => {
       </p>
     </div>
 
-    <!-- Effects Tab (Roadmap Phase E, C6 registry). Video only: these are
-         IMAGE effects (FFmpeg filter chains on the footage). Text has its own
-         export-true effect panel below instead of pretending a LUT can grade
-         drawtext glyphs. -->
+    <!-- Effects Tab (Roadmap Phase E, C6 registry). Video only: these grade
+         the footage itself — the preview paints them as CSS filters and a
+         WebCodecs export refuses them by name ('effects'). Text has its own
+         effect panel below instead of pretending a LUT can grade glyphs. -->
     <div v-if="currentTab === 'effects' && trackType === 'video'" class="space-y-4 pt-2 border-t border-default">
       <div class="flex items-center justify-between">
         <span class="font-semibold text-muted uppercase tracking-wider text-[10px]">

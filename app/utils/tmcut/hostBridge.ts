@@ -11,8 +11,8 @@
  *
  * What lives here and what does not:
  *  - This module is the **host bridge** — raw IPC reachability. Asking it is
- *    how code that genuinely calls a preload method (`tmcut.extractAudio`,
- *    `tools.ffmpeg.detectGpuSupport`) gets its handle.
+ *    how code that genuinely calls a preload method (`tmcut.statFiles`,
+ *    `tools.videoGeneration.submit`) gets its handle.
  *  - It is NOT the feature gate. "Can this host do X" belongs to
  *    `useTmcutPlatform()` (ADR-014), which negotiates capabilities once at
  *    startup; UI branches read `platform.info`, not the bridge.

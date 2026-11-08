@@ -47,11 +47,11 @@ Vì vậy register này dùng số tiếp theo của dãy đang chạy (028…03
 
 | ADR | Quyết định | Trạng thái code | Bị chặn bởi |
 |---|---|---|---|
-| ADR-028 | FFmpeg/FFprobe bị loại khỏi repo, build và dependency tree | **CHỜ** — engine vẫn là đường render duy nhất | slice I. Điều nó chờ ở H đã đổi hình từ lượt H3c: **file đầu tiên từ WebCodecs + Mediabunny đã tồn tại và đo được** (audit §52.5), thứ còn thiếu là consumer trong app |
+| ADR-028 | FFmpeg/FFprobe bị loại khỏi repo, build và dependency tree | **ĐÃ ÁP DỤNG** — slice I (2026-11-08, audit §54) cắt engine: **0** `.exe` tracked/working-tree, **0** FFmpeg trong `package.json` + lockfile, **0** runtime media spawn, **0** kênh IPC FFmpeg, 3 bảng DB ngừng tạo/truy cập (không DROP/DELETE). Còn **syntax** FFmpeg trong core (8 emitter + 2 parser) thuộc slice J — không spawn, không binary | slice J re-express emitter; engine không còn bị chặn |
 | ADR-029 | Mediabunny đảm nhận demux + mux, không phải "FFprobe clone" | **MỘT PHẦN** — leg probe đã code ở slice B, commit `1b57ca1`, và **đã có consumer** từ slice C1: verdict của nó là thứ quyết định `importStatus`/`status` của asset trong library (audit §16). Từ lượt H3b, leg mux **đã có dòng code đầu tiên**: `createEncodeSession` mở `Output` và hai `EncodedPacketSource` (audit §51). Từ lượt H3c, leg mux **có file thật**: mp4 28 305 byte đọc lại bằng chính `Input` của Mediabunny, hai track mỗi track 3,000 s, và bằng `<video>` của trình duyệt (audit §52.5) | H3d: consumer trong app (nút export → `renderAt` → session → tải file) |
 | ADR-030 | decode/encode qua WebCodecs, hỏi capability trước khi dùng | **MỘT PHẦN** — mỗi lượt H đóng băng thêm một tầng thành luật ở core; số đo ở §48–§52. H1: **luật** của leg encode (preset đến từ câu trả lời đã ghi — `unmeasured` ≠ `supported`, runtime đổi codec là `substituted` = thất bại; timestamp từ index × FPS hữu tỉ, không từ `canvasFpsValue`; bound in-flight ≠ 0). H2: **câu hỏi** cũng là luật (`planEncodePresets`: level theo Annex A, container theo codec family, cả hai spelling AAC) + ma trận encode **đo thật** trên Chrome 156. H3a: **đồng hồ audio** là luật (packet theo số sample, duration là hiệu hai vị trí, packet cuối mang phần còn lại). H3b: seam `createEncodeSession` chạy cả hai đồng hồ. H3c: **encoder thật nhận sample thật và file thật đã ra**, và vì số đo mà ba chỗ phải sửa — chunk audio khớp theo `ordinal`, không theo timestamp (`AudioEncoder` tự sinh clock, §52.2), `AUDIO_PACKET_FRAMES` là **cỡ frame của chính encoder** (§52.1), AAC **không flush nổi** trên một packet, sàn 2 hand (§52.1). Phần còn lại: **chưa ai dùng trong app**, không phải "chưa ai chạy". Hai điều vẫn mở: `hardwareAcceleration` không phân biệt mềm/cứng trên máy này nên **hardware H.264 chưa chứng minh**; runtime nhận config mà Annex A cấm (§49.5) nên `supported: true` ≠ "file hợp pháp". | slice H (leg encode + mux), còn mỗi consumer |
 | ADR-031 | một timeline evaluator + một composition model cho hai host | **ĐÃ ÁP DỤNG** — `evaluateTimeline`, `renderAt`, `createFrameScheduler`, `paintStack`. Từ lượt H3d, exporter có thêm **luật nội dung** và **luật chữ nhật plate** (`planEncodeContent`, `planEncodePlate`, audit §53): cả hai **không** viết lại quy tắc nào, mà đọc qua đúng `selectFileRows` / `blendModeOf` / `normalizeMask` / `resolveClipLayout` / `isTrackMuted` / `createFrameScheduler` — chỗ thứ hai tự phân loại là chỗ thứ hai có cơ chế lệch | slice J phải trả nốt phần core đang in văn bản FFmpeg |
-| ADR-032 | Electron là shell, không sở hữu media engine thứ hai | **MỘT PHẦN** — engine HTML-video thứ hai đã xoá (ADR-023); engine FFmpeg desktop còn tới slice I. Slice C1 cộng thêm một bằng chứng "một service cho hai host": nhánh desktop và nhánh web của `analyzeAsset` cùng đi qua một verdict table (audit §16.2) | slice I |
+| ADR-032 | Electron là shell, không sở hữu media engine thứ hai | **ĐÃ ÁP DỤNG** — engine HTML-video thứ hai đã xoá (ADR-023); engine FFmpeg desktop đã cắt ở slice I (audit §54: `ffmpeg.controller.cjs` gone, 0 media spawn, desktop đọc `packages/core/src`). Một service cho hai host: nhánh desktop và web của `analyzeAsset` cùng đi qua một verdict table (audit §16.2) | không còn — engine thứ hai đã chết |
 | ADR-033 | media đi trong máy mặc định; rời máy là một lựa chọn hiển thị | **CHỜ** — web host vẫn stream file đã chọn lên server (`server/api/v1/media/upload.post.ts`), và **upload vẫn bắt buộc**. C1 dựng **điều kiện** (fingerprint dẫn xuất từ path + revision, audit §16.2); C2 dựng **chữ** cho cùng điều kiện đó (`isMediaOffline` + plate Media Offline trên ba bề mặt, §17); C2b dựng **cache vật lý** (`byteCache.mjs` luật + `byteStore.ts` OPFS/IndexedDB, ghi khi import/relink, đối chiếu khi mở library, §18). **Đường đọc giờ có bốn leg**: pixels (§20/D2), silence (§33/E4), waveform (§44/G2 — artifact đọc lại sau reload mà không chạm file), và **playback** (**G4b**, đo 2026-11-06, §47: `app/utils/tmcut/playbackBytes.ts` + `useTmcutPlaybackBytes.ts` thay stream URL bằng `blob:` dựng từ byte cache, luật từ chối vẫn nằm ở core). G3 và G4a không đổi mục này — chúng đổi **mức** (§45) và **thời gian** (§46), không đổi nguồn bytes. Vế **export** đã đóng (§53.12). Còn mở: `currentSrc` của element mà editor mount cùng console sweep năm route cần một session đăng nhập mà tôi không cầm credentials (§47.6). ADR-033 vì thế vẫn **CHỜ**: code đã ship, đường đọc playback đã đo trên origin `:4003` với store thật, còn thiếu phép đo trên element mount thật. | G #140 / H |
 
 ---
@@ -84,7 +84,7 @@ hoặc tách thành một phase riêng — không quay lại FFmpeg.
 ## 3. ADR-029 — Mediabunny là toolkit demux/mux, không phải FFprobe thứ hai
 
 **Bối cảnh.** Plan §3.1 chọn Mediabunny và cảnh báo rõ: nó nằm trong phạm vi API/format nó hỗ trợ, không phải một bản FFprobe đầy đủ.
-Probe cũ của web trả `fps: 0` khi không đo được ([app/utils/tmcut/webProbe.ts:34](file:///D:/Applications/tm-studio/app/utils/tmcut/webProbe.ts#L34)) —
+Probe cũ của web trả `fps: 0` khi không đo được (`app/utils/tmcut/webProbe.ts:34` lúc đó — file đã bị xóa ở slice I) —
 audit §5.2 chỉ ra rằng dùng `0` làm sentinel là đúng cái plan §4.3 cấm: một con số có vẻ hợp lệ thay cho "không biết".
 
 **Quyết định.** Cài `mediabunny@1.65.1` (license MPL-2.0, hai runtime dependency đều là type-only — đã xác minh ngày 2026-11-03, audit §6)
@@ -417,3 +417,20 @@ spawn**" — cũng đã có guard riêng (§53.13, `tmcut_export_process_census.
 không `child_process`/`spawn`/`exec` nào trong đó, không chạm được `ffmpegHelper`/`render/`/`hostBridge`, và nhánh web của
 modal `return` trước `enqueueJob`. "0 spawn" ở đây là 0 trong **đồ thị module của lần xuất trình duyệt**, không phải phép
 đếm tiến trình thật trên máy — dòng đó vẫn mở.)*
+
+*(**đo ngày 2026-11-08, audit §54 — slice I cắt engine**: điều ADR-028 chờ ở H đã xong, nên lượt này **cắt** engine FFmpeg
+khỏi repo/build/runtime thay vì xây thêm. Đo trên cây sẽ commit (HEAD `b0d0c44`): **118 file, +1807/−18098**; **0** `.exe`
+tracked lẫn working-tree, `resources/*.exe` (471 MiB) gone, **0** FFmpeg trong `package.json`+`pnpm-lock.yaml`; **0** runtime
+media spawn, **0** kênh IPC FFmpeg (namespace `tools:ffmpeg:*` + `tmcut:renderDone` + task-manager đã gỡ); 3 bảng
+`ffmpeg_configs`/`ffmpeg_batch_configs`/`ffmpeg_history` ngừng tạo/truy cập bằng **pure deletion** — không DROP/DELETE nên
+dữ liệu cũ trên đĩa còn nguyên, không mất project. `child_process` trong electron/+server/ chỉ còn 2 file không-media
+(`main.cjs` spawn MCP server, `paths.cjs` probe `yt-dlp --version`); updater hết `extractZip`/`execFile`. **ADR-028 và
+ADR-032 chuyển ĐÃ ÁP DỤNG** ở bảng trên. Gate: typecheck exit 0/0 `error TS`, core **957/957** + boundaries PASS, suite
+**124/124**, electron **59/59** (13 suite); lint **0 error trên dòng chạm** (104 problem là nợ cũ owner trên dòng không đổi,
+không `--fix` repo-wide). Suite bắt một regression thật — `extractFrame` snapshot rò slot vì dùng leg `request` giữ slot
+vĩnh viễn — đã sửa bằng `requestFrameBatch` một phần tử, không nới assertion (§54.6). Gate binary cuối nghỉ hưu có mutation
+chứng minh (§54.5). **ADR-033 vẫn CHỜ**: slice I giữ Storage Upload API thuần (brief cấm xoá) nên upload vẫn bắt buộc, và
+`currentSrc` của element editor mount vẫn cần session đăng nhập mà tôi không cầm credentials. **Còn nợ**: slice J re-express
+8 emitter + 2 parser core còn in **syntax** FFmpeg (không spawn, không binary); slice K archive docs + parity bản đóng gói;
+gate 4 live BLOCKED trên bốn route authed (chỉ `/login` quét sạch). Backup `ffmpeg-engine-2026-11-03/` (76 file, 0 exe) giữ
+untracked theo Q8, không xoá bằng `git clean`.)*

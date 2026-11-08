@@ -16,7 +16,6 @@ const {
   customCanvas,
   saveSnapshot
 } = useTmcutEditorDialogs()
-const { queueModalOpen } = useTmcutExportQueue()
 const {
   currentProject,
   snapshots,
@@ -69,9 +68,6 @@ async function handleDeleteSnapshot(ts: number) {
   <!-- Export Modal -->
   <LazyTmcutExportModal v-model:open="showExportModal" />
   <LazyTmcutVoiceStudio v-model:open="voiceStudioOpen" />
-
-  <!-- Export Queue Modal -->
-  <LazyTmcutExportQueueModal v-model:open="queueModalOpen" />
 
   <!-- Custom Canvas Modal -->
   <UModal v-model:open="showCustomCanvasModal" :title="t('tmcut.canvas.customTitle')">

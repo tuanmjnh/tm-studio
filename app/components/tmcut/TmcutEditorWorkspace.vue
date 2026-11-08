@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useTmcutProject } from '~/composables/useTmcutProject'
-import { useTmcutMedia } from '~/composables/useTmcutMedia'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { useTmcutEditorLayout } from '~/composables/useTmcutEditorLayout'
 import { useTmcutEditorDialogs } from '~/composables/useTmcutEditorDialogs'
@@ -22,19 +21,16 @@ const {
   applyRecovery,
   dismissRecovery
 } = useTmcutProject()
-const { isDesktop } = useTmcutMedia()
 const { formatTimecode } = useTmcutPlayback()
 const { layoutVars, timelineHeight, hydrateLayout } = useTmcutEditorLayout()
 const { showExportModal, voiceStudioOpen } = useTmcutEditorDialogs()
 const { statusCanvasLabel } = useTmcutEditorCanvas()
 
-// WebGPU availability is really detectable; the engine side names the
-// export backend (FFmpeg on desktop, preview-only on the web).
+// WebGPU availability is really detectable. The export backend is not a
+// host split any more: zero-FFmpeg slice I deleted the desktop binary, so
+// both hosts encode in-process with WebCodecs and the footer says so.
 const hasWebGPU = ref(false)
-const hardwareLabel = computed(() => {
-  const gpu = hasWebGPU.value ? 'WebGPU' : 'WebGL'
-  return `${gpu} · ${isDesktop.value ? 'FFmpeg' : t('tmcut.workspace.previewOnly')}`
-})
+const hardwareLabel = computed(() => `${hasWebGPU.value ? 'WebGPU' : 'WebGL'} · WebCodecs`)
 
 const clipCount = computed(() => (
   (currentProject.value?.timeline?.tracks || [])

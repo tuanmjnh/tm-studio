@@ -523,16 +523,16 @@ const TRANSITION_PREVIEW: Record<string, FxTransitionPreview> = {
   'vdslice': { primitive: 'slice', axis: 'y' },
   'vuslice': { primitive: 'slice', axis: 'y', reverse: true },
   // `axis` is the axis the FRONT travels along, the same variable core calls
-  // `travel`, and both come from the band geometry the bundled FFmpeg renders —
-  // never from the key name. `squeezeh` opens at the top and bottom edges and
+  // `travel`, and both come from band geometry measured on the retired FFmpeg
+  // build — never from the key name. `squeezeh` opens at the top and bottom edges and
   // `horzopen`/`horzclose` cut a horizontal band, so all three are 'y' here even
   // though their names say otherwise. The `*slice` keys are combs: the teeth vary
   // along the axis the front travels, so `hlslice`/`hrslice` cut vertical teeth on
   // 'x' and `vdslice`/`vuslice` horizontal teeth on 'y' — core's `from` names the
   // edge the fill reaches first, and `tmcut_fx_preview` pins the two against pixels.
-  // Guard: `tmcut_fx_preview` pins this table
-  // against `XFADE_PREVIEW.travel`, and `tmcut_transition_preview` pins `travel`
-  // against pixels.
+  // Guard: `tmcut_fx_preview` pins this table against `XFADE_PREVIEW.travel`.
+  // The spec that pinned `travel` against rendered pixels retired with the
+  // binary it compared against (slice I); core's registry is the law now.
   'squeezeh': { primitive: 'squeeze', axis: 'y' },
   'squeezev': { primitive: 'squeeze', axis: 'x' },
   'horzopen': { primitive: 'band', axis: 'y' },
@@ -551,7 +551,7 @@ function reveal(spec: FxTransitionPreview): CSSProperties {
   const anim = (name: string): CSSProperties => ({ animation: `${name} var(--tmfx-dur) ease-in-out infinite` })
   const withMask = (direction: 'x' | 'y', travel: string, bands = false): CSSProperties => {
     // The striped mask is twice the card wide, so one tooth is 5% of the gradient
-    // line: ten teeth across the card, which is the period FFmpeg measures.
+    // line: ten teeth across the card, the period measured on the retired binary.
     const image = bands
       ? (direction === 'x'
           ? 'repeating-linear-gradient(to right, #000 0 2.5%, transparent 2.5% 5%)'
@@ -840,9 +840,8 @@ export function effectOverlay(type: string, params: Record<string, unknown> = {}
 }
 
 /**
- * One layer's plates, in its effect-chain order — the same order
- * `buildFfmpegEffectFilters` hands the file, so a row with letterbox bars under
- * a vignette shows bars under a vignette here too.
+ * One layer's plates, in the order the clip stores its effect chain, so a row
+ * with letterbox bars under a vignette shows bars under a vignette here too.
  */
 export function layerOverlayPlates(effects: readonly { type: string, params?: Record<string, unknown> }[] | null | undefined): CSSProperties[] {
   const plates: CSSProperties[] = []

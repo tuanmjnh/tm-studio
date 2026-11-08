@@ -14,7 +14,7 @@
  *        tests/unit/tmcut_host_bridge.spec.ts
  */
 import assert from 'node:assert/strict'
-import { readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -119,7 +119,7 @@ async function main() {
       'app/components/tmcut/TmcutMarketplace.vue': 'platform.info.capabilities.filesystem === true',
       'app/components/tmcut/TmcutVoiceStudioBody.vue': 'platform.info.name === \'electron\'',
       'app/components/tools/VideoPreviewModal.vue': 'platform.info.name === \'electron\'',
-      'app/components/tmcut/TmcutExportModal.vue': 'platform.info.capabilities.filesystem === true'
+      'app/components/tmcut/TmcutExportModal.vue': 'platform.info.name === \'electron\''
     }
     for (const [rel, needle] of Object.entries(gated)) {
       const src = sourceOf(rel)
@@ -130,11 +130,11 @@ async function main() {
     }
   })
 
-  // 7. The composable that threw outside a browser is guarded at the source.
-  await check('the task manager no longer touches window directly', () => {
-    const src = sourceOf('app/composables/useToolTaskManager.ts')
-    assert.ok(src.includes('tmcutHostBridge()?.tools?.[kind]'), 'namespace lookup must go through the accessor')
-    assert.doesNotMatch(src, /typeof window|window\./, 'no bare window read should be left in the module')
+  // 7. The task-manager composable was the FFmpeg queue’s window reader; slice I
+  //    deleted it with the engine, so the guard it needed is no longer a file.
+  await check('the desktop-only window readers left with the engine', () => {
+    assert.equal(existsSync(join(root, 'app/composables/useToolTaskManager.ts')), false)
+    assert.equal(existsSync(join(root, 'app/composables/useTmcutExportQueue.ts')), false)
   })
 
   // 8. The adapter factory negotiates the host from the accessor, and it does

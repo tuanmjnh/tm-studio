@@ -6,13 +6,16 @@
  * that answer — and its crossfade leg still read `.find(type === 'video')`,
  * i.e. row 0 whatever the user had hidden there. Two questions with two
  * answers is exactly the bug class #87 closed, so these checks drive the real
- * composable and the real compiler over the real store and require one row.
+ * composable and the real store and require one row.
  *
- * They also pin where the two surfaces still differ, which is no longer a row
- * question. Both stack every visible footage row in core's paint order, so the
- * banner cannot point at a missing row any more. What is left is per-layer
- * effect plates: the monitor's vignette is frame-wide where the file bakes it
- * into its own layer (slice F4). The banner says that, and nothing else.
+ * Slice I deleted the FFmpeg compiler, so the second surface here is no longer
+ * a command line: it is core's `selectFileRows`, the answer the remaining
+ * exporter reads. The parity claim is unchanged in kind — the screen and the
+ * file must take the same row, and hiding a row must move both.
+ *
+ * What the banner promises is pinned too: both surfaces stack every visible
+ * footage row in core's paint order, so the copy may not describe a
+ * single-row renderer.
  *
  * Run: node node_modules/tsx/dist/cli.mjs --tsconfig tsconfig.test.json \
  *        tests/unit/tmcut_footage_row_rule.spec.ts
@@ -21,9 +24,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { selectFileRows } from 'tmcut-core'
 import { TICKS, freshStore } from './helpers/tmcut_store_env'
-import { selectExportTracks } from '../../app/utils/tmcut/render/clip'
-import { compileTimelineToFfmpeg } from '../../app/utils/tmcut/compiler'
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..')
 const read = (rel: string) => readFileSync(join(root, rel), 'utf8')
@@ -34,15 +36,6 @@ async function check(label: string, fn: () => void | Promise<void>) {
   await fn()
   passed++
   console.log(`   ${label} PASSED`)
-}
-
-/** Every `-i` argument of the emitted command line: the footage the file decodes. */
-function decodedSrcs(args: string[]): string[] {
-  const out: string[] = []
-  for (let index = 0; index < args.length; index++) {
-    if (args[index] === '-i') out.push(String(args[index + 1]))
-  }
-  return out
 }
 
 async function main() {
@@ -75,23 +68,18 @@ async function main() {
   const painted = (p: ReturnType<typeof useTmcutPlayback>) => p.activeVideoClip.value?.clip?.src ?? null
 
   // 1. One row, two surfaces: the row the preview paints is the BASE of the
-  // stack, and the file decodes the rows above it as well — overlaid, not
+  // stack, and the file reads the rows above it as well — stacked, not
   // concatenated after it.
   await check('the screen and the file take the same footage row', async () => {
     const { s, top } = await twoRows()
     const project = s.currentProject.value!
     const p = useTmcutPlayback()
     p.seek(1)
-    assert.equal(selectExportTracks(project).videoBase?.id, top.id, 'the base row is the top visible row')
+    assert.equal(selectFileRows(project).base?.trackId, top.id, 'the base row is the top visible row')
     assert.equal(painted(p), 'top.mp4', 'the canvas shows that row')
-    const compiled = compileTimelineToFfmpeg(project, 'out.mp4')
-    const srcs = decodedSrcs(compiled.args)
-    assert.ok(srcs.some(src => src.includes('top.mp4')), `the file decodes the base row, got ${srcs}`)
-    assert.ok(srcs.some(src => src.includes('bottom.mp4')),
-      `the row above the base is stacked into the file, got ${srcs}`)
-    const graph = compiled.args[compiled.args.indexOf('-filter_complex') + 1]!
-    assert.match(graph, /overlay=enable='gte\(t,0\)\*lt\(t,4\)'/,
-      'and it is overlaid on its own window, not concatenated after the base')
+    assert.deepEqual(selectFileRows(project).rows.map(row => row.trackId), [top.id, selectFileRows(project).rows[1]?.trackId],
+      'the row above the base is still in the file stack')
+    assert.equal(selectFileRows(project).stacked.length, 1, 'and it is stacked, not concatenated')
   })
 
   // 2. Hiding the top row moves BOTH answers down one row — hidden is hidden
@@ -102,11 +90,10 @@ async function main() {
     const project = s.currentProject.value!
     const p = useTmcutPlayback()
     p.seek(1)
-    assert.equal(selectExportTracks(project).videoBase?.id, bottom.id, 'the export follows the hide')
+    assert.equal(selectFileRows(project).base?.trackId, bottom.id, 'the export follows the hide')
     assert.equal(painted(p), 'bottom.mp4', 'the preview follows the hide')
-    const srcs = decodedSrcs(compileTimelineToFfmpeg(project, 'out.mp4').args)
-    assert.ok(srcs.some(src => src.includes('bottom.mp4')) && !srcs.some(src => src.includes('top.mp4')),
-      `the hidden row leaves the command line, got ${srcs}`)
+    assert.deepEqual(selectFileRows(project).rows.map(row => row.trackId), [bottom.id],
+      'the hidden row leaves the file stack')
   })
 
   // 3. The crossfade leg used to ask its own question with `.find()`: it read
@@ -139,23 +126,25 @@ async function main() {
     assert.equal(painted(p), 'bottom.mp4', 'the row below still paints its own clip')
   })
 
-  // 5. Neither surface may decide the cut alone: the file decodes the painting
-  // row's pair, and the preview agrees that this particular cut crossfades.
+  // 5. Neither surface may decide the cut alone: the file stack names the
+  // painting row's pair, and the preview agrees that this particular cut
+  // crossfades.
   await check('the transition windows come from the row that paints', async () => {
-    const { s, top } = await twoRows('bottom')
+    const { s, top, bottom } = await twoRows('bottom')
     s.toggleTrackHidden(top.id)
     const project = s.currentProject.value!
     const p = useTmcutPlayback()
     p.seek(3.75)
-    const srcs = decodedSrcs(compileTimelineToFfmpeg(project, 'out.mp4').args)
-    assert.ok(srcs.some(src => src.includes('bottom.mp4')) && srcs.some(src => src.includes('joint.mp4')),
-      `the file decodes the painting row's pair, got ${srcs}`)
+    const rows = selectFileRows(project)
+    assert.deepEqual(rows.rows.map(row => row.trackId), [bottom.id], 'the file reads only the painting row')
+    const fileClips = project.timeline.tracks.find(track => track.id === bottom.id)!.items!.map(item => item.src)
+    assert.ok(fileClips.includes('bottom.mp4') && fileClips.includes('joint.mp4'),
+      `the file volume holds the painting row's pair, got ${fileClips}`)
     assert.ok(p.transitionCrossfade.value, 'the preview must agree that this cut crossfades')
   })
 
   // 6. The banner names what the file does, and it may no longer promise a
-  // single-row screen: since slice F2b the monitor paints the same stack, and
-  // `tmcut_preview_stack_dom` owns the wording of that half.
+  // single-row screen: since slice F2b the monitor paints the same stack.
   await check('the warning says the file stacks and never claims the screen does not', async () => {
     for (const locale of ['en', 'vi']) {
       const copy = read(`i18n/locales/${locale}.json`)
@@ -173,8 +162,8 @@ async function main() {
     const modal = read('app/components/tmcut/TmcutExportModal.vue')
     assert.doesNotMatch(modal, /tracks\.find\(\s*tr\s*=>\s*tr\.type === 'video'\s*\)/,
       'the modal must not pick a footage row by itself')
-    assert.match(modal, /posterUrl[\s\S]{0,400}selectExportTracks/,
-      'the poster reads the same selector the compiler uses')
+    assert.match(modal, /selectFileRows\(/, 'the poster reads the same selector the file reads')
+    assert.doesNotMatch(modal, /selectExportTracks/, 'the retired selector is not coming back')
   })
 
   console.log(`\n=== All ${passed} footage row rule checks passed ===`)

@@ -2,39 +2,35 @@
  * The server/ storage boundary (owner decision Q4, 2026-11-04).
  *
  * The Nitro server is a byte store and nothing else: it persists what the
- * browser hands it and streams it back. Everything that shells out to a media
- * binary sits on one frozen list and is marked ZERO-FFMPEG-LEGACY, because
- * slice I of the zero-FFmpeg audit (docs/audit/zero-ffmpeg-audit.md) deletes the binary those files
- * spawn. The list is allowed to shrink as slices C..H land browser
- * replacements; it is not allowed to grow, and a file cannot spawn without
- * saying which slice kills it.
+ * browser hands it and streams it back. Slice I of the zero-FFmpeg audit
+ * (docs/audit/zero-ffmpeg-audit.md) deleted the binary, so the four routes
+ * that used to spawn it — analyze, proxy, render and the HTML-video renderer —
+ * are gone. This spec pins that state instead of a frozen list, because the
+ * list reached its end: the set of spawning server files is now empty, and an
+ * empty set is only meaningful if something fails when a file joins it.
  *
  * Two specs already cover other angles of the same surface: tmcut_web_upload
  * pins the upload helpers and their wiring, tmcut_platform_adapter pins who
- * calls the render route. This one pins the boundary itself, so a future
- * commit cannot quietly add server-side media processing back.
+ * calls the render route (nobody). This one pins the boundary itself, so a
+ * future commit cannot quietly add server-side media processing back.
  */
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8')
 
-/** Files that import a process spawner. The whole server-side media engine. */
-const SPAWN_SITES = [
+/** Every server route and util slice I deleted. A reappearance is the regression. */
+const RETIRED = [
   'server/api/v1/media/analyze.post.ts',
   'server/api/v1/media/proxy.post.ts',
   'server/api/v1/media/render.post.ts',
-  'server/utils/htmlVideoRender.ts'
-]
-
-/** Spawn sites plus the job registry and poller that only serve them. */
-const LEGACY_MARKED = [
-  ...SPAWN_SITES,
   'server/api/v1/media/render/[jobId].get.ts',
+  'server/api/v1/media/html-video.post.ts',
+  'server/utils/htmlVideoRender.ts',
   'server/utils/renderJobs.ts'
 ]
 
@@ -50,25 +46,23 @@ function serverSources(dir = 'server'): string[] {
   for (const entry of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
     const rel = `${dir}/${entry.name}`
     if (entry.isDirectory()) out.push(...serverSources(rel))
-    else if (/\.(ts|mts|cts|js|mjs|cjs)$/.test(entry.name) && statSync(join(ROOT, rel)).isFile()) out.push(rel)
+    else if (/\.(ts|mts|cts|js|mjs|cjs)$/.test(entry.name)) out.push(rel)
   }
   return out
 }
 
 describe('server media boundary', () => {
-  it('spawns a process in exactly the frozen legacy sites', () => {
+  it('no server file spawns a process at all', () => {
     const found = serverSources()
       .filter(rel => /from ['"]node:child_process['"]/.test(read(rel)))
       .sort()
-    assert.deepEqual(found, [...SPAWN_SITES].sort(), `spawner set changed: ${JSON.stringify(found)}`)
+    assert.deepEqual(found, [],
+      `the server is a byte store: these files spawn a process — ${found.join(', ')}`)
   })
 
-  it('names the slice that deletes each legacy site', () => {
-    for (const rel of LEGACY_MARKED) {
-      const head = read(rel).split('\n').slice(0, 20).join('\n')
-      assert.match(head, /ZERO-FFMPEG-LEGACY/, `${rel} must declare itself legacy in its header`)
-      assert.match(head, /slice I/, `${rel} must name the slice that removes it`)
-    }
+  it('the retired media routes stay retired', () => {
+    const back = RETIRED.filter(rel => existsSync(join(ROOT, rel)))
+    assert.deepEqual(back, [], `these media routes came back: ${back.join(', ')}`)
   })
 
   it('keeps the storage files free of any media-processing entrypoint', () => {
@@ -77,6 +71,7 @@ describe('server media boundary', () => {
       assert.doesNotMatch(src, /node:child_process/, `${rel} may not spawn`)
       assert.doesNotMatch(src, /\bspawn\s*\(/, `${rel} may not spawn`)
       assert.doesNotMatch(src, /tools\.(ffmpeg|ffprobe)Path/, `${rel} may not read a binary path`)
+      assert.doesNotMatch(src, /ffmpeg|ffprobe/gi, `${rel} names a retired binary`)
     }
   })
 

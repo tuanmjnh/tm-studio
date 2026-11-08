@@ -51,7 +51,6 @@ const {
 
 const { canvasLabel, canvasMenuItems, handleDuplicateAs } = useTmcutEditorCanvas()
 
-const { activeJobsCount, queueModalOpen } = useTmcutExportQueue()
 const toast = useToast()
 
 // MCP renderer bridge (Phase 6: forwarded tool calls + job-status events).
@@ -85,17 +84,6 @@ onMounted(async () => {
   loadLibrary()
   checkMissing()
   loadSnapshots()
-
-  // Connect the export queue's event emitter to the MCP renderer bridge
-  // (the bridge itself is initialized during setup — see the composable
-  // block at the top of this file).
-  const { setMcpEventEmitter } = await import('~/composables/useTmcutExportQueue')
-  setMcpEventEmitter((event) => {
-    const bridge = tmcutHostBridge()
-    if (bridge?.mcp?.respond) {
-      bridge.mcp.respond(event.payload.requestId || '', event)
-    }
-  })
 })
 
 onUnmounted(() => {
@@ -300,12 +288,10 @@ function handleEditorKeydown(e: KeyboardEvent) {
         :save-status="saveStatus"
         :last-saved-at="lastSavedAt"
         :stale-revision="staleRevision"
-        :active-jobs-count="activeJobsCount"
         :pending-agent-ops="pendingAgentOps"
         :extra-actions="editorExtraActions"
         @toggle-panel="compactPanel = compactPanel === $event ? null : $event"
         @shortcuts="shortcutsOpen = true"
-        @queue="queueModalOpen = true"
         @ai-script="aiScriptModalOpen = true"
         @ai-editor="aiEditorModalOpen = true"
         @agent="agentPanelOpen = true"

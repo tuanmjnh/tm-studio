@@ -42,12 +42,11 @@ function resolveToolPath(key, exeName) {
   return getResourcePath(exeName)
 }
 
+// yt-dlp is the only external executable left: media work is WebCodecs and
+// mediabunny in-process (ADR-028), so there is no binary to resolve for it.
 function getToolsBinaries() {
   return {
-    ytDlp: resolveToolPath('TOOLS_YTDLP_PATH', 'yt-dlp.exe'),
-    ffmpeg: resolveToolPath('TOOLS_FFMPEG_PATH', 'ffmpeg.exe'),
-    ffprobe: resolveToolPath('TOOLS_FFPROBE_PATH', 'ffprobe.exe'),
-    ffplay: resolveToolPath('TOOLS_FFPLAY_PATH', 'ffplay.exe')
+    ytDlp: resolveToolPath('TOOLS_YTDLP_PATH', 'yt-dlp.exe')
   }
 }
 
@@ -66,21 +65,10 @@ function verifyExecutable(filePath, type) {
     } catch {
       return resolve(false)
     }
-    const args = type === 'ytDlp' ? ['--version'] : ['-version']
-    execFile(filePath, args, { timeout: 2000 }, (error, stdout, stderr) => {
-      // console.log('[verifyExecutable] file:', filePath, 'type:', type, 'error:', error, 'stdout:', stdout, 'stderr:', stderr)
+    if (type !== 'ytDlp') return resolve(false)
+    execFile(filePath, ['--version'], { timeout: 2000 }, (error, stdout, stderr) => {
       const output = (stdout + stderr).toLowerCase()
-      if (type === 'ytDlp') {
-        resolve(output.includes('yt-dlp') || /^\d{4}\.\d{2}\.\d{2}/.test(output.trim()) || output.includes('youtube-dl'))
-      } else if (type === 'ffmpeg') {
-        resolve(output.includes('ffmpeg version'))
-      } else if (type === 'ffprobe') {
-        resolve(output.includes('ffprobe version'))
-      } else if (type === 'ffplay') {
-        resolve(output.includes('ffplay version'))
-      } else {
-        resolve(false)
-      }
+      resolve(output.includes('yt-dlp') || /^\d{4}\.\d{2}\.\d{2}/.test(output.trim()) || output.includes('youtube-dl'))
     })
   })
 }

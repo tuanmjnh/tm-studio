@@ -23,6 +23,12 @@
  *    and a desktop pick re-points the asset, moves the clips and reports the
  *    verdict the probe actually returned.
  *
+ * The desktop leg runs the real flow: the host's `statFiles` answers the byte
+ * facts and real container bytes arrive over a fetch double for the privileged
+ * `media://local` protocol (slice I deleted the `analyzeAsset` IPC, so the
+ * demuxer is the only probe left on either host). A path with no bytes is
+ * settled by the stat and never reaches the demuxer.
+ *
  * Run: node node_modules/tsx/dist/cli.mjs --tsconfig tsconfig.test.json \
  *        tests/unit/tmcut_media_offline.spec.ts
  */
@@ -33,6 +39,8 @@ import { fileURLToPath } from 'node:url'
 // Installs the Vue auto-import and localStorage shims the composables run
 // against. Must stay before every dynamic import below.
 import { freshStore } from './helpers/tmcut_store_env'
+import { installDesktopIpc, installMediaProtocol } from './helpers/tmcut_media_protocol'
+import type { DesktopIpc } from './helpers/tmcut_media_protocol'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const read = (rel: string) => readFileSync(join(root, rel), 'utf8')
@@ -275,7 +283,10 @@ async function main() {
     assert.equal(media.assets.value.length, 1, 'Q6: a failed relink deletes nothing')
   })
 
-  const desktop = installDesktopIpc()
+  const protocol = installMediaProtocol(media)
+  const desktop = installDesktopIpc(protocol)
+  g.window = desktop.window
+  const dialog = installDialog(desktop)
   const { relinkWithPicker } = (await import('../../app/composables/useTmcutRelink')).useTmcutRelink()
 
   await check('a desktop pick repairs the asset and moves the clip with it', async () => {
@@ -287,15 +298,28 @@ async function main() {
     const asset = media.assets.value[0]!
     asset.status = 'missing'
     asset.importStatus = 'error'
-    desktop.picked = ['D:\\Media\\Fixed Take.mp4']
+    // Real container bytes, so the verdict is the demuxer's answer and not a
+    // number the harness invented.
+    protocol.files.set('D:/Media/Fixed Take.mp4', new Uint8Array(readFileSync(join(root, 'tests/fixtures/containers/h264.mp4'))))
+    dialog.picked = ['D:\\Media\\Fixed Take.mp4']
     toasts.length = 0
     const ok = await relinkWithPicker(asset)
     assert.equal(ok, true, 'the verdict the probe actually returned')
     assert.equal(asset.path, 'D:/Media/Fixed Take.mp4')
     assert.equal(asset.name, 'Fixed Take.mp4', 'the picked file names the record')
     assert.equal(asset.status, 'ready')
-    assert.equal(asset.importStatus, 'ready')
-    assert.equal(asset.meta.durationSec, 2)
+    // Node has no WebCodecs, so the demuxer discloses VIDEO_NOT_DECODABLE and
+    // the verdict is `partial`. That is the case this surface exists for: a
+    // usable clip with a disclosed warning stays on screen, not offline.
+    assert.equal(asset.importStatus, 'partial')
+    assert.equal(isMediaOffline(asset), false, 'a partial verdict is not an offline clip')
+    assert.equal(asset.meta.durationSec, 0.6, 'the container reports its own duration, not the fake\'s 2s')
+    assert.equal(asset.meta.fileSize, protocol.files.get('D:/Media/Fixed Take.mp4')!.byteLength, 'the host stat owns the byte count')
+    // The retired IPC wrote these three as by-products of one FFmpeg call. They
+    // are decoder answers now, so a relink must not invent a cover.
+    assert.equal(asset.thumbPath, null)
+    assert.equal(asset.filmstripPath, null)
+    assert.equal(asset.waveformPath, null)
     assert.equal(
       store.currentProject.value!.timeline.tracks.find(t => t.type === 'video')!.items![0]!.src,
       'D:/Media/Fixed Take.mp4',
@@ -315,11 +339,16 @@ async function main() {
     }))
     const asset = media.assets.value[0]!
     asset.status = 'missing'
-    desktop.picked = ['D:/Media/missing-target.mp4']
-    desktop.answer = 'missing'
+    dialog.picked = ['D:/Media/missing-target.mp4']
+    const fetchesBefore = protocol.state.fetches
     toasts.length = 0
     const ok = await relinkWithPicker(asset)
     assert.equal(ok, false)
+    assert.equal(
+      protocol.state.fetches,
+      fetchesBefore,
+      'a dead path never reaches the demuxer: its UrlSource retries a failed fetch forever'
+    )
     assert.deepEqual(
       toasts.map(t => [t.title, t.color]),
       [['tmcut.media.relinkFailed', 'warning']],
@@ -330,8 +359,7 @@ async function main() {
   })
 
   await check('a cancelled desktop pick is silent too', async () => {
-    desktop.answer = 'video'
-    desktop.picked = []
+    dialog.picked = []
     toasts.length = 0
     const asset = media.assets.value[0]!
     const before = asset.path
@@ -341,54 +369,21 @@ async function main() {
     assert.equal(asset.path, before, 'nothing was re-learned')
   })
 
+  protocol.restore()
   console.log(`\n=== All ${passed} media offline checks passed ===`)
 }
 
 /**
- * The preload bridge, answered the way `electron/tools/tmcut.controller.cjs`
- * answers it, plus the one dialog call the relink flow makes. `picked` is the
- * stand-in for the user: empty means the dialog was closed.
+ * The one dialog call the relink flow makes, on top of the shared desktop
+ * double. `picked` is the stand-in for the user: empty means the dialog was
+ * closed. The host answers the byte stat and the registry write; the bytes
+ * themselves come over `media://local`, exactly as the real protocol serves
+ * them, so the verdict below is the demuxer's and not a fake's.
  */
-function installDesktopIpc() {
-  const state = {
-    picked: [] as string[],
-    answer: 'video' as 'video' | 'missing',
-    videoStat: { size: 4096, mtimeMs: 1700000700000 },
-    analyzeCalls: 0,
-    writes: [] as Record<string, unknown>[][]
-  }
-  ;(globalThis.window as Record<string, unknown>).electronAPI = {
-    dialog: {
-      async openFile() { return state.picked.length ? [...state.picked] : null }
-    },
-    tmcut: {
-      async analyzeAsset({ filePath }: { filePath: string }) {
-        state.analyzeCalls++
-        if (state.answer === 'missing') return { ok: false, error: `ENOENT: no such file ${filePath}` }
-        return {
-          ok: true,
-          stat: state.videoStat,
-          probe: {
-            format: { duration: '2.000000' },
-            streams: [{ codec_type: 'video', codec_name: 'h264', width: 1920, height: 1080, avg_frame_rate: '30000/1001' }]
-          },
-          thumbCachePath: 'D:/cache/cover.png',
-          filmstripCachePath: 'D:/cache/strip.png',
-          waveCachePath: 'D:/cache/wave.json'
-        }
-      },
-      async statFiles(paths: string[]) {
-        const out: Record<string, { exists: boolean, size: number, mtimeMs: number }> = {}
-        for (const path of paths) out[path] = { exists: true, ...state.videoStat }
-        return out
-      },
-      async writeAssetsFile(data: Record<string, unknown>[]) { state.writes.push(data) },
-      async readAssetsFile() { return null },
-      async writeProject() { return { ok: true } },
-      async writeRecovery() { return { ok: true } },
-      async captureVideoThumb() { return null },
-      onDownloadProgress() { return () => {} }
-    }
+function installDialog(desktop: DesktopIpc) {
+  const state = { picked: [] as string[] }
+  ;(desktop.window.electronAPI as Record<string, unknown>).dialog = {
+    async openFile() { return state.picked.length ? [...state.picked] : null }
   }
   return state
 }

@@ -11,8 +11,11 @@ import {
 describe('platform contract', () => {
   it('declares the runtime names and capability keys', () => {
     assert.deepEqual([...PLATFORM_NAMES], ['electron', 'web', 'headless'])
-    assert.equal(PLATFORM_CAPABILITIES.length, 8)
-    assert.equal(new Set(PLATFORM_CAPABILITIES).size, 8)
+    // Zero-FFmpeg slice I retired the `nativeFFmpeg` key: no host owns a
+    // renderer any more.
+    assert.equal(PLATFORM_CAPABILITIES.length, 7)
+    assert.equal(new Set(PLATFORM_CAPABILITIES).size, 7)
+    assert.equal(PLATFORM_CAPABILITIES.includes('nativeFFmpeg'), false)
     assert.equal(Object.isFrozen(PLATFORM_NAMES), true)
     assert.equal(Object.isFrozen(PLATFORM_CAPABILITIES), true)
   })
@@ -25,8 +28,8 @@ describe('platform contract', () => {
   })
 
   it('keeps only strict true values', () => {
-    const info = createPlatformInfo('electron', { nativeFFmpeg: true, webCodecs: 'yes', filesystem: 1 })
-    assert.equal(info.capabilities.nativeFFmpeg, true)
+    const info = createPlatformInfo('electron', { webCodecs: 'yes', filesystem: 1 })
+    assert.equal(info.capabilities.webCodecs, false)
     assert.equal(info.capabilities.webCodecs, false)
     assert.equal(info.capabilities.filesystem, false)
   })
@@ -42,10 +45,10 @@ describe('platform contract', () => {
   })
 
   it('answers capability queries defensively', () => {
-    const info = createPlatformInfo('headless', { nativeFFmpeg: true })
-    assert.equal(platformSupports(info, 'nativeFFmpeg'), true)
+    const info = createPlatformInfo('headless', { filesystem: true })
+    assert.equal(platformSupports(info, 'filesystem'), true)
     assert.equal(platformSupports(info, 'webGPU'), false)
     assert.equal(platformSupports(info, 'teleport'), false)
-    assert.equal(platformSupports(null, 'nativeFFmpeg'), false)
+    assert.equal(platformSupports(null, 'filesystem'), false)
   })
 })

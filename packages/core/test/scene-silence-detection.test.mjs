@@ -146,8 +146,8 @@ describe('detection (slice E)', () => {
     // Both of these are MEASURED, not inherited — docs/audit/zero-ffmpeg-audit.md
     // carries the scene band and the real-voice silence table. They are pinned
     // here because a drift of a few hundredths re-cuts every EDL in silence.
-    // The FFmpeg argv builder (shared/utils/detection-args.cjs) still carries its
-    // own 0.4 on its own scale; that number goes with the argv, in slice I.
+    // The FFmpeg argv builder that carried its own 0.4 on its own scale was
+    // deleted with the engine (slice I), so this is the only threshold left.
     assert.equal(TMCUT_SCENE_THRESHOLD, 0.18)
     assert.equal(TMCUT_SILENCE_NOISE_DB, -30)
     assert.equal(TMCUT_SILENCE_MIN_DURATION_SEC, 0.5)

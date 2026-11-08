@@ -37,7 +37,8 @@ import { BLEND_MODES, EFFECT_REGISTRY, TICKS_PER_SECOND, blendModeOf, evaluateTi
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8')
 const PLAYER = 'app/components/tmcut/TmcutPreviewPlayer.vue'
-const EXPORTER = 'app/utils/tmcut/render/video.ts'
+const EXPORT_CONTENT = 'packages/core/src/exportContent.mjs'
+const WEB_EXPORT_CHOICE = 'app/utils/tmcut/webExportChoice.ts'
 const PROJECT_TYPES = 'app/composables/useTmcutProject.ts'
 const INSPECTOR = 'app/components/tmcut/TmcutInspector.vue'
 const MAIN_CSS = 'app/assets/css/main.css'
@@ -119,9 +120,15 @@ async function main() {
   // 4. The exporter asks the same law, so the two surfaces cannot disagree
   // about a mode — and a bogus authored value can no longer kill a render.
   await check('the export asks the same law', () => {
-    const exporter = read(EXPORTER)
-    assert.match(exporter, /blendModeOf\(/, 'the compiler must normalize through core')
-    assert.doesNotMatch(exporter, /clip\.raw\.blend\b/, 'no raw read of the authored mode beside the law')
+    // Slice I deleted the FFmpeg emitter: the export leg is the content law,
+    // which normalizes through core and refuses a non-normal mode by name
+    // instead of interpolating it into a filtergraph.
+    const content = read(EXPORT_CONTENT)
+    assert.match(content, /blendModeOf\(/, 'the content law must normalize through core')
+    assert.doesNotMatch(content, /clip\.raw\.blend\b/, 'no raw read of the authored mode beside the law')
+    assert.match(content, /reasons\.add\('blend'\)/, 'a non-normal mode is a named refusal')
+    const choice = read(WEB_EXPORT_CHOICE)
+    assert.doesNotMatch(choice, /blendModeOf|clip\.blend/, 'the dialog must not re-decide what core already answered')
   })
 
   // 5. No second union in the app: the type gate is what stops a UI from

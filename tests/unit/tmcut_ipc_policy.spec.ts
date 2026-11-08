@@ -79,15 +79,22 @@ await check('destroyed frame (senderFrame read throws) refuses, never crashes', 
 })
 
 await check('push allow-list covers every real webContents.send call site', () => {
-  // Grep-equivalent: the channels main actually pushes (app-updater,
-  // tmcut renderDone, asset center/download progress, ffmpeg task-manager
-  // event family). If a new push appears in main code without landing
-  // here, this list review is the forcing function.
+  // Grep-equivalent: the channels main actually pushes (app-updater, asset
+  // center/download progress, MCP events). If a new push appears in main code
+  // without landing here, this list review is the forcing function.
   assert.ok(isAllowedPushChannel('app-updater:status-changed'))
-  assert.ok(isAllowedPushChannel('tmcut:renderDone'))
-  // Roadmap v3 PART A: Asset Center download progress.
   assert.ok(isAllowedPushChannel('tmcut:assetCenter:progress'))
-  assert.ok(isAllowedPushChannel('tools:ffmpeg:progressTask'))
+  // Slice I retired the render-output watcher with the FFmpeg queue: the
+  // WebCodecs exporter finishes inside the renderer that started it, so
+  // nothing in main sends this any more. Asserting the refusal keeps a dead
+  // channel from creeping back into the array.
+  assert.ok(!isAllowedPushChannel('tmcut:renderDone'))
+  // Zero-FFmpeg slice I deleted the ffmpeg task-manager controller with the
+  // binary, so its ten event channels are not pushable any more. Asserting
+  // the refusal, not just dropping the line, is what keeps a stale channel
+  // from creeping back into the array.
+  assert.ok(!isAllowedPushChannel('tools:ffmpeg:progressTask'))
+  assert.ok(!isAllowedPushChannel('tools:ffmpeg:managerInitialized'))
   // TM Studio has no browser-platform controllers: the profiles
   // statusChanged, youtube task family and the platform EventBus channel
   // must NOT be pushable.
@@ -135,8 +142,8 @@ await check('preload inline copies equal the canonical policy arrays', () => {
 await check('every tmcut handler main registers is invocable from the preload', () => {
   // The classic packaged-app bug: a handler lands in a controller but not in
   // the preload allow-list, so it compiles, type-checks and passes unit tests,
-  // and only the shipped app sees `undefined`. ADR-020 added `probeMedia` and
-  // this pairing is what a reviewer cannot eyeball across two 1200-line files.
+  // and only the shipped app sees `undefined`. This pairing is what a reviewer
+  // cannot eyeball across two 1200-line files.
   const controller = readFileSync(join(root, 'electron', 'tools', 'tmcut.controller.cjs'), 'utf8')
   const preload = readFileSync(join(root, 'electron', 'preload.cjs'), 'utf8')
   const handles = [...controller.matchAll(/ipcMain\.handle\(`\$\{moduleName\}:([A-Za-z]+)`/g)].map(m => m[1]!)
@@ -146,22 +153,27 @@ await check('every tmcut handler main registers is invocable from the preload', 
   const invokes = new Set([...block[1]!.matchAll(/'([^']+)'/g)].map(m => m[1]!))
   const unreachable = handles.filter(name => !invokes.has(name))
   assert.deepEqual(unreachable, [], `handlers the renderer cannot reach: ${unreachable.join(', ')}`)
-  assert.ok(invokes.has('probeMedia'), 'the adapter probe needs its channel')
+  // Slice I retired the ffprobe-over-IPC leg: `media.probeInfo` demuxes in the
+  // renderer, so `probeMedia` has no handler and must not be offered either.
+  assert.ok(!invokes.has('probeMedia'), 'the retired binary probe must not come back as a channel')
 
   // The same pairing read from the other side, because that is the direction a
   // retired transport leaves a hole: a channel the preload offers with no
   // handler is a call that rejects at runtime, and the app can sit on it for
-  // months behind a `.catch(() => {})`. `watchOutput`/`unwatchOutput` are the
-  // proof (G14): main registered them under a kebab-case second convention,
-  // so the export modal's output watcher never started and nothing reported it.
+  // months behind a `.catch(() => {})`. `watchOutput`/`unwatchOutput` were the
+  // proof (G14): main registered them under a kebab-case second convention, so
+  // the export modal's output watcher never started and nothing reported it.
+  // Slice I deleted both channels with the render-output watcher they served;
+  // this direction is what keeps a retired transport from leaving a hole.
   const main = readFileSync(join(root, 'electron', 'main.cjs'), 'utf8')
   const literalHandles = [...main.matchAll(/ipcMain\.handle\([`']tmcut:([A-Za-z-]+)/g)].map(m => m[1]!)
-  assert.ok(literalHandles.length > 0, 'main.cjs registers tmcut channels directly; the guard must see them')
-  const registered = new Set([...handles, ...literalHandles])
+  // Slice I removed the render-output watcher, which was the last tmcut channel
+  // main registered itself; the controller owns the namespace now. Zero here is
+  // the expected state, so the guard pins it instead of going vacuous.
+  assert.deepEqual(literalHandles, [], 'the tmcut namespace belongs to the controller, not main.cjs')
+  const registered = new Set(handles)
   const orphans = [...invokes].filter(name => !registered.has(name)).sort()
   assert.deepEqual(orphans, [], `channels with no handler: ${orphans.join(', ')}`)
-  const dead = literalHandles.filter(name => !invokes.has(name)).sort()
-  assert.deepEqual(dead, [], `main handlers the preload will not invoke: ${dead.join(', ')}`)
 })
 
 await check('choke point gates every later registration (R134)', async () => {

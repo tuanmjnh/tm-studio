@@ -106,7 +106,10 @@ async function main() {
   })
 
   check('toURL passes /uploads/ URLs through untouched', () => {
-    const helper = read('app/utils/ffmpegHelper.ts')
+    // `toURL` moved out of the deleted `ffmpegHelper.ts` into the media utility
+    // in slice I; the pass-through is what keeps a server URL from being
+    // rewritten into a `media://` path.
+    const helper = read('app/utils/tmcut/media.ts')
     if (!helper.includes('|\\/uploads\\/')) {
       throw new Error('toURL regex must include the /uploads/ pass-through')
     }

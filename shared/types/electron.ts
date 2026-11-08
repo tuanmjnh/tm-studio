@@ -2,286 +2,6 @@ import type { ApiResponse } from '~~/shared/contracts/common'
 import type { SystemInfoResponse, OpenDirectoryInput, StorageUsage } from '~~/shared/contracts/system.ipc'
 import type { EventBusContracts } from '~~/shared/contracts/events'
 
-export interface TaskStatus {
-  total: number
-  running: number
-  done: number
-  waiting: number
-  isProcessing: boolean
-  isPaused: boolean
-  retryCount: Record<number, number>
-  globalRetryCount: number
-  globalRetryLimit: number
-  maxRetry: number
-  threads: (number | null)[]
-  taskStatus: Record<number, string>
-}
-
-export interface ToolTaskMeta {
-  taskId?: string
-  taskKey?: number
-  thread?: number
-  input?: string
-  inputs?: string[]
-  output?: string
-  outPath?: string
-  fileName?: string
-  duration?: number
-  formatId?: string
-  formatTitle?: string
-  configId?: string
-  configTitle?: string
-  threads?: number
-  startedAt?: string
-  config?: unknown
-  operation?: 'render' | 'split' | 'join' | 'split_render' | 'join_render' | 'image2video' | 'audio_tool' | string
-  outputPattern?: string
-  outputDir?: string
-  images?: string[]
-  settings?: Record<string, unknown>
-  joinFiles?: string[]
-  splitStartTime?: number
-  splitDuration?: number
-  splitSegmentName?: string
-  audioMode?: 'extract' | 'mute' | 'replace_bgm' | 'mix_bgm' | string
-  audioOptions?: Record<string, unknown>
-}
-
-export interface MediaProbeResult {
-  duration: number
-  width: number
-  height: number
-  fps: number
-  bitrate?: string
-}
-
-export interface JoinFolderItem {
-  name: string
-  path: string
-  count: number
-  files: string[]
-}
-
-export interface FfmpegLabel {
-  id?: string
-  text: string
-  size: number
-  color: string
-  x: number
-  y: number
-  w?: number
-  h?: number
-  path?: string
-  box?: number
-  boxColor?: string
-  boxOpacity?: number
-  boxBorderW?: number
-  family?: string
-  monospace?: boolean
-  weight?: string | number
-  style?: string
-  italic?: boolean
-  width?: number
-  scaleX?: number
-  scaleY?: number
-  resizeMode?: 'scale' | 'box'
-  hidden?: boolean
-}
-
-export interface FfmpegSubFile {
-  id?: string
-  path: string
-  type: 'image' | 'video'
-  x: number
-  y: number
-  w: number
-  h: number
-  hidden?: boolean
-}
-
-export interface ToolTask {
-  command?: string
-  args?: string[]
-  options?: Record<string, unknown>
-  meta?: ToolTaskMeta
-  timeout?: number
-}
-
-export interface YoutubeDownloadResponse extends ToolTaskMeta {
-  taskKey?: number
-  thread?: number
-  speed?: string
-  percent?: number
-  downloaded?: string
-  done?: boolean
-  message?: string
-  code?: number | null
-}
-
-export interface FfmpegRenderResponse extends ToolTaskMeta {
-  taskKey?: number
-  thread?: number
-  percent?: number
-  speed?: string
-  downloaded?: string
-  done?: boolean
-  message?: string
-  code?: number | null
-}
-
-export interface ExecutableCheck {
-  data: Record<string, { path: string, exists: boolean }> | string
-  status: boolean
-}
-
-export interface YoutubeFormat {
-  id: string
-  title: string
-  code: string
-  opt: string[]
-  w: number
-  h: number
-  sort: number
-  flag: number
-  created_at: string
-  updated_at: string | null
-}
-
-export interface YoutubeConfig {
-  id: string
-  title: string
-  format_id: string
-  out_path: string
-  file_name: string
-  threads: number
-  restrict: number
-  overwrite: number
-  encoding: string
-  flag: number
-  created_at: string
-  updated_at: string | null
-}
-
-export interface CursorPage<T> {
-  items: T[]
-  nextCursor: { ts: string, rowid: number } | null
-  hasMore: boolean
-}
-
-export interface YoutubeHistory {
-  id: string
-  url: string
-  title: string | null
-  format_id: string | null
-  format_title: string | null
-  out_path: string | null
-  file_name: string | null
-  file_size: number | null
-  duration: number | null
-  status: 'completed' | 'failed' | 'cancelled'
-  error_message: string | null
-  config_id: string | null
-  config_title: string | null
-  threads: number | null
-  started_at: string | null
-  completed_at: string | null
-  created_at: string
-}
-
-export interface FfmpegConfig {
-  id: string
-  user_id: string | null
-  title: string
-  aspect_ratio: number
-  background_type: 'color' | 'boxblur' | 'file'
-  background_color: string
-  background_boxblur: number
-  background_file: string | null
-  center: number
-  speed: number
-  volume: number
-  zoom_enable: number
-  zoom_ratio: number
-  zoom_time_start: number
-  zoom_time_duration: number
-  zoom_time_loop: number
-  hflip_enable: number
-  hflip_all: number
-  hflip_time_start: number
-  hflip_time_duration: number
-  hflip_time_loop: number
-  vflip_enable: number
-  vflip_all: number
-  vflip_time_start: number
-  vflip_time_duration: number
-  vflip_time_loop: number
-  scale_x: number
-  scale_y: number
-  scale_w: number
-  scale_h: number
-  labels: string | FfmpegLabel[]
-  files: string | FfmpegSubFile[]
-  subtitle: string | null
-  render_code: string | null
-  flag: number
-  created_at: string
-  updated_at: string | null
-}
-
-export interface FfmpegBatchConfigItem {
-  configId: string
-  inputPattern: string
-  outputPattern: string
-  fileFilter?: {
-    minDuration?: number
-    maxDuration?: number
-    minWidth?: number
-    maxWidth?: number
-  }
-}
-
-export interface FfmpegBatchConfig {
-  id: string
-  title: string
-  items: string | FfmpegBatchConfigItem[]
-  threads: number
-  output_path: string
-  flag: number
-  created_at: string
-  updated_at: string | null
-}
-
-export interface FfmpegHistory {
-  id: string
-  config_id: string | null
-  config_title: string | null
-  batch_config_id: string | null
-  batch_config_title: string | null
-  input_file: string | null
-  input_files: string | unknown[] | null
-  output_file: string | null
-  output_path: string | null
-  operation: 'render' | 'split' | 'join' | 'split_render' | 'join_render'
-  duration: number | null
-  file_size: number | null
-  status: 'completed' | 'failed' | 'cancelled'
-  error_message: string | null
-  threads: number | null
-  started_at: string | null
-  completed_at: string | null
-  created_at: string
-}
-
-export interface PlaylistVideo {
-  id: string
-  title: string
-  duration: number
-  uploader: string
-  viewCount: number
-  uploadDate: string
-  url: string
-}
-
 export interface FileStat {
   name: string
   fullPath: string
@@ -369,92 +89,6 @@ export interface FileManagerNamespace {
   imageToDataUrl(imagePath: string): Promise<string | null>
 }
 
-type EventUnsubscriber = () => void
-
-export interface FfmpegVersions {
-  ffmpeg?: string
-  ffprobe?: string
-  ffplay?: string
-}
-
-export interface ToolsNamespace {
-  checkExecutable(): Promise<ExecutableCheck>
-  getStatus(): Promise<TaskStatus>
-  getTasks?(): Promise<ToolTask[]>
-  initTaskManager(args: { threads?: number, delay?: number, delayUI?: number, maxRetry?: number, timeout?: number }): Promise<void>
-  setTasks(tasks: ToolTask[]): Promise<void>
-  setGroupTasks?(groups: ToolTask[][]): Promise<void>
-  startTasks(): Promise<void>
-  pauseTasks(): Promise<TaskStatus>
-  continueTasks(): Promise<TaskStatus>
-  stopTask(idx: number): Promise<TaskStatus>
-  stopTasks(): Promise<TaskStatus>
-  getMediaInfo?(args: string[]): Promise<{ pid: number, code: number | null, signal: string | null, stdout: string, stderr: string }>
-  getData?(): Promise<Record<string, unknown>>
-  crawlPlaylist(url: string): Promise<{ status: boolean, data?: PlaylistVideo[], message?: string }>
-  getFormats(url: string): Promise<{ status: boolean, data?: { title: string, duration: number, formats: YoutubeFormat[] }, message?: string }>
-  getVersion<T = string>(): Promise<{ status: boolean, data?: T, message?: string }>
-  listFormats(): Promise<YoutubeFormat[]>
-  createFormat(data: Partial<YoutubeFormat>): Promise<{ status: boolean, data?: { id: string } }>
-  updateFormat(data: { id: string, data: Partial<YoutubeFormat> }): Promise<{ status: boolean }>
-  deleteFormat(id: string): Promise<{ status: boolean }>
-  listConfigs(): Promise<YoutubeConfig[]>
-  createConfig(data: Partial<YoutubeConfig>): Promise<{ status: boolean, data?: { id: string } }>
-  updateConfig(data: { id: string, data: Partial<YoutubeConfig> }): Promise<{ status: boolean }>
-  deleteConfig(id: string): Promise<{ status: boolean }>
-  listHistory(limit?: number): Promise<YoutubeHistory[]>
-  listHistoryCursor(options: { cursor: { ts: string, rowid: number } | null, limit?: number }): Promise<CursorPage<YoutubeHistory>>
-  deleteHistory(id?: string | string[]): Promise<{ status: boolean }>
-
-  // FFmpeg SQLite and helper operations
-  listFfmpegConfigs(): Promise<FfmpegConfig[]>
-  createFfmpegConfig(data: Partial<FfmpegConfig>): Promise<{ status: boolean, data?: { id: string } }>
-  updateFfmpegConfig(data: { id: string, data: Partial<FfmpegConfig> }): Promise<{ status: boolean }>
-  deleteFfmpegConfig(id: string): Promise<{ status: boolean }>
-  listFfmpegBatchConfigs(): Promise<FfmpegBatchConfig[]>
-  createFfmpegBatchConfig(data: Partial<FfmpegBatchConfig>): Promise<{ status: boolean, data?: { id: string } }>
-  updateFfmpegBatchConfig(data: { id: string, data: Partial<FfmpegBatchConfig> }): Promise<{ status: boolean }>
-  deleteFfmpegBatchConfig(id: string): Promise<{ status: boolean }>
-  listFfmpegHistory(limit?: number): Promise<FfmpegHistory[]>
-  deleteFfmpegHistory(id: string | string[]): Promise<{ status: boolean }>
-  detectGpuSupport(): Promise<{ nvenc: boolean, amf: boolean, qsv: boolean, gpus: string[] }>
-  globFiles(pattern: string): Promise<string[]>
-  scanImageSubfolders(inputDir: string, extensions?: string[], mode?: 'root' | 'subfolder'): Promise<Array<{ name: string, path: string, count: number, images: string[] }>>
-  probeMedia(filePath: string): Promise<MediaProbeResult>
-  scanJoinFolders(rootPath: string, mode: 'root' | 'subfolder', extensions?: string[]): Promise<JoinFolderItem[]>
-  checkUpdate?(options?: { source?: 'btbn' | 'gyan' }): Promise<{ status: boolean, data?: ToolUpdateInfo, message?: string }>
-  performUpdate?(options?: { cleanTemp?: boolean, downloadUrl?: string, source?: 'btbn' | 'gyan' }): Promise<{ status: boolean, message?: string }>
-  onBeforeRunTask(cb: (data: YoutubeDownloadResponse | FfmpegRenderResponse) => void): EventUnsubscriber
-  onProgressTask(cb: (data: YoutubeDownloadResponse | FfmpegRenderResponse) => void): EventUnsubscriber
-  onAllTasksDone(cb: (data: { total: number }) => void): EventUnsubscriber
-  onErrorTask(cb: (data: YoutubeDownloadResponse | FfmpegRenderResponse) => void): EventUnsubscriber
-  onStoppedTask(cb: (data: boolean) => void): EventUnsubscriber
-  onStoppedTasks(cb: (data: boolean) => void): EventUnsubscriber
-  onTaskRetry(cb: (data: { taskKey: number, retryCount: number }) => void): EventUnsubscriber
-  onTaskTimeout(cb: (data: { taskKey: number }) => void): EventUnsubscriber
-  onManagerInitialized(cb: (data: Record<string, unknown>) => void): EventUnsubscriber
-  onUpdateProgress?(cb: (data: ToolUpdateProgress) => void): EventUnsubscriber
-
-  // Video Generation (P4)
-  videoGeneration: VideoGenerationNamespace
-}
-
-export interface ToolUpdateInfo {
-  hasUpdate: boolean
-  currentVersion: string
-  latestVersion: string
-  downloadUrl?: string
-  releaseUrl?: string
-  publishedAt?: string
-  source?: 'btbn' | 'gyan'
-}
-
-export interface ToolUpdateProgress {
-  stage?: 'downloading' | 'extracting' | 'copying' | 'cleaning' | 'done' | 'error'
-  percent?: number
-  message?: string
-}
-
 export interface AppUpdateStatus {
   state: 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'
   currentVersion: string
@@ -516,22 +150,6 @@ export interface TmcutProjectMeta {
   recoveryUpdatedAtMs: number | null
 }
 
-export interface TmcutExtractResult {
-  ok: boolean
-  cachePath?: string
-  buckets?: number[]
-  durationSec?: number
-  error?: string
-}
-
-/** Single-frame extraction (roadmap G-1): cached PNG per seek/width. */
-export interface TmcutFrameResult {
-  ok: boolean
-  path?: string
-  cached?: boolean
-  error?: string
-}
-
 /** One system font face (roadmap C-1): `path` feeds drawtext fontfile= so the export renders the very file the preview family shows. */
 export interface TmcutFontEntry {
   family: string
@@ -540,37 +158,6 @@ export interface TmcutFontEntry {
   weight: number
   italic: boolean
   monospace: boolean
-}
-
-export interface TmcutAnalyzeResult {
-  ok: boolean
-  stat?: { size: number, mtimeMs: number }
-  /** Raw ffprobe JSON (format + streams); normalized renderer-side. */
-  probe?: unknown
-  thumbCachePath?: string | null
-  /** 8-frame filmstrip for timeline clips (desktop only). */
-  filmstripCachePath?: string | null
-  waveCachePath?: string | null
-  error?: string
-}
-
-/**
- * Read-only metadata answer (ADR-020) — `analyzeAsset` without the side
- * effects: main spawns ffprobe and returns its JSON, nothing is written.
- */
-export interface TmcutProbeResult {
-  ok: boolean
-  /** Raw ffprobe JSON (format + streams); normalized renderer-side via core. */
-  probe?: unknown
-  error?: string
-}
-
-export interface TmcutAnalysisResult {
-  ok: boolean
-  /** Raw ffmpeg stderr; parsed renderer-side via core analysis module. */
-  log?: string
-  durationSec?: number
-  error?: string
 }
 
 export interface AiChatMessage {
@@ -827,10 +414,6 @@ export interface TmcutNamespace {
   readSnapshot(args: { id: string, ts: number }): Promise<unknown>
   deleteSnapshot(args: { id: string, ts: number }): Promise<boolean>
   statFiles(paths: string[]): Promise<Record<string, TmcutFileStat>>
-  extractThumbnail(args: { filePath: string }): Promise<TmcutExtractResult>
-  extractFrame(args: { src: string, atSec: number, width?: number }): Promise<TmcutFrameResult>
-  /** Caption audio for Whisper (roadmap C-3): cached 16kHz mono MP3 extracted in main. */
-  extractAudio(args: { filePath: string }): Promise<{ ok: boolean, path?: string, error?: string }>
   voiceStatus(args?: { baseUrl?: string }): Promise<{ ok: boolean, data?: { baseUrl: string, health: unknown, voices: Array<{ name: string, description: string }> }, error?: string }>
   enrollVoice(args: { baseUrl?: string, filePath: string, name: string, description?: string, denoise?: boolean }): Promise<{ ok: boolean, data?: { voice: string, alreadyPresent?: boolean }, error?: string }>
   listManagedVoices(): Promise<Array<{ id: string, name: string, engineName: string, description: string, createdAt: string }>>
@@ -846,11 +429,6 @@ export interface TmcutNamespace {
    * captured for speech-to-text); it defaults to `voiceover`.
    */
   saveRecording(args: { data: Uint8Array, ext?: string, prefix?: string }): Promise<{ ok: boolean, path?: string, error?: string }>
-  extractWaveform(args: { filePath: string, buckets?: number }): Promise<TmcutExtractResult>
-  /** Preview proxy generator (roadmap F-4): converts video to lightweight 540p/720p H.264 preview in cache. */
-  generateProxy(args: { filePath: string, width?: number }): Promise<{ ok: boolean, path?: string, cached?: boolean, error?: string }>
-  /** 2-pass video stabilization (roadmap E-5): motion vector analysis + smoothing via vidstab. */
-  stabilizeVideo(args: { filePath: string, options?: { level?: 'mild' | 'medium' | 'aggressive' } }): Promise<{ ok: boolean, path?: string, cached?: boolean, error?: string }>
   /**
    * Generated media download (P4 groundwork): pulls an http(s) URL into
    * <base>/downloads/ so the renderer can import a real local file. Refuses
@@ -867,21 +445,8 @@ export interface TmcutNamespace {
   stockSearch(args: { url: string, headers?: Record<string, string> }): Promise<{ ok: boolean, status?: number, data?: unknown, error?: string }>
   /** Byte progress for a download started with the same `id`. */
   onDownloadProgress(callback: (payload: DownloadProgressPayload) => void): () => void
-  analyzeAsset(args: { filePath: string, kind: string }): Promise<TmcutAnalyzeResult>
-  /**
-   * Metadata for one absolute path, with nothing written to disk (ADR-020).
-   * The platform adapter's `media.probe` on the desktop host; import keeps
-   * using `analyzeAsset`, whose single round-trip also makes the thumbnail,
-   * filmstrip and waveform.
-   */
-  probeMedia(args: { filePath: string }): Promise<TmcutProbeResult>
-  analyzeScenes(args: { filePath: string, threshold?: number }): Promise<TmcutAnalysisResult>
-  analyzeSilence(args: { filePath: string, noiseDb?: number, minDuration?: number }): Promise<TmcutAnalysisResult>
   /** System font faces with file paths (roadmap C-1). Empty array when the scanner addon cannot load. */
   listFonts(): Promise<TmcutFontEntry[]>
-  watchOutput(args: { filePath: string }): Promise<boolean>
-  unwatchOutput(args: { filePath: string }): Promise<boolean>
-  onRenderDone(callback: (payload: { filePath: string, size: number }) => void): () => void
   /** On-demand Asset Center (roadmap v3 PART A): registry + verified installs. */
   assetCenter: TmcutAssetCenterNamespace
 }
@@ -1115,15 +680,13 @@ export interface ElectronAPI {
   aiKeyStatus(): Promise<{ ok: boolean, data?: AiKeyVaultStatus }>
   /** R143 (§206): re-run the idempotent at-rest migration; fresh counts. */
   aiMigrateKeys(): Promise<{ ok: boolean, data?: AiKeyVaultStatus }>
-  verifyPath(filePath: string, type: 'ytDlp' | 'ffmpeg' | 'ffprobe' | 'ffplay'): Promise<{ status: boolean }>
+  verifyPath(filePath: string, type: 'ytDlp'): Promise<{ status: boolean }>
   openPath(fullPath: string): Promise<boolean>
   openExternal(url: string): Promise<boolean>
   showItemInFolder(fullPath: string): Promise<boolean>
   send(channel: string, data?: unknown): void
   on(channel: string, callback: (...args: unknown[]) => void): void
   tools: {
-    youtube: ToolsNamespace
-    ffmpeg: ToolsNamespace
     profiles: ProfilesNamespace
     aiGateway: AiGatewayNamespace
     videoGeneration: VideoGenerationNamespace

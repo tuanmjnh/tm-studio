@@ -5,8 +5,9 @@
  * the six-state import machine, and a persisted record that never carries a
  * `File` object. Both are proven by running the real flows — the web leg
  * demuxes hand-written WAV bytes through MediaProbeService and writes the
- * localStorage mirror, and the desktop leg drives the Relink button through a
- * fake IPC that answers the way `electron/tools/tmcut.controller.cjs` does.
+ * localStorage mirror, and the desktop leg demuxes the same bytes through a
+ * fetch double for the privileged `media://local` protocol, with the host's
+ * `statFiles` answering the byte facts and the Relink button driven end to end.
  *
  * What is pinned, in order:
  *  - the six verdicts are core's, and the table that maps a verdict onto the
@@ -37,6 +38,7 @@ import { fileURLToPath } from 'node:url'
 // Installs the Vue auto-import and localStorage shims the store is written
 // against. Must stay before every dynamic import below.
 import { freshStore } from './helpers/tmcut_store_env'
+import { installDesktopIpc, installMediaProtocol } from './helpers/tmcut_media_protocol'
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..')
 const read = (rel: string) => readFileSync(join(root, rel), 'utf8')
@@ -314,17 +316,24 @@ async function main() {
 
   // ===== the desktop leg =====
 
-  const desktop = installDesktopIpc(media)
+  const protocol = installMediaProtocol(media)
+  const desktop = installDesktopIpc(protocol)
   g.window = desktop.window
 
   await check('the whole queue is in the library before the first probe answers', async () => {
     media.assets.value = []
-    desktop.firstProbeCount = 0
+    protocol.files.set('D:/Media/a.wav', wavBytes(0.5))
+    protocol.files.set('D:/Media/b.wav', wavBytes(0.5))
+    protocol.state.firstFetchCount = 0
     const result = await media.importFiles(['D:/Media/a.wav', 'D:/Media/b.wav'])
     assert.equal(result.added, 2)
     assert.equal(result.failed, 0)
-    assert.equal(desktop.firstProbeCount, 2, 'two cards, not one at a time')
+    assert.equal(protocol.state.firstFetchCount, 2, 'two cards, not one at a time')
     assert.equal(media.assets.value.length, 2)
+    const first = media.assets.value.find(a => a.path === 'D:/Media/a.wav')!
+    assert.equal(first.meta.durationSec, 0.5, 'the demuxer read the container over the privileged protocol')
+    assert.equal(first.meta.fileSize, protocol.files.get('D:/Media/a.wav')!.byteLength, 'the host stat owns the byte count')
+    assert.equal(first.meta.mtimeMs, protocol.mtimeMs, 'and the revision stamp the cache key is built from')
   })
 
   await check('the desktop relink re-points the clips and relearns the file', async () => {
@@ -342,23 +351,34 @@ async function main() {
     asset.proxyStatus = 'ready'
     asset.fingerprint = 'deadbeef'
 
-    desktop.mode = 'video'
+    // A real H.264 file, so the numbers below are read out of a container rather
+    // than invented by a fake: 0.6 s at 64x36 is what the fixture was encoded at.
+    const clipBytes = readFileSync(join(root, 'tests/fixtures/containers/h264.mp4'))
+    protocol.files.set('D:/Media/New Clip.mp4', new Uint8Array(clipBytes))
     const ok = await media.relink(asset.id, 'D:\\Media\\New Clip.mp4', { size: 999 })
     assert.equal(ok, true)
     assert.equal(asset.path, 'D:/Media/New Clip.mp4')
     assert.equal(asset.name, 'New Clip.mp4', 'no friendly name in, the new file\'s own name out')
-    assert.equal(asset.importStatus, 'ready')
-    assert.equal(asset.meta.durationSec, 2, 'the numbers come from the new probe')
-    assert.equal(asset.meta.width, 1920)
-    assert.equal(asset.meta.fileSize, desktop.videoStat.size, 'the host\'s stat outranks the caller\'s hint')
-    assert.equal(asset.thumbPath, 'D:/cache/key-cover.png')
-    assert.equal(asset.filmstripPath, 'D:/cache/key-strip.png')
-    assert.equal(asset.waveformPath, 'D:/cache/key.json')
+    // Node has no WebCodecs, so the collector demuxes this file but cannot paint
+    // it: 'partial' is the honest verdict, and the byte axis still calls it usable.
+    assert.equal(asset.importStatus, 'partial')
+    assert.equal(asset.status, 'ready')
+    assert.equal(asset.meta.durationSec, 0.6, 'the numbers come from the new probe')
+    assert.equal(asset.meta.width, 64)
+    assert.equal(asset.meta.height, 36)
+    assert.equal(asset.meta.fileSize, clipBytes.byteLength, 'the host\'s stat outranks the caller\'s hint')
+    assert.equal(asset.meta.mtimeMs, protocol.mtimeMs)
+    // Slice I deleted the IPC that wrote these three through FFmpeg. The probe
+    // no longer produces them — the frame service, filmstrip and PCM decoder do,
+    // on demand — so a relink must leave them empty rather than name a stale file.
+    assert.equal(asset.thumbPath, null)
+    assert.equal(asset.filmstripPath, null)
+    assert.equal(asset.waveformPath, null)
     assert.equal(asset.proxyPath, null, 'a proxy of the old file cannot describe the new one')
     assert.equal(asset.proxyStatus, 'none')
     assert.equal(
       asset.fingerprint,
-      core.cacheKeyForPath(asset.path, { mtimeMs: desktop.videoStat.mtimeMs, size: desktop.videoStat.size })
+      core.cacheKeyForPath(asset.path, { mtimeMs: protocol.mtimeMs, size: clipBytes.byteLength })
     )
     assert.equal(
       store.currentProject.value!.timeline.tracks.find(t => t.type === 'video')!.items![0]!.src,
@@ -375,12 +395,19 @@ async function main() {
     }))
     const asset = media.assets.value[0]!
     asset.status = 'ready'
-    desktop.mode = 'missing'
+    // 'D:/Media/gone.wav' is deliberately not registered: the host stat is the
+    // only thing that can say it is not there.
+    const fetchesBefore = protocol.state.fetches
     const ok = await media.relink(asset.id, 'D:/Media/gone.wav')
     assert.equal(ok, false, 'the button reports what actually happened')
     assert.equal(asset.status, 'missing', 'the byte axis owns this word')
     assert.equal(asset.importStatus, 'error', 'the probe axis records that this attempt learned nothing')
     assert.equal(asset.fingerprint, null, 'no key for bytes that were not read')
+    assert.equal(
+      protocol.state.fetches,
+      fetchesBefore,
+      'a dead path never reaches the demuxer: its UrlSource retries a failed fetch forever'
+    )
     assert.equal(media.assets.value.length, 1, 'Q6: the asset reference is never deleted')
     assert.deepEqual(asset.usedBy, [projectId()], 'nor is it cut off from the project')
     assert.equal(
@@ -397,12 +424,12 @@ async function main() {
       path: 'D:/Media/wrong.mp4', kind: 'video', projectId: projectId(), now: 1700000000002, nonce: 'knd01'
     }))
     const asset = media.assets.value[0]!
-    desktop.mode = 'audio'
+    protocol.files.set('D:/Media/actually.wav', wavBytes(0.5))
     assert.equal(await media.relink(asset.id, 'D:/Media/actually.wav'), true)
-    assert.equal(asset.kind, 'audio', 'the container, not the old label, decides')
+    assert.equal(asset.kind, 'audio', 'the new path\'s kind replaces the old label')
     assert.equal(asset.thumbPath, null)
     assert.equal(asset.filmstripPath, null)
-    assert.equal(asset.waveformPath, 'D:/cache/audio.json')
+    assert.equal(asset.waveformPath, null, 'the strip is the decoder\'s answer now, not a file the probe wrote')
     assert.equal(asset.meta.width, 0, 'no video stream, no invented frame size')
     assert.equal(asset.meta.hasVideo, false)
   })
@@ -413,11 +440,11 @@ async function main() {
       path: 'D:/Media/x.wav', kind: 'audio', projectId: projectId(), now: 1700000000003, nonce: 'thr01'
     }))
     const asset = media.assets.value[0]!
-    desktop.analyzeCalls = 0
+    desktop.statCalls = 0
     assert.equal(await media.relink('asset_nope', 'D:/Media/y.wav'), false, 'nothing to relink')
     assert.equal(await media.relink(asset.id, '   '), false, 'a blank path is not a new file')
-    assert.equal(desktop.analyzeCalls, 0, 'both guards run before any IPC')
-    desktop.mode = 'throw'
+    assert.equal(desktop.statCalls, 0, 'both guards run before any IPC')
+    desktop.throwOnStat = true
     const logged: unknown[][] = []
     const previousError = console.error
     const capture = (...args: unknown[]) => logged.push(args)
@@ -427,6 +454,7 @@ async function main() {
       ok = await media.relink(asset.id, 'D:/Media/z.wav')
     } finally {
       console.error = previousError
+      desktop.throwOnStat = false
     }
     assert.equal(ok, false)
     assert.equal(asset.status, 'error', 'an IPC that died is not a missing file')
@@ -435,7 +463,6 @@ async function main() {
       logged.some(args => String(args[0]).includes('Media analysis failed')),
       'the failure is logged, not swallowed'
     )
-    desktop.mode = 'audio'
   })
 
   await check('the desktop write survives structured clone', () => {
@@ -458,15 +485,17 @@ async function main() {
       meta: { durationSec: 3, width: 0, height: 0, fps: 0, fileSize: 500, mtimeMs: 0, probedAt: null },
       thumbPath: null, filmstripPath: null, waveformPath: null, addedAt: '2026-01-01T00:00:00.000Z'
     } as never)
-    desktop.mode = 'audio'
-    desktop.statKey = 'D:/Media/old.wav'
+    protocol.files.set('D:/Media/old.wav', wavBytes(0.5))
     await media.checkMissing()
     const asset = media.assets.value[0] as never as Record<string, unknown>
     assert.equal(asset.status, 'ready', 'a byte fact restores the file, it does not re-probe it')
     assert.equal(asset.importStatus, undefined, 'and the probe axis stays absent until a real probe answers')
     assert.equal(
       asset.fingerprint,
-      core.cacheKeyForPath('D:/Media/old.wav', { mtimeMs: desktop.audioStat.mtimeMs, size: desktop.audioStat.size }),
+      core.cacheKeyForPath('D:/Media/old.wav', {
+        mtimeMs: protocol.mtimeMs,
+        size: protocol.files.get('D:/Media/old.wav')!.byteLength
+      }),
       'the one key scheme is backfilled from the stat that proved the bytes'
     )
   })
@@ -487,8 +516,16 @@ async function main() {
     // mutated the record, so the name and thumbnail vanished on the next reload.
     assert.match(read('app/composables/useTmcutMedia.ts'), /persistLibrary\(\)\n\s*return asset\.status === 'ready'/,
       'the probe owns the last write')
+    // Slice I deleted the desktop's FFmpeg analysis channel. One demuxer probe
+    // answers on both hosts now, so a call back into that IPC would resurrect a
+    // pipeline that no longer exists — and hang on a path it cannot read.
+    assert.doesNotMatch(read('app/composables/useTmcutMedia.ts'), /ipc\.analyzeAsset/,
+      'the retired analysis channel is not called')
+    assert.doesNotMatch(read('shared/types/electron.ts'), /analyzeAsset/,
+      'and the bridge no longer advertises it')
   })
 
+  protocol.restore()
   console.log(`\n=== All ${passed} asset import checks passed ===`)
 }
 
@@ -530,74 +567,6 @@ function installWebUploads() {
   }
   objectUrls.revokeObjectURL = () => {
     state.revoked += 1
-  }
-  return state
-}
-
-/**
- * A stand-in for the preload bridge and `electron/tools/tmcut.controller.cjs`,
- * answering the three calls the import pipeline makes: analyze one file, stat a
- * list, write the registry.
- */
-function installDesktopIpc(media: { assets: { value: unknown[] } }) {
-  const writes: Record<string, unknown>[][] = []
-  const state = {
-    mode: 'audio' as 'video' | 'audio' | 'missing' | 'throw',
-    analyzeCalls: 0,
-    firstProbeCount: 0,
-    statKey: 'D:/Media/old.wav',
-    writes,
-    videoStat: { size: 4096, mtimeMs: 1700000500000 },
-    audioStat: { size: 640, mtimeMs: 1700000600000 },
-    window: {} as Record<string, unknown>
-  }
-  state.window.electronAPI = {
-    tmcut: {
-      async analyzeAsset({ filePath, kind }: { filePath: string, kind: string }) {
-        state.analyzeCalls++
-        // The batch rule: when the first probe starts, the whole queue is
-        // already in the library.
-        if (state.firstProbeCount === 0) state.firstProbeCount = media.assets.value.length
-        if (state.mode === 'throw') throw new Error('ipc channel closed')
-        if (state.mode === 'missing') return { ok: false, error: `ENOENT: no such file ${filePath}` }
-        // The controller only returns a cover and filmstrip for a video it
-        // decoded, so the answer follows the kind the renderer asked about.
-        if (state.mode === 'audio' || kind === 'audio') {
-          return {
-            ok: true,
-            stat: state.audioStat,
-            probe: { format: { duration: '0.500000' }, streams: [{ codec_type: 'audio', codec_name: 'pcm_s16le' }] },
-            waveCachePath: 'D:/cache/audio.json'
-          }
-        }
-        return {
-          ok: true,
-          stat: state.videoStat,
-          probe: {
-            format: { duration: '2.000000' },
-            streams: [{ codec_type: 'video', codec_name: 'h264', width: 1920, height: 1080, avg_frame_rate: '30000/1001' }]
-          },
-          thumbCachePath: 'D:/cache/key-cover.png',
-          filmstripCachePath: 'D:/cache/key-strip.png',
-          waveCachePath: 'D:/cache/key.json'
-        }
-      },
-      async statFiles(paths: string[]) {
-        const out: Record<string, { exists: boolean, size: number, mtimeMs: number }> = {}
-        for (const path of paths) {
-          out[path] = path === state.statKey ? { exists: true, ...state.audioStat } : { exists: true, ...state.videoStat }
-        }
-        return out
-      },
-      async writeAssetsFile(data: Record<string, unknown>[]) { writes.push(data) },
-      async readAssetsFile() { return null },
-      // The project store debounces a disk write after every timeline mutation;
-      // without these the fake would log a failure that is the harness's, not
-      // the code under test's.
-      async writeProject() { return { ok: true } },
-      async writeRecovery() { return { ok: true } },
-      onDownloadProgress() { return () => {} }
-    }
   }
   return state
 }

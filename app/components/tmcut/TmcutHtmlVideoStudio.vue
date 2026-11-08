@@ -5,18 +5,20 @@ import { collectHtmlTokens, createClock, createFramePace, fpsToRational, lintHtm
 import { HTML_VIDEO_STARTERS, buildHtmlVideoPreviewDocument } from '~/utils/tmcut/htmlVideoStarters'
 import type { HtmlVideoStarter } from '~/utils/tmcut/htmlVideoStarters'
 import { useFileSystem } from '~/composables/useFileSystem'
-import { useTmcutInsertAsset } from '~/composables/useTmcutInsertAsset'
 import { useTmcutIndustries } from '~/composables/useTmcutIndustries'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { clipDurationSec, clipStartSec } from '~/utils/tmcut/clipTime'
 import { parseCaptionCues, serializeCaptionCues, toCaptionCues } from '~/utils/tmcut/captions'
 
 /**
- * HTML/CSS video studio. The composition is authored here, previewed in a
- * sandboxed iframe that is driven frame-first (postMessage → __hf.seek), and
- * rendered by the Nitro server (POST /api/v1/media/html-video) — the same job
- * store the timeline export polls, so progress is the real capture progress and
- * the file is served from /uploads/**.
+ * HTML/CSS video studio. The composition is authored here and previewed in a
+ * sandboxed iframe that is driven frame-first (postMessage → __hf.seek).
+ *
+ * Zero-FFmpeg slice I retired the server-side MP4 render (POST
+ * /api/v1/media/html-video spawned ffmpeg over headless-Chrome frames), so this
+ * surface authors, previews and saves the composition; turning it into an MP4
+ * needs a WebCodecs capture leg that does not exist yet (see
+ * docs/audit/zero-ffmpeg-audit.md, section 10 item 3).
  *
  * The preview iframe runs with `sandbox="allow-scripts"` (opaque origin): it
  * cannot touch the studio DOM or storage, and the only channel is the bridge
@@ -26,12 +28,8 @@ const props = defineProps<{ embedded?: boolean }>()
 const { t } = useI18n()
 const toast = useToast()
 const { selectSaveFile, writeText, isElectron } = useFileSystem()
-const { insertAsset } = useTmcutInsertAsset()
 const { currentProject } = useTmcutProject()
-const inserting = ref(false)
 
-const POLL_MS = 500
-const POLL_LIMIT = Math.ceil((15 * 60 * 1000) / POLL_MS)
 const FALLBACK_DURATION = 5
 
 const starterId = ref<string>('kinetic-title')
@@ -40,28 +38,12 @@ const width = ref(1080)
 const height = ref(1920)
 const fps = ref(30)
 const variables = ref<Record<string, string>>({})
-const allowRemote = ref(false)
-const quality = ref(92)
 const previewFrame = ref<HTMLIFrameElement | null>(null)
 const previewTime = ref(0)
 const declaredDuration = ref(0)
 const previewError = ref('')
 const playing = ref(false)
 const previewDoc = ref('')
-
-interface RenderResult {
-  url: string
-  size: number
-  duration: number
-  frames: number
-}
-const rendering = ref(false)
-const progress = ref(0)
-const outTime = ref(0)
-const jobDuration = ref(0)
-const result = ref<RenderResult | null>(null)
-const renderError = ref('')
-let pollAbort = false
 
 const tokens = computed(() => collectHtmlTokens(html.value))
 const usesCues = computed(() => tokens.value.includes('cues'))
@@ -71,7 +53,6 @@ const lint = computed(() => lintHtmlVideo(effectiveHtml.value))
 const lintErrors = computed(() => lint.value.filter(issue => issue.level === 'error'))
 const lintWarnings = computed(() => lint.value.filter(issue => issue.level === 'warn'))
 const renderDuration = computed(() => declaredDuration.value > 0 ? declaredDuration.value : FALLBACK_DURATION)
-const framesEstimate = computed(() => Math.max(1, Math.round(renderDuration.value * fps.value)))
 const aspectModel = computed({
   get: () => `${width.value}x${height.value}`,
   set: (value: string) => {
@@ -81,8 +62,6 @@ const aspectModel = computed({
     height.value = nextHeight
   }
 })
-const canRender = computed(() => !rendering.value && lintErrors.value.length === 0 && html.value.trim().length > 0)
-const progressPercent = computed(() => Math.round(progress.value))
 
 let previewTimer: ReturnType<typeof setTimeout> | undefined
 let rafId = 0
@@ -146,8 +125,6 @@ function loadStarter(item: HtmlVideoStarter): void {
   previewTime.value = 0
   declaredDuration.value = 0
   previewError.value = ''
-  result.value = null
-  renderError.value = ''
 }
 
 function rebuildPreview(): void {
@@ -158,11 +135,6 @@ watch([html, variables], () => {
   clearTimeout(previewTimer)
   previewTimer = setTimeout(rebuildPreview, 350)
 }, { deep: true, immediate: true })
-
-// Any edit invalidates the previous MP4: it was rendered from different HTML.
-watch([html, variables, width, height, fps, quality, allowRemote], () => {
-  if (result.value && !rendering.value) result.value = null
-})
 
 function postSeek(time: number): void {
   const target = Math.max(0, Math.min(renderDuration.value, time))
@@ -233,78 +205,6 @@ function step(frames: number): void {
   seekFrame(currentPreviewFrame() + frames)
 }
 
-function errorMessage(err: unknown): string {
-  const detail = err as { data?: { message?: string, statusMessage?: string }, message?: string } | null
-  const status = detail?.data?.statusMessage || ''
-  if (status === 'error.renderBusy') return t('tmcut.htmlVideo.busy')
-  if (status === 'error.htmlVideo.noBrowser') return t('tmcut.htmlVideo.noBrowser')
-  return detail?.data?.message || detail?.message || String(err)
-}
-
-async function renderVideo(): Promise<void> {
-  if (!canRender.value) return
-  rendering.value = true
-  progress.value = 0
-  outTime.value = 0
-  result.value = null
-  renderError.value = ''
-  pollAbort = false
-  try {
-    const started = await $fetch<{ jobId: string, duration: number, frames: number }>('/api/v1/media/html-video', {
-      method: 'POST',
-      body: {
-        html: html.value,
-        width: width.value,
-        height: height.value,
-        fps: fps.value,
-        durationSec: renderDuration.value,
-        variables: { ...variables.value },
-        allowRemote: allowRemote.value,
-        quality: quality.value,
-        outputName: `${starterId.value || 'html-video'}.mp4`
-      }
-    })
-    jobDuration.value = started.duration
-    for (let attempt = 0; attempt < POLL_LIMIT; attempt++) {
-      await new Promise(resolve => setTimeout(resolve, POLL_MS))
-      if (pollAbort) throw new Error(t('tmcut.htmlVideo.cancelled'))
-      const job = await $fetch<{
-        status: 'running' | 'done' | 'failed'
-        progress: number
-        outTimeSec: number
-        duration: number
-        url: string | null
-        size: number
-        error: string | null
-      }>(`/api/v1/media/render/${started.jobId}`)
-      if (job.status === 'running') {
-        progress.value = Math.max(0, Math.min(99, job.progress || 0))
-        outTime.value = job.outTimeSec || 0
-        jobDuration.value = job.duration || jobDuration.value
-        continue
-      }
-      if (job.status === 'done' && job.url) {
-        progress.value = 100
-        result.value = {
-          url: job.url,
-          size: job.size,
-          duration: job.duration || started.duration,
-          frames: started.frames
-        }
-        toast.add({ title: t('tmcut.htmlVideo.renderComplete'), color: 'success' })
-        return
-      }
-      throw new Error(job.error || t('tmcut.htmlVideo.renderFailed'))
-    }
-    throw new Error(t('tmcut.htmlVideo.renderTimeout'))
-  } catch (err) {
-    renderError.value = errorMessage(err)
-    toast.add({ title: t('tmcut.htmlVideo.renderFailed'), description: renderError.value, color: 'error' })
-  } finally {
-    rendering.value = false
-  }
-}
-
 async function saveHtml(): Promise<void> {
   const documentHtml = effectiveHtml.value
   if (isElectron.value) {
@@ -329,16 +229,6 @@ async function saveHtml(): Promise<void> {
   link.remove()
   setTimeout(() => URL.revokeObjectURL(url), 4000)
   toast.add({ title: t('tmcut.htmlVideo.compositionSaved'), color: 'success' })
-}
-
-function downloadResult(): void {
-  if (!result.value) return
-  const link = document.createElement('a')
-  link.href = result.value.url
-  link.download = `${starterId.value || 'html-video'}.mp4`
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
 }
 
 function fillCuesFromTimeline(): void {
@@ -369,32 +259,6 @@ function fillCuesFromTimeline(): void {
   toast.add({ title: t('tmcut.htmlVideo.captionsFilled', { n: cues.length }), color: 'success' })
 }
 
-async function addResultToTimeline(): Promise<void> {
-  if (!result.value || inserting.value) return
-  inserting.value = true
-  try {
-    const outcome = await insertAsset(result.value.url).catch(() => {
-      throw new Error(t('tmcut.htmlVideo.addFailed'))
-    })
-    toast.add({
-      title: t('tmcut.htmlVideo.added'),
-      description: outcome.placed ? t('tmcut.htmlVideo.addedToTimeline') : t('tmcut.htmlVideo.addedToLibrary'),
-      color: 'success'
-    })
-  } catch (error) {
-    toast.add({ title: t('tmcut.htmlVideo.addFailed'), description: String((error as Error)?.message || error), color: 'error' })
-  } finally {
-    inserting.value = false
-  }
-}
-
-function formatBytes(bytes: number): string {
-  if (!bytes) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB']
-  const exponent = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)))
-  return `${(bytes / Math.pow(1024, exponent)).toFixed(exponent === 0 ? 0 : 1)} ${units[exponent]}`
-}
-
 onMounted(() => {
   loadStarter(HTML_VIDEO_STARTERS[0]!)
   window.addEventListener('message', handlePreviewMessage)
@@ -404,7 +268,6 @@ onBeforeUnmount(() => {
   clearTimeout(previewTimer)
   playing.value = false
   cancelAnimationFrame(rafId)
-  pollAbort = true
   window.removeEventListener('message', handlePreviewMessage)
 })
 </script>
@@ -429,17 +292,6 @@ onBeforeUnmount(() => {
           @click="saveHtml"
         >
           {{ t('tmcut.htmlVideo.saveHtml') }}
-        </UButton>
-        <UButton
-          color="primary"
-          variant="soft"
-          size="sm"
-          icon="i-lucide-film"
-          :loading="rendering"
-          :disabled="!canRender"
-          @click="renderVideo"
-        >
-          {{ t('tmcut.htmlVideo.render') }}
         </UButton>
       </div>
     </header>
@@ -516,35 +368,9 @@ onBeforeUnmount(() => {
               size="sm"
             />
           </label>
-          <label class="space-y-1 text-xs text-muted">
-            {{ t('tmcut.htmlVideo.quality') }}
-            <UInput
-              id="tmcut-html-video-quality"
-              v-model.number="quality"
-              name="tmcut-html-video-quality"
-              type="number"
-              min="60"
-              max="100"
-              step="2"
-              size="sm"
-            />
-          </label>
-          <label class="flex items-end gap-2 pb-1 text-xs text-muted">
-            <input
-              id="tmcut-html-video-allow-remote"
-              v-model="allowRemote"
-              name="tmcut-html-video-allow-remote"
-              type="checkbox"
-              class="accent-primary-500"
-            >
-            <span>{{ t('tmcut.htmlVideo.allowRemote') }}</span>
-          </label>
         </div>
         <p class="text-xs text-muted">
-          {{ t('tmcut.htmlVideo.durationHint', { duration: renderDuration.toFixed(2), frames: framesEstimate }) }}
-        </p>
-        <p v-if="allowRemote" class="text-xs text-warning">
-          {{ t('tmcut.htmlVideo.allowRemoteHint') }}
+          {{ t('tmcut.htmlVideo.durationHint', { duration: renderDuration.toFixed(2) }) }}
         </p>
       </UCard>
 
@@ -717,68 +543,5 @@ onBeforeUnmount(() => {
         </p>
       </UCard>
     </div>
-
-    <!-- Render job -->
-    <UCard v-if="rendering || result || renderError" :ui="{ body: 'space-y-3' }">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <h3 class="text-sm font-medium text-highlighted dark:text-white">
-          {{ t('tmcut.htmlVideo.resultTitle') }}
-        </h3>
-        <span v-if="rendering" class="font-mono text-xs tabular-nums text-muted">
-          {{ progressPercent }}% · {{ outTime.toFixed(2) }} / {{ jobDuration.toFixed(2) }}s
-        </span>
-      </div>
-      <UProgress v-if="rendering" :model-value="progressPercent" size="sm" />
-      <p v-if="rendering" class="text-xs text-muted">
-        {{ t('tmcut.htmlVideo.renderProgress', { frames: framesEstimate }) }}
-      </p>
-      <p v-if="renderError" class="text-sm text-error">
-        {{ renderError }}
-      </p>
-      <template v-if="result">
-        <video
-          :src="result.url"
-          class="max-h-[420px] w-full rounded-lg bg-black"
-          controls
-          playsinline
-        />
-        <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
-          <span class="font-mono tabular-nums">{{ result.duration.toFixed(2) }}s · {{ result.frames }} {{ t('tmcut.htmlVideo.frames') }} · {{ formatBytes(result.size) }}</span>
-          <div class="flex items-center gap-2">
-            <UButton
-              size="xs"
-              color="neutral"
-              variant="soft"
-              icon="i-lucide-external-link"
-              :href="result.url"
-              external
-              target="_blank"
-              rel="noopener"
-            >
-              {{ t('tmcut.htmlVideo.openResult') }}
-            </UButton>
-            <UButton
-              size="xs"
-              color="neutral"
-              variant="soft"
-              icon="i-lucide-list-plus"
-              :loading="inserting"
-              @click="addResultToTimeline"
-            >
-              {{ t('tmcut.htmlVideo.addToTimeline') }}
-            </UButton>
-            <UButton
-              size="xs"
-              color="primary"
-              variant="soft"
-              icon="i-lucide-download"
-              @click="downloadResult"
-            >
-              {{ t('tmcut.htmlVideo.download') }}
-            </UButton>
-          </div>
-        </div>
-      </template>
-    </UCard>
   </section>
 </template>

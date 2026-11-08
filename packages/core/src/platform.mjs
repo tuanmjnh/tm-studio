@@ -15,7 +15,6 @@ export const PLATFORM_NAMES = Object.freeze(['electron', 'web', 'headless'])
 /** Capability keys, matching TmcutCapabilities in types/runtime.ts. */
 export const PLATFORM_CAPABILITIES = Object.freeze([
   'filesystem',
-  'nativeFFmpeg',
   'webCodecs',
   'webGPU',
   'hardwareEncoding',

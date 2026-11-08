@@ -5,7 +5,7 @@ import { useTmcutProject } from '~/composables/useTmcutProject'
 // toolbar, the canvas menu, the timeline and keyboard shortcuts, while
 // TmcutEditorOverlays renders them. One set of refs keeps both sides in sync
 // without prop drilling (same pattern as useTmcutEditorLayout and
-// useTmcutExportQueue).
+// useTmcutEditorCanvas).
 const showExportModal = ref(false)
 const voiceStudioOpen = ref(false)
 const showSnapshotModal = ref(false)

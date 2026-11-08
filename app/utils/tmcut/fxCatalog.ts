@@ -1,14 +1,14 @@
 /**
  * Render-side transition catalog (roadmap R128 / core C5).
  *
- * Single source of truth for how a TMCut transition key renders in FFmpeg
- * (`xfade=transition=<name>`) and how it is labelled/grouped in the UI. Pure
- * data + tiny helpers — no component, store or core import — so the render
- * graph (app/utils/tmcut/render/video.ts) and the FX library panel consume
- * the exact same table.
+ * Single source of truth for how a TMCut transition key is named, labelled and
+ * grouped in the UI. The `xfade` spellings are the ones core's `XFADE_PREVIEW`
+ * registry draws (ADR-028); no filter runs them any more. Pure data + tiny
+ * helpers — no component, store or core import — so the FX library panel and
+ * the preview consume the exact same table.
  *
  * Keys mirror core KNOWN_TRANSITIONS: the 6 legacy TMCut keys first, then the
- * 39 literal FFmpeg xfade names (alphabetical). tests/unit/
+ * 39 literal xfade names (alphabetical). tests/unit/
  * tmcut_fx_catalog.spec.ts pins the order against the core export, so the two
  * sides cannot drift.
  */
@@ -19,7 +19,7 @@ export type TmcutTransitionCategory
 export interface TmcutTransitionEntry {
   /** TMCut transition key (what a clip stores in `transitionIn.type`). */
   key: string
-  /** FFmpeg xfade transition name. */
+  /** The xfade spelling core's preview registry draws for this key. */
   xfade: string
   category: TmcutTransitionCategory
   /** Readable English label for the UI. */
@@ -39,13 +39,15 @@ export const TRANSITION_CATEGORIES: readonly TmcutTransitionCategory[] = [
 ]
 
 /**
- * Transition names accepted by FFmpeg's xfade filter — the documented
- * `ffmpeg -h filter=xfade` set (transitions 0..57 plus `custom`).
+ * The transition vocabulary. The spellings came from FFmpeg's documented
+ * `ffmpeg -h filter=xfade` set (transitions 0..57 plus `custom`); no filter runs
+ * them any more (ADR-028) — core's `XFADE_PREVIEW` registry draws each name and
+ * `xfadeNameFor()` resolves a stored key onto one of them. The list stays what a
+ * project file may hold, so an old project still opens.
  *
- * `custom` is part of the documented set but is NOT fallback-safe: it
- * requires a user-supplied `expr`, so emitting it as a bare name produces a
- * broken filter graph. `xfadeNameFor()` therefore only passes back the names
- * in this list other than `custom`.
+ * `custom` is part of that documented set but was never fallback-safe: it
+ * requires a user-supplied `expr`, so a bare name carries no geometry to draw.
+ * `xfadeNameFor()` therefore only passes back the names other than `custom`.
  */
 export const FFMPEG_XFADE_NAMES: readonly string[] = [
   'circleclose',
@@ -174,8 +176,8 @@ function catalogEntry(key: string | undefined | null): TmcutTransitionEntry | un
 }
 
 /**
- * Resolves a stored transition key to the FFmpeg xfade name that must be
- * emitted. Never returns something that would break the filter graph:
+ * Resolves a stored transition key to the xfade name the preview registry can
+ * draw. Never returns a name with no geometry behind it:
  *  - a catalog key resolves through its alias (wipe-left -> wipeleft);
  *  - an unknown key that is already a documented xfade name passes through;
  *  - anything else (garbage, missing, `custom`) falls back to `fade`.

@@ -12,9 +12,9 @@
  * that serves both import styles the repo uses. A candidate array such as
  * ["./shared/*.ts", "./shared/*.cjs"] does not work: measured on Node v24.22,
  * the first pattern that misses throws ERR_MODULE_NOT_FOUND instead of falling
- * through to the next candidate, so `#shared/utils/detection-args.cjs` would
- * be looked up as `detection-args.cjs.ts` and the .cjs import would die. With
- * a single target, the exact-file case (.cjs) resolves as written and the
+ * through to the next candidate, so `#shared/utils/stockGuards.ts` would be
+ * looked up as `stockGuards.ts.ts` and the exact-file import would die. With a
+ * single target, a specifier naming its extension resolves as written and the
  * extensionless TypeScript case is settled by the loader's own extension
  * guessing.
  *
@@ -23,8 +23,10 @@
  *    to a real file, so a shared module cannot be importable in Nuxt and
  *    unresolvable under the test runner;
  *  - resolution must work at runtime in the two shapes the repo uses: a
- *    TypeScript module named without an extension and a .cjs module named with
- *    one;
+ *    TypeScript module named without an extension and one named with it. The
+ *    exact-file leg used to be a `.cjs` (the AutoCut argv builder); slice I
+ *    deleted that file with the engine, and the property it proved — a single
+ *    literal target resolves a filename as written — is unchanged.
  *  - no import may traverse outside shared/.
  */
 import { describe, it } from 'node:test'
@@ -101,17 +103,11 @@ describe('package.json imports map for #shared/*', () => {
     assert.equal(store.isSafeRunId('../S01'), false)
   })
 
-  it('imports a .cjs module named with its extension', async () => {
-    const mod = await import('#shared/utils/detection-args.cjs')
-    const build = mod.sceneDetectionArgs ?? mod.default.sceneDetectionArgs
-    assert.equal(typeof build, 'function')
-    const scene = build('in.mp4', 0.4)
-    assert.equal(scene[2], 'in.mp4', 'the input follows -i')
-    assert.ok(scene.includes(`select='gt(scene,0.4)',showinfo`), `got ${JSON.stringify(scene)}`)
-    assert.ok(scene.includes('-fps_mode'), 'the bundled build dropped -vsync')
-    assert.ok(
-      build('in.mp4', 9).includes(`select='gt(scene,0.4)',showinfo`),
-      'an out-of-range threshold falls back to the pipeline default'
-    )
+  it('imports a module named with its exact extension', async () => {
+    const guards = await import('#shared/utils/stockGuards.ts')
+    assert.equal(typeof guards.isStockDownloadHost, 'function')
+    assert.equal(guards.isStockDownloadHost('images.pexels.com'), true)
+    assert.equal(guards.isStockDownloadHost('evilpexels.com'), false, 'the suffix matches on a domain boundary')
+    assert.equal(guards.isStockDownloadHost('127.0.0.1'), false, 'an IP literal is never a provider CDN')
   })
 })

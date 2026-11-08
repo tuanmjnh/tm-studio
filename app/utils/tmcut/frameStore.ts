@@ -30,7 +30,7 @@ import {
   planFrameCacheEviction
 } from 'tmcut-core'
 import { readCachedBytes } from './byteStore'
-import { decodeFrame } from './frameDecode'
+import { decodeFrame, hasFrameDecoder } from './frameDecode'
 import type { TmcutFrameDecodeAsk } from './frameDecode'
 
 /** One frame somebody wants to see. */
@@ -293,6 +293,15 @@ export function createFrameService(
 
 /** The service the whole app shares: one cache, one pool, one set of answers. */
 export const frameService = createFrameService(decodeFrame)
+
+/**
+ * Whether this runtime can answer a frame ask at all. The capability lives
+ * behind the entry point so a control asks the store it already uses, rather
+ * than reaching past it into the decoder module for a second answer.
+ */
+export function canDecodeFrames(): boolean {
+  return hasFrameDecoder()
+}
 
 export function requestFrame(ask: TmcutFrameAsk): Promise<string | null> {
   return frameService.request(ask)

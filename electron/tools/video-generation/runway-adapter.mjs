@@ -293,7 +293,7 @@ async function downloadResult(providerTaskId, destDir) {
   const stats = fs.statSync(destPath)
   if (stats.size === 0) throw new RunwayAdapterError('download-failed', 'Downloaded file is empty')
   
-  // Probe video metadata (shared ffprobe wrapper, resolves bundled binary)
+  // Probe video metadata with the shared demuxer (no external binary).
   const probe = await probeVideo(destPath)
   
   return {

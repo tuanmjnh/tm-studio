@@ -236,8 +236,8 @@ importers:
         specifier: ^4.3.3
         version: 4.3.3
       tm-hub-client:
-        specifier: 1.0.9
-        version: 1.0.9
+        specifier: 1.1.0
+        version: 1.1.0
       uuid:
         specifier: ^14.0.2
         version: 14.0.3
@@ -6723,8 +6723,8 @@ packages:
     resolution: {integrity: sha512-wXR/dYpcqKmfWpEdZjiKJOwCNFndD0DMnrW/cYjVGttEkBfVgcLFHoNrlj47mjOVic9yyNu65alsgF4NQyTa2g==}
     engines: {node: '>=12.0.0'}
 
-  tm-hub-client@1.0.9:
-    resolution: {integrity: sha512-LZSx1DxNTvTf2K0wQbr08FMDQ9DJN5X8kjldefAIa2WgA3IJ61xY9AXSlgL8Vodo0OeDU/EQ7VZ5cIS+ZKpFhw==}
+  tm-hub-client@1.1.0:
+    resolution: {integrity: sha512-SgnrtUiMcUfGpBEZQrdFNCu7CH4+wH+sQHX1IXOsD53IrNrMipa3tTpNKyL/8E4WDrakNgk2RkZepKFmgyVanA==}
 
   tmp-promise@3.0.3:
     resolution: {integrity: sha512-RwM7MoPojPxsOBYnyd2hy0bxtIlVrihNs9pj5SUvY8Zz1sQcQG2tG1hSr8PDxfgEB8RNKDhqbIlroIarSNDNsQ==}
@@ -14773,7 +14773,7 @@ snapshots:
       fdir: 6.5.0(picomatch@4.0.7)
       picomatch: 4.0.7
 
-  tm-hub-client@1.0.9: {}
+  tm-hub-client@1.1.0: {}
 
   tmp-promise@3.0.3:
     dependencies:

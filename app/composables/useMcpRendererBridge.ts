@@ -7,7 +7,6 @@ import { tmcutHostBridge } from '~/utils/tmcut/hostBridge'
 import { useTmcutAgentTools } from './useTmcutAgentTools'
 import { useTmcutAssetCenter } from './useTmcutAssetCenter'
 import { useTmcutTemplates } from './useTmcutTemplates'
-import { useTmcutExportQueue } from './useTmcutExportQueue'
 import { useVideoFactory } from './useVideoFactory'
 
 /**
@@ -20,7 +19,6 @@ export function useMcpRendererBridge() {
   const agent = useTmcutAgentTools()
   const assetCenter = useTmcutAssetCenter()
   const templates = useTmcutTemplates()
-  const exportQueue = useTmcutExportQueue()
   const factory = useVideoFactory()
 
   // Map of tool name to handler function
@@ -150,61 +148,6 @@ export function useMcpRendererBridge() {
       if (!template) return { ok: false, error: { code: 'NOT_FOUND', message: 'Template not found', retryable: false } }
       const result = await templates.exportTemplate(template)
       return { ok: true, data: result }
-    },
-
-    // === Export Queue (Phase 4) ===
-    'export.list_jobs': async (params, _projectId) => {
-      const jobs = exportQueue.queue.value.filter((j) => {
-        if (params.status && params.status !== 'all' && j.status !== params.status) return false
-        return true
-      }).slice(0, params.limit || 50)
-      return { ok: true, data: jobs }
-    },
-    'export.add_job': async (params, _projectId) => {
-      const { useToolTaskManager } = await import('~/composables/useToolTaskManager')
-      const taskManager = useToolTaskManager('ffmpeg')
-      taskManager.initManager({
-        threads: 1,
-        delay: 1000,
-        maxRetry: 3,
-        timeout: 3600000
-      })
-      const taskInput: ToolTask = {
-        command: 'ffmpeg',
-        args: ['-y', '-i', 'input.mp4', 'output.mp4'],
-        options: { projectId: params.projectId, outputPath: params.outputPath, mode: params.mode, specs: params.specs, duration: params.duration },
-        timeout: 3600000
-      }
-      const result = await exportQueue.enqueueJob({
-        projectId: params.projectId,
-        projectName: 'MCP Export',
-        outputPath: params.outputPath,
-        mode: params.mode,
-        specs: params.specs,
-        duration: params.duration,
-        task: taskInput
-      })
-      return { ok: true, data: result }
-    },
-    'export.pause_job': async (_params, _projectId) => {
-      await exportQueue.pauseQueue()
-      return { ok: true }
-    },
-    'export.resume_job': async (_params, _projectId) => {
-      await exportQueue.resumeQueue()
-      return { ok: true }
-    },
-    'export.cancel_job': async (params, _projectId) => {
-      await exportQueue.cancelJob(params.jobId)
-      return { ok: true }
-    },
-    'export.retry_job': async (params, _projectId) => {
-      const result = await exportQueue.retryJob(params.jobId)
-      return { ok: true, data: result }
-    },
-    'export.clear_history': async (_params, _projectId) => {
-      await exportQueue.clearDoneJobs()
-      return { ok: true }
     },
 
     // === Video Factory (Phase 7) ===
