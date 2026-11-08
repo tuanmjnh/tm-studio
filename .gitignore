@@ -43,3 +43,7 @@ yt-dlp.exe
 
 # Dev Electron profile (dev:electron --user-data-dir)
 .dev-user-data/
+
+# Retired FFmpeg engine source, kept on this machine for reference only.
+# Local copy preserved; the repo carries no engine any more (ADR-028).
+backup/
