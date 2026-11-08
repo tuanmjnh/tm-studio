@@ -165,10 +165,12 @@ export function clearTransition(timeline, clipId) {
 //  a plain crossfade, so choosing `smoothleft` showed something the export would
 //  never paint. This section is the single source of what a key LOOKS like.
 //
-//  Every row is measured, not designed. Method: solid black plate -> solid white
-//  plate through `xfade=transition=<name>:duration=0.4:offset=0.8` at 320x180
-//  with `resources/ffmpeg.exe` (N-126482-g903325e279-20260909), the 12 transition
-//  frames decoded as gray, then read three ways — mean luminance is the fill
+//  Every row is measured, not designed. Method: while that engine still existed
+//  (N-126482-g903325e279-20260909), solid black and solid white plates went
+//  through `xfade=transition=<name>:duration=0.4:offset=0.8` at 320x180 and the
+//  12 transition frames were decoded as gray. Slice J deleted both the emitter
+//  and the binary, so the numbers below are frozen measurements this repo can no
+//  longer re-run. Each frame was then read three ways — mean luminance is the fill
 //  fraction (0 and 255 make it exact), the 50%-luminance crossing is the boundary
 //  position, and which pixels are over 128 IS the shape. The third read is the
 //  one that separates a family from its mirror: a wipe, a squeeze and a closing

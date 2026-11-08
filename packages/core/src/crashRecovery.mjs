@@ -155,8 +155,20 @@ export async function runHealthChecks() {
     checks.push({ name: 'disk-access', status: 'fail', detail: String(e.message || e) })
   }
 
-  // FFmpeg availability (main process only — renderer can't check directly)
-  checks.push({ name: 'ffmpeg', status: 'unknown', detail: 'Check in main process' })
+  // Encoder capability (slice J: FFmpeg is gone, WebCodecs is the only engine).
+  // This runs in whichever context called it — a renderer sees the real
+  // constructor, a Node/main context has none, and "no encoder in THIS context"
+  // is reported as such rather than as a missing engine.
+  try {
+    const hasEncoder = typeof globalThis['VideoEncoder'] === 'function'
+    checks.push({
+      name: 'webcodecs',
+      status: hasEncoder ? 'ok' : 'warn',
+      detail: hasEncoder ? 'VideoEncoder available' : 'VideoEncoder not in this context (renderer-only)'
+    })
+  } catch {
+    checks.push({ name: 'webcodecs', status: 'fail', detail: 'WebCodecs check failed' })
+  }
 
   // GPU / WebGL (renderer only)
   try {

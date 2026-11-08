@@ -2,8 +2,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  parseSceneOutput,
-  parseSilenceOutput,
   overlapDuration,
   scoreSegments,
   blendSceneInterest,
@@ -11,42 +9,7 @@ import {
   analyzeTranscriptSegment
 } from '../src/analysis.mjs'
 
-const SHOWINFO = `
-[Parsed_showinfo_1 @ 0x123] n:  10 pts:  240 pts_time:2.000 s:1920x1080 fmt:yuv420p
-[Parsed_showinfo_1 @ 0x123] n:  25 pts:  600 pts_time:5.000 s:1920x1080 fmt:yuv420p
-[Parsed_showinfo_1 @ 0x123] n:  40 pts:  960 pts_time:8.000 s:1920x1080 fmt:yuv420p
-`
-
-const SILENCE = `
-[silencedetect @ 0xabc] silence_start: 1.000
-[silencedetect @ 0xabc] silence_end: 3.000 | silence_duration: 2.000
-[silencedetect @ 0xabc] silence_start: 9.500
-`
-
 describe('analysis', () => {
-  it('parses showinfo cuts into shot segments', () => {
-    const segments = parseSceneOutput(SHOWINFO, 10)
-    assert.deepEqual(segments, [
-      { start: 0, end: 2 },
-      { start: 2, end: 5 },
-      { start: 5, end: 8 },
-      { start: 8, end: 10 }
-    ])
-  })
-
-  it('handles empty scene output', () => {
-    assert.deepEqual(parseSceneOutput('', 0), [])
-    assert.deepEqual(parseSceneOutput('no cuts here', 6), [{ start: 0, end: 6 }])
-  })
-
-  it('parses silencedetect ranges and closes dangling starts', () => {
-    assert.deepEqual(parseSilenceOutput(SILENCE, 12), [
-      { start: 1, end: 3 },
-      { start: 9.5, end: 12 }
-    ])
-    assert.deepEqual(parseSilenceOutput('', 5), [])
-  })
-
   it('measures range overlap', () => {
     assert.equal(overlapDuration(0, 10, [{ start: 2, end: 5 }]), 3)
     assert.equal(overlapDuration(0, 10, []), 0)

@@ -8,8 +8,7 @@ import {
   setKeyframe,
   removeKeyframe,
   propsWithKeyframes,
-  keyframeTimes,
-  keyframeExpr
+  keyframeTimes
 } from '../src/keyframes.mjs'
 
 const T = 120000 // ticks per second
@@ -140,63 +139,5 @@ describe('keyframes', () => {
 
   it('exposes the easing names', () => {
     assert.deepEqual(KEYFRAME_EASINGS, ['linear', 'ease-in', 'ease-out', 'ease-in-out', 'step'])
-  })
-
-  describe('keyframeExpr (Roadmap R2, core C3)', () => {
-    it('returns null when prop has no keyframes or clip is empty', () => {
-      assert.equal(keyframeExpr(null, 'scale'), null)
-      assert.equal(keyframeExpr({}, 'scale'), null)
-      assert.equal(keyframeExpr({ keyframes: [] }, 'scale'), null)
-      assert.equal(keyframeExpr(clipWith({ t: 0, prop: 'x', value: 10 }), 'scale'), null)
-    })
-
-    it('returns constant number string for a single keyframe', () => {
-      const clip = clipWith({ t: 0, prop: 'scale', value: 100 })
-      assert.equal(keyframeExpr(clip, 'scale'), '100')
-      const clip2 = clipWith({ t: T, prop: 'volume', value: 80.5 })
-      assert.equal(keyframeExpr(clip2, 'volume'), '80.5')
-    })
-
-    it('builds linear interpolation expression across segments', () => {
-      const clip = clipWith(
-        { t: 0, prop: 'x', value: 0, easing: 'linear' },
-        { t: 2 * T, prop: 'x', value: 100 }
-      )
-      const expr = keyframeExpr(clip, 'x', 't')
-      assert.ok(expr.includes('if(lt(t,0),0,'))
-      assert.ok(expr.includes('if(lt(t,2),'))
-      assert.ok(expr.includes('(0+(100)*((t-0)/2))'))
-      assert.ok(expr.endsWith(',100))'))
-    })
-
-    it('supports custom time variable (e.g. T in geq)', () => {
-      const clip = clipWith(
-        { t: 0, prop: 'opacity', value: 20 },
-        { t: T, prop: 'opacity', value: 100 }
-      )
-      const expr = keyframeExpr(clip, 'opacity', 'T')
-      assert.ok(expr.includes('T'))
-      assert.ok(!expr.includes('(t-'))
-    })
-
-    it('supports all easing formulas in expression', () => {
-      const clip = clipWith(
-        { t: 0, prop: 'scale', value: 0, easing: 'ease-in' },
-        { t: T, prop: 'scale', value: 50, easing: 'ease-out' },
-        { t: 2 * T, prop: 'scale', value: 100, easing: 'ease-in-out' },
-        { t: 3 * T, prop: 'scale', value: 150, easing: 'step' },
-        { t: 4 * T, prop: 'scale', value: 200 }
-      )
-      const expr = keyframeExpr(clip, 'scale', 't')
-      assert.ok(expr)
-      // ease-in square
-      assert.ok(expr.includes('*((t-0)/1)'))
-      // ease-out (1 - (1-u)*(1-u))
-      assert.ok(expr.includes('(1-(1-((t-1)/1))*(1-((t-1)/1)))'))
-      // ease-in-out
-      assert.ok(expr.includes('if(lt(((t-2)/1),0.5),2*'))
-      // step
-      assert.ok(expr.includes(',150,'))
-    })
   })
 })

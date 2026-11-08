@@ -22,7 +22,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { EFFECT_REGISTRY, KNOWN_TRANSITIONS, XFADE_COMB_PERIOD, XFADE_PREVIEW, fxCapabilities, lut3dChain } from 'tmcut-core'
+import { EFFECT_REGISTRY, KNOWN_TRANSITIONS, XFADE_COMB_PERIOD, XFADE_PREVIEW, fxCapabilities, lutGrade } from 'tmcut-core'
 import {
   resolveFxPreview,
   effectAdapterKeys,
@@ -258,7 +258,7 @@ check('effectCss is the live-preview face and matches the documented scale', () 
   assert.equal(effectCss('nope', {}), '')
 })
 
-check('a clip lut3d entry grades the live preview from the export chain', () => {
+check('a clip lut3d entry grades the live preview from the semantic grade', () => {
   const warm = effectCssParts('lut3d', { lut: 'warm' })
   assert.ok(warm.filter.includes('brightness') || warm.filter.includes('sepia'), warm.filter)
   assert.equal(warm.filter, lutCss('warm'))
@@ -334,14 +334,14 @@ check('layer z-order is always defined (nothing paints by accident)', () => {
   }
 })
 
-// 5. FILTERS DERIVED FROM THE EXPORT CHAIN -----------------------------------
-check('filter grades come from the lut3d chain, not a hand-copied table', () => {
+// 5. FILTERS DERIVED FROM THE SEMANTIC GRADE --------------------------------
+check('filter grades come from lutGrade, not a hand-copied table', () => {
   // 'neutral' is the documented no-op: identity, exact, one plate.
   const neutral = anim('neutral', true, {}, 'filter')
   assert.equal(neutral.layers.length, 1)
   assert.equal(neutral.status.fidelity, 'exact')
-  assert.equal(lut3dChain('neutral'), null)
-  assert.equal(lut3dChain('not-a-preset'), null)
+  assert.equal(lutGrade('neutral'), null)
+  assert.equal(lutGrade('not-a-preset'), null)
 
   const mono = anim('mono', true, {}, 'filter').layers[1]
   assert.ok(mono?.filter?.includes('grayscale(1)'), mono?.filter)

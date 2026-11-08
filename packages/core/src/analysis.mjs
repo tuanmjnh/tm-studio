@@ -1,60 +1,11 @@
 // =============================================================================
 //  tmcut-core — analysis
 //  Pure media-analysis helpers for AutoCut (docs sections 39-40, Phase 16).
-//  The Electron runtime executes ffmpeg and returns RAW stderr text; this
-//  module parses it and scores segments per AutoCut profile. No process,
-//  no filesystem, no network — fully unit-tested. The shot law itself lives in
-//  detection.mjs, shared with the decoder-side scan slice E puts next to it.
+//  Scores segments per AutoCut profile from plain numbers. No process, no
+//  filesystem, no network — fully unit-tested. Slice J retired the FFmpeg
+//  stderr readers: cut instants now come from the decoder-side scan, and the
+//  one shot law stays in detection.mjs (`cutsToShots`).
 // =============================================================================
-
-import { cutsToShots } from './detection.mjs'
-
-/**
- * Parse `select='gt(scene,N)',showinfo` stderr into shot segments.
- * showinfo prints `pts_time:<sec>` per scene cut; the cut INSTANTS are what
- * this reader owns, and turning them into shots is one law shared with the
- * decoder-side scan (detection.mjs `cutsToShots`), so both producers hand the
- * scorer the same list for the same instants.
- */
-export function parseSceneOutput(stderrText, durationSec) {
-  const text = String(stderrText ?? '')
-  const cuts = []
-  const pattern = /pts_time:(\d+(?:\.\d+)?)/g
-  let match = pattern.exec(text)
-  while (match) {
-    const time = Number(match[1])
-    if (Number.isFinite(time)) cuts.push(time)
-    match = pattern.exec(text)
-  }
-  return cutsToShots(cuts, durationSec)
-}
-
-/**
- * Parse `silencedetect` stderr into silence ranges [{ start, end }].
- * Dangling silence_start (no end before EOF) closes at durationSec.
- */
-export function parseSilenceOutput(stderrText, durationSec) {
-  const text = String(stderrText ?? '')
-  const duration = Number.isFinite(durationSec) && durationSec > 0 ? durationSec : 0
-  const ranges = []
-  const pattern = /silence_(start|end):\s*(-?[\d.]+)/g
-  let match = pattern.exec(text)
-  let open = null
-  while (match) {
-    const time = Number(match[2])
-    if (match[1] === 'start') {
-      if (open === null && Number.isFinite(time)) open = Math.max(0, time)
-    } else if (open !== null && Number.isFinite(time) && time > open) {
-      ranges.push({ start: round3(open), end: round3(time) })
-      open = null
-    }
-    match = pattern.exec(text)
-  }
-  if (open !== null && duration > open) {
-    ranges.push({ start: round3(open), end: round3(duration) })
-  }
-  return ranges
-}
 
 function round3(value) {
   return Math.round(value * 1000) / 1000

@@ -256,7 +256,7 @@ export function mediaFileKey(input: unknown): string
 export function mediaFileName(input: unknown): string
 export function extensionOf(input: unknown): string
 export function classifyAssetKind(input: unknown): TmcutAssetKind | null
-/** True when the path is a still whose FFmpeg decoder accepts a raster size. */
+/** True when the path is a still drawn from geometry (SVG), not pixels. */
 export function isVectorStillImage(input: unknown): boolean
 export function formatDurationSec(sec: unknown): string
 export function formatFileSize(bytes: unknown): string
@@ -298,12 +298,6 @@ export function fnv1aHex(text: string): string
 export function cacheKeyForPath(path: string, revision?: { mtimeMs?: number, size?: number }): string
 export function cachePathFor(cacheDir: string, kind: string, key: string, extension: string): string
 
-export interface ProxyOptions {
-  width?: number
-  crf?: number
-  fps?: number
-}
-export function buildProxyArgs(input: string, output: string, options?: number | ProxyOptions): string[]
 
 export function validateEdl(edl: unknown): string[]
 export function selectSegments(edl: TmcutEdl, minScore?: number): TmcutEdlSegment[]
@@ -362,9 +356,10 @@ export type CoreFadeClip = TmcutTimelineClip | {
 } | null | undefined
 export function fadeDuration(clip: CoreFadeClip, edge: TmcutClipFadeEdge): number
 export function gainAt(clip: CoreFadeClip, atTicks: number): number
-export function volumeExpr(clip: CoreFadeClip): string
 // --- R124 A1: track-level audio (CapCut §5.3) ---
-export function panFilter(pan: number): string
+// Slice J retired `volumeExpr` (FFmpeg fade expression) and `panFilter`
+// (`stereotools` argv). `gainAt` is the live gain law; pan is a documented
+// mixer gap in the slice J section of docs/audit/zero-ffmpeg-audit.md.
 export function isTrackMuted(track: { muted?: boolean } | null | undefined): boolean
 
 // --- Zero-FFmpeg G3/G4: which layers make sound at one tick, and their time ---
@@ -563,9 +558,6 @@ export function relinkAsset(registry: CoreAssetRecord[], id: string, locator: Co
 export function removeAsset(registry: CoreAssetRecord[], id: string): boolean
 export function listAssets(registry: CoreAssetRecord[], kind?: CoreAssetKind): CoreAssetRecord[]
 
-export function parseFrameRate(raw: unknown): number
-export function normalizeProbe(payload: unknown): TmcutMediaMetadata | null
-
 export const MEDIA_WARNING_SEVERITY: Record<string, 'info' | 'warning' | 'error'>
 
 export function pickDuration(
@@ -604,8 +596,9 @@ export function v3ClipToTicks(clip: TmcutTimelineClip): CoreV1TrackItem
 export function ticksMatchesV3(item: CoreV1TrackItem, clip: TmcutTimelineClip): boolean
 export function syncTicksResult(v1Tracks: CoreV1Track[], afterV3: TmcutTimeline): CoreV3SyncStats
 
-export function parseSceneOutput(stderrText: unknown, durationSec: number): CoreSceneSegment[]
-export function parseSilenceOutput(stderrText: unknown, durationSec: number): CoreSilenceRange[]
+// Slice J retired the ffprobe-JSON normalizer and the FFmpeg stderr readers.
+// Probed media flows through mediaInfo.mjs (buildMediaInfo); cut instants come
+// from detection.mjs (`sceneCuts` + `cutsToShots`).
 export function overlapDuration(start: number, end: number, ranges?: Array<{ start: number, end: number }>): number
 export interface CoreTranscriptItem {
   start: number
@@ -681,40 +674,15 @@ export function ratioIdOf(width: number, height: number): string
 export function ratioLabel(width: number, height: number): string
 export function normalizeCanvas(canvas: unknown): TmcutCanvas
 export function computeFitObjectStyle(mode: string, focusX?: number, focusY?: number, cropRect?: { x: number, y: number, w: number, h: number } | null): { objectFit: 'contain' | 'cover' | 'fill', objectPosition: string }
-export function buildFfmpegFitFilters(mode: string, canvasW: number, canvasH: number, options?: { focusX?: number, focusY?: number, cropRect?: { x: number, y: number, w: number, h: number } | null, padColor?: string, rotation?: number }): string[]
 
 /**
- * Media placement resolved from a stored clip (V4 M3): the defaults the two fit
- * adapters above already assume, so the evaluator's layer and the render clip
- * cannot disagree on fit, focus or crop. `cropRect` comes back as stored —
- * each adapter clamps it itself.
+ * Media placement resolved from a stored clip (V4 M3): the defaults the
+ * preview fit adapter already assumes, so the evaluator's layer and the
+ * render plate cannot disagree on fit, focus or crop. `cropRect` comes back
+ * as stored.
  */
 export function resolveClipLayout(clip: { fit?: string | null, focusX?: number, focusY?: number, cropRect?: TmcutCropRect | null } | null | undefined): CoreEvaluatedLayout
 
-export interface TmcutFfmpegTransform {
-  /** Standalone background source chain (`color=...`) — label it yourself. */
-  bg: string
-  /** Appends to the clip's own filter chain (`scale=W:H`). */
-  tail: string
-  /** Joins the two labeled inputs (`overlay=x=..:y=..:shortest=1`). */
-  overlay: string
-}
-
-export function buildFfmpegTransform(options?: {
-  canvasW: number
-  canvasH: number
-  scale?: number
-  x?: number
-  y?: number
-  scaleExpr?: string | null
-  xExpr?: string | null
-  yExpr?: string | null
-  fps?: number
-  duration?: number
-  bgColor?: string
-  /** Phase 4: pre-labeled background stream (e.g. `[v_bg]`) used instead of the inline `color=` source — for image backgrounds. */
-  bgInput?: string
-}): TmcutFfmpegTransform | null
 export function reframeTransform(x: number, y: number, fromW: number, fromH: number, toW: number, toH: number): { x: number, y: number }
 export function previewScale(containerWidth: number, canvasWidth: number): number
 
@@ -743,45 +711,12 @@ export function clampCropRect(rect: unknown, minSize?: number): TmcutCropRect
 export function applyCropRatio(rect: unknown, ratio: number | null | undefined, sourceW?: number, sourceH?: number): TmcutCropRect
 
 // --- Canvas Background (Phase 4) ---
-export interface TmcutBackgroundOptions {
-  canvasW: number
-  canvasH: number
-  fps: number
-  duration: number
-  background: { type: 'color' | 'image' | 'transparent', value?: string }
-}
-/** Self-contained `color=` source chain; append your own stream label. */
-export interface TmcutBackgroundSourceDescriptor {
-  type: 'color' | 'transparent'
-  kind: 'source'
-  chain: string
-}
-/** Image background: an FFmpeg INPUT (see `stillImageInputFlags`); apply `tail` to the labeled stream. */
-export interface TmcutBackgroundImageDescriptor {
-  type: 'image'
-  kind: 'input'
-  file: string
-  inputFlags: string[]
-  tail: string
-}
-export type TmcutBackgroundDescriptor = TmcutBackgroundSourceDescriptor | TmcutBackgroundImageDescriptor
-export function buildBackgroundSource(options: TmcutBackgroundOptions): TmcutBackgroundDescriptor
-
-export interface TmcutStillInputOptions {
-  /** Frame rate for the loop; unusable values fall back to 30. */
-  fps?: number
-  /** Raster box, sent ONLY for a vector still — a raster decoder rejects it. */
-  width?: number
-  height?: number
-  /** Seconds to bound the loop to; omit for an input longer than one clip. */
-  duration?: number
-}
-
-/**
- * Input flags for a still image: always loops, and gives a vector still the
- * box it should rasterise into.
- */
-export function stillImageInputFlags(path: string, options?: TmcutStillInputOptions): string[]
+//
+// Slice J retired the FFmpeg background descriptor and still-input argv
+// emitters. What remains is the semantic answer a painter needs:
+// `encodeCanvasFill` (exportContent.mjs) names the fill colour one painted
+// frame starts from, or `null` when no colour paints the background
+// correctly (transparent, or a real image).
 
 // --- Keyframes (Roadmap C3) ---
 export type TmcutKeyframeEasing = 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out' | 'step'
@@ -805,7 +740,6 @@ export function setKeyframe(clip: { keyframes?: TmcutKeyframe[] } | null | undef
 export function removeKeyframe(clip: { keyframes?: TmcutKeyframe[] } | null | undefined, prop: string, atTicks: number, toleranceTicks?: number): boolean
 export function propsWithKeyframes(clip: { keyframes?: TmcutKeyframe[] } | null | undefined): string[]
 export function keyframeTimes(clip: { keyframes?: TmcutKeyframe[] } | null | undefined, prop: string): number[]
-export function keyframeExpr(clip: { keyframes?: TmcutKeyframe[] } | null | undefined, prop: string, timeVar?: string): string | null
 
 // --- Masks (R124 A3, CapCut 5.7) ---
 export type TmcutMaskShape = 'rectangle' | 'circle' | 'linear'
@@ -837,20 +771,14 @@ export type TmcutMaskInput = Partial<TmcutMask> & { shape: TmcutMaskShape }
 export function normalizeMask(mask: (Partial<TmcutMask> & { shape?: string | null }) | null | undefined): TmcutMask | null
 
 /**
- * FFmpeg `geq` alpha expression (0..255) for the mask. Contains commas —
- * the caller must wrap it in single quotes inside the geq filter.
- */
-export function maskAlphaExpr(mask: (Partial<TmcutMask> & { shape?: string | null }) | null | undefined): string
-
-/**
  * CSS `mask-image` SVG data-URI for the browser preview (authored in the
  * given pixel aspect so rotation is not distorted). Null without a mask.
  */
 export function maskCssMaskImage(mask: (Partial<TmcutMask> & { shape?: string | null }) | null | undefined, wPx?: number, hPx?: number): string | null
 
 // --- Text style law (V4 Phase 2, closes the last app-side copy) ---
-// One set of pixel numbers feeds two syntaxes: the preview's CSS overlay and
-// the export's drawtext options. Hosts must not re-derive them.
+// One set of pixel numbers the preview's CSS overlay reads. The exporter
+// refuses text clips by name (slice J), so no second syntax exists.
 
 /** Font size used when a text clip carries none. */
 export const DEFAULT_TEXT_FONT_SIZE: number
@@ -858,13 +786,13 @@ export const DEFAULT_TEXT_FONT_SIZE: number
 /** Glyph colour used when a text clip carries none. */
 export const DEFAULT_TEXT_COLOR: string
 
-/** Stroke width in px — drawtext `borderw` and the CSS text stroke. */
+/** Stroke width in px — the CSS text stroke. */
 export function textStrokeWidth(fontSize: number): number
 
-/** Shadow offset in px — drawtext `shadowx`/`shadowy` and CSS text-shadow. */
+/** Shadow offset in px — the CSS text-shadow. */
 export function textShadowOffset(fontSize: number): number
 
-/** Plate padding in px — drawtext `boxborderw` and the CSS plate padding. */
+/** Plate padding in px — the CSS plate padding. */
 export function textBoxPadding(fontSize: number): number
 
 // --- Sticker catalog (R124 A6, CapCut §3.4) ---
@@ -997,7 +925,6 @@ export function rampIntegral(clip: { speed?: number, speedPoints?: TmcutSpeedPoi
 export function rampTimelineToSource(clip: { in?: number, out?: number, speed?: number, reverse?: boolean, speedPoints?: TmcutSpeedPoint[] | null } | null | undefined, atTicks: number): number
 export const SPEED_RAMP_PRESETS: string[]
 export function buildRampPreset(kind: string, durationTicks: number, baseSpeed?: number): TmcutSpeedPoint[]
-export function rampSetptsExpr(clip: { speedPoints?: TmcutSpeedPoint[] | null } | null | undefined, uVariable?: string): string | null
 // V4 G5 follow-up: a split inherits the time map. `in`/`out` of each half are
 // SOURCE ticks; `speed` is that half's own mean, which is what keeps its
 // derived length (span/speed) on the cut the user asked for.
@@ -1052,7 +979,7 @@ export interface TmcutEffectDescriptor {
   /** English constant label; UIs translate by `type` instead. */
   label: string
   params: TmcutEffectParam[]
-  /** False while the export compiler cannot map this effect yet (R4). */
+  /** Definition completeness: the registry ships a full semantic face (params + preview + grade ops). Not a promise the file export bakes it — `planEncodeContent` decides that separately. */
   renderReady: boolean
   /** Registry bucket used by the library panels; missing means `other`. */
   category?: string
@@ -1063,7 +990,6 @@ export interface TmcutEffectDescriptor {
 export const EFFECT_REGISTRY: Record<string, TmcutEffectDescriptor>
 export function validateEffect(effect: unknown): string[]
 export function normalizeEffects(list: unknown): TmcutClipEffect[]
-export function buildFfmpegEffectFilters(effects: unknown): string[]
 /** Capability matrix for one effect; null for an unregistered type. */
 export function fxCapabilities(type: string): {
   fidelity: TmcutEffectPreview['fidelity']
@@ -1076,23 +1002,21 @@ export function fxCapabilities(type: string): {
 } | null
 /** Coerce one raw param value into registry bounds; undefined when unknown. */
 export function clampEffectParam(type: string, name: string, raw: unknown): unknown
-/** The export FFmpeg chain of one lut3d preset; null when it has none (unknown id or the `neutral` no-op). */
-export function lut3dChain(preset: string): string | null
 
-export interface StabilizeOptions {
-  level?: TmcutStabilizeLevel
-  smoothing?: number
-  shakiness?: number
-  accuracy?: number
-  stepsize?: number
-  zoom?: number
-  optalgo?: string
-}
-export const STABILIZE_PRESETS: Record<TmcutStabilizeLevel, Required<Omit<StabilizeOptions, 'level'>>>
-export function escapeFilterPath(filePath: string): string
-export function resolveStabilizeOptions(options?: TmcutStabilizeLevel | StabilizeOptions): Required<StabilizeOptions>
-export function buildVidstabDetectArgs(input: string, trfPath: string, options?: TmcutStabilizeLevel | StabilizeOptions): string[]
-export function buildVidstabTransformArgs(input: string, trfPath: string, output: string, options?: TmcutStabilizeLevel | StabilizeOptions): string[]
+/** One semantic grade instruction (slice J): a typed op a renderer consumes directly, never FFmpeg text. */
+export type TmcutGradeOp =
+  | { op: 'balance', rs?: number, gs?: number, bs?: number, rm?: number, gm?: number, bm?: number, rh?: number, gh?: number, bh?: number }
+  | { op: 'eq', brightness?: number, contrast?: number, saturation?: number }
+  | { op: 'curves', preset: 'lighter' | 'medium_contrast' | 'strong_contrast' | 'cross_process' }
+  | { op: 'desaturate' }
+  | { op: 'sepia' }
+  | { op: 'grain', amount: number }
+/** Ordered semantic grade of one lut3d preset; null for an unknown id or the `neutral` no-op. */
+export function lutGrade(preset: string): TmcutGradeOp[] | null
+
+// Slice J retired the vidstab argv planners with the FFmpeg engine; the
+// `stabilize` clip flags survive as stored data, and the exporter refuses such
+// clips by name (planEncodeContent -> 'stabilize').
 
 export interface TmcutMediaFolder {
   id: string
@@ -1920,10 +1844,10 @@ export interface CoreEvaluatedText {
 }
 
 /**
- * Media placement resolved from the stored clip, with the defaults the two
+ * Media placement resolved from the stored clip, with the defaults the
  * renderers already assume. `cropRect` passes through as stored: core clamps
- * it inside `computeFitObjectStyle` (preview) and `buildFfmpegFitFilters`
- * (export), so the model carries one rect rather than three clamping rules.
+ * it inside `computeFitObjectStyle` (preview) and `planEncodePlate` (export),
+ * so the model carries one rect rather than three clamping rules.
  */
 export interface CoreEvaluatedLayout {
   fit: string

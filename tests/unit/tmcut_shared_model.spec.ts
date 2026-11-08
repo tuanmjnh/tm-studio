@@ -7,8 +7,8 @@
  * `fit`/`focus`/`cropRect` at all, while the FFmpeg compiler pulled `raw.mask`
  * and `raw.cropRect` off the app item. A third renderer (the WebCodecs host at
  * M5, WASM at M8) reading only the layer therefore could not place a frame, and
- * an unknown mask shape read as "masked" in the model while both alpha builders
- * returned empty — masked on paper, unmasked on screen.
+ * an unknown mask shape read as "masked" in the model while the preview
+ * painted no mask — masked on paper, unmasked on screen.
  *
  * Slice I deleted the FFmpeg compiler, so the third copy is gone rather than
  * agreeing. What this spec owns now:
@@ -31,7 +31,6 @@ import { fileURLToPath } from 'node:url'
 import {
   TICKS_PER_SECOND,
   evaluateTimeline,
-  maskAlphaExpr,
   maskCssMaskImage,
   planEncodeContent,
   resolveClipLayout,
@@ -108,10 +107,9 @@ check('the layer reports sanitized mask geometry, not the stored fragment', () =
 
 check('both painters build their mask from the object the layer carries', () => {
   // The equality that makes M3 true: one normalized geometry -> the CSS mask
-  // and the alpha expression cannot describe different shapes.
-  assert.equal(maskAlphaExpr(maskedLayer.mask), maskAlphaExpr(maskedLayer.mask))
-  assert.notEqual(maskAlphaExpr(maskedLayer.mask), '', 'a real mask must yield a real alpha expression')
+  // and the plate painter cannot describe different shapes.
   assert.notEqual(maskCssMaskImage(maskedLayer.mask, 64, 36), null, 'a real mask must yield a real CSS mask')
+  assert.equal(maskCssMaskImage(maskedLayer.mask, 64, 36), maskCssMaskImage(CIRCLE, 64, 36))
 })
 
 check('the layer resolves fit, focus and crop from one core call', () => {
@@ -130,12 +128,12 @@ check('defaults land where the resolver puts them', () => {
 
 check('a shape neither builder knows is no mask for either of them', () => {
   // The foot-gun this slice closes: `{ shape: 'star' }` used to reach the layer
-  // as truthy data, so "is this clip masked?" said yes while the export emitted
-  // no alpha filter and the preview applied no mask.
+  // as truthy data, so "is this clip masked?" said yes while the preview
+  // applied no mask and the export refused that clip shape.
   const bad = videoItem({ mask: { shape: 'star', x: 0.2, y: 0.2 } })
   const layer = evaluateTimeline(projectWith([bad]), T).layers[0]!
   assert.equal(layer.mask, null)
-  assert.equal(maskAlphaExpr(layer.mask), '')
+  assert.equal(layer.mask, null)
   assert.equal(maskCssMaskImage(layer.mask, 64, 36), null)
 })
 

@@ -13,17 +13,13 @@
 //     axis: 'x' | 'y'      // 'linear' only: gradient direction along it
 //   }
 //
-// Two pure builders share the SAME geometry so preview and export can
-// never disagree on where the shape is:
-//  - maskAlphaExpr(): a per-pixel alpha expression (0..255) for FFmpeg
-//    `geq` on the export path. The sample point is rotated back by
-//    -rotation around the box center, a signed distance (negative inside)
-//    is taken, and a clamped linear ramp across the feather band decides
-//    coverage.
+// One pure geometry builder serves both preview and export:
 //  - maskCssMaskImage(): an SVG data-URI used as a CSS `mask-image`
 //    (alpha mask — opaque = visible) in the browser preview.
+// Slice J retired maskAlphaExpr (an FFmpeg `geq` alpha string): the WebCodecs
+// exporter paints from the plan, and the layer carries the normalized geometry.
 
-/** Shapes understood by normalizeMask/maskAlphaExpr/maskCssMaskImage. */
+/** Shapes understood by normalizeMask/maskCssMaskImage. */
 export const TMUTCUT_MASK_SHAPES = ['rectangle', 'circle', 'linear']
 
 const num = (v, fallback) => (typeof v === 'number' && Number.isFinite(v) ? v : fallback)
@@ -59,47 +55,6 @@ function geometry(m) {
     hw: Math.max(0.0005, m.w / 2),
     hh: Math.max(0.0005, m.h / 2)
   }
-}
-
-/**
- * FFmpeg `geq` alpha expression (0..255), embedded as:
- *   format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='<this>'
- * Contains commas (min/max/hypot) — the caller MUST wrap it in single
- * quotes (same convention as keyframeExpr). '' when there is no mask.
- */
-export function maskAlphaExpr(mask) {
-  const m = normalizeMask(mask)
-  if (!m) return ''
-  const { cx, cy, hw, hh } = geometry(m)
-  const rad = (m.rotation * Math.PI) / 180
-  const cos = fmt(Math.cos(rad))
-  const sin = fmt(Math.sin(rad))
-  // Sample point rotated back by -rotation around the box center
-  // (normalized frame units; X/W and Y/H are geq frame coordinates).
-  const dx = `(${cos}*((X/W)-${fmt(cx)})-${sin}*((Y/H)-${fmt(cy)}))`
-  const dy = `(${sin}*((X/W)-${fmt(cx)})+${cos}*((Y/H)-${fmt(cy)}))`
-
-  let u // coverage: 0 = inside (opaque side), 1 = outside (cleared)
-  if (m.shape === 'linear') {
-    // Linear wipe: a ramp along the axis. Position normalized by the
-    // half-extent is -1 at the start edge, +1 at the end; the feather
-    // fraction (0.02..1) compresses the ramp toward the center, leaving
-    // opaque/clear plateaus at both ends when < 100.
-    const half = m.axis === 'y' ? hh : hw
-    const along = m.axis === 'y' ? dy : dx
-    const f = Math.max(0.02, m.feather / 100)
-    u = `((min(1\,max(-1\,((${along})/${fmt(half)})/${fmt(f)})))+1)/2`
-  } else {
-    // Signed distance in normalized units: negative inside, ~0 border.
-    const sd = m.shape === 'rectangle'
-      ? `(max(abs(${dx})/${fmt(hw)}\,abs(${dy})/${fmt(hh)})-1)`
-      : `(hypot(abs(${dx})/${fmt(hw)}\,abs(${dy})/${fmt(hh)})-1)`
-    // Ramp half-width in sd units — feather 0 stays a hard edge.
-    const f = Math.max(0.02, m.feather / 100)
-    u = `min(1\,max(0\,((${sd})+${fmt(f)})/${fmt(2 * f)}))`
-  }
-  // alpha: opaque inside unless inverted, then opaque outside.
-  return m.invert ? `255*(${u})` : `255*(1-(${u}))`
 }
 
 /**

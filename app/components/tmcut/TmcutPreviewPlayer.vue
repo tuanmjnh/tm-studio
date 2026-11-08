@@ -636,8 +636,9 @@ function setAudioEl(clipId: string, el: unknown) {
 // source core refuses to play (a reversed clip — an element has no backward
 // playback, while the export runs `areverse`) is not mounted at all, and the
 // plan says why rather than the player dropping it in silence. Track pan
-// (-100..100) stays a documented preview gap: an element has no stereo field
-// without a graph, so it is honored at EXPORT only (core `panFilter`).
+// (-100..100) is not applied anywhere today: an element has no stereo field
+// without a graph, and the retired export pan filter left the gap documented
+// in the zero-FFmpeg audit rather than silently dropped.
 const audioClipsById = computed(() => {
   const tracks = currentProject.value?.timeline?.tracks || []
   const byId = new Map<string, TmcutTimelineItem>()

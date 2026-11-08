@@ -15,7 +15,6 @@
 // functions are pure except setKeyframe/removeKeyframe, which mutate
 // `clip.keyframes` in place (wrap them with the app's applyV3Edit for
 // undo/history like every other core mutation).
-import { TICKS_PER_SECOND } from './time.mjs'
 
 /** Easing names accepted by setKeyframe/evalKeyframe. */
 export const KEYFRAME_EASINGS = ['linear', 'ease-in', 'ease-out', 'ease-in-out', 'step']
@@ -133,62 +132,4 @@ export function propsWithKeyframes(clip) {
 /** Times (ticks, ascending) of every keyframe of `prop`. */
 export function keyframeTimes(clip, prop) {
   return sortedFor(clip, prop).map(k => k.t)
-}
-
-function fmt(n) {
-  return String(Number(n.toFixed(6)))
-}
-
-/**
- * FFmpeg mathematical expression string for `prop` over time (Roadmap R2, core C3).
- * Evaluates in clip-local time `timeVar` (seconds, default 't').
- * Clamps before the first keyframe to the first value, and after the
- * last keyframe to the last value. Supports all 5 easings:
- * linear, ease-in, ease-out, ease-in-out, step.
- *
- * @param {object|null|undefined} clip
- * @param {string} prop
- * @param {string} [timeVar='t']
- * @returns {string|null} null when the prop has no valid keyframes,
- *   constant number string if exactly 1 keyframe, or nested if() expression.
- */
-export function keyframeExpr(clip, prop, timeVar = 't') {
-  const kf = sortedFor(clip, prop)
-  if (kf.length === 0) return null
-  if (kf.length === 1) return fmt(kf[0].value)
-
-  let expr = fmt(kf[kf.length - 1].value)
-
-  for (let i = kf.length - 2; i >= 0; i--) {
-    const a = kf[i]
-    const b = kf[i + 1]
-    const sa = a.t / TICKS_PER_SECOND
-    const sb = b.t / TICKS_PER_SECOND
-    const span = sb - sa
-    const va = a.value
-    const vb = b.value
-
-    let segExpr
-    if (span <= 0 || a.easing === 'step') {
-      segExpr = fmt(va)
-    } else {
-      const uStr = `((${timeVar}-${fmt(sa)})/${fmt(span)})`
-      let easedStr
-      if (a.easing === 'ease-in') {
-        easedStr = `(${uStr}*${uStr})`
-      } else if (a.easing === 'ease-out') {
-        easedStr = `(1-(1-${uStr})*(1-${uStr}))`
-      } else if (a.easing === 'ease-in-out') {
-        easedStr = `if(lt(${uStr},0.5),2*${uStr}*${uStr},1-2*(1-${uStr})*(1-${uStr}))`
-      } else {
-        easedStr = uStr
-      }
-      segExpr = `(${fmt(va)}+(${fmt(vb - va)})*${easedStr})`
-    }
-
-    expr = `if(lt(${timeVar},${fmt(sb)}),${segExpr},${expr})`
-  }
-
-  const s0 = kf[0].t / TICKS_PER_SECOND
-  return `if(lt(${timeVar},${fmt(s0)}),${fmt(kf[0].value)},${expr})`
 }

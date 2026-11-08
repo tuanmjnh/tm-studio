@@ -219,6 +219,13 @@ test('runHealthChecks returns check array with overall status', async () => {
   assert.ok(['ok', 'warn', 'fail'].includes(result.summary.overall))
 })
 
+test('runHealthChecks names the engine that exists, not the one slice I cut', async () => {
+  const { checks } = await runHealthChecks()
+  const names = checks.map(check => check.name)
+  assert.ok(!names.includes('ffmpeg'), `diagnostics still probe a removed engine: ${names.join(', ')}`)
+  assert.ok(names.includes('webcodecs'), `diagnostics do not report the encoder the app uses: ${names.join(', ')}`)
+})
+
 test('generateSupportBundle produces anonymized bundle', () => {
   clearRecoveryCheckpoint()
   clearCrashLog()

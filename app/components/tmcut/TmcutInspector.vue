@@ -28,7 +28,7 @@ const activeTab = ref<TabKey>('visual')
 
 const availableTabs = computed<TabKey[]>(() => {
   // Audio clips get the animation tab too: their motion property is the
-  // volume envelope, which the export evaluates through `keyframeExpr`.
+  // volume envelope, which the mixer evaluates through `gainAt`.
   if (trackType.value === 'audio') return ['audio', 'animation', 'speed']
   if (trackType.value === 'text') return ['visual', 'effects', 'animation', 'speed']
   return ['visual', 'audio', 'speed', 'animation', 'effects', 'filters']
@@ -879,8 +879,8 @@ const saveStateLabel = computed(() => {
       </div>
     </div>
 
-    <!-- Audio motion: the volume envelope the export already renders
-         (render/audio.ts -> keyframeExpr(clip,'volume')). -->
+    <!-- Audio motion: the volume envelope the mixer already renders
+         (core audio.mjs -> gainAt with evalKeyframe('volume')). -->
     <div v-if="currentTab === 'animation' && trackType === 'audio'" class="space-y-3 pt-2 border-t border-default">
       <TmcutKeyframeEditor :allowed="['volume']" />
     </div>

@@ -1,6 +1,7 @@
-// Canvas geometry (presets, aspect math, fit styles, FFmpeg fit filters,
-// reframe) lives in tmcut-core as the single source of truth since
-// Roadmap C0 — this module only preserves existing app import paths.
+// Canvas geometry (presets, aspect math, fit styles, reframe) lives in
+// tmcut-core as the single source of truth since Roadmap C0 — this module only
+// preserves existing app import paths. Slice J retired the FFmpeg emitters, so
+// no filter/argv re-export survives here.
 //
 // C16: App migration to DSL v3 — normalizeCanvas now uses core's implementation
 // which returns rational fps ({ numerator, denominator }). The app project model
@@ -18,13 +19,10 @@ export {
   findCanvasPreset,
   findCanvasPresetByDimensions,
   computeFitObjectStyle,
-  buildFfmpegFitFilters,
-  buildFfmpegTransform,
   reframeTransform,
   CROP_RATIO_PRESETS,
   clampCropRect,
   applyCropRatio,
-  buildBackgroundSource,
   normalizeCanvas
 } from 'tmcut-core'
 

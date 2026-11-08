@@ -9,14 +9,15 @@
  *
  * Nothing is invented: fidelity + export support come from `fxCapabilities`,
  * parameter bounds from the descriptor (`clampEffectParam`), filter grades are
- * derived from the very chain the export runs (`lut3dChain`) and transition
+ * derived from the semantic grade core ships (`lutGrade`) and transition
  * geometry is keyed by `fxCatalog`. A definition without an adapter reports
  * `known: false` — the UI then says so instead of playing a generic animation.
  *
  * Pure + store-free so the node spec runner can exercise every definition.
  */
 import type { CSSProperties } from 'vue'
-import { EFFECT_REGISTRY, clampEffectParam, fxCapabilities, lut3dChain } from 'tmcut-core'
+import type { TmcutGradeOp } from 'tmcut-core'
+import { EFFECT_REGISTRY, clampEffectParam, fxCapabilities, lutGrade } from 'tmcut-core'
 import { TRANSITION_CATALOG } from './fxCatalog'
 
 export type FxPreviewKind = 'effect' | 'transition' | 'filter'
@@ -60,11 +61,11 @@ const TOP_Z = 3
 const COMPARE = 'tmfx-compare var(--tmfx-dur) ease-in-out infinite'
 
 /**
- * The grain overlay's OWN motion. `noise=alls=…:allf=t` draws fresh grain every
- * frame in the file, so a still plate on the monitor is a different picture;
- * shifting the tile keeps the noise alive. Declared apart from the tile's
- * `overlayAnimation` because a live plate must carry this and NOT the
- * before/after reveal, which is a thumbnail mnemonic with nothing to compare.
+ * The grain overlay's OWN motion. Grain is fresh noise every frame, so a still
+ * plate on the monitor is a different picture; shifting the tile keeps the
+ * noise alive. Declared apart from the tile's `overlayAnimation` because a live
+ * plate must carry this and NOT the before/after reveal, which is a thumbnail
+ * mnemonic with nothing to compare.
  */
 const GRAIN_MOTION = 'tmfx-grain 1.1s linear infinite'
 
@@ -228,7 +229,7 @@ const EFFECT_BUILDERS: Record<string, EffectBuilder> = {
     return { filter: 'grayscale(1) invert(1) contrast(2.2) brightness(1.05)' }
   },
   'letterbox': (p) => {
-    // Export draws bars of `size`% of frame height each (drawbox h=ih*size/100).
+    // Bars of `size`% of frame height each, capped at 45 so the picture survives.
     const bar = Math.max(0, Math.min(45, Math.round(numParam('letterbox', 'size', p.size))))
     return {
       overlay: {
@@ -311,10 +312,10 @@ const EFFECT_BUILDERS: Record<string, EffectBuilder> = {
     }
   },
   'sepia': (p) => {
-    // `colorchannelmixer` interpolates identity -> the W3C sepia matrix, which
-    // is the literal definition of CSS `sepia(t)` — so the face is that one
-    // function. A second grade here (a saturation lift, say) is a look the
-    // export never bakes, and the tile would claim `exact` for it.
+    // CSS `sepia(t)` is the W3C interpolation identity -> the sepia matrix, so
+    // the face is that one function. A second grade here (a saturation lift,
+    // say) is a look the definition never declares, and the tile would claim
+    // `exact` for it.
     const t = unit('sepia', 'intensity', p.intensity)
     return { filter: `sepia(${r3(t)})` }
   },
@@ -364,56 +365,39 @@ const CURVES_PRESETS: Record<string, string> = {
   cross_process: 'contrast(1.25) saturate(1.2) hue-rotate(-10deg)'
 }
 
-/** One `filter=k=v:k=v` token split into its name and its `k=v` arguments. */
-function splitToken(token: string): { name: string, args: string[] } {
-  const eq = token.indexOf('=')
-  const rest = eq === -1 ? '' : token.slice(eq + 1)
-  return { name: token.slice(0, eq === -1 ? token.length : eq).trim(), args: rest ? rest.split(':') : [] }
-}
-
-function argValue(args: string[], key: string): number | null {
-  const hit = args.find(argument => argument.startsWith(`${key}=`))
-  if (hit === undefined) return null
-  const value = Number(hit.slice(key.length + 1))
-  return Number.isFinite(value) ? value : null
-}
-
-function eqCss(args: string[]): string[] {
+/** CSS for one `eq` grade op: brightness, contrast, saturation in that order. */
+function eqCss(op: Extract<TmcutGradeOp, { op: 'eq' }>): string[] {
   const out: string[] = []
-  const saturation = argValue(args, 'saturation')
-  const contrast = argValue(args, 'contrast')
-  const brightness = argValue(args, 'brightness')
-  if (brightness !== null) out.push(`brightness(${r3(1 + brightness)})`)
-  if (contrast !== null) out.push(`contrast(${r3(contrast)})`)
-  if (saturation !== null) out.push(`saturate(${r3(saturation)})`)
+  if (op.brightness !== undefined) out.push(`brightness(${r3(1 + op.brightness)})`)
+  if (op.contrast !== undefined) out.push(`contrast(${r3(op.contrast)})`)
+  if (op.saturation !== undefined) out.push(`saturate(${r3(op.saturation)})`)
   return out
 }
 
 /**
- * Map one export chain to CSS. Unknown filters are skipped, never guessed, so a
- * new chain token degrades to "less of the look" instead of a wrong colour.
- * `colorbalance` has no CSS twin, so only its shadow split (rs/bs) drives the
- * warm/cool cast — the same sepia / sepia+hue-rotate(180deg) trick the
- * eq-grade `temp` param uses, which keeps both panels consistent.
+ * Map one semantic grade to CSS. Unknown ops are skipped, never guessed, so a
+ * new op degrades to "less of the look" instead of a wrong colour. `balance`
+ * has no CSS twin, so only its shadow split (rs/bs) drives the warm/cool cast —
+ * the same sepia / sepia+hue-rotate(180deg) trick the eq-grade `temp` param uses,
+ * which keeps both panels consistent. Op order is preserved so the preview
+ * paints identically to the grade core ships.
  */
-function cssFromChain(chain: string | null): { filter: string, grain: number } {
+function cssFromGrade(grade: TmcutGradeOp[] | null): { filter: string, grain: number } {
   const parts: string[] = []
   let warmth = 0
   let green = 0
   let grain = 0
-  for (const token of String(chain ?? '').split(',')) {
-    const { name, args } = splitToken(token)
-    if (!name) continue
-    if (name === 'eq') parts.push(...eqCss(args))
-    else if (name === 'hue') parts.push('grayscale(1)')
-    else if (name === 'curves') {
-      const preset = token.match(/preset=([a-z_]+)/)?.[1]
-      if (preset && CURVES_PRESETS[preset]) parts.push(CURVES_PRESETS[preset])
-    } else if (name === 'colorchannelmixer') parts.push('sepia(1)')
-    else if (name === 'colorbalance') {
-      warmth += (argValue(args, 'rs') ?? 0) - (argValue(args, 'bs') ?? 0)
-      green += argValue(args, 'gs') ?? 0
-    } else if (name === 'noise') grain += (argValue(args, 'alls') ?? 0) / 25
+  for (const op of grade ?? []) {
+    if (op.op === 'eq') parts.push(...eqCss(op))
+    else if (op.op === 'desaturate') parts.push('grayscale(1)')
+    else if (op.op === 'curves') {
+      const css = CURVES_PRESETS[op.preset]
+      if (css) parts.push(css)
+    } else if (op.op === 'sepia') parts.push('sepia(1)')
+    else if (op.op === 'balance') {
+      warmth += (op.rs ?? 0) - (op.bs ?? 0)
+      green += op.gs ?? 0
+    } else if (op.op === 'grain') grain += op.amount / 25
   }
   if (Math.abs(warmth) > 0.02) {
     const t = Math.min(0.35, clamp01(Math.abs(warmth) * 1.6))
@@ -434,14 +418,14 @@ export function lutPresetIds(): string[] {
 }
 
 function filterPaint(preset: string): { filter: string, overlay?: CSSProperties } {
-  const chain = lut3dChain(preset)
-  if (chain === null) {
-    // A registered preset with no chain is the documented no-op ('neutral'):
+  const grade = lutGrade(preset)
+  if (grade === null) {
+    // A registered preset with no grade is the documented no-op ('neutral'):
     // identity is the honest picture, so there is nothing to paint over the
     // plate. An unregistered id never reaches here — it reports `known: false`.
     return { filter: '' }
   }
-  const { filter, grain } = cssFromChain(chain)
+  const { filter, grain } = cssFromGrade(grade)
   const overlay = grain > 0.02
     ? {
         backgroundImage: 'radial-gradient(rgba(0,0,0,.55) 1px, transparent 1.4px)',
@@ -672,7 +656,7 @@ function filterStatus(preset: string): FxPreviewStatus {
   return {
     known,
     // An id outside the enum reports `known: false` and paints nothing.
-    fidelity: !known || !caps ? 'illustrative' : lut3dChain(preset) === null ? 'exact' : caps.fidelity,
+    fidelity: !known || !caps ? 'illustrative' : lutGrade(preset) === null ? 'exact' : caps.fidelity,
     exportSupported: caps?.exportSupported ?? false
   }
 }
@@ -898,15 +882,15 @@ export function missingEffectPreviews(): string[] {
 }
 
 /**
- * lut3d presets whose export chain produces no CSS at all. A chain of filters
+ * lut3d presets whose semantic grade produces no CSS at all. A grade of ops
  * this module does not understand yet is a gap worth failing on, because the
- * tile would otherwise look like a no-op while the export changes the picture.
+ * tile would otherwise look like a no-op while the grade changes the picture.
  */
 export function missingFilterPreviews(): string[] {
   return lutPresetIds().filter((preset) => {
-    const chain = lut3dChain(preset)
-    if (chain === null) return false // no chain = identity = nothing to paint
-    const { filter, grain } = cssFromChain(chain)
+    const grade = lutGrade(preset)
+    if (grade === null) return false // no grade = identity = nothing to paint
+    const { filter, grain } = cssFromGrade(grade)
     return filter === '' && grain <= 0.02
   })
 }

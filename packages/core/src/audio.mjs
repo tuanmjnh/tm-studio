@@ -2,15 +2,20 @@
 //  tmcut-core — audio
 //  Fade in/out + gain math (Roadmap C12). Fades live on the clip as
 //  `fade?: { in, out }` in TICKS; volume stays 0..100 (v1 heritage).
-//  gainAt returns the linear 0..1 multiplier a player or the compiler
-//  applies at a CLIP-LOCAL tick position (0 = clip start).
+//  gainAt returns the linear 0..1 multiplier a player or the mixer applies
+//  at a CLIP-LOCAL tick position (0 = clip start).
+//
+//  Slice J retired the FFmpeg `volume` expression (fade envelope) and the
+//  `stereotools` pan filter. `gainAt` is the live law; pan is currently not
+//  applied by the Web Audio mixer — a documented gap in the slice J section
+//  of docs/audit/zero-ffmpeg-audit.md.
 //
 //  Clip argument accepts both shapes: v3 (`timeline.duration` ticks) and
 //  the legacy v1 flat item (`in`/`out` in SECONDS) — same dual-shape
 //  contract as evalKeyframe, so the preview can call it directly.
 // =============================================================================
 
-import { secToTicks, ticksToSec } from './time.mjs'
+import { secToTicks } from './time.mjs'
 
 function isFiniteNumber(value) {
   return typeof value === 'number' && Number.isFinite(value)
@@ -63,55 +68,6 @@ export function gainAt(clip, atTicks) {
     envelope = Math.min(envelope, (duration - at) / fadeOut)
   }
   return volume * envelope
-}
-
-/** FFmpeg expression for the fade envelope (t = seconds since clip start). */
-function fmt(seconds) {
-  // Trim float noise: 0.5 stays "0.5", 1 stays "1".
-  return String(Number(seconds.toFixed(6)))
-}
-
-/**
- * FFmpeg volume-expression string implementing the fade envelope ONLY
- * (the volume percent stays a separate `volume=` filter). Markers: fade-in
- * end A, fade-out start D-B, clip end D. No fades -> constant '1'.
- */
-export function volumeExpr(clip) {
-  if (!clip || typeof clip !== 'object') return '1'
-  const durationSec = ticksToSec(durationTicks(clip))
-  const inSec = ticksToSec(fadeDuration(clip, 'in'))
-  const outSec = ticksToSec(fadeDuration(clip, 'out'))
-  if (inSec <= 0 && outSec <= 0) return '1'
-  if (inSec > 0 && outSec > 0) {
-    return `if(lt(t,${fmt(inSec)}),t/${fmt(inSec)},if(gt(t,${fmt(durationSec - outSec)}),(${fmt(durationSec)}-t)/${fmt(outSec)},1))`
-  }
-  if (inSec > 0) return `if(lt(t,${fmt(inSec)}),t/${fmt(inSec)},1)`
-  return `if(gt(t,${fmt(durationSec - outSec)}),(${fmt(durationSec)}-t)/${fmt(outSec)},1)`
-}
-
-/**
- * Pan / Balance (CapCut §5.3, Roadmap R124 A1): a single -100..100
- * control that shifts stereo gain between left and right. 0 = dead centre,
- * -100 = full left (right silent), +100 = full right (left silent).
- *
- * The mapping is the classic linear split: L = (1 - pan)/2, R = (1 + pan)/2
- * so the TOTAL energy stays constant across the pan range (a hard left
- * does not double the perceived loudness — it only moves it). The output
- * is an FFmpeg `stereotools` filter string; `pan` is a separate filter
- * and is NOT emitted here because `stereotools` is the one that keeps the
- * two channels' gains independent of the input channel count.
- *
- * @param {number} pan -100..100
- * @returns {string} empty string when pan == 0 (no-op), otherwise the
- *   `stereotools=...` filter string.
- */
-export function panFilter(pan) {
-  const p = Number(pan)
-  if (!Number.isFinite(p) || p === 0) return ''
-  const v = Math.max(-1, Math.min(1, p / 100))
-  const l = Number((1 - v) / 2).toFixed(4)
-  const r = Number((1 + v) / 2).toFixed(4)
-  return `stereotools=level_in=${l}:level_out=${r}`
 }
 
 /**

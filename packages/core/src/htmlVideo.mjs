@@ -7,8 +7,8 @@
 //  exposed on `__hf.seek(t)`. Rendering never plays the animation — it asks for
 //  one frame at a time, so the same input produces the same video.
 //
-//  This module is the pure half: no browser, no fs. The frame capture and the
-//  ffmpeg encode live in the host app (tm-tools/server).
+//  This module is the pure half: no browser, no fs. Frame capture and encode
+//  live in the host, through the WebCodecs path the exporter already uses.
 // =============================================================================
 
 export const HTML_VIDEO_SPEC_VERSION = 1

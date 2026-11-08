@@ -1,19 +1,19 @@
 // tmcut-core — clip blend mode (Zero-FFmpeg slice F6d).
 //
 // A video clip can composite over the footage beneath it with a pixel-wise
-// blend instead of the plain overlay. The two counterparts spell the modes
-// identically — CSS `mix-blend-mode` on the monitor, FFmpeg `blend=all_mode=`
-// in the file — so ONE name can drive both, and it has to: FFmpeg validates the
-// mode while it parses the filtergraph, so an unknown name is not one clip
-// looking wrong, it is every frame of that render failing.
+// blend instead of the plain overlay. ONE name drives the monitor's CSS
+// `mix-blend-mode`, and the same name is what the layer carries, so the
+// preview and the exporter never decide a mode twice.
 //
-// The legal set is therefore core's, and both surfaces ask before they paint or
-// emit: `evaluateTimeline` puts the answer on the layer so the preview never
-// reaches for the authored clip, and the export compiler runs the clip through
-// `blendModeOf` before interpolating it into a filtergraph. Anything outside the
-// set — a hand-edited project, a CSS mode the binary does not know — normalizes
-// to `normal`, which the exporter draws with the classic `overlay` combiner and
-// no blend filter at all.
+// The legal set is core's: `evaluateTimeline` puts the answer on the layer so
+// the preview never reaches for the authored clip, and the export eligibility
+// law runs the clip through `blendModeOf` before painting. Anything outside the
+// set — a hand-edited project, a CSS mode no consumer implements — normalizes
+// to `normal`.
+//
+// Slice J retired the FFmpeg `blend=all_mode=` emitter. The WebCodecs export
+// MVP refuses a non-normal blend by name (`planEncodeContent` -> 'blend'), so
+// today the set describes the monitor's reach, not the file's.
 
 /** The modes both counterparts implement with the same spelling. */
 export const BLEND_MODES = ['normal', 'screen', 'overlay', 'multiply']

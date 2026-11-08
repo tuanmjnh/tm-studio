@@ -1,7 +1,7 @@
 // tmcut-core — audio fade / gain tests (Roadmap C12). Run: node --test "test/*.test.mjs"
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { fadeDuration, gainAt, volumeExpr, panFilter, isTrackMuted } from '../src/audio.mjs'
+import { fadeDuration, gainAt, isTrackMuted } from '../src/audio.mjs'
 import { secToTicks } from '../src/time.mjs'
 
 function v3Clip(overrides = {}) {
@@ -50,36 +50,9 @@ describe('audio fades (C12)', () => {
     assert.ok(Math.abs(gainAt({ ...v1, volume: undefined, fade: undefined }, 0) - 1) < 1e-9)
   })
 
-  it('volumeExpr contains every marker and stays clean', () => {
-    const expr = volumeExpr(v3Clip())
-    assert.match(expr, /lt\(t,1\)/) // fade-in end A
-    assert.match(expr, /gt\(t,4\)/) // fade-out start D-B
-    assert.match(expr, /\(5-t\)/) // clip end D
-    assert.equal(volumeExpr(v3Clip({ fade: undefined })), '1')
-    assert.equal(volumeExpr(null), '1')
-    // Float noise stays trimmed.
-    assert.match(volumeExpr(v3Clip({ fade: { in: secToTicks(0.5), out: 0 } })), /lt\(t,0\.5\)/)
-  })
 })
 
 describe('track-level audio (R124 A1)', () => {
-  it('panFilter returns empty for neutral / invalid pan', () => {
-    assert.equal(panFilter(0), '')
-    assert.equal(panFilter(NaN), '')
-    assert.equal(panFilter(undefined), '')
-  })
-
-  it('panFilter emits a stereotools filter with balanced gain', () => {
-    // Center stays 0.5/0.5.
-    assert.equal(panFilter(0), '')
-    // Hard left: L gets full, R gets 0.
-    const left = panFilter(-100)
-    assert.match(left, /^stereotools=level_in=/)
-    // Hard right mirror.
-    const right = panFilter(100)
-    assert.ok(left !== right)
-  })
-
   it('isTrackMuted reads the track flag defensively', () => {
     assert.equal(isTrackMuted({ muted: true }), true)
     assert.equal(isTrackMuted({ muted: false }), false)

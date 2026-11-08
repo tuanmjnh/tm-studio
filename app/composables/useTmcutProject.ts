@@ -111,9 +111,8 @@ export interface TmcutTimelineItem {
   cropRect?: TmcutCropRect
   effects?: Array<{ type: string, params: Record<string, unknown> }>
   /** Keyframes: animated prop values (t in ticks; easing drives the
-      segment to the NEXT keyframe). Export renders them: the render
-      builders feed keyframeExpr() into scale/x/y/opacity/volume
-      (video.ts, text.ts, audio.ts) on the desktop FFmpeg path. */
+      segment to the NEXT keyframe). Both renderers evaluate them through
+      `evalKeyframe` for scale/x/y/opacity, and the mixer for volume. */
   keyframes?: Array<{ t: number, prop: string, value: number, easing?: 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out' | 'step' }>
   /** Clip mask (R124 A3, CapCut §5.7): shape + normalized box + feather/
    *  rotation/invert. Geometry math (and the FFmpeg/CSS builders) live in

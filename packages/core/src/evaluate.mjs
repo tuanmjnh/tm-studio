@@ -146,8 +146,8 @@ function volumeOf(clip, localTicks) {
 
 /**
  * Mask geometry as the renderers see it. `normalizeMask` is the same call
- * `maskAlphaExpr` (export) and `maskCssMaskImage` (preview) make internally,
- * so publishing its output cannot move a pixel — and a shape neither builder
+ * `maskCssMaskImage` (preview) and the plate painter make internally, so
+ * publishing its output cannot move a pixel — and a shape neither renderer
  * knows becomes `null` here instead of truthy data on the layer.
  */
 function maskOf(clip) {

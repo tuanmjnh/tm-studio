@@ -8,7 +8,7 @@
 //  delete the whole clip. This is the missing list view.
 //
 //  It edits exactly the channels the render pipeline evaluates through
-//  `keyframeExpr` (opacity/scale/x/y on visual clips, volume on audio), so a
+//  `evalKeyframe` (opacity/scale/x/y on visual clips, volume on audio), so a
 //  row here is always a row the export honors. Times are clip-local ticks
 //  (0 = clip start), the same convention the ⏱ buttons and the timeline
 //  keyframe lane use, which is why keyframes travel with the clip.

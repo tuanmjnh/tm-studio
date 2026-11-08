@@ -5,14 +5,11 @@
 
 const VIDEO_EXTS = ['mp4', 'mov', 'mkv', 'webm', 'avi', 'm4v', 'mpg', 'mpeg', 'ts', 'wmv', 'flv']
 const AUDIO_EXTS = ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'flac', 'wma', 'opus']
-// `svg` is here because the render binary really does decode it: the vendored
-// FFmpeg is built `--enable-librsvg`, and `ffprobe x.svg` reports
-// codec=svg / 1 frame / duration N/A — the same still shape a PNG has. It is
-// the ONE still whose decoder takes a raster size, which is what
-// `isVectorStillImage` exists to say.
+// `svg` is a still whose frame is drawn from geometry, not pixels — the browser
+// rasterises it at whatever box it is laid into. It is the ONE still whose
+// decoder resolves geometry, which is what `isVectorStillImage` exists to say.
 const IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'tiff', 'tif', 'gif', 'svg']
-// Extensions whose decoder accepts `-width`/`-height` to choose the raster.
-// Any other decoder handed those options refuses the input outright.
+// Extensions whose decoder resolves the raster from geometry rather than pixels.
 const VECTOR_STILL_EXTS = ['svg']
 
 export function normalizeMediaPath(input) {
@@ -45,9 +42,10 @@ export function classifyAssetKind(input) {
 }
 
 /**
- * True when the path is a still the decoder draws from geometry rather than
- * pixels. Callers use it for one decision only: whether a raster size may be
- * handed to FFmpeg for this input.
+ * True when the path is a still whose frame is drawn from geometry rather than
+ * pixels — an SVG. Callers use it to decide how the still is rasterised (the
+ * browser scales it to the layout box; a decoder that needs a size is told
+ * which one), never to build filter text.
  */
 export function isVectorStillImage(input) {
   return VECTOR_STILL_EXTS.includes(extensionOf(input))

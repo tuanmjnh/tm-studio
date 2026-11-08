@@ -9,15 +9,12 @@ import {
   findCanvasPresetByDimensions,
   normalizeCanvas,
   computeFitObjectStyle,
-  buildFfmpegFitFilters,
-  buildFfmpegTransform,
   reframeTransform,
   previewScale,
   safeAreaRects,
   SAFE_AREA_PRESETS,
   clampCropRect,
-  applyCropRatio,
-  buildBackgroundSource
+  applyCropRatio
 } from '../src/canvas.mjs'
 
 describe('canvas', () => {
@@ -58,70 +55,6 @@ describe('canvas', () => {
     const cropped = computeFitObjectStyle('crop', 0.5, 0.5, { x: 0.1, y: 0.1, w: 0.8, h: 0.8 })
     assert.equal(cropped.objectFit, 'cover')
     assert.deepEqual(computeFitObjectStyle('crop'), { objectFit: 'contain', objectPosition: '50% 50%' })
-  })
-
-  it('builds ffmpeg fit filters', () => {
-    const fit = buildFfmpegFitFilters('fit', 1920, 1080)
-    assert.equal(fit.length, 1)
-    assert.ok(fit[0].includes('pad=1920:1080'))
-    assert.ok(buildFfmpegFitFilters('fill', 1920, 1080)[0].includes('crop=1920:1080'))
-    assert.ok(buildFfmpegFitFilters('stretch', 1920, 1080)[0] === 'scale=1920:1080')
-    assert.ok(buildFfmpegFitFilters('smart', 1920, 1080, { focusX: 0.2 })[0].includes('0.2000'))
-    const cropped = buildFfmpegFitFilters('crop', 1920, 1080, { cropRect: { x: 0.1, y: 0.1, w: 0.8, h: 0.8 } })
-    assert.equal(cropped.length, 2)
-  })
-
-  it('appends rotation after the fit filters (roadmap C7)', () => {
-    const rot = buildFfmpegFitFilters('fit', 1920, 1080, { rotation: 90, padColor: '#101010' })
-    assert.equal(rot.length, 2)
-    assert.equal(rot[1], 'rotate=90*PI/180:ow=iw:oh=ih:fillcolor=#101010')
-    // Order: rotate comes AFTER every fit filter (fill = single chain string).
-    const fillRot = buildFfmpegFitFilters('fill', 1920, 1080, { rotation: -45 })
-    assert.equal(fillRot.length, 2)
-    assert.ok(fillRot[1].startsWith('rotate=-45*PI/180'))
-    // Identity rotations append nothing (byte-identical legacy output).
-    assert.equal(buildFfmpegFitFilters('fit', 1920, 1080, { rotation: 0 }).length, 1)
-    assert.equal(buildFfmpegFitFilters('fit', 1920, 1080, { rotation: 360 }).length, 1)
-    assert.equal(buildFfmpegFitFilters('fit', 1920, 1080, {}).length, 1)
-    // Default fill color for the uncovered corners.
-    assert.ok(buildFfmpegFitFilters('stretch', 640, 360, { rotation: 30 })[1].endsWith('fillcolor=black'))
-  })
-
-  it('returns null for the identity transform', () => {
-    assert.equal(buildFfmpegTransform({ canvasW: 1920, canvasH: 1080 }), null)
-    assert.equal(buildFfmpegTransform({ canvasW: 1920, canvasH: 1080, scale: 100, x: 0, y: 0 }), null)
-    assert.equal(buildFfmpegTransform({ canvasW: 1920, canvasH: 1080, scale: undefined, x: undefined, y: undefined }), null)
-  })
-
-  it('builds a centered scale transform with background overlay', () => {
-    const t = buildFfmpegTransform({ canvasW: 1920, canvasH: 1080, scale: 50, fps: 30, duration: 4, bgColor: '#000000' })
-    assert.equal(t.tail, 'scale=960:540')
-    assert.equal(t.overlay, 'overlay=x=480:y=270:shortest=1')
-    assert.ok(t.bg.startsWith('color=c=#000000:s=1920x1080:r=30:d=6.000')) // duration + 2s headroom
-  })
-
-  it('applies offsets and rounds to whole pixels', () => {
-    const t = buildFfmpegTransform({ canvasW: 1920, canvasH: 1080, scale: 100, x: -100.4, y: 50.6 })
-    assert.equal(t.overlay, 'overlay=x=-100:y=51:shortest=1')
-    assert.equal(t.tail, 'scale=1920:1080')
-    const up = buildFfmpegTransform({ canvasW: 1920, canvasH: 1080, scale: 150, x: 20, y: -30 })
-    assert.equal(up.tail, 'scale=2880:1620')
-    assert.equal(up.overlay, 'overlay=x=-460:y=-300:shortest=1') // (1920-2880)/2+20, (1080-1620)/2-30
-  })
-
-  it('evenizes odd canvases and clamps degenerate scales', () => {
-    const t = buildFfmpegTransform({ canvasW: 1919, canvasH: 1079, scale: 100.0001, x: 1 })
-    assert.ok(t.bg.includes('s=1918x1078'))
-    const tiny = buildFfmpegTransform({ canvasW: 1920, canvasH: 1080, scale: 0 })
-    assert.equal(tiny.tail, 'scale=20:10') // clamped to 1% of the evenized canvas
-    const neg = buildFfmpegTransform({ canvasW: 1920, canvasH: 1080, scale: -50, x: 1 })
-    assert.equal(neg.tail, 'scale=20:10')
-  })
-
-  it('applies default fps and duration when omitted', () => {
-    const t = buildFfmpegTransform({ canvasW: 1000, canvasH: 500, scale: 200 })
-    assert.ok(t.bg.includes(':r=30:d=3.000')) // default duration 1 + 2s headroom
-    assert.equal(t.overlay, 'overlay=x=-500:y=-250:shortest=1')
   })
 
   it('reframes offsets proportionally', () => {
@@ -200,89 +133,5 @@ describe('safe areas (C13)', () => {
 
     // Free / null ratio returns clamped rect unchanged
     assert.deepEqual(applyCropRatio(initial, null), initial)
-  })
-})
-
-describe('buildBackgroundSource (Phase 4)', () => {
-  const baseOpts = { canvasW: 1920, canvasH: 1080, fps: 30, duration: 10 }
-
-  it('returns color source descriptor with 0x hex for color background', () => {
-    const desc = buildBackgroundSource({
-      ...baseOpts,
-      background: { type: 'color', value: '#ff0000' }
-    })
-    assert.equal(desc.type, 'color')
-    assert.equal(desc.kind, 'source')
-    assert.ok(typeof desc.chain === 'string')
-    assert.ok(desc.chain.includes('color=c=0xff0000'))
-    assert.ok(desc.chain.includes('s=1920x1080'))
-    assert.ok(desc.chain.includes('r=30'))
-    assert.ok(desc.chain.includes('d=10.000'))
-  })
-
-  it('defaults to black (0x000000) when color value missing', () => {
-    const desc = buildBackgroundSource({
-      ...baseOpts,
-      background: { type: 'color' }
-    })
-    assert.ok(desc.chain.includes('color=c=0x000000'))
-  })
-
-  it('returns transparent source descriptor (0x00000000) for transparent background', () => {
-    const desc = buildBackgroundSource({
-      ...baseOpts,
-      background: { type: 'transparent' }
-    })
-    assert.equal(desc.type, 'transparent')
-    assert.equal(desc.kind, 'source')
-    assert.ok(desc.chain.includes('color=c=0x00000000'))
-  })
-
-  it('returns image input descriptor for image background', () => {
-    const desc = buildBackgroundSource({
-      ...baseOpts,
-      background: { type: 'image', value: '/path/to/bg.png' }
-    })
-    assert.equal(desc.type, 'image')
-    assert.equal(desc.kind, 'input')
-    assert.equal(desc.file, '/path/to/bg.png')
-    // No -t here: each consumer trims its own window, so the input is a
-    // single looping still for the whole timeline.
-    assert.deepEqual(desc.inputFlags, ['-framerate', '30', '-loop', '1'])
-    assert.ok(desc.tail.includes('scale=1920:1080'))
-    assert.ok(desc.tail.includes('crop=1920:1080'))
-    assert.ok(desc.tail.includes('setsar=1'))
-  })
-
-  it('falls back to black color source when image path is empty', () => {
-    const desc = buildBackgroundSource({
-      ...baseOpts,
-      background: { type: 'image', value: '' }
-    })
-    assert.equal(desc.type, 'color')
-    assert.ok(desc.chain.includes('color=c=0x000000'))
-  })
-
-  it('evenizes canvas dimensions and clamps minimum 2px', () => {
-    const desc = buildBackgroundSource({
-      canvasW: 1921,
-      canvasH: 1081,
-      fps: 30,
-      duration: 5,
-      background: { type: 'color', value: '#00ff00' }
-    })
-    assert.ok(desc.chain.includes('s=1920x1080'))
-  })
-
-  it('handles fractional fps and duration', () => {
-    const desc = buildBackgroundSource({
-      canvasW: 1280,
-      canvasH: 720,
-      fps: 29.97,
-      duration: 7.5,
-      background: { type: 'color', value: '#ffffff' }
-    })
-    assert.ok(desc.chain.includes('r=29.97'))
-    assert.ok(desc.chain.includes('d=7.500'))
   })
 })

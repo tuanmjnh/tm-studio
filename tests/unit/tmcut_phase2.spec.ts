@@ -2,7 +2,6 @@ import assert from 'node:assert/strict'
 import {
   TMUTCANVAS_PRESETS,
   aspectValue,
-  buildFfmpegFitFilters,
   computeFitObjectStyle,
   findCanvasPreset,
   findCanvasPresetByDimensions,
@@ -96,55 +95,6 @@ function main() {
       computeFitObjectStyle('crop', 0.5, 0.5, { x: 0.1, y: 0.2, w: 0.4, h: 0.4 }),
       { objectFit: 'cover', objectPosition: '30% 40%' }
     )
-  })
-
-  check('buildFfmpegFitFilters fit uses decrease + pad', () => {
-    const filters = buildFfmpegFitFilters('fit', 1920, 1080)
-    assert.equal(filters.length, 1)
-    assert.ok(filters[0]!.includes('force_original_aspect_ratio=decrease'))
-    assert.ok(filters[0]!.includes('pad=1920:1080:(ow-iw)/2:(oh-ih)/2'))
-  })
-
-  check('buildFfmpegFitFilters fill uses increase + center crop', () => {
-    const filters = buildFfmpegFitFilters('fill', 1080, 1920)
-    assert.equal(filters.length, 1)
-    assert.ok(filters[0]!.includes('force_original_aspect_ratio=increase'))
-    assert.ok(filters[0]!.includes('crop=1080:1920'))
-  })
-
-  check('buildFfmpegFitFilters stretch scales only', () => {
-    const filters = buildFfmpegFitFilters('stretch', 1080, 1080)
-    assert.equal(filters.length, 1)
-    assert.ok(filters[0]!.includes('scale=1080:1080'))
-    assert.ok(!filters[0]!.includes('crop'))
-    assert.ok(!filters[0]!.includes('pad'))
-  })
-
-  check('buildFfmpegFitFilters smart uses focus-driven crop offset', () => {
-    const filters = buildFfmpegFitFilters('smart', 1920, 1080, { focusX: 0.25, focusY: 0.75 })
-    assert.equal(filters.length, 1)
-    assert.ok(filters[0]!.includes('(iw-1920)*0.2500'))
-    assert.ok(filters[0]!.includes('(ih-1080)*0.7500'))
-  })
-
-  check('buildFfmpegFitFilters crop applies normalized crop region then fits', () => {
-    const filters = buildFfmpegFitFilters('crop', 1920, 1080, { cropRect: { x: 0.1, y: 0.2, w: 0.5, h: 0.5 } })
-    assert.equal(filters.length, 2)
-    assert.ok(filters[0]!.includes('crop=w=\'iw*0.5000\''))
-    assert.ok(filters[0]!.includes('x=\'iw*0.1000\''))
-    assert.ok(filters[1]!.includes('force_original_aspect_ratio=decrease'))
-  })
-
-  check('buildFfmpegFitFilters crop with identity rect falls back to fit', () => {
-    const filters = buildFfmpegFitFilters('crop', 1920, 1080, { cropRect: { x: 0, y: 0, w: 1, h: 1 } })
-    assert.equal(filters.length, 1)
-    assert.ok(filters[0]!.includes('force_original_aspect_ratio=decrease'))
-  })
-
-  check('buildFfmpegFitFilters rounds odd canvas dims to even', () => {
-    const filters = buildFfmpegFitFilters('fit', 1921, 1081)
-    assert.ok(filters[0]!.includes('scale=1920:1080'))
-    assert.ok(filters[0]!.includes('pad=1920:1080'))
   })
 
   check('reframeTransform scales manual offsets proportionally', () => {

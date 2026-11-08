@@ -1,7 +1,7 @@
 // tmcut-core — mask tests (R124 A3). Run: node --test "test/*.test.mjs"
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { normalizeMask, maskAlphaExpr, maskCssMaskImage, TMUTCUT_MASK_SHAPES } from '../src/mask.mjs'
+import { normalizeMask, maskCssMaskImage, TMUTCUT_MASK_SHAPES } from '../src/mask.mjs'
 
 function rect(overrides = {}) {
   return { shape: 'rectangle', x: 0.25, y: 0.25, w: 0.5, h: 0.5, feather: 10, ...overrides }
@@ -33,79 +33,6 @@ describe('masks normalize (R124 A3)', () => {
     assert.equal(m.h, 0.001) // minimum half-safe size
     assert.equal(m.feather, 100)
     assert.equal(m.rotation, 180)
-  })
-})
-
-describe('mask FFmpeg alpha expr (R124 A3)', () => {
-  it('is empty without a mask', () => {
-    assert.equal(maskAlphaExpr(null), '')
-    assert.equal(maskAlphaExpr({ shape: 'blob' }), '')
-  })
-
-  it('produces a 0..255 alpha expression for each shape', () => {
-    for (const shape of TMUTCUT_MASK_SHAPES) {
-      const expr = maskAlphaExpr(rect({ shape }))
-      assert.ok(expr.startsWith('255*'), `${shape}: ${expr}`)
-      // Commas must exist escaped-free inside the (caller-quoted) expr ONLY
-      // as function separators of min/max/hypot — never a bare separator at
-      // the top level (quoting is the caller's job, same as keyframeExpr).
-      assert.ok(!/,$/.test(expr))
-    }
-  })
-
-  it('rectangle uses max/abs distance, circle uses hypot', () => {
-    assert.match(maskAlphaExpr(rect({ shape: 'rectangle' })), /max\(abs\(/)
-    assert.match(maskAlphaExpr(rect({ shape: 'circle' })), /hypot\(abs\(/)
-  })
-
-  it('invert mirrors the coverage term', () => {
-    const plain = maskAlphaExpr(rect())
-    const inv = maskAlphaExpr(rect({ invert: true }))
-    assert.ok(plain.startsWith('255*(1-('))
-    assert.ok(inv.startsWith('255*(min(') || inv.startsWith('255*('))
-    assert.notEqual(plain, inv)
-  })
-
-  it('rotation embeds cos/sin coefficients', () => {
-    const expr = maskAlphaExpr(rect({ rotation: 90 }))
-    // cos(90°) ≈ 0, sin ≈ 1 — the coefficients must be inlined numbers.
-    assert.match(expr, /0\*\(\(X\/W\)-0\.5\)-1\*\(\(Y\/H\)-0\.5\)/)
-  })
-
-  it('evaluates to plausible alpha when sampled numerically', () => {
-    // Port the expression to JS: X/W -> u, Y/H -> v (center sample u=v=0.5
-    // must sit deep INSIDE a centered 0.5-box => alpha 255 for plain,
-    // 0 for invert; a far corner must flip). FFmpeg geq math functions get
-    // their Math. prefix — plain JS has no bare hypot/min/max/abs globals.
-    const build = m => maskAlphaExpr(m)
-      .replace(/X\/W/g, 'u')
-      .replace(/Y\/H/g, 'v')
-      .replace(/\b(hypot|min|max|abs)\(/g, 'Math.$1(')
-    for (const shape of ['rectangle', 'circle']) {
-      const fn = new Function('u', 'v', `return (${build(rect({ shape, feather: 20 }))})`)
-      const center = fn(0.5, 0.5)
-      const outside = fn(0.02, 0.5)
-      assert.ok(center > 250, `${shape} center=${center}`)
-      assert.ok(outside < 5, `${shape} outside=${outside}`)
-      const fnInv = new Function('u', 'v', `return (${build(rect({ shape, feather: 20, invert: true }))})`)
-      assert.ok(fnInv(0.5, 0.5) < 5, `${shape} inverted center`)
-      assert.ok(fnInv(0.02, 0.5) > 250, `${shape} inverted outside`)
-    }
-    // Linear-x: opaque left of the box, clear right of it.
-    const lin = new Function('u', 'v', `return (${build(rect({ shape: 'linear', feather: 60 }))})`)
-    assert.ok(lin(0.05, 0.5) > 250, `linear left=${lin(0.05, 0.5)}`)
-    assert.ok(lin(0.95, 0.5) < 5, `linear right=${lin(0.95, 0.5)}`)
-  })
-
-  it('feather=0 stays a hard edge (band collapses to 2% minimum)', () => {
-    const expr = maskAlphaExpr(rect({ feather: 0 }))
-      .replace(/X\/W/g, 'u').replace(/Y\/H/g, 'v')
-      .replace(/\b(hypot|min|max|abs)\(/g, 'Math.$1(')
-    const fn = new Function('u', 'v', `return (${expr})`)
-    // Just inside the rect edge (x=0.25..0.75 box): 0.27 is inside.
-    assert.ok(fn(0.27, 0.5) > 250)
-    // Just outside: 0.23 is outside and should be cleared.
-    assert.ok(fn(0.23, 0.5) < 5)
   })
 })
 

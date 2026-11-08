@@ -2,7 +2,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { clipSourceRange, evaluateClip, evaluateTimeline, projectTracks, textAnimationAt } from '../src/evaluate.mjs'
-import { maskAlphaExpr, maskCssMaskImage } from '../src/mask.mjs'
+import { maskCssMaskImage } from '../src/mask.mjs'
 import { TICKS_PER_SECOND } from '../src/time.mjs'
 
 const T = TICKS_PER_SECOND
@@ -497,14 +497,13 @@ describe('evaluateTimeline — mask geometry', () => {
     assert.equal(only(evaluateTimeline(timelineOf([videoClip({ mask: null })]), 0).layers).mask, null)
   })
 
-  it('the geometry the layer reports is the geometry both builders render', () => {
-    // The sharing proof: normalizeMask runs inside maskAlphaExpr (export) and
-    // maskCssMaskImage (preview), so handing out its output can never move a
-    // pixel — and a renderer that reads only the layer gets the same edge.
+  it('the geometry the layer reports is the geometry the renderer paints', () => {
+    // The sharing proof: normalizeMask runs inside maskCssMaskImage (preview)
+    // and the plate painter, so handing out its output can never move a pixel
+    // — and a renderer that reads only the layer gets the same edge.
     const stored = { shape: 'circle', x: 0.2, y: 0.1, w: 0.6, h: 0.8, feather: 25, rotation: 30, invert: true, axis: 'y' }
     const layer = only(evaluateTimeline(timelineOf([videoClip({ mask: stored })]), 0).layers)
-    assert.notEqual(maskAlphaExpr(layer.mask), '', 'a real mask must produce a real alpha expression')
-    assert.equal(maskAlphaExpr(layer.mask), maskAlphaExpr(stored))
+    assert.notEqual(maskCssMaskImage(layer.mask, 64, 36), null, 'a real mask must produce a real CSS mask')
     assert.equal(maskCssMaskImage(layer.mask, 64, 36), maskCssMaskImage(stored, 64, 36))
   })
 })
@@ -516,9 +515,9 @@ describe('evaluateTimeline — media layout', () => {
   })
 
   it('passes a stored crop rect through untouched', () => {
-    // Core clamps the rect inside each builder (clamp01 in computeFitObjectStyle
-    // and buildFfmpegFitFilters), so the model hands the SAME geometry to both
-    // instead of normalizing twice with a third rule.
+    // Core clamps the rect inside each consumer (clamp01 in
+    // computeFitObjectStyle, the plate planner's own fit law), so the model hands
+    // the SAME geometry to both instead of normalizing twice with a third rule.
     const cropRect = { x: 0.1, y: 0.2, w: 0.7, h: 0.6 }
     const layer = only(evaluateTimeline(timelineOf([videoClip({ fit: 'crop', cropRect })]), 0).layers)
     assert.equal(layer.layout.cropRect, cropRect)

@@ -1,7 +1,7 @@
 // tmcut-core — retime tests. Run: node --test "test/*.test.mjs"
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { validateSpeed, isRetimed, timelineToSource, sourceToTimeline, withSpeed, isRamped, speedAt, rampIntegral, rampTimelineToSource, SPEED_RAMP_PRESETS, buildRampPreset, rampSetptsExpr, splitSpeedPoints, splitRamp, rampElapsedForConsumed, trimRamp } from '../src/retime.mjs'
+import { validateSpeed, isRetimed, timelineToSource, sourceToTimeline, withSpeed, isRamped, speedAt, rampIntegral, rampTimelineToSource, SPEED_RAMP_PRESETS, buildRampPreset, splitSpeedPoints, splitRamp, rampElapsedForConsumed, trimRamp } from '../src/retime.mjs'
 import { TICKS_PER_SECOND } from '../src/time.mjs'
 
 const T = TICKS_PER_SECOND // 120000 ticks per second
@@ -83,18 +83,6 @@ describe('retime', () => {
   })
 })
 
-// Port a setpts expression into an evaluable JS function by providing the
-// FFmpeg math functions as locals (lt/sqrt) and renaming the reserved-ish
-// `if` -> `_if`; commas stay plain JS argument separators. `^` -> `**`,
-// and the u-var `(PTS-STARTPTS)` -> the `u` parameter.
-function jsify(expr) {
-  const js = expr
-    .replace(/\(PTS-STARTPTS\)/g, 'u')
-    .replace(/\bif\(/g, '_if(')
-    .replace(/\^/g, '**')
-  return new Function('u', `const lt=(a,b)=>a<b, sqrt=Math.sqrt, _if=(c,a,b)=>c?a:b; return (${js});`)
-}
-
 describe('speed ramping (R124 A4)', () => {
   const clip = { in: 0, out: 4 * T, speed: 1, speedPoints: [
     { t: 0, speed: 1 },
@@ -146,47 +134,29 @@ describe('speed ramping (R124 A4)', () => {
     assert.deepEqual(buildRampPreset('nope', 4 * T), [])
   })
 
-  it('rampSetptsExpr null for non-ramped, else a nested-if of closed forms', () => {
-    assert.equal(rampSetptsExpr({}), null)
-    assert.equal(rampSetptsExpr({ speedPoints: [{ t: 0, speed: 1 }] }), null)
-    const expr = rampSetptsExpr(clip)
-    assert.ok(expr.startsWith('if(lt('), expr)
-    assert.ok(expr.includes('sqrt('))
-  })
-
-  it('rampSetptsExpr inverts the speed integral (numeric roundtrip)', () => {
-    const plain = { in: 0, out: 10 * T, speed: 1 }
-    const rc = { ...plain, speedPoints: clip.speedPoints }
-    const expr = rampSetptsExpr(rc)
-    const evalU = jsify(expr)
-    // For each sample of SOURCE time u (seconds), the expr gives output
-    // time τ; the inverse map (JS rampIntegral in seconds) must agree:
-    // u = ∫₀ᵗ s dt evaluated at t = τ.
-    const integralSec = (tSec) => rampIntegral(rc, tSec * T) / T
+  it('rampElapsedForConsumed inverts the speed integral (numeric roundtrip)', () => {
+    // The inverse law the export used to encode as a filter expression, kept
+    // as arithmetic: for each sample of SOURCE ticks u, the timeline time that
+    // has consumed exactly u must integrate back to u.
+    const rc = { in: 0, out: 10 * T, speed: 1, speedPoints: clip.speedPoints }
     for (const uSec of [0, 0.5, 1, 2, 3, 4, 4.5, 5, 6, 8, 10, 12]) {
-      const tau = evalU(uSec)
-      const back = integralSec(tau)
-      assert.ok(Math.abs(back - uSec) < 0.01, `u=${uSec} -> τ=${tau} -> ${back}`)
+      const tau = rampElapsedForConsumed(rc, uSec * T)
+      const back = rampIntegral(rc, tau) / T
+      assert.ok(Math.abs(back - uSec) < 0.01, `u=${uSec} -> tau=${tau} -> ${back}`)
     }
-    // Monotone increasing output times.
+    // Monotone: more consumed source never maps to an earlier timeline time.
     let prev = -1
     for (const uSec of [0, 1, 2, 3, 4, 6, 10]) {
-      const tau = evalU(uSec)
+      const tau = rampElapsedForConsumed(rc, uSec * T)
       assert.ok(tau > prev, `not monotone at u=${uSec}`)
       prev = tau
     }
-    // Ends: u=0 -> τ=0; the full source span 10s consumed at τ=4s (clip dur).
-    assert.ok(Math.abs(evalU(0)) < 1e-6)
-    assert.ok(Math.abs(evalU(10) - 4) < 0.01)
   })
 
-  it('rampSetptsExpr constant segment degrades to the linear form', () => {
+  it('rampElapsedForConsumed degrades to the constant form for an equal-speed curve', () => {
     const constClip = { speedPoints: [{ t: 0, speed: 2 }, { t: 4 * T, speed: 2 }] }
-    const expr = rampSetptsExpr(constClip)
-    assert.ok(expr, 'ramped even with equal speeds')
-    assert.ok(!expr.includes('sqrt('), `expected linear form, got: ${expr}`)
-    const evalU = jsify(expr)
-    assert.ok(Math.abs(evalU(4) - 2) < 1e-6) // 4s source at 2x = 2s out
+    // 4s of source at 2x is 2s of timeline, exactly like the plain division.
+    assert.ok(Math.abs(rampElapsedForConsumed(constClip, 4 * T) - 2 * T) < 1e-6)
   })
 })
 

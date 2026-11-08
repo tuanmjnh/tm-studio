@@ -3,10 +3,15 @@
 //  First-wave effect descriptors + validation + normalization for clip
 //  `effects: [{ type, params }]` (docs DSL v3, TmcutClipEffect).
 //
-//  `renderReady` is the honesty flag: it stays FALSE until the export
-//  compiler actually maps the effect (Roadmap R4) — consumers must show a
-//  truthful "not exported yet" badge instead of implying the file will
-//  contain the effect. Preview (CSS/filter) may still render it.
+//  `renderReady` is the definition-completeness flag: TRUE means the registry
+//  ships a full semantic face for the effect (params + preview descriptor +
+//  grade ops where applicable) that a renderer can consume. It is NOT a promise
+//  the current file export bakes the effect — file-export eligibility is decided
+//  separately by `planEncodeContent` (exportContent.mjs), which today refuses a
+//  clip that carries effects until the WebCodecs painter learns to bake them.
+//  Preview (CSS/filter) may still render it. `fxCapabilities.exportSupported`
+//  mirrors this flag, so a tile badge reflects definition completeness, not the
+//  export refusal — see the slice J audit note on that honesty gap.
 //
 //  `preview.layerOverlay` is the other honesty flag: TRUE only when this
 //  effect's CSS overlay is what the export bakes into the layer, so a live
@@ -86,10 +91,10 @@ export const EFFECT_REGISTRY = {
     renderReady: true,
     preview: { strategy: 'css', fidelity: 'approximate' },
     params: [
-      // Preset grades (R128 A3): 20 linear FFmpeg mappings, all render
-      // verified. The first five keep their R4 order/output byte-identical
-      // so stored projects resolve to the exact same filter strings; only
-      // 'neutral' is a no-op (see buildFfmpegEffectFilters). File-based
+      // Preset grades (R128 A3, slice J): 19 semantic grade op-lists (see
+      // lutGrade), each an ordered instruction list a renderer consumes. The
+      // first five keep their R4 order so stored projects resolve to the same
+      // look; only 'neutral' is a no-op (lutGrade returns null). File-based
       // `.cube` loading still arrives with a future `file` param kind.
       {
         name: 'lut',
@@ -125,7 +130,7 @@ export const EFFECT_REGISTRY = {
       { name: 'contrast', kind: 'number', min: 0, max: 200, default: 100 },
       { name: 'saturation', kind: 'number', min: 0, max: 200, default: 100 },
       // R117: color temperature — negative = cooler (blue), positive =
-      // warmer (amber). Mapped to FFmpeg colorbalance (red/blue) at export.
+      // warmer (amber). One number; `lutGrade` carries it as a `balance` op.
       { name: 'temp', kind: 'number', min: -100, max: 100, default: 0 },
       // R128 A4 adjust params. Every default is a true no-op so a stored
       // legacy eq-grade exports the byte-identical filter string. hue is
@@ -194,9 +199,9 @@ export const EFFECT_REGISTRY = {
     label: 'Negate',
     category: 'color',
     renderReady: true,
-    // NOT `exact`: `alpha` switches the bake to negate_alpha=1 and CSS invert()
-    // has no alpha face, so one reachable param makes the tile a different
-    // picture. Policed by tests/unit/tmcut_fx_exact.spec.ts.
+    // NOT `exact`: `alpha` inverts the alpha channel and CSS invert() has no
+    // alpha face, so one reachable param makes the tile a different picture.
+    // Policed by tests/unit/tmcut_fx_exact.spec.ts.
     preview: { strategy: 'css', fidelity: 'approximate' },
     params: [
       { name: 'alpha', kind: 'bool', default: false }
@@ -484,312 +489,49 @@ export function normalizeEffects(list) {
   return out
 }
 
-// R128 A3 — lut3d preset chains. Every value is one linear FFmpeg chain
-// (single input, comma-chained like the caller does) and was render-verified
-// against real FFmpeg. The first five keep their R4 strings byte-identical;
-// 'neutral' is deliberately absent so it emits nothing (legacy no-op).
-const LUT3D_CHAINS = {
-  'warm': 'colorbalance=rs=0.12:gs=0.02:bs=-0.1',
-  'cool': 'colorbalance=rs=-0.1:gs=0.02:bs=0.15',
-  'cinematic': 'curves=preset=cross_process,eq=contrast=1.1:saturation=1.15',
-  'vintage': 'colorbalance=rs=0.15:gs=0.08:bs=-0.12,eq=contrast=0.95:saturation=0.85',
-  'vivid': 'eq=saturation=1.45:contrast=1.12:brightness=0.02',
-  'fade': 'curves=preset=lighter,eq=saturation=0.78:contrast=0.9:brightness=0.03',
-  'mono': 'hue=s=0,eq=contrast=1.08',
-  'sepia': 'colorchannelmixer=rr=0.393:rg=0.769:rb=0.189:gr=0.349:gg=0.686:gb=0.168:br=0.272:bg=0.534:bb=0.131',
-  'noir': 'hue=s=0,curves=preset=strong_contrast,eq=brightness=-0.02',
-  'bleach': 'curves=preset=strong_contrast,eq=saturation=0.35:contrast=1.15',
-  'teal-orange': 'colorbalance=bs=0.18:gs=0.05:rh=0.14:rm=0.1,eq=saturation=1.08',
-  'sunset': 'colorbalance=rs=0.2:gs=0.05:bs=-0.15:rm=0.1,eq=saturation=1.15:brightness=0.02',
-  'moonlight': 'colorbalance=rs=-0.12:bs=0.2:bm=0.08,eq=brightness=-0.03:saturation=0.85:contrast=1.05',
-  'forest': 'colorbalance=gs=0.15:rs=-0.1:bs=0.05,eq=saturation=1.1:contrast=1.03',
-  'rose': 'colorbalance=rs=0.16:rm=0.08:bs=-0.05,eq=saturation=1.08',
-  'cyberpunk': 'colorbalance=bs=0.25:rs=0.1:bm=0.15,eq=saturation=1.35:contrast=1.15',
-  'film': 'curves=preset=medium_contrast,eq=saturation=0.92:brightness=0.01,noise=alls=4:allf=t',
-  'honey': 'colorbalance=rs=0.1:gs=0.06:bs=-0.08,curves=preset=lighter,eq=saturation=1.1',
-  'arctic': 'colorbalance=bs=0.18:gs=0.06:rs=-0.12,eq=saturation=0.9:brightness=0.02:contrast=1.06'
+// Slice J — the same grades as semantic instruction lists, not FFmpeg text.
+// Each op is a typed object a GPU/canvas/Web Audio renderer consumes directly;
+// the UI maps the same ops to CSS. Order mirrors the old chain so the preview
+// paints identically. 'neutral' is absent (the documented no-op → null).
+//   balance   { rs,gs,bs, rm,gm,bm, rh,gh,bh }  shadow/mid/highlight offsets
+//   eq        { brightness, contrast, saturation }  (only the fields set)
+//   curves    { preset }  one of lighter|medium_contrast|strong_contrast|cross_process
+//   desaturate  (hue=s=0)   sepia  (colorchannelmixer sepia matrix)
+//   grain     { amount }  (noise alls)
+const LUT_GRADES = {
+  'warm': [{ op: 'balance', rs: 0.12, gs: 0.02, bs: -0.1 }],
+  'cool': [{ op: 'balance', rs: -0.1, gs: 0.02, bs: 0.15 }],
+  'cinematic': [{ op: 'curves', preset: 'cross_process' }, { op: 'eq', contrast: 1.1, saturation: 1.15 }],
+  'vintage': [{ op: 'balance', rs: 0.15, gs: 0.08, bs: -0.12 }, { op: 'eq', contrast: 0.95, saturation: 0.85 }],
+  'vivid': [{ op: 'eq', saturation: 1.45, contrast: 1.12, brightness: 0.02 }],
+  'fade': [{ op: 'curves', preset: 'lighter' }, { op: 'eq', saturation: 0.78, contrast: 0.9, brightness: 0.03 }],
+  'mono': [{ op: 'desaturate' }, { op: 'eq', contrast: 1.08 }],
+  'sepia': [{ op: 'sepia' }],
+  'noir': [{ op: 'desaturate' }, { op: 'curves', preset: 'strong_contrast' }, { op: 'eq', brightness: -0.02 }],
+  'bleach': [{ op: 'curves', preset: 'strong_contrast' }, { op: 'eq', saturation: 0.35, contrast: 1.15 }],
+  'teal-orange': [{ op: 'balance', bs: 0.18, gs: 0.05, rh: 0.14, rm: 0.1 }, { op: 'eq', saturation: 1.08 }],
+  'sunset': [{ op: 'balance', rs: 0.2, gs: 0.05, bs: -0.15, rm: 0.1 }, { op: 'eq', saturation: 1.15, brightness: 0.02 }],
+  'moonlight': [{ op: 'balance', rs: -0.12, bs: 0.2, bm: 0.08 }, { op: 'eq', brightness: -0.03, saturation: 0.85, contrast: 1.05 }],
+  'forest': [{ op: 'balance', gs: 0.15, rs: -0.1, bs: 0.05 }, { op: 'eq', saturation: 1.1, contrast: 1.03 }],
+  'rose': [{ op: 'balance', rs: 0.16, rm: 0.08, bs: -0.05 }, { op: 'eq', saturation: 1.08 }],
+  'cyberpunk': [{ op: 'balance', bs: 0.25, rs: 0.1, bm: 0.15 }, { op: 'eq', saturation: 1.35, contrast: 1.15 }],
+  'film': [{ op: 'curves', preset: 'medium_contrast' }, { op: 'eq', saturation: 0.92, brightness: 0.01 }, { op: 'grain', amount: 4 }],
+  'honey': [{ op: 'balance', rs: 0.1, gs: 0.06, bs: -0.08 }, { op: 'curves', preset: 'lighter' }, { op: 'eq', saturation: 1.1 }],
+  'arctic': [{ op: 'balance', bs: 0.18, gs: 0.06, rs: -0.12 }, { op: 'eq', saturation: 0.9, brightness: 0.02, contrast: 1.06 }]
 }
 
 /**
- * Map an array of clip effects to FFmpeg video filter strings (Roadmap R4, core C6).
- * Safe against dirty or unnormalized inputs (runs normalizeEffects first).
- * Order of effects is preserved.
- *
- * @param {Array<object>} effects
- * @returns {string[]} array of FFmpeg filter strings
- */
-export function buildFfmpegEffectFilters(effects) {
-  const clean = normalizeEffects(effects)
-  if (clean.length === 0) return []
-
-  const filters = []
-  for (const { type, params } of clean) {
-    switch (type) {
-      case 'blur': {
-        const amount = Number(params.amount) || 0
-        if (amount > 0) {
-          const sigma = Number(((amount / 100) * 20).toFixed(2))
-          filters.push(`gblur=sigma=${sigma}`)
-        }
-        break
-      }
-      case 'sharpen': {
-        const amount = Number(params.amount) || 0
-        if (amount > 0) {
-          const la = Number(((amount / 100) * 2.5).toFixed(2))
-          filters.push(`unsharp=5:5:${la}:5:5:0.0`)
-        }
-        break
-      }
-      case 'vignette': {
-        const intensity = Number(params.intensity) || 0
-        if (intensity > 0) {
-          const angle = Number(((Math.PI / 4) * (intensity / 100 * 1.5)).toFixed(4))
-          filters.push(`vignette=angle=${angle}`)
-        }
-        break
-      }
-      case 'grain': {
-        const amount = Number(params.amount) || 0
-        if (amount > 0) {
-          const flag = params.size === 'coarse' ? 't' : params.size === 'medium' ? 'u' : 't+u'
-          filters.push(`noise=alls=${Math.round(amount * 0.6)}:allf=${flag}`)
-        }
-        break
-      }
-      case 'chromakey': {
-        const hex = (params.color || '#00ff00').replace('#', '')
-        const sim = (Number(params.similarity || 30) / 100).toFixed(2)
-        const bl = (Number(params.blend || 10) / 100).toFixed(2)
-        filters.push(`colorkey=0x${hex}:${sim}:${bl}`)
-        break
-      }
-      case 'lut3d': {
-        // R128 A3: one linear chain per preset. 'neutral' maps to nothing
-        // (a true no-op) — the only registry entry the honesty rule exempts.
-        const chain = LUT3D_CHAINS[params.lut]
-        if (chain) filters.push(chain)
-        break
-      }
-      case 'stabilize': {
-        const strength = Number(params.strength) || 50
-        const rx = Math.max(8, Math.round((strength / 100) * 32))
-        filters.push(`deshake=rx=${rx}:ry=${rx}:edge=mirror`)
-        break
-      }
-      case 'eq-grade': {
-        const b = Number(params.brightness || 0)
-        const c = Number(params.contrast || 100)
-        const s = Number(params.saturation || 100)
-        const bVal = Number((b / 100 * 0.5).toFixed(3))
-        const cVal = Number((c / 100).toFixed(3))
-        const sVal = Number((s / 100).toFixed(3))
-        // R128 honesty rule: eq-grade is renderReady, so the base eq is
-        // ALWAYS emitted — at registry defaults it is a bit-exact identity
-        // grade, and a stored project with real values keeps the exact same
-        // string it produced before this round (b=0/c=100/s=100 previously
-        // produced no filter at all, which made the honesty flag a lie).
-        filters.push(`eq=brightness=${bVal}:contrast=${cVal}:saturation=${sVal}`)
-        // R117: color temperature — negative = cooler (blue), positive =
-        // warmer (amber). Mapped to FFmpeg colorbalance red/blue; the
-        // value is clamped to [-1, 1] so a stray param never breaks the
-        // graph (real-FFmpeg verified, same range as the lut3d presets).
-        const t = Number(params.temp || 0)
-        if (t !== 0) {
-          const r = Number(Math.max(-1, Math.min(1, t / 100)).toFixed(3))
-          filters.push(`colorbalance=rs=${r}:bs=${-r}`)
-        }
-        // R128 A4 adjust params. Each stays silent at its default value, so
-        // an untouched grade keeps a byte-identical export.
-        const hue = Number(params.hue || 0)
-        if (hue !== 0) {
-          const hVal = Number(Math.max(-180, Math.min(180, hue)).toFixed(3))
-          filters.push(`hue=h=${hVal}`)
-        }
-        const gamma = Number(params.gamma ?? 100)
-        if (gamma !== 100) {
-          const gVal = Number(Math.max(0.1, Math.min(3, gamma / 100)).toFixed(3))
-          filters.push(`eq=gamma=${gVal}`)
-        }
-        const fade = Number(params.fade || 0)
-        if (fade !== 0) {
-          // Fade lifts the black floor (colorlevels minimum, 0..1 per plane).
-          const fVal = Number((Math.max(0, Math.min(100, fade)) / 100 * 0.25).toFixed(3))
-          filters.push(`colorlevels=rimin=${fVal}:gimin=${fVal}:bimin=${fVal}`)
-        }
-        const vibrance = Number(params.vibrance || 0)
-        if (vibrance !== 0) {
-          const vVal = Number((Math.max(-100, Math.min(100, vibrance)) / 100).toFixed(3))
-          filters.push(`vibrance=intensity=${vVal}`)
-        }
-        break
-      }
-      // --- R128 A2: second-wave effects, all single-input linear chains ---
-      case 'pixelate': {
-        const size = Math.max(1, Math.min(64, Math.round(Number(params.size) || 12)))
-        const mode = ['avg', 'min', 'max'].includes(params.mode) ? params.mode : 'avg'
-        filters.push(`pixelize=w=${size}:h=${size}:mode=${mode}`)
-        break
-      }
-      case 'emboss': {
-        const amount = Math.max(0, Math.min(100, Number(params.amount ?? 100)))
-        const rdiv = Math.max(0.01, Number((amount / 100).toFixed(3)))
-        filters.push(`convolution=0m='-2 -1 0 -1 1 1 0 1 2':0rdiv=${rdiv}:0bias=0`)
-        break
-      }
-      case 'edge-detect': {
-        const mode = ['wires', 'colormix', 'canny'].includes(params.mode) ? params.mode : 'wires'
-        if (mode === 'canny') {
-          const low = Number(Math.max(0, Math.min(1, Number(params.low ?? 0.1))).toFixed(3))
-          const high = Number(Math.max(0, Math.min(1, Number(params.high ?? 0.4))).toFixed(3))
-          filters.push(`edgedetect=mode=canny:low=${low}:high=${high}`)
-        } else {
-          filters.push(`edgedetect=mode=${mode}`)
-        }
-        break
-      }
-      case 'letterbox': {
-        const size = Math.max(1, Math.min(40, Number(params.size) || 12))
-        const bar = Number((size / 100).toFixed(2))
-        const offset = Number((1 - bar).toFixed(2))
-        const top = `drawbox=x=0:y=0:w=iw:h=ih*${bar}:color=black:t=fill`
-        const bottom = `drawbox=x=0:y=ih*${offset}:w=iw:h=ih*${bar}:color=black:t=fill`
-        filters.push(`${top},${bottom}`)
-        break
-      }
-      case 'negate': {
-        filters.push(params.alpha === true ? 'negate=negate_alpha=1' : 'negate')
-        break
-      }
-      case 'vivid': {
-        const amount = Math.max(0, Math.min(100, Number(params.amount ?? 50)))
-        const sat = Number((1 + amount / 100 * 0.6).toFixed(3))
-        const contrast = Number((1 + amount / 100 * 0.15).toFixed(3))
-        filters.push(`eq=saturation=${sat}:contrast=${contrast}`)
-        break
-      }
-      case 'bleach-bypass': {
-        const amount = Math.max(0, Math.min(100, Number(params.amount ?? 100)))
-        const contrast = Number((1 + amount / 100 * 0.3).toFixed(3))
-        const sat = Number((1 - amount / 100 * 0.65).toFixed(3))
-        filters.push(`eq=contrast=${contrast}:saturation=${sat}`)
-        break
-      }
-      case 'teal-orange': {
-        const amount = Math.max(0, Math.min(100, Number(params.amount ?? 60)))
-        const k = amount / 100
-        const scaled = value => Number((value * k).toFixed(3))
-        const lift = Number((1 + k * 0.05).toFixed(3))
-        const balance = `colorbalance=bs=${scaled(0.15)}:gs=${scaled(0.05)}:rh=${scaled(0.12)}:rm=${scaled(0.08)}`
-        filters.push(`${balance},eq=saturation=${lift}:contrast=${lift}`)
-        break
-      }
-      case 'vibrance': {
-        const intensity = Math.max(-100, Math.min(100, Number(params.intensity ?? 50)))
-        filters.push(`vibrance=intensity=${Number((intensity / 100).toFixed(3))}`)
-        break
-      }
-      case 'mirror-h':
-      case 'mirror-v': {
-        const axis = ['horizontal', 'vertical', 'both'].includes(params.axis) ? params.axis : 'horizontal'
-        if (axis === 'vertical') filters.push('vflip')
-        else if (axis === 'both') filters.push('hflip,vflip')
-        else filters.push('hflip')
-        break
-      }
-      case 'rotate-90': {
-        // transpose=1 is one clockwise quarter turn; transpose=2 is one
-        // counter-clockwise turn (used to keep the 3-turn case on one filter).
-        const turns = Math.max(1, Math.min(3, Math.round(Number(params.turns) || 1)))
-        filters.push(turns === 3 ? 'transpose=2' : Array(turns).fill('transpose=1').join(','))
-        break
-      }
-      case 'chromatic': {
-        const shift = Math.max(1, Math.min(64, Math.round(Number(params.shift) || 6)))
-        filters.push(`rgbashift=rh=${shift}:bh=${-shift}`)
-        break
-      }
-      case 'fisheye': {
-        const strength = Math.max(0, Math.min(100, Number(params.strength ?? 30)))
-        const k1 = Number((-(strength / 100)).toFixed(3))
-        filters.push(`lenscorrection=k1=${k1}:k2=0:i=bilinear`)
-        break
-      }
-      case 'motion-blur': {
-        const frames = Math.max(2, Math.min(30, Math.round(Number(params.frames) || 8)))
-        filters.push(`tmix=frames=${frames}`)
-        break
-      }
-      case 'afterimage': {
-        const decay = Math.max(0, Math.min(100, Number(params.decay ?? 80)))
-        filters.push(`lagfun=decay=${Number((decay / 100).toFixed(2))}`)
-        break
-      }
-      case 'denoise': {
-        const strength = Math.max(0, Math.min(100, Number(params.strength ?? 50)))
-        const spatial = Number((strength / 10).toFixed(2))
-        const chromaSpatial = Number((spatial * 0.6).toFixed(2))
-        const temporal = Number((strength / 8).toFixed(2))
-        const chromaTemporal = Number((temporal * 0.75).toFixed(2))
-        const luma = `hqdn3d=luma_spatial=${spatial}:chroma_spatial=${chromaSpatial}`
-        filters.push(`${luma}:luma_tmp=${temporal}:chroma_tmp=${chromaTemporal}`)
-        break
-      }
-      case 'deband': {
-        const threshold = Math.max(1, Math.min(100, Number(params.threshold) || 20))
-        const thr = Number((threshold / 1000).toFixed(4))
-        const range = Math.max(4, Math.min(64, Math.round(Number(params.range) || 16)))
-        const thresholds = `1thr=${thr}:2thr=${thr}:3thr=${thr}:4thr=${thr}`
-        filters.push(`deband=${thresholds}:range=${range}:blur=true`)
-        break
-      }
-      case 'sepia': {
-        const t = Math.max(0, Math.min(100, Number(params.intensity ?? 100))) / 100
-        const mix = value => Number(value.toFixed(3))
-        const matrix = [
-          `rr=${mix(1 - 0.607 * t)}`,
-          `rg=${mix(0.769 * t)}`,
-          `rb=${mix(0.189 * t)}`,
-          `gr=${mix(0.349 * t)}`,
-          `gg=${mix(1 - 0.314 * t)}`,
-          `gb=${mix(0.168 * t)}`,
-          `br=${mix(0.272 * t)}`,
-          `bg=${mix(0.534 * t)}`,
-          `bb=${mix(1 - 0.869 * t)}`
-        ]
-        filters.push(`colorchannelmixer=${matrix.join(':')}`)
-        break
-      }
-      case 'mono': {
-        const intensity = Math.max(0, Math.min(100, Number(params.intensity ?? 100)))
-        const sat = Number(Math.max(0, 1 - intensity / 100).toFixed(3))
-        filters.push(`hue=s=${sat}`)
-        break
-      }
-      case 'vhs': {
-        const amount = Math.max(0, Math.min(100, Number(params.amount ?? 50)))
-        const noise = Math.round(amount * 0.2)
-        const shift = Math.round(amount * 0.06)
-        filters.push(`noise=alls=${noise}:allf=t,chromashift=cbh=${shift}:crh=${-shift}`)
-        break
-      }
-    }
-  }
-  return filters
-}
-
-/**
- * The export chain one `lut3d` preset maps to, straight from the table above.
- * Exposed so the UI derives its grade preview from the same data the renderer
- * uses instead of keeping a second, drift-prone colour table (Roadmap v1 §5.1).
- * Returns null when the preset has no chain — an unknown id OR 'neutral', the
- * documented no-op; both render as identity.
+ * The semantic grade one `lut3d` preset maps to: an ordered list of typed ops
+ * (balance/eq/curves/desaturate/sepia/grain), never FFmpeg filter text. Returns
+ * null for an unknown id OR 'neutral' — both render as identity. A renderer
+ * (GPU/canvas/Web Audio) consumes the ops directly; the UI derives CSS from the
+ * same list so preset looks cannot drift.
  *
  * @param {string} preset
- * @returns {string | null}
+ * @returns {Array<object> | null}
  */
-export function lut3dChain(preset) {
-  return Object.prototype.hasOwnProperty.call(LUT3D_CHAINS, preset) ? LUT3D_CHAINS[preset] : null
+export function lutGrade(preset) {
+  return Object.prototype.hasOwnProperty.call(LUT_GRADES, preset) ? LUT_GRADES[preset].map(op => ({ ...op })) : null
 }
 
 /**

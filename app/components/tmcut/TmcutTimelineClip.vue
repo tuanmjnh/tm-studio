@@ -48,8 +48,8 @@ const clipWidth = computed(() => Math.max(20, duration.value * zoom.value))
 // Keyframe diamonds (Roadmap B1): unique keyframe times across every
 // animated prop, as a percentage of the clip duration (times are
 // clip-local ticks). Nothing renders when the clip has no keyframes —
-// no empty layer. Desktop export renders them (keyframeExpr chains);
-// the web build has no FFmpeg, so web export stays preview-only.
+// no empty layer. Both renderers evaluate them through `evalKeyframe`;
+// the WebCodecs export refuses effect/keyframe-heavy clips for now.
 const keyframePercents = computed<number[]>(() => {
   if (!props.clip.keyframes?.length) return []
   const seen = new Set<number>()

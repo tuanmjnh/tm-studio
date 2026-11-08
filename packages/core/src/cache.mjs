@@ -1,10 +1,9 @@
 // =============================================================================
 //  tmcut-core — cache
-//  Portable cache-key builder + proxy plan helpers (docs Phase 3: cache,
-//  proxy; sections 27-28). Zero dependencies: FNV-1a instead of node:crypto
-//  so keys compute identically in Electron, Web workers and plain node.
-//  The Electron controller mirrors this scheme
-//  (electron/tools/tmcut.controller.cjs — keep in sync).
+//  Portable cache-key builder (docs Phase 3: cache, section 27).
+//  Zero dependencies: FNV-1a instead of node:crypto so keys compute
+//  identically in Electron, Web workers and plain node. Slice J retired the
+//  FFmpeg proxy-argument planner: the preview decodes the source directly.
 // =============================================================================
 
 import { mediaFileKey } from './media.mjs'
@@ -34,48 +33,8 @@ export function cacheKeyForPath(path, revision = {}) {
   return `${fnv1aHex(`v2:${normalized}:${mtime}:${size}`)}`
 }
 
-/** Cache file path for a derived artifact (thumbnail/waveform/proxy). */
+/** Cache file path for a derived artifact (thumbnail/waveform). */
 export function cachePathFor(cacheDir, kind, key, extension) {
   const safeKey = String(key).replace(/[^a-zA-Z0-9_-]/g, '_')
   return `${String(cacheDir).replace(/\/+$/, '')}/${kind}-${safeKey}.${extension}`
-}
-
-/**
- * Pure ffmpeg argument plan for a preview proxy (small, fast to decode).
- * The runtime adapter executes it; the core only describes it.
- *
- * @param {string} input - Path to source video
- * @param {string} output - Target proxy file path (.mp4)
- * @param {number|{width?: number, crf?: number, fps?: number}} [options=960] - Target width or options object
- * @returns {string[]} FFmpeg argument list
- */
-export function buildProxyArgs(input, output, options = 960) {
-  const opts = typeof options === 'number' ? { width: options } : (options || {})
-  const target = Math.max(320, Math.floor(opts.width ?? 960))
-  const crf = String(opts.crf ?? 28)
-  const vfFilters = [`scale=${target}:-2`]
-  if (Number.isFinite(opts.fps) && opts.fps > 0) {
-    vfFilters.push(`fps=${opts.fps}`)
-  }
-  return [
-    '-y',
-    '-hide_banner',
-    '-loglevel',
-    'error',
-    '-i',
-    input,
-    '-vf',
-    vfFilters.join(','),
-    '-c:v',
-    'libx264',
-    '-preset',
-    'veryfast',
-    '-crf',
-    crf,
-    '-c:a',
-    'aac',
-    '-b:a',
-    '128k',
-    output
-  ]
 }

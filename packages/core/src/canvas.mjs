@@ -1,153 +1,13 @@
 // =============================================================================
 //  tmcut-core — canvas
 //  Ported from app/utils/tmcut/canvas.ts (docs Phase 4: Canvas Engine).
-//  Pure geometry: presets, orientation, fit styles, ffmpeg fit filters and
-//  reframe math. Canvas fps is rational (docs section 3); numeric inputs
-//  are coerced via fpsToRational.
+//  Pure geometry: presets, orientation, fit styles, reframe and crop math.
+//  Canvas fps is rational (docs section 3); numeric inputs are coerced via
+//  fpsToRational. Slice J retired the FFmpeg argv/filter emitters — the
+//  WebCodecs exporter paints from the plan, never from a filter string.
 // =============================================================================
 
 import { fpsToRational } from './time.mjs'
-import { isVectorStillImage } from './media.mjs'
-
-/**
- * The input flags a still image needs, for any consumer that feeds one to
- * FFmpeg.
- *
- * Two laws, both measured on the render binary rather than assumed:
- *
- * 1. A still must LOOP. It decodes to a single frame, so an unlooped input
- *    gives a 3-second clip ONE frame (measured: 320x180 rgb24, 172800 bytes
- *    for a 3 s window) and the segment silently collapses to a snapshot.
- *    `-t` then bounds the loop to the caller's window.
- * 2. A VECTOR still must be told what box to draw into. Without a size,
- *    librsvg rasterises at the file's own width/height, or at 100x100 when
- *    those are absent — so a logo that is only a `viewBox` lands as a
- *    100x100 postage stamp that the fit filters then stretch across a 4K
- *    canvas. `-width`/`-height` are the decoder's own options; it keeps the
- *    aspect it resolved for the file inside that box, which for a file with
- *    real width/height attributes is the file's own aspect, and for a
- *    `viewBox`-only file is still 1:1 (a known gap, recorded in the roadmap).
- *
- * The pair is therefore sent ONLY for a vector still. Hand `-width` to a PNG
- * input and FFmpeg refuses the whole export before building the graph
- * ("Codec AVOption width ... has not been used for any stream"), which is why
- * this function, not the call sites, decides the difference.
- *
- * @param {string} path          The still's path — decides the vector leg.
- * @param {object} [options]
- * @param {number} [options.fps]     Frame rate; unusable values fall back to 30.
- * @param {number} [options.width]   Raster box width; ignored for a raster still.
- * @param {number} [options.height]  Raster box height; ignored for a raster still.
- * @param {number} [options.duration] Seconds to bound the loop to; omit for an
- *   input that outlives a single clip (a canvas background).
- * @returns {string[]} flags to emit before `-i`
- */
-export function stillImageInputFlags(path, options = {}) {
-  const fps = Number(options.fps) > 0 ? Number(options.fps) : 30
-  const flags = ['-framerate', String(fps), '-loop', '1']
-  const width = positiveSize(options.width)
-  const height = positiveSize(options.height)
-  if (width && height && isVectorStillImage(path)) {
-    flags.push('-width', String(width), '-height', String(height))
-  }
-  const duration = Number(options.duration)
-  if (Number.isFinite(duration) && duration > 0) flags.push('-t', duration.toFixed(3))
-  return flags
-}
-
-function positiveSize(value) {
-  const size = Number(value)
-  return Number.isFinite(size) && size > 0 ? Math.floor(size) : 0
-}
-
-/**
- * Convert a DSL canvas color to an FFmpeg `color` source spec.
- * FFmpeg color syntax is `[0x|#]RRGGBB[AA]` — the render pipeline's proven
- * working form is `0x` hex (see app render helper ffmpegColor and the R62
- * render test asserting `color=c=0x123456`). Named colors ('black', 'red')
- * pass through unchanged.
- */
-function toFfmpegColor(value) {
-  const v = typeof value === 'string' ? value.trim() : ''
-  if (!v) return '0x000000'
-  if (v.startsWith('#')) return `0x${v.slice(1)}`
-  if (v.startsWith('0x')) return v
-  return v
-}
-
-/**
- * Builds the FFmpeg background source descriptor for the canvas.
- *
- * Contract (R76 — Phase 4 Canvas Engine):
- * - `color` / `transparent` → `{ kind: 'source', chain }` — a self-contained
- *   `color=` source filter chain; append your own stream label.
- *   Transparent is a REAL chain (`0x00000000`) so overlays still composite
- *   over it; the output codec (alpha-capable) decides whether the alpha
- *   survives to the file.
- * - `image` → `{ kind: 'input', file, inputFlags, tail }` — the image is an
- *   FFmpeg INPUT (not a `movie=` filter: drive-letter colons like `D:/`
- *   break `:`-separated filter options, and `fps=` is not a movie demuxer
- *   option). The caller registers the file via
- *   `graph.addInput(file, inputFlags)` (flags come from
- *   `stillImageInputFlags` — `-framerate`, `-loop 1`, `-t <duration>` and, for
- *   a vector still, the raster box) and applies `tail` to the labeled stream.
- *
- * @param {object} options
- * @param {number} options.canvasW    Canvas width (evened).
- * @param {number} options.canvasH    Canvas height (evened).
- * @param {number} options.fps        Frame rate.
- * @param {number} options.duration   Seconds the background must cover.
- * @param {object} options.background { type: 'color'|'image'|'transparent', value?: string }.
- * @returns {object} { type, kind, chain?, file?, inputFlags?, tail? }
- */
-export function buildBackgroundSource(options) {
-  const canvasW = Math.max(2, Math.floor((Number(options.canvasW) || 0) / 2) * 2)
-  const canvasH = Math.max(2, Math.floor((Number(options.canvasH) || 0) / 2) * 2)
-  const fps = Number(options.fps) > 0 ? Number(options.fps) : 30
-  const duration = Math.max(0.05, Number(options.duration) || 1)
-  const bg = options.background ?? { type: 'color', value: '#000000' }
-
-  if (bg.type === 'image') {
-    const imgPath = typeof bg.value === 'string' ? bg.value.trim() : ''
-    if (!imgPath) {
-      // Missing path: fall back to a solid black source so the render
-      // still produces a full-canvas frame (no dangling input).
-      return {
-        type: 'color',
-        kind: 'source',
-        chain: `color=c=0x000000:s=${canvasW}x${canvasH}:r=${fps}:d=${duration.toFixed(3)}`
-      }
-    }
-    // Cover-fit: scale to fill the canvas, crop the overflow, keep SAR 1.
-    // No `-t` here: each consumer trims its own window (clip duration +
-    // headroom), so one looping input can serve the whole timeline. The
-    // canvas box goes to the same still law a clip uses, so a vector
-    // background rasterises at the canvas instead of at 100x100.
-    const tail = `scale=${canvasW}:${canvasH}:force_original_aspect_ratio=increase,crop=${canvasW}:${canvasH},setsar=1`
-    return {
-      type: 'image',
-      kind: 'input',
-      file: imgPath,
-      inputFlags: stillImageInputFlags(imgPath, { fps, width: canvasW, height: canvasH }),
-      tail
-    }
-  }
-
-  if (bg.type === 'transparent') {
-    return {
-      type: 'transparent',
-      kind: 'source',
-      chain: `color=c=0x00000000:s=${canvasW}x${canvasH}:r=${fps}:d=${duration.toFixed(3)}`
-    }
-  }
-
-  // 'color' (default)
-  return {
-    type: 'color',
-    kind: 'source',
-    chain: `color=c=${toFfmpegColor(bg.value)}:s=${canvasW}x${canvasH}:r=${fps}:d=${duration.toFixed(3)}`
-  }
-}
 
 export const TMUTCANVAS_PRESETS = [
   { id: '16:9', width: 1920, height: 1080, orientation: 'landscape', icon: 'i-lucide-tv' },
@@ -244,15 +104,13 @@ function clamp01(value) {
 
 /**
  * Media placement resolved from a stored clip: the same defaults
- * `computeFitObjectStyle` (preview CSS) and `buildFfmpegFitFilters` (export
- * filter chain) assume, so a renderer never re-guesses them. Focus goes
- * through `clamp01` because that is exactly what the 'smart' fit does with it;
- * `cropRect` passes through as stored because each builder clamps it itself —
- * a third rule here could only disagree with them.
+ * `computeFitObjectStyle` (preview CSS) and the export plate planner assume,
+ * so a renderer never re-guesses them. Focus goes through `clamp01` because
+ * that is exactly what the 'smart' fit does with it; `cropRect` passes
+ * through as stored.
  *
- * V4 M3: `evaluateTimeline` puts this on every layer and `toRenderClip` feeds
- * the FFmpeg compiler the same call, so the two renderers cannot diverge on
- * fit, focus or crop.
+ * `evaluateTimeline` puts this on every layer and `planEncodePlate` reads the
+ * same call, so the two renderers cannot diverge on fit, focus or crop.
  */
 export function resolveClipLayout(clip) {
   return {
@@ -280,137 +138,6 @@ export function computeFitObjectStyle(mode, focusX = 0.5, focusY = 0.5, cropRect
     return { objectFit: 'cover', objectPosition: `${Math.round(cx * 100)}% ${Math.round(cy * 100)}%` }
   }
   return { objectFit: 'contain', objectPosition: '50% 50%' }
-}
-
-/** FFmpeg filter chain for a fit mode (render adapter, same semantics). */
-export function buildFfmpegFitFilters(mode, canvasW, canvasH, options = {}) {
-  const w = Math.max(2, Math.floor(canvasW / 2) * 2)
-  const h = Math.max(2, Math.floor(canvasH / 2) * 2)
-  const padColor = options.padColor || 'black'
-  const fit = `scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:${padColor}`
-  if (mode === 'fill') return withRotation([`scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h}`], options)
-  if (mode === 'stretch') return withRotation([`scale=${w}:${h}`], options)
-  if (mode === 'smart') {
-    const fx = clamp01(options.focusX ?? 0.5)
-    const fy = clamp01(options.focusY ?? 0.5)
-    return withRotation([`scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h}:x='(iw-${w})*${fx.toFixed(4)}':y='(ih-${h})*${fy.toFixed(4)}'`], options)
-  }
-  if (mode === 'crop' && options.cropRect) {
-    const cx = clamp01(options.cropRect.x)
-    const cy = clamp01(options.cropRect.y)
-    const cw = clamp01(options.cropRect.w)
-    const ch = clamp01(options.cropRect.h)
-    if (cw > 0 && ch > 0 && (cx > 0 || cy > 0 || cw < 1 || ch < 1)) {
-      return withRotation([
-        `crop=w='iw*${cw.toFixed(4)}':h='ih*${ch.toFixed(4)}':x='iw*${cx.toFixed(4)}':y='ih*${cy.toFixed(4)}'`,
-        fit
-      ], options)
-    }
-    return withRotation([fit], options)
-  }
-  return withRotation([fit], options)
-}
-
-/**
- * Append the rotation step (Roadmap C7) AFTER the fit filters, keeping
- * the canvas box size: `rotate=<deg>*PI/180:ow=iw:oh=ih` clips the
- * rotated corners to the canvas just like the preview monitor's
- * `overflow: hidden`, and `fillcolor` colors the uncovered corners with
- * the canvas background. Direction matches CSS `rotate(deg)` — verified
- * against ffmpeg: `rotate=90*PI/180` is byte-identical to
- * `transpose=1` (clockwise). A rotation of0 (or absent) appends nothing,
- * so callers keep byte-identical output for unrotated clips.
- */
-function withRotation(filters, options = {}) {
-  const deg = Number(options.rotation)
-  if (!Number.isFinite(deg) || deg % 360 === 0) return filters
-  filters.push(`rotate=${deg}*PI/180:ow=iw:oh=ih:fillcolor=${options.padColor || 'black'}`)
-  return filters
-}
-
-/**
- * FFmpeg filters applying a clip transform to a canvas-sized stream,
- * matching the preview CSS `translate(x, y) scale(s)` (rotation is
- * intentionally NOT included — the export rotate filter is pending, C7):
- *
- *   content = scale(canvasW * s, canvasH * s)   // evenized, min 2px
- *   x_pos   = (canvasW - contentW) / 2 + x      // rounded, may be negative
- *   y_pos   = (canvasH - contentH) / 2 + y
- *
- * A background is required because the content can be larger than the
- * canvas (scale > 100) or leave gaps (scale < 100). FFmpeg's `pad` is
- * not usable for this: it rejects input larger than output ("Padded
- * dimensions cannot be smaller than input dimensions") and silently
- * ignores negative offsets (both verified against ffmpeg). The reliable
- * form is `color` + `overlay` with `shortest=1` and a background
- * duration of `duration + 2` seconds — the headroom absorbs source
- * frame quantization from `trim` so the segment always ends on the
- * clip's own last frame and concat A/V lengths stay aligned.
- *
- * Phase 4 (R76): `bgInput` lets the caller supply a pre-labeled background
- * stream (e.g. `[v_bg]` from the canvas image source). The overlay then
- * composites the clip over that shared base instead of an inline `color=`
- * source — required when the canvas background is an image, where the
- * still must be a looping INPUT (drive-letter colons cannot appear in a
- * `movie=` filter). When set, `bg` is an empty string and the overlay
- * reads the background from the supplied label.
- *
- * @param {object} [options]
- * @param {number} options.canvasW     Canvas width (evenized like fit filters).
- * @param {number} options.canvasH     Canvas height.
- * @param {number} [options.scale=100] Scale percent (clip.scale).
- * @param {number} [options.x=0]       X offset in canvas px (clip.x, may be fractional/negative).
- * @param {number} [options.y=0]       Y offset in canvas px (clip.y).
- * @param {number} [options.fps=30]    Background frame rate.
- * @param {number} [options.duration=1] Clip duration in seconds (background headroom base).
- * @param {string} [options.bgColor='black'] FFmpeg color spec for the background.
- * @returns {null | { bg: string, tail: string, overlay: string }} `null` for
- *   the identity transform (scale 100 + no offsets) so callers keep the
- *   original pipeline untouched. Otherwise `bg` is a standalone source
- *   chain (label it yourself), `tail` appends to the clip's own chain,
- *   and `overlay` joins the two labeled inputs.
- */
-export function buildFfmpegTransform(options = {}) {
-  const canvasW = Math.max(2, Math.floor((Number(options.canvasW) || 0) / 2) * 2)
-  const canvasH = Math.max(2, Math.floor((Number(options.canvasH) || 0) / 2) * 2)
-  const rawScale = Number(options.scale)
-  let s = Number.isFinite(rawScale) ? rawScale / 100 : 1
-  if (!(s > 0)) s = 0.01 // degenerate non-positive scale renders near-invisible
-  const dx = Math.round(Number.isFinite(Number(options.x)) ? Number(options.x) : 0)
-  const dy = Math.round(Number.isFinite(Number(options.y)) ? Number(options.y) : 0)
-  const scaleExpr = options.scaleExpr || null
-  const xExpr = options.xExpr || null
-  const yExpr = options.yExpr || null
-  const isAnimated = Boolean(scaleExpr || xExpr || yExpr)
-
-  if (!isAnimated && s === 1 && dx === 0 && dy === 0) return null
-
-  const fps = Number(options.fps) > 0 ? Number(options.fps) : 30
-  const duration = Math.max(0.05, Number(options.duration) || 1)
-  const bgColor = options.bgColor || 'black'
-  const bg = options.bgInput
-    ? '' // caller supplies the background via a labeled input (image background)
-    : `color=c=${bgColor}:s=${canvasW}x${canvasH}:r=${fps}:d=${(duration + 2).toFixed(3)}`
-
-  if (isAnimated) {
-    const tail = scaleExpr
-      ? `scale=w='trunc(${canvasW}*(${scaleExpr})/100/2)*2':h='trunc(${canvasH}*(${scaleExpr})/100/2)*2':eval=frame`
-      : `scale=${Math.max(2, Math.round(canvasW * s / 2) * 2)}:${Math.max(2, Math.round(canvasH * s / 2) * 2)}`
-    const ovX = xExpr ? `(W-w)/2+(${xExpr})` : `(W-w)/2+${dx}`
-    const ovY = yExpr ? `(H-h)/2+(${yExpr})` : `(H-h)/2+${dy}`
-    const overlay = `overlay=x='${ovX}':y='${ovY}':eval=frame:shortest=1`
-    return { bg, tail, overlay }
-  }
-
-  const w = Math.max(2, Math.round(canvasW * s / 2) * 2)
-  const h = Math.max(2, Math.round(canvasH * s / 2) * 2)
-  const x = Math.round((canvasW - w) / 2 + dx)
-  const y = Math.round((canvasH - h) / 2 + dy)
-  return {
-    bg,
-    tail: `scale=${w}:${h}`,
-    overlay: `overlay=x=${x}:y=${y}:shortest=1`
-  }
 }
 
 /** Proportionally reframe manual x/y offsets across a canvas switch. */

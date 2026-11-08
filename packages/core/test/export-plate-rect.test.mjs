@@ -2,14 +2,14 @@
 //
 // The exporter's painter is one `drawImage` call, and that call takes two
 // rectangles: which pixels of the decoded frame to read, and where on the canvas
-// to put them. Both renderers already answer that question — `computeFitObjectStyle`
-// for the preview's CSS, `buildFfmpegFitFilters` + `buildFfmpegTransform` for the
-// file — so the third answer has to come from the same numbers or the export is a
-// different video than the monitor showed. This file is where that is pinned.
+// to put them. Both renderers answer that question — `computeFitObjectStyle` for
+// the preview's CSS and `planEncodePlate` for the painted file — so the two
+// answers have to come from the same numbers or the export is a different video
+// than the monitor showed. This file is where that is pinned.
 //
-// Every case is written as the rects themselves, not as a call into the FFmpeg
-// builders: a test that re-ran those builders would pass even if the plate model
-// drifted, and drift is exactly what parity against a real file measures.
+// Every case is written as the rects themselves, not as a call into the plate
+// planner: a test that re-ran the builder would pass even if the model drifted,
+// and drift is exactly what parity against a real file measures.
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { planEncodePlate } from '../src/exportContent.mjs'

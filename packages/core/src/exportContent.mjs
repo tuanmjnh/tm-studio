@@ -379,12 +379,10 @@ export function planEncodePlate(input = {}) {
 // `planEncodePlate` says where a layer lands; it says nothing about what is
 // underneath it. A painter that never clears re-uses the previous frame's pixels
 // and ships a smear, so every frame begins at the canvas background — and that
-// background is read in three languages today: CSS (`bgStyle.backgroundColor =
-// bg.value || '#000000'` in the preview), FFmpeg's `color=` source (through
-// `buildBackgroundSource`, whose `toFfmpegColor` blanks to `0x000000`) and a
-// canvas `fillStyle`, which is the weakest of the three: it keeps the OLD colour
-// when handed a string it cannot parse, so a bad value does not paint black, it
-// paints last frame.
+// background is read in two languages today: CSS (`bgStyle.backgroundColor =
+// bg.value || '#000000'` in the preview) and this canvas `fillStyle`, which is
+// the weaker of the two: it keeps the OLD colour when handed a string it cannot
+// parse, so a bad value does not paint black, it paints last frame.
 //
 // `null` is part of the answer, not an error: it means "no colour paints this
 // background correctly", and it is reserved for the two shapes
@@ -399,7 +397,7 @@ function cssColorOf(value) {
   if (typeof value !== 'string') return null
   const text = value.trim()
   if (text === '') return null
-  // `toFfmpegColor` accepts the `0xRRGGBB` spelling, so a project can hold it —
+  // `toFfmpegColor` accepted the `0xRRGGBB` spelling, so a project can hold it —
   // and a canvas cannot. One colour, two spellings, resolved here rather than
   // silently dropped by a `fillStyle` that never changed.
   if (/^0x[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/.test(text)) return `#${text.slice(2)}`
@@ -420,10 +418,10 @@ export function encodeCanvasFill(canvas) {
   const background = canvas?.background
   const type = background?.type
   if (type === 'transparent') return null
-  // A blank image path is no background in either counterpart — the FFmpeg chain
-  // says so in its own comment and falls back to a black source.
+  // A blank image path is no background in either counterpart — the preview
+  // paints nothing there, and this returns the black default.
   if (type === 'image') return cssColorOf(background.value) === null ? '#000000' : null
-  // Everything else is the colour branch, which is also what an unknown type
-  // becomes in `buildBackgroundSource` and what the preview leaves unpainted.
+  // Everything else is the colour branch, which is also what the preview leaves
+  // unpainted.
   return cssColorOf(background?.value) ?? '#000000'
 }

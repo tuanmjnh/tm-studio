@@ -3,12 +3,11 @@
 // `planEncodePlate` says where one layer lands; it says nothing about what is
 // UNDER it. A painter that forgets to clear re-uses the previous frame's pixels
 // and ships a file whose motion is a smear, so the frame must start from the
-// canvas background — and the colour of that background is a rule with three
+// canvas background — and the colour of that background is a rule with two
 // readers today: the preview's CSS (`bgStyle.backgroundColor = bg.value ||
-// '#000000'`), the FFmpeg chain (`buildBackgroundSource`, which defaults to
-// `color=c=0x000000` and blanks to black through `toFfmpegColor`), and a canvas
-// `fillStyle`, which is a fourth language: it eats `#101820` and `red`, and
-// silently keeps the old colour for anything it does not parse.
+// '#000000'`) and a canvas `fillStyle`, which is the weaker language: it eats
+// `#101820` and `red`, and silently keeps the old colour for anything it does
+// not parse.
 //
 // So the painter gets the answer from core rather than reading the canvas itself.
 // `null` is part of the law: it means "there is no colour that paints this
@@ -57,8 +56,8 @@ describe('encodeCanvasFill — the frame the painter starts from', () => {
   })
 
   it('no background at all is black, in both counterparts', () => {
-    // `buildBackgroundSource` defaults to `#000000` when the canvas carries no
-    // background; a file painted any other way is a different picture.
+    // The preview reads a missing background as `#000000`; a file painted any
+    // other way is a different picture.
     assert.equal(encodeCanvasFill({}), '#000000')
     assert.equal(encodeCanvasFill({ background: null }), '#000000')
     assert.equal(encodeCanvasFill(null), '#000000')
@@ -95,8 +94,8 @@ describe('encodeCanvasFill — the frame the painter starts from', () => {
   })
 
   it('an unknown background type is the colour branch, as both counterparts read it', () => {
-    // `buildBackgroundSource` falls through to the colour branch, the preview
-    // paints nothing (so the box shows black); the painter follows the file.
+    // The preview paints nothing for an unknown type (the box shows black), so
+    // an authored colour is the only painter answer.
     assert.equal(encodeCanvasFill({ background: { type: 'gradient', value: '#101820' } }), '#101820')
   })
 

@@ -182,18 +182,18 @@ và một bản văn bản FFmpeg (dùng cho export). Bản thứ hai phải b�
 
 | Module | Dấu vết FFmpeg | Hệ quả khi xóa |
 |---|---|---|
-| [canvas.mjs:286](file:///D:/Applications/tm-studio/packages/core/src/canvas.mjs#L286) | `buildFfmpegFitFilters`, và `buildFfmpegTransform` (373), `stillImageInputFlags` (45), `buildBackgroundSource` (103) | Fit/crop/rotate vẫn còn `computeFitObjectStyle` cho DOM; background/still input không còn nguồn nào khác |
-| [mask.mjs:70](file:///D:/Applications/tm-studio/packages/core/src/mask.mjs#L70) | `maskAlphaExpr` — biểu thức `geq` alpha per-pixel | Luật mask chỉ tồn tại dưới dạng `geq`; phải viết lại thành shader/destination-out |
-| [audio.mjs:79](file:///D:/Applications/tm-studio/packages/core/src/audio.mjs#L79) | `volumeExpr` (fade theo `t`), `panFilter` (108) phát filter `stereotools` | Còn `gainAt` (số học) để Web Audio dùng; phần filter string bỏ |
-| [keyframes.mjs:155](file:///D:/Applications/tm-studio/packages/core/src/keyframes.mjs#L155) | `keyframeExpr` — FFmpeg math expression cho property theo thời gian | Cần bản "evaluate at tick" cho renderer (interpolation đã có) |
-| [retime.mjs:401](file:///D:/Applications/tm-studio/packages/core/src/retime.mjs#L401) | `rampSetptsExpr` — `setpts` cho speed curve phi tuyến | Source-time mapping phải tự tính từ cùng curve — đã có `sourceTicks` trong evaluate |
-| [effects.mjs:512](file:///D:/Applications/tm-studio/packages/core/src/effects.mjs#L512) | `buildFfmpegEffectFilters` + `lut3dChain` (782): 20 preset → chuỗi grade | §8 "Color effects cơ bản" cần shader tương ứng |
+| [canvas.mjs:125](file:///D:/Applications/tm-studio/packages/core/src/canvas.mjs#L125) | **Đã nghỉ hưu ở slice J (§55)**: `buildFfmpegFitFilters`, `buildFfmpegTransform`, `stillImageInputFlags`, `buildBackgroundSource` | Fit/crop/rotate sống ở `computeFitObjectStyle` + `resolveClipLayout`; background/still input do painter WebCodecs đọc từ plan |
+| [mask.mjs:67](file:///D:/Applications/tm-studio/packages/core/src/mask.mjs#L67) | **Đã nghỉ hưu ở slice J (§55)**: `maskAlphaExpr` — biểu thức `geq` alpha per-pixel | `maskCssMaskImage` (SVG alpha mask) là hình học duy nhất còn sống; exporter từ chối clip có mask theo tên |
+| [audio.mjs:56](file:///D:/Applications/tm-studio/packages/core/src/audio.mjs#L56) | **Đã nghỉ hưu ở slice J (§55)**: `volumeExpr` (fade theo `t`), `panFilter` phát filter `stereotools` | `gainAt` (số học) là luật gain duy nhất; mixer Web Audio chưa áp pan — gap §55 |
+| [keyframes.mjs:50](file:///D:/Applications/tm-studio/packages/core/src/keyframes.mjs#L50) | **Đã nghỉ hưu ở slice J (§55)**: `keyframeExpr` — biểu thức toán FFmpeg cho property theo thời gian | `evalKeyframe` là bản "evaluate at tick" mà renderer đọc |
+| [retime.mjs:221](file:///D:/Applications/tm-studio/packages/core/src/retime.mjs#L221) | **Đã nghỉ hưu ở slice J (§55)**: `rampSetptsExpr` — `setpts` cho speed curve phi tuyến | Source-time mapping tính từ cùng curve: `rampTimelineToSource` / `rampElapsedForConsumed` |
+| [effects.mjs:512](file:///D:/Applications/tm-studio/packages/core/src/effects.mjs#L512) | **Đã nghỉ hưu ở slice J (§55)**: `buildFfmpegEffectFilters` + `lut3dChain`: 20 preset → chuỗi grade | Thay bằng `lutGrade` (ops semantics) + `cssFromGrade` ở `app/utils/tmcut/fxPreview.ts` |
 | [textStyle.mjs:6](file:///D:/Applications/tm-studio/packages/core/src/textStyle.mjs#L6) | Module chỉ giữ **số dùng chung** (borderw/shadow/boxborderw ↔ CSS); chuỗi `drawtext` thật nằm ở engine | Giữ CSS, bỏ `drawtext` — và thấy luôn rằng text không có emitter nào trong core để xóa |
 | [transitions.mjs:253](file:///D:/Applications/tm-studio/packages/core/src/transitions.mjs#L253) | `XFADE_POSITION_LAWS` / `XFADE_PREVIEW` — hình học đo từ binary. **Tên spelling FFmpeg không ở đây**: nó sống ở `app/utils/tmcut/fxCatalog.ts:5`, bên ngoài core | **Semantics giữ được** (window, progress, vùng), spelling bỏ mà không đụng core |
-| [probe.mjs:32](file:///D:/Applications/tm-studio/packages/core/src/probe.mjs#L32) | `normalizeProbe` theo shape JSON của ffprobe | MediaInfo schema §4.1 rộng hơn nhiều → viết contract mới |
-| [stabilize.mjs:83](file:///D:/Applications/tm-studio/packages/core/src/stabilize.mjs#L83) | `buildVidstabDetectArgs` / `buildVidstabTransformArgs` (108): argv 2-pass | Không có thay thế → tính năng phải khai tử (xem §10) |
-| [cache.mjs:52](file:///D:/Applications/tm-studio/packages/core/src/cache.mjs#L52) | `buildProxyArgs` | Bỏ được, proxy là optional |
-| [analysis.mjs:14](file:///D:/Applications/tm-studio/packages/core/src/analysis.mjs#L14) | `parseSceneOutput` / `parseSilenceOutput` (41): parse stderr FFmpeg | Autocut mất đầu vào; cần decoder-side scene/silence |
+| `packages/core/src/probe.mjs` (đã xoá ở slice J, §55) | `normalizeProbe` theo shape JSON của ffprobe | Thay bằng `buildMediaInfo` ở [mediaInfo.mjs:231](file:///D:/Applications/tm-studio/packages/core/src/mediaInfo.mjs#L231), schema rộng hơn |
+| `packages/core/src/stabilize.mjs` (đã xoá ở slice J, §55) | `buildVidstabDetectArgs` / `buildVidstabTransformArgs`: argv 2-pass | Không có thay thế → tính năng khai tử; exporter từ chối clip `stabilize` theo tên |
+| [cache.mjs:29](file:///D:/Applications/tm-studio/packages/core/src/cache.mjs#L29) | **Đã nghỉ hưu ở slice J (§55)**: `buildProxyArgs` | Bỏ được — proxy là optional; `cacheKeyForPath` / `cachePathFor` còn sống |
+| [analysis.mjs:20](file:///D:/Applications/tm-studio/packages/core/src/analysis.mjs#L20) | **Đã nghỉ hưu ở slice J (§55)**: `parseSceneOutput` / `parseSilenceOutput` — parse stderr FFmpeg | Autocut đọc cut từ decoder (`sceneScore`, `silenceSpans`); `cutsToShots` ở [detection.mjs:193](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L193) là đường duy nhất |
 | `packages/core/src/platform.mjs:18` | Capability flag `nativeFFmpeg` | Xóa flag khi engine gone; **đây là flag duy nhất cần giữ lại là `webCodecs`** |
 | [crashRecovery.mjs:159](file:///D:/Applications/tm-studio/packages/core/src/crashRecovery.mjs#L159) | Health check `{name:'ffmpeg'}` | Thay bằng check WebCodecs/muxer capability |
 
@@ -201,7 +201,7 @@ Bảng trên chạm **14 module**, nhưng đo kỹ thì FFmpeg sống trong core
 
 | Mức | Module | Ý nghĩa với migration |
 |---|---|---|
-| **Emit văn bản FFmpeg** | `canvas`, `mask`, `audio` (`stereotools` ở [dòng 114](file:///D:/Applications/tm-studio/packages/core/src/audio.mjs#L114)), `keyframes`, `retime`, `effects`, `stabilize`, `cache` — **8 module** | phải viết lại thành instruction cho GPU/canvas/Web Audio. Đây là khối việc thật |
+| **Emit văn bản FFmpeg** | `canvas`, `mask`, `audio` (`stereotools` đã nghỉ hưu — còn `gainAt` ở [dòng 56](file:///D:/Applications/tm-studio/packages/core/src/audio.mjs#L56)), `keyframes`, `retime`, `effects`, `stabilize`, `cache` — **8 module** | slice J đã thay cả 8 bằng instruction cho canvas/Web Audio (**§55**). Đây là khối việc thật |
 | **Parse output FFmpeg** | `probe` (JSON ffprobe), `analysis` (stderr) — **2 module** | phải đổi sang schema MediaInfo mới; không có "bản dịch" nào khác |
 | **Mang tên FFmpeg trong metadata** | `platform` (flag `nativeFFmpeg`), `crashRecovery` (health check `'ffmpeg'`) — **2 module** | xóa tên là xong, không đụng semantics |
 | **Chỉ nhắc trong comment** | `textStyle`, `transitions` — **2 module** | **không có gì để gỡ**: `textStyle` chỉ export số dùng chung, còn spelling `xfade=` nằm ở `app/utils/tmcut/fxCatalog.ts` phía app. Sửa comment là đủ |
@@ -1282,16 +1282,18 @@ một lưới luma và một cửa sổ PCM, không tự quyết gì — đúng 
 | [packages/core/src/detection.mjs:147](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L147) | `sceneScore` = mean abs delta trên lưới luma, chia 255, scale 0..1. Con số **0.4** lấy từ `select='gt(scene,X)'` (`shared/utils/detection-args.cjs:42`, đã xoá ở slice I) nhưng **thang thì không chung** — §23 đo trên clip thật: một cut hard cho core **0.2626** còn FFmpeg cho **0.694299**, nên 0.4 hiện **bỏ sót** chính cut mà nó được kế thừa sang. Lưới **không so sánh được** thì trả `null`, không trả `0` | check [:47](file:///D:/Applications/tm-studio/packages/core/test/scene-silence-detection.test.mjs#L47) đo `0` / `1` / `0.5` (nửa số ô đổi hết dải) và tính **đối xứng** `sceneScore(b,a) === sceneScore(a,b)`; check [:61](file:///D:/Applications/tm-studio/packages/core/test/scene-silence-detection.test.mjs#L61) buộc `null` khi độ dài khác nhau, lưới rỗng, hoặc một ô là `NaN` |
 | [packages/core/src/detection.mjs:193](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L193) | `cutsToShots`: sắp xếp, bỏ cut ≤ 0 và ≥ duration, chống rung `minGapSec` **0.04**, bỏ shot dưới `minShotSec` **0.2**, đóng đuôi bằng duration — hoặc bằng cut cuối khi **không biết** duration, vì đó là câu trả lời trung thực chứ không phải một con số đoán | **6** assert của check [:68](file:///D:/Applications/tm-studio/packages/core/test/scene-silence-detection.test.mjs#L68): shot liền mạch, input lộn thứ tự == input đã sắp xếp, shot 0.1 s bị bỏ, `3.00` và `3.02` gộp thành **một** cut, `cutsToShots([4], 0) === [{0,4}]`, `cutsToShots([], 8) === [{0,8}]`, `cutsToShots([], 0) === []` |
 | [packages/core/src/detection.mjs:217](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L217) + [:227](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L227) + [:256](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L305) | Thang im lặng: `dbfsOf` (RMS → dBFS, sàn −120 thay cho −Infinity), `levelSeries` (một mức cho mỗi cửa sổ, **cả cửa sổ đuôi cụt**, mẫu không phải số thì bỏ qua chứ không tính là im), `silenceSpans` (chuỗi cửa sổ ≤ ngưỡng, giữ khi đủ dài, đóng ở duration). Hình dạng output **giống hệt** reader stderr để không module phía dưới nào phải học shape mới | checks [:93](file:///D:/Applications/tm-studio/packages/core/test/scene-silence-detection.test.mjs#L93) (`dbfsOf(1) === 0`, `dbfsOf(0.5) === -6.02`, sàn cho 0/âm/NaN), [:103](file:///D:/Applications/tm-studio/packages/core/test/scene-silence-detection.test.mjs#L103) (225 mẫu @100 Hz → **5** cửa sổ `[0,0,sàn,sàn,sàn]`, `[]` khi mẫu rỗng hoặc rate 0), [:117](file:///D:/Applications/tm-studio/packages/core/test/scene-silence-detection.test.mjs#L117) (giữ/bỏ theo độ dài, ngưỡng **bao gồm** `<=`, `NaN` **không** im), [:155](file:///D:/Applications/tm-studio/packages/core/test/scene-silence-detection.test.mjs#L155) (vòng round-trip ticks↔seconds mà app dùng) |
-| [packages/core/src/analysis.mjs:29](file:///D:/Applications/tm-studio/packages/core/src/analysis.mjs#L29) | `parseSceneOutput` vẫn đọc `pts_time:` nhưng **không còn tự dựng shot list**: nó giao phần đó cho `cutsToShots`. Từ lượt này một cut chỉ có **một** cách biến thành shot, dù nó sinh ra từ stderr hay từ hai khung hình | [packages/core/test/scene-shot-law.test.mjs:16](file:///D:/Applications/tm-studio/packages/core/test/scene-shot-law.test.mjs#L16): cùng những khoảnh khắc, reader stderr và scan-frame trả về **cùng một** shot list |
-| [packages/core/src/index.mjs:38](file:///D:/Applications/tm-studio/packages/core/src/index.mjs#L38) + `packages/core/src/index.d.ts:392` | Barrel export + khai báo tay cho **năm** hàm và **năm** hằng số, dùng lại `CoreSceneSegment` (`packages/core/src/index.d.ts:169`) và `CoreSilenceRange` (`packages/core/src/index.d.ts:174`) thay vì chế type trùng — `parseSceneOutput` và `cutsToShots` trả đúng một shape | `tsc --noEmit -p packages/core/tsconfig.check.json` (strict + `noUnusedLocals`) exit **0**, 0 `error TS`; file declaration tăng **81706 → 83727** byte |
+| [packages/core/src/detection.mjs:193](file:///D:/Applications/tm-studio/packages/core/src/detection.mjs#L193) | `cutsToShots` là **đường duy nhất** biến cut thành shot. Slice E1 ràng buộc reader stderr vào đây; slice J (§55) xoá reader đó, nên hôm nay cut đến từ `sceneCuts` của decoder, còn luật cắt đuôi EOF vẫn nằm nguyên một chỗ | `cutsToShots` giữ nguyên hành vi đã đo ở E1: cut vượt duration bị cắt về duration, không tạo shot dài hơn file. Case đó nay do test của `detection` phủ, không còn reader stderr để đối chiếu |
+| [packages/core/src/index.mjs:41](file:///D:/Applications/tm-studio/packages/core/src/index.mjs#L41) + `packages/core/src/index.d.ts:482` | Barrel export + khai báo tay cho detection (`sceneSampleTimes`, `sceneScore`, `sceneCuts`, `cutsToShots`, `dbfsOf`, `peakLevelSeries`, `silenceSpans`), dùng lại `CoreSceneSegment` ([index.d.ts:169](file:///D:/Applications/tm-studio/packages/core/src/index.d.ts#L169)) và `CoreSilenceRange` ([index.d.ts:174](file:///D:/Applications/tm-studio/packages/core/src/index.d.ts#L174)) thay vì chế type trùng | `tsc --noEmit -p packages/core/tsconfig.check.json` (strict + `noUnusedLocals`) exit **0**, 0 `error TS` sau slice J |
 
 ### 22.2 Một luật dùng chung phơi ra một lỗi thật của đường cũ
 
-Check thứ hai của `scene-shot-law.test.mjs` là RED **không chủ định**. Nó đưa cho reader một dòng
+Check thứ hai của `scene-shot-law.test.mjs` (file đó chỉ sống từ E1 tới slice J — §55) là RED **không chủ định**. Nó đưa cho reader một dòng
 `pts_time:12` và một file dài 10 s. Trước E1, vòng dựng shot inline trong `parseSceneOutput` cắt đuôi
 bằng cách **đo** `stop - start` chứ không khoá `stop` vào duration, nên kết quả là
-`[{ start: 0, end: 12 }]` — một shot **dài hơn chính file**. Sau E1, `[{ start: 0, end: 10 }]`
-([:24](file:///D:/Applications/tm-studio/packages/core/test/scene-shot-law.test.mjs#L24)).
+`[{ start: 0, end: 12 }]` — một shot **dài hơn chính file**. Sau E1, `[{ start: 0, end: 10 }]`.
+
+Bài học sống tiếp sau khi cả hai đường đó bị xoá: `cutsToShots` khoá đuôi vào duration, và đó là luật
+duy nhất còn lại mà app đọc. Một reader mới tự dựng shot list là chỗ thứ hai có cơ chế lệch.
 
 Hệ quả trên app là có thật chứ không phải vệ sinh: shot list đổ thẳng vào `scoreSegments`, rồi EDL đổ
 vào timeline, nên một shot vượt EOF là một clip mà `validateEdl` hoặc phải chặn hoặc phải chấp nhận
@@ -2740,16 +2742,16 @@ riêng — [effects.mjs:11-16](file:///D:/Applications/tm-studio/packages/core/s
 [ vignette :53](file:///D:/Applications/tm-studio/packages/core/src/effects.mjs#L53),
 [grain :63](file:///D:/Applications/tm-studio/packages/core/src/effects.mjs#L63),
 [letterbox :185](file:///D:/Applications/tm-studio/packages/core/src/effects.mjs#L185) — và
-[`fxCapabilities` :809](file:///D:/Applications/tm-studio/packages/core/src/effects.mjs#L809) luôn trả về
+[`fxCapabilities` :548](file:///D:/Applications/tm-studio/packages/core/src/effects.mjs#L548) luôn trả về
 một boolean (không `undefined`), kiểu hóa ở
-`packages/core/src/index.d.ts:964` và
-`packages/core/src/index.d.ts:989`.
+`packages/core/src/index.d.ts:960` và
+`packages/core/src/index.d.ts:994`.
 
-Mặt overlay đi ra ngoài qua [fxPreview.ts:812](file:///D:/Applications/tm-studio/app/utils/tmcut/fxPreview.ts#L812)
+Mặt overlay đi ra ngoài qua [fxPreview.ts:814](file:///D:/Applications/tm-studio/app/utils/tmcut/fxPreview.ts#L814)
 `effectOverlay(type, params)` — cửa duy nhất đọc cờ registry, không có bảng type cục bộ — và
-[:822](file:///D:/Applications/tm-studio/app/utils/tmcut/fxPreview.ts#L822) `layerOverlayPlates(effects)`,
-một call biến **một layer** hiệu ứng thành **đúng** các plate của nó, theo thứ tự chain mà
-`buildFfmpegEffectFilters` đưa cho file.
+[:830](file:///D:/Applications/tm-studio/app/utils/tmcut/fxPreview.ts#L830) `layerOverlayPlates(effects)`,
+một call biến **một layer** hiệu ứng thành **đúng** các plate của nó, theo thứ tự chain mà clip lưu.
+(Tới slice J, chuỗi đó còn được `buildFfmpegEffectFilters` đọc để nung vào file; §55 kể chuyện nó nghỉ hưu.)
 
 ### 32.3 RED đo được, cả bảy check một lượt
 
@@ -4081,7 +4083,7 @@ yêu cầu 8 (resource lifecycle)*. Lượt này đóng yêu cầu 4; yêu cầu
 biến nó thành badge, và `exact` là cái badge nói với người dựng phim «cái bạn thấy là cái file
 render». Trước lượt này tuyên bố đó là **một từ tự viết**: mặt CSS sống ở
 [fxPreview.ts:818](file:///D:/Applications/tm-studio/app/utils/tmcut/fxPreview.ts#L818), mặt export sống ở
-`buildFfmpegEffectFilters` ([effects.mjs:521](file:///D:/Applications/tm-studio/packages/core/src/effects.mjs#L521)),
+`buildFfmpegEffectFilters` (khi đó nằm trong `packages/core/src/effects.mjs`; slice J đã xoá nó — §55),
 và **không một spec nào đặt hai cái cạnh nhau**. Đây đúng là lớp lỗi review từng file không thấy,
 vì mỗi nửa tự đọc rất hợp lý: `sepia(0.6) saturate(1.15)` trông như một cú sepia,
 `colorchannelmixer=rr=0.636:…` trông như một cú sepia — chỉ phép so mới nói được rằng một trong
@@ -4100,8 +4102,8 @@ Registry có **29** effect; **5** cái claim `exact` (letterbox, negate, mirror-
 | 60 | `sepia(0.6) saturate(1.15)` | `rr=0.636:rg=0.461:rb=0.113:gr=0.209:gg=0.812:gb=0.101:br=0.163:bg=0.32:bb=0.479` | file chạy sepia thuần; `saturate(1.15)` là **15 % bão hòa bịa thêm** |
 | 100 | `sepia(1) saturate(1.25)` | `rr=0.393:rg=0.769:rb=0.189:gr=0.349:gg=0.686:gb=0.168:br=0.272:bg=0.534:bb=0.131` | chính xác bảng W3C — tức `sepia(t)` tự nó đã là export |
 
-`negate` thì sai theo cách khác: param `alpha` làm file đổi hẳn ([effects.mjs:661](file:///D:/Applications/tm-studio/packages/core/src/effects.mjs#L661))
-thành `negate=negate_alpha=1`, và `invert()` trong CSS **không có mặt alpha** để mà nói. Một claim
+`negate` thì sai theo cách khác: param `alpha` làm file đổi hẳn (emitter `negate=negate_alpha=1` đã nghỉ hưu ở slice J — §55)
+và `invert()` trong CSS **không có mặt alpha** để mà nói. Một claim
 cấp type không được phép nhân danh giá trị mặc định của param. Ba cái còn lại (letterbox,
 mirror-h, mirror-v) đo thì **đúng thật** — nên chúng ở lại.
 
@@ -4127,7 +4129,7 @@ nó là khác biệt thật giữa «test này fail» và «test này đã đư�
 | [effects.mjs:200](file:///D:/Applications/tm-studio/packages/core/src/effects.mjs#L200) | negate `exact` → `approximate`, comment nêu đích danh `alpha` |
 
 Hai test cũ nêu claim cũ cũng phải sửa theo, và sửa **vì claim sai**, không vì code đổi:
-[packages/core/test/effects.test.mjs:255](file:///D:/Applications/tm-studio/packages/core/test/effects.test.mjs#L255)
+[packages/core/test/effects.test.mjs](file:///D:/Applications/tm-studio/packages/core/test/effects.test.mjs) (dòng 255 khi đó)
 và [tmcut_fx_preview.spec.ts:124](file:///D:/Applications/tm-studio/tests/unit/tmcut_fx_preview.spec.ts#L124).
 Không có assertion nào được nới để chiều production.
 
@@ -6937,3 +6939,108 @@ Bảng §11 là *kế hoạch bằng chứng* ở slice A; bảng dưới là tr
 - **Production build**: shell này không chạy `electron-builder` ra app đóng gói; parity bản asar thuộc slice K.
 - **Backup**: `backup/ffmpeg-engine-2026-11-03/` (76 file, 0 exe) giữ untracked theo Q8; xoá hay không là quyết định riêng
   của chủ repo sau parity, không nằm trong chỉ thị "xóa exe".
+
+## 55. Slice J — core thôi phát ngôn FFmpeg: 8 emitter + 2 parser nghỉ hưu (đo ngày 2026-11-08)
+
+Slice I cắt engine khỏi runtime. Slice J trả nốt phần còn lại: **cú pháp** FFmpeg mà core vẫn xuất ra như
+API công khai. Sau lượt này, `packages/core/src` không còn hàm nào sinh chuỗi filter, chuỗi argv hay đọc
+output của một binary không tồn tại. Cái còn lại là **semantics** — số, hình học, thời gian — mà cả
+monitor lẫn exporter đọc chung.
+
+### 55.1 Mười hai phát ngôn bị gỡ, và thứ sống thay chúng
+
+| # | Hàm đã gỡ | Module | Bản sống thay thế | Test |
+|---|---|---|---|---|
+| 1 | `buildFfmpegEffectFilters` + `lut3dChain` | `effects.mjs` | `lutGrade(preset)` trả **ops semantics** (`balance`/`eq`/`curves`/`desaturate`/`sepia`/`grain`); `cssFromGrade` ở `app/utils/tmcut/fxPreview.ts` dựng CSS từ đúng ops đó | `effects.test.mjs` (16) |
+| 2 | `buildFfmpegFitFilters` | `canvas.mjs` | `computeFitObjectStyle` + `resolveClipLayout` (một hình học, hai người đọc) | `canvas.test.mjs`, `still-image.test.mjs` |
+| 3 | `buildFfmpegTransform` | `canvas.mjs` | `reframeTransform` | `canvas.test.mjs` |
+| 4 | `buildBackgroundSource` + `stillImageInputFlags` | `canvas.mjs` | `exportContent.mjs` + `encodeCanvasFill`; painter đọc plan, không đọc chuỗi | `export-canvas-fill.test.mjs` |
+| 5 | `maskAlphaExpr` | `mask.mjs` | `normalizeMask` + `maskCssMaskImage` (SVG alpha mask) | `mask.test.mjs` |
+| 6 | `keyframeExpr` | `keyframes.mjs` | `evalKeyframe` (evaluate-at-tick) | `keyframes.test.mjs` |
+| 7 | `rampSetptsExpr` | `retime.mjs` | `rampTimelineToSource` / `rampElapsedForConsumed` / `rampIntegral` | `retime.test.mjs` |
+| 8 | `volumeExpr` + `panFilter` | `audio.mjs` | `gainAt` (+ `fadeDuration`, `isTrackMuted`) | `audio.test.mjs` (4) |
+| 9 | `buildVidstabDetectArgs` + `buildVidstabTransformArgs` | `stabilize.mjs` **xoá** | không có thay thế: tính năng khai tử; exporter từ chối clip `stabilize` theo tên | `stabilize.test.mjs` **xoá** |
+| 10 | `buildProxyArgs` | `cache.mjs` | `cacheKeyForPath` / `cachePathFor` (danh tính cache, không phải argv) | `assets-probe-cache.test.mjs` (10) |
+| 11 | `normalizeProbe` + `parseFrameRate` | `probe.mjs` **xoá** | `buildMediaInfo` / `buildFrameRate` ở `mediaInfo.mjs` (schema rộng hơn ffprobe) | `media-info.test.mjs` |
+| 12 | `parseSceneOutput` + `parseSilenceOutput` | `analysis.mjs` | `sceneCuts` / `sceneScore` / `silenceSpans` / `cutsToShots` ở `detection.mjs` | `analysis.test.mjs`, `scene-silence-detection.test.mjs` |
+
+Hai file bị xoá (`stabilize.mjs`, `probe.mjs`) và hai file test chỉ chứa luật đã chết
+(`stabilize.test.mjs`, `scene-shot-law.test.mjs`). Mười một file test còn lại được **tách assertion**,
+không xoá: phần số học sống giữ nguyên, phần chuỗi FFmpeg chết bị bỏ — đúng chỉ thị của chủ repo.
+
+Cùng lượt, `crashRecovery.runHealthChecks` thôi dò một binary không còn (`{name:'ffmpeg'}`) và báo
+`webcodecs` — engine duy nhất còn lại. Test mới khoá cả hai chiều: `'ffmpeg'` **không** được xuất hiện,
+`'webcodecs'` **phải** xuất hiện (RED trước, xanh sau, assertion không đổi).
+
+### 55.2 Một tuyên bố phải đổi nghĩa, không phải đổi cờ
+
+`renderReady` trong `EFFECT_REGISTRY` từng được đọc như "file export nung được effect này". Sau slice J
+điều đó **không còn đúng**: `planEncodeContent` từ chối clip có effect theo tên, nên không effect nào đi
+tới file hôm nay. Giữ nguyên cờ mà đổi cách đọc là cách một bảng nói dối. Vì vậy `renderReady` được định
+nghĩa lại thành **độ đầy đủ của definition** (params + preview + grade ops), và chỗ quyết định export
+vẫn là `planEncodeContent` — hai câu hỏi khác nhau, hai câu trả lời khác nhau, cùng đọc từ một registry.
+
+Phần này **không** đóng bằng code: badge `exportSupported` trên UI vẫn đang nói "export được" cho những
+effect mà exporter từ chối. Đó là blocker §55.6, không phải một dòng đã sửa.
+
+### 55.3 Bảng gate (đo trên chính cây sẽ commit)
+
+| Gate | Lệnh | Kết quả | Bằng chứng |
+|---|---|---|---|
+| Core build | `pnpm build:core` | PASS | exit 0, dist regenerate |
+| 1 Types | `npx nuxt typecheck` | PASS | exit 0, **0** × `error TS`; `.nuxt/eslint.config.mjs` regenerate 26.290 byte |
+| 2 Lint | `npx eslint <11 file app chạm>` (sau gate 1) | PASS | exit 0, 0 problem |
+| 2b Lint core | `npx eslint packages/core/src/{crashRecovery,transitions,htmlVideo,audio}.mjs` | PASS ở dòng chạm | 10 error trong `crashRecovery.mjs` là **nợ có sẵn**: HEAD cũng 10, không thêm cái nào |
+| 3 Core types | `pnpm typecheck:core` | PASS | exit 0 |
+| 4 Boundaries | `pnpm check:core` | PASS | `core imports nothing platform-specific` |
+| 5 Core tests | `pnpm test:core` | PASS | **906/906**, exit 0 |
+| 6 Unit suite | `npx tsx tests/unit/run-all.mts` | PASS | **124/124** specs, exit 0 |
+| 7 Live | 5 route trên `:4003` | PASS | cả 5 route **200**; console **0** `[error]`/`[warn]`/`[issue]` — chỉ `[debug]` vite ×2 và `[info] <Suspense>` mỗi route |
+| 8 Doc guards | 6 guard chạy riêng từng cái | PASS | xem §55.5 |
+
+### 55.4 Điều test cũ không bắt được, và cái đã thay nó
+
+Ba thứ có thể hỏng mà suite cũ mù:
+
+- **`lutGrade` lệch khỏi `cssFromGrade`.** Nếu hai bên cùng trôi, không assertion nào thấy. Chốt: check
+  2 của `tmcut_fx_exact.spec.ts` giải `t` từ **cả bộ** hệ số sepia trên 8 giá trị intensity, nên CSS phải
+  là **một** hàm của `t`; ops của `lutGrade` là nguồn duy nhất.
+- **Một chuỗi FFmpeg lọt lại.** `retime.mjs` từng có một body mồ côi sau khi splice (bắt bằng
+  `node --check`, exit 1), và `analysis.mjs` còn comment nhắc `cutsToShots`. Cả hai đã sửa; `node --check`
+  trên mọi file core là bước chạy lại được.
+- **Một citation trỏ vào section không tồn tại.** `audit §55` trong comment là dạng chết im lặng — doc
+  chưa có §55 khi comment viết. Guard `tmcut_doc_citations` bắt đúng hai chỗ; sửa bằng cách trỏ vào
+  `docs/audit/zero-ffmpeg-audit.md` theo tên, không bằng cách thêm family giả.
+
+Danh sách link chết sau khi xoá module: **9 anchor** trong chính tài liệu này (`canvas#L286`,
+`keyframes#L155`, `cache#L52`, `audio#L114`, `effects#L809`, `effects#L661`, `effects.test#L255`,
+`probe.mjs`, `stabilize.mjs`, `scene-shot-law.test.mjs`) và 2 anchor trong roadmap V4. Tất cả đã được
+repoint vào dòng còn sống hoặc đổi thành tên file không kèm `#L`, và `tmcut_docs_link_integrity` xác nhận.
+
+### 55.5 Doc guards (chạy sau cùng, trên cây đã sửa)
+
+| Guard | Kết quả |
+|---|---|
+| `tmcut_docs_link_integrity` | **4/4** exit 0 |
+| `tmcut_doc_citations` | **5/5** exit 0 |
+| `tmcut_doc_table_shape` | **3/3** exit 0 |
+| `tmcut_doc_line_length` | **4/4** exit 0 |
+| `tmcut_doc_charset` | **3/3** exit 0 |
+| `docs_markdown` | **12** check exit 0 |
+
+### 55.6 Chưa chứng minh / blocker (gom một lần)
+
+- **Gate 4 đo được, nhưng hẹp hơn slice I giả định.** Dev server cũ trên `:4003` kẹt ở "Starting Nuxt…"
+  (503 trên cả năm route) vì `.nuxt` vừa bị typecheck regenerate; sau khi restart, cả năm route trả **200**
+  và console **0** `[error]`/`[warn]`/`[issue]`. Điều **chưa** đo: nội dung authed bên trong editor (mount
+  thật của player, export modal) — vẫn cần session, như slice I §54.10. Sweep này chứng minh route và
+  console của trang, không chứng minh hành vi sau khi đăng nhập.
+- **Badge `exportSupported` nói quá** — `fxCapabilities` lấy `exportSupported = renderReady`, tức một
+  effect đầy đủ definition được badge là export được, trong khi `planEncodeContent` từ chối **mọi** clip
+  có effect. Đây là quyết định sản phẩm (đổi badge, đổi cột, hay đổi exporter), không phải một dòng sửa.
+- **Pan của track audio không có đường sống** — `panFilter` đã nghỉ hưu và mixer Web Audio chưa áp pan.
+  Trường `pan` vẫn nằm trong project schema; hiện nó là dữ liệu im lặng.
+- **Backup `backup/ffmpeg-engine-2026-11-03/`** (76 file, **0 exe**) vẫn giữ untracked. Chỉ thị "xoá hết
+  phần exe" đã thoả (repo: **0** `.exe` tracked, 0 trong working tree); việc xoá hay giữ thư mục backup
+  là quyết định riêng của chủ repo.
+- **Electron đóng gói** — không lượt nào trong J chạy `electron-builder`; parity bản asar thuộc slice K.

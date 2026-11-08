@@ -1,27 +1,24 @@
 // =============================================================================
 //  Slice F9 (Roadmap v1 §5.6, zero-FFmpeg brief req 4) — an `exact` preview
-//  claim is measured against the filter the export actually runs.
+//  claim is measured, never hand-written.
 //
 //  `preview.fidelity` is not decoration. `TmcutFxThumb` turns it into a badge,
-//  and `exact` is the badge that tells a creator "what you see is what renders".
-//  Until this spec it was a hand-written word with nothing behind it: the CSS
-//  face lives in `fxPreview.ts`, the export face lives in
-//  `buildFfmpegEffectFilters`, and no test ever put the two side by side. That
-//  is precisely the failure a per-file review cannot catch, because each half
-//  reads plausible alone — and two of the five claims were false when this was
-//  written (`sepia` graded its own saturation, `negate` could not speak `alpha`).
-//
-//  So every rule below derives its expectation from the SHIPPED filter string
-//  rather than from a description of it: a CSS number is checked against the
-//  coefficient the file will run at the same param value, and the param is
-//  swept rather than sampled once. A rule that only restated the builder would
-//  keep passing after the two sides drifted, which is the drift being policed.
+//  and `exact` is the badge that tells a creator "what you see is the effect".
+//  The original spec put the CSS face side by side with the FFmpeg filter the
+//  export ran. Slice J retired that export face: the WebCodecs exporter refuses
+//  effect clips outright (planEncodeContent), so there is no filter string to
+//  compare against. The living half of the contract survives and is re-anchored
+//  on the EFFECT DEFINITION: the registry's param bounds and the core clamp law
+//  (`clampEffectParam`) derive every expected number independently of the CSS
+//  builder, and the param is swept rather than sampled once. A builder that
+//  drifts from the registry — a private saturation lift, a wrong clamp — fails
+//  here, which is the drift being policed.
 // =============================================================================
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { EFFECT_REGISTRY, buildFfmpegEffectFilters, fxCapabilities } from 'tmcut-core'
+import { EFFECT_REGISTRY, clampEffectParam, fxCapabilities } from 'tmcut-core'
 import {
   effectAdapterKeys,
   effectCss,
@@ -40,43 +37,48 @@ function check(label: string, fn: () => void) {
   console.log(`   ${label} PASSED`)
 }
 
-/** The one filter the export puts on the chain for one instance of `type`. */
-function exportFilter(type: string, params: Record<string, unknown> = {}): string {
-  const filters = buildFfmpegEffectFilters([{ type, params }])
-  assert.equal(filters.length, 1, `${type} emitted ${filters.length} filters for ${JSON.stringify(params)}`)
-  return filters[0]
+/**
+ * The registry's own answer for one param: the core clamp law applied to the
+ * raw value (undefined falls back to the descriptor default). This is the
+ * independent anchor — a different module from the CSS builder under test.
+ */
+function registryParam(type: string, name: string, raw?: unknown): number {
+  const spec = EFFECT_REGISTRY[type].params.find(p => p.name === name)
+  assert.ok(spec, `${type} lost its ${name} param`)
+  const value = clampEffectParam(type, name, raw === undefined ? spec.default : raw)
+  assert.equal(typeof value, 'number', `${type}.${name} did not clamp to a number`)
+  return value as number
 }
 
-/** `k=v:k=v` after a filter's leading name, e.g. `colorchannelmixer=`. */
-function filterArgs(filter: string, name: string): Record<string, string> {
-  assert.ok(filter.startsWith(`${name}=`), `${filter} is not a ${name}`)
-  const args: Record<string, string> = {}
-  for (const pair of filter.slice(name.length + 1).split(':')) {
-    const eq = pair.indexOf('=')
-    if (eq > 0) args[pair.slice(0, eq)] = pair.slice(eq + 1)
-  }
-  return args
+/** The param normalised to 0..1 across its documented registry range. */
+function registryUnit(type: string, name: string, raw?: unknown): number {
+  const spec = EFFECT_REGISTRY[type].params.find(p => p.name === name)
+  const min = typeof spec?.min === 'number' ? spec.min : 0
+  const max = typeof spec?.max === 'number' ? spec.max : 100
+  const t = (registryParam(type, name, raw) - min) / (max - min)
+  return Math.max(0, Math.min(1, t))
 }
 
 /**
- * The complete set of types allowed to advertise "what you see renders", each
- * with the reason its CSS face IS the export. Anything missing from this table
- * has to be argued for here before it can claim `exact` in the registry — and
- * a claim that stops being true gets named here, not silently dropped.
+ * The complete set of types allowed to advertise "what you see is the effect",
+ * each with the reason its CSS face IS the definition. Anything missing from
+ * this table has to be argued for here before it can claim `exact` in the
+ * registry — and a claim that stops being true gets named here, not silently
+ * dropped.
  */
 const EXACT_RULES: Record<string, string> = {
-  'sepia': 'colorchannelmixer interpolates identity -> the W3C sepia matrix; CSS sepia(t) is that interpolation',
-  'mirror-h': 'hflip/vflip/hflip,vflip are exactly scaleX(-1)/scaleY(-1)/scale(-1,-1)',
+  'sepia': 'CSS sepia(t) is the W3C identity -> sepia-matrix interpolation; the face emits exactly that one function at the registry-clamped strength',
+  'mirror-h': 'the axis vocabulary maps one-to-one onto scaleX(-1)/scaleY(-1)/scale(-1,-1)',
   'mirror-v': 'the same axis vocabulary as mirror-h, only a different registry default',
-  'letterbox': 'drawbox h=ih*bar paints bars of bar% of frame height, which is the gradient stop'
+  'letterbox': 'bars of size% of frame height are exactly the four gradient stops'
 }
 
 /** Types the registry may NOT claim exact, with the reason, so a re-claim fails. */
 const NOT_EXACT: Record<string, string> = {
-  negate: '`alpha` switches the file to negate=negate_alpha=1; CSS invert() has no alpha face'
+  negate: '`alpha` is a real registry param with no CSS face — invert() cannot invert alpha'
 }
 
-console.log('=== [Slice F9: an exact FX claim is measured against the export filter] Starting ===\n')
+console.log('=== [Slice F9/J: an exact FX claim is measured against the effect definition] Starting ===\n')
 
 // 1. THE CLAIM SET ------------------------------------------------------------
 check('the registry\'s `exact` claims are exactly the rules proven below', () => {
@@ -98,55 +100,30 @@ check('the registry\'s `exact` claims are exactly the rules proven below', () =>
 })
 
 // 2. SEPIA --------------------------------------------------------------------
-/** CSS `sepia(t)`: each coefficient is identity + (target - identity) * t. */
-const CSS_SEPIA: Record<string, [number, number]> = {
-  rr: [1, 0.393], rg: [0, 0.769], rb: [0, 0.189],
-  gr: [0, 0.349], gg: [1, 0.686], gb: [0, 0.168],
-  br: [0, 0.272], bg: [0, 0.534], bb: [1, 0.131]
-}
-
-check('sepia: the matrix in the file IS the CSS interpolation, at every strength', () => {
+check('sepia: one function at the registry-clamped strength, across the sweep', () => {
   const intensities = [undefined, 0, 10, 25, 60, 100, -20, 140]
   for (const raw of intensities) {
     const at = `intensity ${raw === undefined ? '(default)' : raw}`
-    const args = filterArgs(exportFilter('sepia', raw === undefined ? {} : { intensity: raw }), 'colorchannelmixer')
-    assert.deepEqual(Object.keys(args).sort(), Object.keys(CSS_SEPIA).sort(), `${at}: coefficients ${JSON.stringify(args)}`)
-
-    // Solve t independently from all nine coefficients. If the export's matrix
-    // were any other family (a fixed sepia, a saturation twist) the nine
-    // answers would not agree, and no CSS `sepia()` could match it.
-    const solved = Object.entries(CSS_SEPIA).map(([key, [id, target]]) => {
-      const value = Number(args[key])
-      assert.ok(Number.isFinite(value), `${key}=${args[key]} is not a number`)
-      return (value - id) / (target - id)
-    })
-    const worst = Math.max(...solved.map(t => Math.abs(t - solved[0])))
-    assert.ok(worst < 0.002, `coefficients disagree on t by ${worst.toFixed(4)} at ${at}`)
-
-    // Now the claim itself: one function, and the same strength the file runs.
+    // The strength is solved from the core clamp law + registry bounds, not
+    // from the builder: out-of-range values must land on the documented edge.
+    const t = registryUnit('sepia', 'intensity', raw)
     const css = effectCss('sepia', raw === undefined ? {} : { intensity: raw })
-    assert.equal(css, `sepia(${Number(solved[0].toFixed(3))})`, `${at}: CSS face vs the shipped matrix`)
+    assert.equal(css, `sepia(${Number(t.toFixed(3))})`, `${at}: CSS face vs the registry law`)
     assert.equal(css.split('(').length - 1, 1, `${at}: ${css} grades more than sepia`)
   }
 })
 
 // 3. NEGATE -------------------------------------------------------------------
-check('negate: invert(1) matches the black-and-white case and alpha is not claimed', () => {
-  assert.equal(exportFilter('negate'), 'negate')
+check('negate: invert(1) is the black-and-white face and alpha is not pretended', () => {
+  // The reason the claim cannot survive: one param is real in the registry
+  // and CSS has no way to say it. Prove the param exists before grading the label.
+  const alpha = EFFECT_REGISTRY.negate.params.find(p => p.name === 'alpha')
+  assert.ok(alpha, 'negate lost its alpha param — the NOT_EXACT reason would be stale')
   assert.equal(effectCss('negate'), 'invert(1)', 'CSS stopped matching plain negate')
-
-  // The reason the claim cannot survive: one param changes what the file bakes
-  // and CSS has no way to say it. Prove the param is real before grading the label.
-  assert.equal(exportFilter('negate', { alpha: true }), 'negate=negate_alpha=1')
   assert.equal(effectCss('negate', { alpha: true }), 'invert(1)', 'the CSS face pretends to read alpha')
 })
 
 // 4. MIRROR -------------------------------------------------------------------
-const AXIS_EXPORT: Record<string, string> = {
-  horizontal: 'hflip',
-  vertical: 'vflip',
-  both: 'hflip,vflip'
-}
 const AXIS_CSS: Record<string, string> = {
   horizontal: 'scaleX(-1)',
   vertical: 'scaleY(-1)',
@@ -163,7 +140,6 @@ check('mirror-h / mirror-v: the axis vocabulary maps one-to-one, default include
       const wanted = axis === undefined || !(spec.options as string[]).includes(axis)
         ? String(spec.default)
         : String(axis)
-      assert.equal(exportFilter(type, { axis }), AXIS_EXPORT[wanted], `${type} axis ${axis}: export`)
       assert.equal(effectCssParts(type, { axis }).transform, AXIS_CSS[wanted], `${type} axis ${axis}: CSS`)
       assert.equal(effectCss(type, { axis }), '', `${type} must not grade the picture it flips`)
     }
@@ -174,23 +150,18 @@ check('mirror-h / mirror-v: the axis vocabulary maps one-to-one, default include
 })
 
 // 5. LETTERBOX ----------------------------------------------------------------
-check('letterbox: the CSS bar is the drawbox height, across the whole range', () => {
+check('letterbox: the CSS bar is the registry-clamped size, across the whole range', () => {
   for (const raw of [undefined, 1, 5, 12, 27, 40, 0, 45, 120]) {
     const params = raw === undefined ? {} : { size: raw }
-    const filter = exportFilter('letterbox', params)
-    const heights = [...filter.matchAll(/h=ih\*([\d.]+)/g)].map(m => Number(m[1]))
-    assert.equal(heights.length, 2, `${filter} is not a pair of bars`)
-    const [top, bottom] = heights
-    const offsets = [...filter.matchAll(/y=ih\*([\d.]+)/g)].map(m => Number(m[1]))
-    assert.deepEqual(offsets, [Number((1 - bottom).toFixed(2))], `${filter}: the lower bar is not symmetric`)
+    // Bar height solved from the core clamp law, then the documented 0..45
+    // paint cap — independent of the builder that formats the gradient.
+    const bar = Math.max(0, Math.min(45, Math.round(registryParam('letterbox', 'size', raw))))
 
     const overlay = effectOverlay('letterbox', params)
     assert.ok(overlay, 'letterbox lost its plate — the bars would only live on the tile')
     // `#000 0 B%, transparent B% (100-B)%, #000 (100-B)%` — four stops, two bars.
-    const pct = (value: number) => Number(value.toFixed(2))
-    const stops = [...String(overlay.background).matchAll(/([\d.]+)%/g)].map(m => pct(Number(m[1])))
-    const expected = [pct(top * 100), pct(top * 100), pct((1 - bottom) * 100), pct((1 - bottom) * 100)]
-    assert.deepEqual(stops, expected, `bars at ${stops}% vs export ${filter}`)
+    const stops = [...String(overlay.background).matchAll(/([\d.]+)%/g)].map(m => Number(m[1]))
+    assert.deepEqual(stops, [bar, bar, 100 - bar, 100 - bar], `bars at ${stops}% vs registry size ${bar}%`)
 
     // Same face on both hosts: the tile's plate is the plate the monitor gets.
     const layers = resolveFxPreview('effect', 'letterbox', params, { scenes: SCENES, animate: false }).layers
@@ -200,7 +171,7 @@ check('letterbox: the CSS bar is the drawbox height, across the whole range', ()
 
 // 6. ONE BRIDGE ---------------------------------------------------------------
 /** CSS that grades or flips a picture. Written anywhere but the bridge, it is a
- *  private look the export has never heard of — the thing req 4 forbids. */
+ *  private look the definition has never heard of — the thing req 4 forbids. */
 const FX_CSS = ['saturate(', 'grayscale(', 'invert(', 'hue-rotate(', 'brightness(', 'sepia(', 'scaleX(-1)', 'scaleY(-1)']
 
 function sourceFiles(dir: string, out: string[] = []): string[] {
