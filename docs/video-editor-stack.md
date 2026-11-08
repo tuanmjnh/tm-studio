@@ -1,4 +1,33 @@
 
+## 1. Stack chính thức của TMCut (chốt 2026-11-08)
+
+TMCut **không có FFmpeg, FFprobe, FFmpeg.wasm, wrapper hay binary media nào** (ADR-028). Không có fallback:
+một codec hay container runtime không hỗ trợ thì capability check báo `Unsupported`, sản phẩm không lặng lẽ
+đổi sang một đường khác. Tài liệu này liệt kê các thư viện đã cân nhắc; những mục không thuộc stack chính
+thức được giữ lại để tham chiếu lịch sử, và trạng thái của chúng ghi ngay trên mục.
+
+| Lớp | Thư viện / API | Vai trò trong sản phẩm |
+|---|---|---|
+| Luật dùng chung (Browser + Electron) | `tmcut-core` (`packages/core`) | timeline evaluator, frame scheduler, paint stack, export eligibility, mask/blend/text/audio laws — một artifact cho cả hai host |
+| Probe / demux / mux | `mediabunny` | đọc metadata, `CanvasSink` cho thumbnail, `Mp4OutputFormat` cho file ra |
+| Decode / encode | WebCodecs (`VideoDecoder`, `VideoEncoder`, `AudioDecoder`, `AudioEncoder`) | đường duy nhất; hỏi `isConfigSupported` trước khi chạy |
+| Audio | Web Audio API | mix, gain, waveform; PCM offline cho export |
+| Composition | Canvas 2D + WebGL2, WebGPU khi runtime có | preview composite và painter của exporter |
+| Lưu bytes | OPFS, fallback IndexedDB | client byte cache khoá theo fingerprint |
+
+Ba điều người đọc tài liệu này phải nhớ:
+
+- **Browser và Electron dùng chung một Media Engine.** Electron chỉ là shell; nó không có engine riêng và
+  không có đường media thứ hai (ADR-032).
+- **Không có FFmpeg/FFprobe fallback.** Mục `@ffmpeg/ffmpeg` dưới đây là ghi chú đã nghỉ hưu, không phải
+  hướng dẫn cài.
+- **Một hàm, một engine.** Preview và export đọc cùng một evaluator, nên không có chuyện monitor và file
+  trả lời hai câu khác nhau (ADR-031).
+
+---
+
+## 2. Cách các lớp phối hợp
+
 **Nguyên tắc phân vai:**
 - **Core Engine** = "xương sống" — quản lý timeline, composition, và gọi render.
 - **Motion Layer** = tạo hiệu ứng chuyển động (CSS/JS/GSAP/timeline).
@@ -7,7 +36,7 @@
 
 ---
 
-## 2. Bảng phân loại nhanh (Capability Matrix)
+## 3. Bảng phân loại nhanh (Capability Matrix)
 
 | # | Package / Tên | Vai trò | Dùng để xây app? | Dùng để làm hiệu ứng? | Cần cho pipeline? |
 |---|---|---|---|---|---|
@@ -26,17 +55,17 @@
 | 13 | `three.js` | WebGL/WebGPU 3D | ✅ | ✅ (3D VFX) | Tùy chọn |
 | 14 | `gsap-video-export` | Exporter | ❌ | ❌ (bridge) | ⭐ Bắt buộc |
 | 15 | `motion-canvas-webcodecs` ⚠️ | Exporter Plugin | ❌ | ❌ (bridge) | Tùy chọn |
-| 16 | `mediabunny` | Muxer/Demuxer | ❌ | ❌ (I/O) | ⭐ Khuyến nghị |
-| 17 | `mp4-muxer` | Muxer MP4 | ❌ | ❌ (I/O) | Thay thế #16 |
-| 18 | `webm-muxer` | Muxer WebM | ❌ | ❌ (I/O) | Thay thế #16 |
-| 19 | `mp4box` | MP4 Container | ❌ | ❌ (I/O) | Tùy chọn |
-| 20 | `@ffmpeg/ffmpeg` | Fallback Encoder | ❌ | ❌ (I/O) | Fallback |
+| 16 | `mediabunny` | Muxer/Demuxer | ❌ | ❌ (I/O) | ⭐ **Đã chọn** (ADR-029) |
+| 17 | `mp4-muxer` | Muxer MP4 | ❌ | ❌ (I/O) | Không dùng — mediabunny phủ cả hai container |
+| 18 | `webm-muxer` | Muxer WebM | ❌ | ❌ (I/O) | Không dùng — cùng lý do |
+| 19 | `mp4box` | MP4 Container | ❌ | ❌ (I/O) | Không dùng — mediabunny là demuxer duy nhất |
+| 20 | `@ffmpeg/ffmpeg` | Fallback Encoder | ❌ | ❌ (I/O) | **Đã nghỉ hưu (ADR-028)** — không có trong sản phẩm, không có fallback |
 
 ---
 
-## 3. CHI TIẾT TỪNG THƯ VIỆN
+## 4. CHI TIẾT TỪNG THƯ VIỆN
 
-### 3.1. CORE ENGINE (Xương sống ứng dụng)
+### 4.1. CORE ENGINE (Xương sống ứng dụng)
 
 #### 🔹 `@diffusionstudio/core`
 - **Vai trò:** 2D motion graphics engine + video renderer, xây dựng riêng cho WebCodecs.
@@ -69,7 +98,7 @@
 
 ---
 
-### 3.2. MOTION / ANIMATION LAYER
+### 4.2. MOTION / ANIMATION LAYER
 
 #### 🔹 `gsap`
 - **Vai trò:** Thư viện animation tiêu chuẩn của web.
@@ -118,7 +147,7 @@
 
 ---
 
-### 3.3. GPU EFFECTS LAYER
+### 4.3. GPU EFFECTS LAYER
 
 #### 🔹 `longpipe` ⚠️
 - **Vai trò:** SDK hiệu ứng video trên WebGPU/WebGL2.
@@ -164,7 +193,7 @@
 
 ---
 
-### 3.4. RENDER / ENCODE / MUXER LAYER
+### 4.4. RENDER / ENCODE / MUXER LAYER
 
 #### 🔹 `gsap-video-export`
 - **Vai trò:** Công cụ chuyển animation GSAP → video.
@@ -205,20 +234,20 @@
 - **License:** BSD-3-Clause
 - **Cài đặt:** `npm i mp4box`
 
-#### 🔹 `@ffmpeg/ffmpeg` (FFmpeg.wasm)
-- **Vai trò:** Encoder/decoder fallback.
-- **Dùng làm:** Xử lý khi WebCodecs không hỗ trợ codec/container cần thiết.
-- **Dùng làm hiệu ứng:** Không (I/O).
-- **Web:** https://ffmpegwasm.netlify.app
-- **License:** LGPL/GPL (tùy build — **cần đọc kỹ vì ảnh hưởng đến license app**)
-- **Cài đặt:** `npm i @ffmpeg/ffmpeg @ffmpeg/util`
-- **Điểm tích hợp:** Chỉ dùng làm fallback, không dùng làm pipeline chính vì chậm và nặng.
+#### 🔹 `@ffmpeg/ffmpeg` (FFmpeg.wasm) — ĐÃ NGHỈ HƯU
+- **Trạng thái:** **Không dùng, không cài, không phải fallback** (ADR-028, quyết định 2026-11-03).
+- **Lý do:** TMCut chạy media in-process bằng WebCodecs + Mediabunny. Một runtime không hỗ trợ codec hay
+  container nào đó thì capability check báo `unsupported` cho đúng tổ hợp đó — sản phẩm không chuyển sang
+  một engine thứ hai, vì hai engine là hai kết quả khác nhau cho cùng một timeline (ADR-031).
+- **Không có hướng dẫn cài đặt ở đây.** Gói đã bị gỡ khỏi `package.json` và `pnpm-lock.yaml` ở slice I; dev
+  setup không cần thêm bất cứ binary media nào.
+- **Mục này được giữ lại để người đọc tài liệu cũ biết nó đã bị thay bằng gì,** không phải để hướng dẫn dùng.
 
 ---
 
-## 4. NGUỒN ASSET (Tài nguyên để nhúng vào app)
+## 5. NGUỒN ASSET (Tài nguyên để nhúng vào app)
 
-### 4.1. Hình ảnh (cho phép thương mại)
+### 5.1. Hình ảnh (cho phép thương mại)
 | Nguồn | URL | Giấy phép |
 |---|---|---|
 | Pexels | https://pexels.com | Pexels License |
@@ -237,7 +266,7 @@
 | WordPress Photo Directory | https://wordpress.org/photos | CC0 |
 | Openverse (meta-search) | https://openverse.org | Đa giấy phép, có filter |
 
-### 4.2. Video
+### 5.2. Video
 | Nguồn | URL | Giấy phép |
 |---|---|---|
 | Pexels Video | https://pexels.com/videos | Pexels License |
@@ -248,7 +277,7 @@
 | Life of Vids | https://lifeofvids.com | CC0 |
 | LoveYouMotion | https://loveyoumotion.com | Free commercial, no watermark |
 
-### 4.3. Audio / Music / SFX
+### 5.3. Audio / Music / SFX
 | Nguồn | URL | Giấy phép |
 |---|---|---|
 | YouTube Audio Library | https://studio.youtube.com | YouTube-safe, có loại cần credit |
@@ -259,7 +288,7 @@
 | SFX Kit (GitHub) | https://github.com/... | CC0 |
 | Openverse Audio | https://openverse.org | Đa giấy phép |
 
-### 4.4. Hiệu ứng / Overlay / Template
+### 5.4. Hiệu ứng / Overlay / Template
 | Nguồn | URL | Loại |
 |---|---|---|
 | Mixkit Overlays | https://mixkit.co | Light leaks, film texture, bokeh |
@@ -273,9 +302,17 @@
 
 ---
 
-## 5. KHUYẾN NGHỊ STACK TỐI THIỂU (MVP)
+## 6. KHUYẾN NGHỊ STACK TỐI THIỂU (MVP)
 
-Nếu chỉ chọn một bộ tối giản để AI triển khai ngay, dùng combo sau:
+Phần này là **khuyến nghị lịch sử** cho một dự án mới bắt đầu từ đầu; TMCut đã đi xa hơn nó. Stack TMCut
+**đang chạy** là bảng ở §1, và ba điểm khác biệt quan trọng so với bản khuyến nghị cũ:
+
+- Core engine là `tmcut-core` trong `packages/core` (đã ship, có test), không phải `@diffusionstudio/core`.
+- Exporter là WebCodecs + `mediabunny` viết trong repo (`webCodecsExport.ts`, `exportEncodeSession.ts`),
+  không phải `gsap-video-export` chạy CLI — một CLI export sẽ là engine thứ hai, trái ADR-031/ADR-032.
+- Không có `@ffmpeg/ffmpeg` ở bất kỳ vai trò nào, kể cả fallback.
+
+Nếu vẫn muốn xem combo tối giản cho một prototype độc lập:
 
 ```json
 {
@@ -284,5 +321,10 @@ Nếu chỉ chọn một bộ tối giản để AI triển khai ngay, dùng com
   "vector-animation": "lottie-web",
   "gpu-effects": ["kampos", "gl-transitions"],
   "muxer": "mediabunny",
-  "exporter": "gsap-video-export (CLI fallback)"
+  "exporter": "WebCodecs in-app + mediabunny muxer"
 }
+```
+
+Đọc bảng này như **danh sách ứng viên cho prototype mới**, không như mô tả TMCut: combo trên chưa được đo
+trong repo này (TMCut không cài `@diffusionstudio/core`, `gsap`, `lottie-web`, `kampos` hay
+`gl-transitions`).
