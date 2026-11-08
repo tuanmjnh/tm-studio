@@ -7153,16 +7153,120 @@ Brief K còn ba mục chưa đóng, và không mục nào là "code đã xong, c
 - **Mục 8 (docs consolidation/archive)**: bộ V4 roadmap vẫn nằm nguyên trong `docs/`; mục 4 §10 của ADR
   register đã quyết định archive cả bộ ở slice K. Việc này chạm nhiều file tài liệu của **chủ repo**
   (`docs/video-editor-stack.md`, `docs/design/`), nên nó cần một lượt riêng chứ không gộp vào đây.
-- **Mục 9 phần "release artifacts"**: `npx nuxt build` xong (exit 0, 48.6 s, output 25 MB), nhưng
-  `npx electron-builder --dir --win` **không dựng được bản đóng gói hoàn chỉnh trên máy này**. Nó dừng
-  ở bước tạo symlink cho asar (thông báo đòi bật Windows Developer Mode); chạy lại với `-c.asar=false`
-  thì dừng ở `EPERM … symlink .nitro/devalue@6.0.3`. Cả hai là quyền symlink của Windows, không phải
-  cấu hình project. Cây `release/win-unpacked` dựng dở vẫn đo được: `resources/app` nặng 545 MB,
-  `packages/core/src` có 62 file `.mjs` và **không** có `probe.mjs` lẫn `stabilize.mjs`, không một
-  `ffmpeg.exe`/`ffprobe.exe` nào dưới `win-unpacked`, và `.exe` duy nhất ngoài shell `electron.exe` là
-  ba `esbuild.exe` của build tooling trong `node_modules`. File duy nhất mang tên ffmpeg là
-  `ffmpeg.dll`, byte-identical (md5 `aa60b6cbd14cf6e670090ff8a7680008`) với
-  `node_modules/electron/dist/ffmpeg.dll` — tức thư viện Chromium của Electron, không phải engine đã
-  nghỉ hưu ở slice I. Guard §56.2 vẫn chỉ pin **input** của bước đóng gói (`electron-builder.yml`);
-  bằng chứng **output** ở đây là một lần đo thủ công trên cây dựng dở, và `release/` bị gitignore nên
-  không đi theo commit.
+- **Mục 9 phần "release artifacts"**: `npx nuxt build` xong (exit 0, 54.2 s, output 25 MB).
+  `npx electron-builder --dir --win` chạy lại sau khi owner bật Developer Mode vẫn **fail** — không phải
+  vì cấu hình project mà vì quyền symlink của tiến trình. Bằng chứng đo được: registry
+  `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock` **không tồn tại** (giá trị
+  `AllowDevelopmentWithoutDevLicense` rỗng), `mklink /D` trả "You do not have sufficient privilege", và
+  token hiện tại không có `SeCreateSymbolicLinkPrivilege` (`whoami /priv` không liệt kê). UAC đang bật
+  (`EnableLUA=1`), Defender bật real-time nhưng **không** phải nguyên nhân: lỗi là `EPERM` ở syscall
+  `symlink`, do `@electron/asar` 3.4.1 (`lib/disk.js:212-217`) ném ra đúng nhánh đó khi hệ thống từ chối
+  tạo symlink. Không có file lock nào can thiệp — asar ghi bình thường tới bước symlink.
+  Dù build dừng, `release/win-unpacked/resources/app.asar` **đã ghi xong** (363 090 003 byte, 30 829
+  entry) nên đây là bằng chứng **output**, không phải input: `asar.listPackage` cho kết quả 62 file
+  `packages/core/src/*.mjs`, **không** có `probe.mjs`/`stabilize.mjs`, **0** tên chứa `ffmpeg`/
+  `ffprobe`, và `.exe` duy nhất là ba `esbuild.exe` của build tooling trong `node_modules`. File
+  `ffmpeg.dll` nằm ở gốc `win-unpacked` (không trong asar) và byte-identical
+  (md5 `aa60b6cbd14cf6e670090ff8a7680008`) với `node_modules/electron/dist/ffmpeg.dll` — thư viện
+  Chromium của Electron, không phải engine đã nghỉ hưu ở slice I.
+  Hai lần thử (trước và sau Developer Mode) đều **BLOCKED**; CI Linux vẫn có thể chạy như kiểm thử bổ
+  sung nhưng không thay thế được gói Windows thật. `release/` bị gitignore nên các số đo này không đi
+  theo commit.
+
+## 57. Slice L — hai capability, hai chủ (2026-11-08)
+
+Sáu blocker mở ở §55.6/§56.6 đã có quyết định của chủ repo. Ba trong số đó là **code** và đã đóng; ba
+còn lại là quyết định giữ nguyên hoặc giới hạn được ghi lại chứ không phải việc phải làm.
+
+### 57.1 Badge effect không còn nói quá
+
+`fxCapabilities` từng trả một boolean `exportSupported` lấy từ `renderReady` — cờ **độ đầy đủ định
+nghĩa** (registry có params + preview descriptor + grade ops). Cờ đó trả lời "preview có mặt để sơn
+không", không trả lời "file có nung effect này không", nhưng tên `exportSupported` khiến badge đọc nó
+như câu thứ hai. Kết quả: mọi effect hiện "xuất được" trong khi `planEncodeContent` từ chối **mọi**
+clip mang effect.
+
+Tách thành hai câu, hai chủ:
+
+| Câu hỏi | Chủ | Giá trị hôm nay |
+|---|---|---|
+| Preview sơn được effect này? | `fxCapabilities().previewReady` (registry) | true cho cả 29 |
+| File nung được effect này? | `exportBakesEffect(type)` (`exportContent.mjs`) | false cho cả 29 |
+
+`exportBakesEffect` đọc một `Set` rỗng có chủ đích: painter hiện chỉ `drawImage` tấm plate đã decode.
+Khi một leg painter học nung một effect, effect đó vào Set **trong đúng commit** chuyển luôn lời từ chối
+`'effects'` — test `a refused effect is named, once per type` và `the exporter answers export support
+itself` giữ hai vế khớp nhau.
+
+Badge của `TmcutFxThumb` đổi copy từ "Not in export" (chỉ hiện khi định nghĩa thiếu) sang **"Preview
+only — not exportable yet"** (hiện cho mọi effect exporter từ chối, `urgent: true` nên luôn hiện, không
+chờ hover). Một trạng thái `previewReady: false` mới hiện "No preview for this item".
+
+### 57.2 Export nói tên thứ chặn nó
+
+`planEncodeContent` trả thêm `blockedEffects`: tên từng loại effect đứng giữa project và file, sắp xếp
+và khử trùng (hai clip cùng `blur` → một tên), **rỗng** khi `effects` không nằm trong `reasons`. Nhờ vậy
+`TmcutExportModal` in được `Effects the file cannot bake: Blur, Vignette` trước khi người dùng bấm render,
+thay vì để họ tự dò từng clip sau khi thất bại.
+
+Banner cũ ở vị trí đó — *"{n} transition(s) will be blended … using xfade & acrossfade"* — đã **gỡ**.
+Nó hứa hai emitter mà slice I đã xoá, trên đúng loại project mà painter từ chối (`'transition'` cũng nằm
+trong `ENCODE_REFUSAL_REASONS`). Copy `transitionsTitle`/`transitionsDesc` gỡ khỏi cả hai locale.
+
+### 57.3 Pan: control đi, dữ liệu ở lại
+
+Mixer Web Audio không có panner, và filter `pan` của FFmpeg đã nghỉ hưu ở slice J. Vậy control Pan trên
+hàng track audio chỉ sửa một con số không có đường nào đọc — đúng loại control mà chính comment trong
+`TmcutExportModal.vue` gọi là "worse than no control".
+
+| Thứ | Hành động | Lý do |
+|---|---|---|
+| Input Pan trên timeline | **Gỡ** | playback/export không áp dụng giá trị |
+| `pan?: number` trong schema v3 | **Giữ** | project cũ chứa nó; xoá field là phá dữ liệu |
+| `updateTrackPan` trong store | **Giữ** | dữ liệu cũ còn đường đi; test pin sự tồn tại |
+| `pan ≠ 0` khi mở project | **Cảnh báo** (`i-lucide-triangle-alert` + `tmcut.tracks.panNotApplied`) | nói thật thay vì im lặng |
+| Reset `pan` về 0 | **Không** | đó là xoá việc của người dùng |
+
+Pan trở lại UI khi có một leg stereo thật trong mixer, kèm test playback/mix/export — không phải việc
+của slice này.
+
+### 57.4 Gate
+
+| Gate | Lệnh | Kết quả | Bằng chứng |
+|---|---|---|---|
+| Build core | `pnpm build:core` | PASS | exit 0 |
+| 1 Types | `npx nuxt typecheck` | PASS | exit 0, **0** × `error TS` |
+| 2 Lint | `npx eslint <6 file chạm>` sau gate 1 | PASS | exit 0, 0 problem |
+| 3 Core types | `pnpm typecheck:core` | PASS | exit 0 |
+| 4 Boundaries | `pnpm check:core` | PASS | exit 0 |
+| 5 Core tests | `pnpm test:core` | PASS | **909/909** (thêm 2 test slice L) |
+| 6 Unit suite | `npx tsx tests/unit/run-all.mts` | PASS | **126/126** (thêm `tmcut_capability_honesty`) |
+| 7 Build | `npx nuxt build` | PASS | exit 0, 54.2 s, 25 MB |
+| 8 Live | 5 route trên `:4003` | **PARTIAL** | 200 ×5; console 0 `[warn]`/`[issue]`, nhưng `/tmcut/editor`, `/tmcut/templates`, `/tmcut/factory` có `[error] 401 error.invalidToken` từ `/api/v1/ai/relay/catalog` |
+| 9 Package | `npx electron-builder --dir --win` | **BLOCKED** | xem §56.6 mục 9: quyền symlink, asar vẫn ghi xong |
+
+Gate 8 ghi **PARTIAL**, không PASS: tôi không biến một 401 thành "sạch" chỉ vì nó giải thích được. Nguyên
+nhân đã đo, không suy đoán — `curl` vào `/api/v1/ai/relay/catalog` trả `401 error.tokenMissing`
+("Missing authorization token"), và browser context của lần quét này **không có** khoá token nào trong
+`localStorage` (đếm tên khoá, không đọc giá trị). Đây là điều kiện môi trường đã biết từ trước slice này,
+không phải hồi quy do thay đổi capability: ba route ấy gọi catalog AI khi mount, mà không có phiên thì
+relay từ chối đúng như thiết kế. Cái đo được là **thay đổi của slice L sống trên DOM thật**: ở
+`/tmcut/editor`, `[id^="track-volume-"]` đếm được **1**, `[id^="track-pan-"]` đếm được **0**, và chrome
+của editor (Timeline/Preview) render bình thường. `/tmcut` và `/tmcut/autocut` sạch hoàn toàn ngoài noise
+`<Suspense>`.
+
+Hai spec cũ đã **đổi assertion** vì hợp đồng đổi có chủ đích, không phải để test xanh:
+`tmcut_fx_preview.spec.ts` (dòng `exportSupported` → `previewReady`/`exportReady`) và
+`tmcut_component_hygiene.spec.ts` (khẳng định control Pan tồn tại → khẳng định nó **không** tồn tại, kèm
+con trỏ sang spec mới giữ vế dữ liệu).
+
+### 57.5 Parity pixel: bằng chứng lịch sử, không phải gate chạy lại
+
+- **Historical parity evidence**: có, ở §53.11 (WebCodecs vs FFmpeg đo **trước** khi xoá binary).
+- **Reproducible old/new pixel comparison**: **không có** — engine cũ đã xoá ở slice I, không dựng lại
+  theo quyết định của chủ repo.
+- **Exact pixel parity**: **chưa được kiểm độc lập.** Con số §53.11 là một lần đo trong điều kiện của
+  nó, không phải một bất biến mà suite hôm nay tái lập được.
+- **Current engine regression/visual tests**: chạy theo kết quả thực tế ở §57.4 — 909 core spec + 126
+  unit spec đều xanh, nhưng chúng kiểm **luật** (hình học plate, grid frame, mix packet), không kiểm
+  từng pixel của một file render thật.

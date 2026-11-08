@@ -2,6 +2,8 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { EFFECT_REGISTRY, validateEffect, normalizeEffects, fxCapabilities, clampEffectParam, lutGrade } from '../src/effects.mjs'
+import { exportBakesEffect, planEncodeContent } from '../src/exportContent.mjs'
+import { TICKS_PER_SECOND } from '../src/time.mjs'
 
 const FIRST_WAVE = [
   'blur', 'sharpen', 'vignette', 'grain', 'chromakey', 'lut3d', 'stabilize', 'eq-grade'
@@ -152,10 +154,45 @@ describe('fx capabilities contract (roadmap v1 §5-6)', () => {
     for (const [key, desc] of Object.entries(EFFECT_REGISTRY)) {
       const caps = fxCapabilities(key)
       assert.equal(caps.fidelity, desc.preview.fidelity)
-      assert.equal(caps.exportSupported, desc.renderReady === true)
+      assert.equal(caps.previewReady, desc.renderReady === true)
       assert.equal(caps.label, desc.label)
       assert.equal(caps.category, desc.category)
+      // Preview readiness is not export support. The registry cannot answer the
+      // second question, and a boolean here would be read as if it had.
+      assert.equal('exportSupported' in caps, false, `${key} still publishes one boolean for two capabilities`)
     }
+  })
+
+  // A complete definition is not an exportable one. `planEncodeContent` names
+  // 'effects' for every clip that carries one, so a tile claiming "exportable"
+  // sends the user to a button that then refuses their project.
+  it('the exporter answers export support itself, and today it bakes no effect', () => {
+    const project = {
+      version: 3,
+      canvas: { width: 1920, height: 1080, fps: { numerator: 30, denominator: 1 } },
+      markers: [],
+      tracks: [{
+        id: 'row-a',
+        type: 'video',
+        items: [{
+          id: 'a',
+          type: 'video',
+          source: { in: 0, out: 4 * TICKS_PER_SECOND },
+          timeline: { start: 0, duration: 4 * TICKS_PER_SECOND },
+          speed: 1,
+          transform: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0 },
+          effects: [{ type: 'blur', params: {} }],
+          keyframes: []
+        }]
+      }]
+    }
+    assert.deepEqual(planEncodeContent(project).reasons, ['effects'], 'the painter still refuses a clip with effects')
+
+    for (const key of Object.keys(EFFECT_REGISTRY)) {
+      assert.equal(fxCapabilities(key).previewReady, true, `${key} ships a preview face`)
+      assert.equal(exportBakesEffect(key), false, `${key} claims an export the painter refuses`)
+    }
+    assert.equal(exportBakesEffect('no-such-effect'), false)
   })
 
   it('fidelity is a documented stance, not a default', () => {

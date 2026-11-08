@@ -979,7 +979,7 @@ export interface TmcutEffectDescriptor {
   /** English constant label; UIs translate by `type` instead. */
   label: string
   params: TmcutEffectParam[]
-  /** Definition completeness: the registry ships a full semantic face (params + preview + grade ops). Not a promise the file export bakes it — `planEncodeContent` decides that separately. */
+  /** Definition completeness: the registry ships a full semantic face (params + preview + grade ops) a PREVIEW can paint. Says nothing about the file export — `exportBakesEffect` owns that answer. */
   renderReady: boolean
   /** Registry bucket used by the library panels; missing means `other`. */
   category?: string
@@ -996,10 +996,16 @@ export function fxCapabilities(type: string): {
   strategy: TmcutEffectPreview['strategy']
   /** Whether this effect's overlay face may plate a live layer (never undefined). */
   layerOverlay: boolean
-  exportSupported: boolean
+  /** The registry ships a complete face a PREVIEW renderer can paint. */
+  previewReady: boolean
   label: string
   category: string
 } | null
+/**
+ * Whether the FILE exporter bakes this effect. A separate question with a
+ * separate owner — never derived from `fxCapabilities().previewReady`.
+ */
+export function exportBakesEffect(type: unknown): boolean
 /** Coerce one raw param value into registry bounds; undefined when unknown. */
 export function clampEffectParam(type: string, name: string, raw: unknown): unknown
 
@@ -2442,6 +2448,12 @@ export interface CoreEncodeContentVerdict {
   kind: 'eligible' | 'refused'
   /** Sorted and complete: every unpaintable feature in the project, named once. */
   reasons: readonly string[]
+  /**
+   * The effect types standing between this project and a file, sorted and
+   * de-duplicated. Empty whenever 'effects' is not among the reasons, so a
+   * caller can print its names instead of making the user hunt for the clip.
+   */
+  blockedEffects: readonly string[]
   /** Hand this to `planEncodePresets`. Null whenever anything is refused. */
   request: CoreEncodeRequest | null
   /** The validated canvas the painter sizes itself to. Null on a refusal. */

@@ -540,7 +540,7 @@
       "noPreview": "Không có xem trước cho mục này",
       "fidelityApproximate": "Xem trước gần đúng",
       "fidelityIllustrative": "Chỉ mang tính minh hoạ",
-      "exportUnsupported": "Không có trong bản xuất"
+      "previewOnly": "Chỉ xem trước — chưa xuất được"
     },
     "tracks": {
       "mute": "Tắt tiếng track",
@@ -558,7 +558,8 @@
       "pan": "Cân bằng âm (-100 Trái đến +100 Phải)",
       "order": "Thứ tự chồng lớp",
       "moveUp": "Đưa lên trên (hiển thị đè)",
-      "moveDown": "Đưa xuống dưới"
+      "moveDown": "Đưa xuống dưới",
+      "panNotApplied": "Giá trị cân bằng đã lưu chưa được áp dụng — mixer chưa có pan stereo"
     },
     "keyframeLane": {
       "title": "Keyframe",
@@ -974,8 +975,6 @@
       "presetYoutube": "YouTube 1080p",
       "presetSquare": "Instagram 1:1",
       "presetNeedsCanvas": "Cần canvas {ratio} — đặt trong trình chỉnh sửa",
-      "transitionsTitle": "Kích hoạt {n} hiệu ứng chuyển cảnh",
-      "transitionsDesc": "Các hiệu ứng chuyển cảnh sẽ được hòa trộn mượt mà qua pipeline xfade & acrossfade.",
       "encoder": "Bộ mã hóa (Encoder)",
       "encoderCpu": "CPU (libx264) - Tương thích tối đa",
       "encoderGpu": "NVIDIA GPU (h264_nvenc) - Xuất cực nhanh",
@@ -998,6 +997,8 @@
       "errorDesc": "Có lỗi xảy ra khi xuất video",
       "close": "Đóng",
       "badgeMaster": "MASTER ENCODE",
+      "blockersTitle": "Dự án này chưa xuất được",
+      "blockersEffects": "Hiệu ứng bản xuất chưa bake được: {effects}",
       "fileName": "Tên tệp",
       "posterEmpty": "Chưa có frame xem trước",
       "specDuration": "Thời lượng xuất",
@@ -1254,7 +1255,7 @@
       "shortcutsBtn": "Phím tắt",
       "hardwareStatus": "Phần cứng phát hiện được & engine xuất video",
       "clipCount": "{count} clip",
-            "resizeMedia": "Đổi rộng panel media",
+      "resizeMedia": "Đổi rộng panel media",
       "resizeInspector": "Đổi rộng panel thuộc tính",
       "resizeTimeline": "Đổi cao timeline"
     },

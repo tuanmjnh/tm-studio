@@ -216,9 +216,9 @@ nên bảng dưới ghi rõ cái nào đã chốt, cái nào là **đề xuất 
 | 1 | Stabilization (vidstab) | **Khai tử**, ghi là tính năng mất khi cắt. Lý do: không có tương đương trong WebCodecs/Web Audio, và giữ nghĩa là giữ engine desktop riêng — trái ADR-032. Chủ repo xác nhận trước khi slice I xoá. | 028, 032 |
 | 2 | Autocut scene/silence | **Làm lại trên sample đã decode** (slice E). Không tắt tính năng vì đầu vào (frame, PCM) vẫn lấy được từ decoder. | 030, 031 |
 | 3 | HTML-video export | **Không phải đường export của timeline.** HTML-video ở lại như một loại composition có UI riêng; export timeline dùng WebCodecs + muxer (slice H). Điều này cũng khớp ADR-023: một function, một engine. | 030, 031 |
-| 4 | V4 roadmap | **Sửa prose ngay, archive cả bộ ở slice K.** Lý do: DoD §25 của plan có mục "không docs hướng dẫn cài FFmpeg" — dán nhãn supersede mà để nguyên **14** dòng prose còn cho phép fallback (đo ở audit §5.3) thì mục đó vẫn fail khi grep. | 028 |
+| 4 | V4 roadmap | **Sửa prose ngay (đã xong); archive cả bộ: `DEFERRED / OWNER APPROVAL REQUIRED`.** Lý do sửa prose: DoD §25 của plan có mục "không docs hướng dẫn cài FFmpeg" — dán nhãn supersede mà để nguyên **14** dòng prose còn cho phép fallback (đo ở audit §5.3) thì mục đó vẫn fail khi grep. Lý do hoãn archive: thao tác này chạm tài liệu thuộc quyền chủ repo (`docs/video-editor-stack.md`, `docs/design/`, `docs/asset-sources-catalog.md`), và chủ repo quyết định **giữ nguyên vị trí** (2026-11-08). Không di chuyển, đổi tên hay xoá khi chưa có xác nhận riêng. | 028 |
 | 5 | Số ADR | **028…033**, ánh xạ ở §0. | — |
-| 6 | `backup/ffmpeg-engine-2026-11-03/` | **Giữ untracked tới slice I**, rồi xoá. Nó là bản soi chiếu để kiểm tra lại, không phải lịch sử; lịch sử đã có git (source commit `92a4818`). | — |
+| 6 | `backup/ffmpeg-engine-2026-11-03/` | **Giữ, untracked, không đưa vào build/release.** Chủ repo xác nhận 2026-11-08: đây là bản lưu trữ mã nguồn để đối chiếu lịch sử (76 file, 0 `.exe` sau slice I), chỉ xoá khi có xác nhận riêng. Không `git clean`, không script dọn nào được chạm vào thư mục này. Lịch sử vẫn có git làm nguồn thứ hai. | — |
 | 7 | `resources/*.exe` (471 MiB) | **Xoá ở slice I**, và chỉ sau khi chủ repo duyệt; đây là thao tác khó đảo và là điểm không quay lại. | 028 |
 | 8 | ADR-025 (font vendoring) | **Vẫn mở.** `drawtext` đã nghỉ hưu ở slice J (§55) và chữ sơn bằng DOM layer của core, nên vế cú pháp đã đóng; vế **font đi cùng app** vẫn là việc của ADR-025 (measure FontFace + OPFS). | 031 |
 | 9 | Subtitle burn-in | **Đi qua text/paint renderer đã có**, không qua libass: subtitle đã là text track trong timeline, nên "burn-in" chỉ là một lớp sơn trong stack chứ không phải một pipeline. Không viết parser `.ass` đầy đủ. Chủ repo xác nhận nếu sản phẩm thật sự cần `.ass` styling ngoài phạm vi đó. | 031 |
@@ -450,3 +450,18 @@ guard exit 0. §55.2 ghi một điều phải nói rõ: `renderReady` **không**
 lặng (mixer chưa áp). Gate 4 live **đo được sau khi restart dev server** (`:4003` treo 503 do `.nuxt` vừa
 regenerate): năm route **200**, console **0** `[error]`/`[warn]`/`[issue]`; nội dung authed bên trong editor vẫn cần
 session nên vẫn chưa đo.)*
+
+*(**đo ngày 2026-11-08, audit §57 — slice L "hai capability, hai chủ"**: sáu blocker của §55.6/§56.6 đã có quyết định của chủ
+repo, và ba trong số đó là code. (a) `fxCapabilities` thôi phát `exportSupported`: nó chỉ trả `previewReady` (registry có mặt
+xem trước hoàn chỉnh), vì câu "file có nung effect này không" thuộc exporter. Câu thứ hai có chủ riêng —
+`exportBakesEffect` trong `exportContent.mjs`, hiện là một Set rỗng vì painter chưa có leg nào; khi một leg học nung một
+effect, effect đó chuyển vào Set trong đúng commit chuyển luôn lời từ chối. (b) Badge của `TmcutFxThumb` đổi thành "Preview
+only — not exportable yet" cho mọi effect mà exporter từ chối, thay cho "Not in export" chỉ hiện khi định nghĩa thiếu. (c)
+`planEncodeContent` trả thêm `blockedEffects` — tên từng loại effect đứng giữa project và file, sắp xếp + khử trùng, rỗng
+khi `effects` không nằm trong `reasons` — và `TmcutExportModal` in tên đó trước khi render. Banner cũ "transitions will be
+blended with xfade & acrossfade" đã **gỡ**: nó hứa một emitter slice I đã xoá, trên đúng project mà painter từ chối. (d)
+Track pan: control **gỡ** khỏi timeline, field `pan` **giữ** trong schema v3 và store setter `updateTrackPan` vẫn còn (dữ
+liệu cũ không bị xoá, không bị reset về 0), và hàng track hiện cảnh báo khi giá trị khác 0. Pan trở lại khi có một leg mixer
+stereo kèm test playback/mix/export. (e) Archive bộ tài liệu V4: `DEFERRED / OWNER APPROVAL REQUIRED` — xem §10 mục 4. (f)
+Parity pixel cũ/mới: chấp nhận bằng chứng lịch sử §53.11, **không** dựng lại engine cũ; mục §57.5 nói rõ cái gì chưa được
+kiểm độc lập.)*

@@ -22,7 +22,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { EFFECT_REGISTRY, KNOWN_TRANSITIONS, XFADE_COMB_PERIOD, XFADE_PREVIEW, fxCapabilities, lutGrade } from 'tmcut-core'
+import { EFFECT_REGISTRY, KNOWN_TRANSITIONS, XFADE_COMB_PERIOD, XFADE_PREVIEW, exportBakesEffect, fxCapabilities, lutGrade } from 'tmcut-core'
 import {
   resolveFxPreview,
   effectAdapterKeys,
@@ -100,8 +100,22 @@ check('fidelity comes from the core descriptor, never from a UI table', () => {
     assert.ok(caps, type)
     const status = anim(type).status
     assert.equal(status.fidelity, caps!.fidelity, `${type} fidelity`)
-    assert.equal(status.exportSupported, caps!.exportSupported, `${type} export support`)
+    assert.equal(status.previewReady, caps!.previewReady, `${type} preview readiness`)
   }
+})
+
+// A tile that says "exportable" while the painter refuses every clip with an
+// effect is the honesty gap this check exists to keep closed. Preview support
+// and export support are two answers with two owners: the registry knows the
+// first, `exportBakesEffect` in core knows the second.
+check('preview support and export support are separate answers', () => {
+  for (const type of Object.keys(EFFECT_REGISTRY)) {
+    const status = anim(type).status
+    assert.equal(status.previewReady, true, `${type} preview`)
+    assert.equal(status.exportReady, exportBakesEffect(type), `${type} export`)
+  }
+  // The exporter owns the answer; a UI must never derive it from `renderReady`.
+  for (const type of Object.keys(EFFECT_REGISTRY)) assert.equal(exportBakesEffect(type), false, type)
 })
 
 check('an unknown definition says so instead of inventing a wipe', () => {

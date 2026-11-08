@@ -78,6 +78,26 @@ export const ENCODE_REFUSAL_REASONS = Object.freeze([
   'rotation'
 ])
 
+/** Effects the WebCodecs painter bakes today. Empty on purpose — see above. */
+const EXPORT_BAKED_EFFECTS = new Set([])
+
+/**
+ * Does the file export bake this effect into the picture?
+ *
+ * The registry's `renderReady` answers a different question (does a preview
+ * have a complete face to paint), so it cannot answer this one: the painter
+ * here draws one `drawImage` of the decoded plate and has no measured twin for
+ * any effect, which is why `planEncodeContent` names 'effects' for a clip that
+ * carries even one. When a painter leg learns to bake a named effect, that
+ * effect moves into this set in the same commit that moves the refusal.
+ *
+ * @param {unknown} type registry effect type
+ * @returns {boolean} true only for effects the exporter paints itself
+ */
+export function exportBakesEffect(type) {
+  return EXPORT_BAKED_EFFECTS.has(type)
+}
+
 function isFiniteNumber(value) {
   return typeof value === 'number' && Number.isFinite(value)
 }
@@ -186,11 +206,20 @@ export function planEncodeContent(input) {
   // they paint nothing, so a mask on one is not a reason to refuse.
   const tracks = projectTracks(input)
   const used = [...rows.rows, ...rows.audio].map(row => tracks[row.trackIndex]).filter(Boolean)
+  const blockedEffects = new Set()
   for (const track of used) {
     const items = Array.isArray(track?.items) ? track.items : []
     for (const clip of items) {
       if (!(clipSpan(clip).duration > 0)) continue
-      if (Array.isArray(clip.effects) && clip.effects.length > 0) reasons.add('effects')
+      if (Array.isArray(clip.effects) && clip.effects.length > 0) {
+        const unbaked = clip.effects
+          .map(effect => effect?.type)
+          .filter(type => typeof type === 'string' && !exportBakesEffect(type))
+        if (unbaked.length > 0) {
+          reasons.add('effects')
+          for (const type of unbaked) blockedEffects.add(type)
+        }
+      }
       if (normalizeMask(clip.mask)) reasons.add('mask')
       if (blendModeOf(clip) !== 'normal') reasons.add('blend')
       if (clip.transitionIn) reasons.add('transition')
@@ -207,14 +236,14 @@ export function planEncodeContent(input) {
     && (Array.isArray(track?.items) ? track.items : []).some(clip => makesSound(clip))
   ))
 
-  return verdict([...reasons], { fps, canvas, grid: scheduler, silent })
+  return verdict([...reasons], { fps, canvas, grid: scheduler, silent, blockedEffects })
 }
 
 /**
  * Assemble the verdict: reasons sorted and de-duplicated against the published
  * vocabulary, and no request at all when anything is refused.
  */
-function verdict(rawReasons, { fps, canvas, grid, silent }) {
+function verdict(rawReasons, { fps, canvas, grid, silent, blockedEffects = new Set() }) {
   const reasons = ENCODE_REFUSAL_REASONS
     .filter(reason => new Set(rawReasons).has(reason))
     .sort()
@@ -223,6 +252,11 @@ function verdict(rawReasons, { fps, canvas, grid, silent }) {
   return Object.freeze({
     kind: refused ? 'refused' : 'eligible',
     reasons: Object.freeze(reasons),
+    // Which effect types stand between this project and a file. Sorted and
+    // de-duplicated so two clips with one blur name it once; empty when
+    // `effects` is not among the reasons, so a caller cannot print a warning
+    // about a project that would export.
+    blockedEffects: Object.freeze([...blockedEffects].sort()),
     request: refused || !fps
       ? null
       : Object.freeze({

@@ -5,13 +5,12 @@
 //
 //  `renderReady` is the definition-completeness flag: TRUE means the registry
 //  ships a full semantic face for the effect (params + preview descriptor +
-//  grade ops where applicable) that a renderer can consume. It is NOT a promise
-//  the current file export bakes the effect — file-export eligibility is decided
-//  separately by `planEncodeContent` (exportContent.mjs), which today refuses a
-//  clip that carries effects until the WebCodecs painter learns to bake them.
-//  Preview (CSS/filter) may still render it. `fxCapabilities.exportSupported`
-//  mirrors this flag, so a tile badge reflects definition completeness, not the
-//  export refusal — see the slice J audit note on that honesty gap.
+//  grade ops where applicable) that a PREVIEW renderer can consume. It says
+//  nothing about the file export: `planEncodeContent` (exportContent.mjs)
+//  refuses every clip that carries an effect until the WebCodecs painter learns
+//  to bake one, and `exportBakesEffect` there is the single place that answers
+//  it. Two capabilities, two owners — a single boolean published from the
+//  registry was read as "this effect exports" and was wrong for all 29 entries.
 //
 //  `preview.layerOverlay` is the other honesty flag: TRUE only when this
 //  effect's CSS overlay is what the export bakes into the layer, so a live
@@ -542,8 +541,16 @@ export function lutGrade(preset) {
  * Returns null for an unknown type — callers must show an honest unknown
  * state rather than a generic animation.
  *
+ * `previewReady` answers ONE question: does the registry ship a full semantic
+ * face (params + preview descriptor + grade ops) a preview renderer can
+ * consume? Whether the FILE export bakes this effect is a different question
+ * with a different owner — `exportBakesEffect` in exportContent.mjs — because
+ * the answer depends on the painter, not on the definition. Folding both into
+ * one boolean is what let a tile claim "Not in export only when incomplete"
+ * while every effect was in fact refused.
+ *
  * @param {string} type
- * @returns {{ fidelity: 'exact'|'approximate'|'illustrative', strategy: string, layerOverlay: boolean, exportSupported: boolean, label: string, category: string } | null}
+ * @returns {{ fidelity: 'exact'|'approximate'|'illustrative', strategy: string, layerOverlay: boolean, previewReady: boolean, label: string, category: string } | null}
  */
 export function fxCapabilities(type) {
   const desc = EFFECT_REGISTRY[type]
@@ -552,7 +559,7 @@ export function fxCapabilities(type) {
     fidelity: desc.preview?.fidelity ?? 'approximate',
     strategy: desc.preview?.strategy ?? 'css',
     layerOverlay: desc.preview?.layerOverlay === true,
-    exportSupported: desc.renderReady === true,
+    previewReady: desc.renderReady === true,
     label: desc.label,
     category: desc.category
   }

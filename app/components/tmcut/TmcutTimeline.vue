@@ -32,7 +32,6 @@ const {
   toggleTrackLock,
   toggleTrackHidden,
   updateTrackVolume,
-  updateTrackPan,
   addTrackToProject,
   moveTrackInProject,
   removeTrackFromProject,
@@ -1439,12 +1438,12 @@ onUnmounted(() => {
                 />
               </div>
             </div>
-            <!-- R124 A1 → refit: track-level volume/pan for audio tracks
-                 (CapCut §5.3) moved to its own compact second line. It sat
-                 INLINE before, overflowing the 176px header column and
-                 raising the phantom horizontal scrollbar (Vol+Pan+inputs
-                 ≈ 300px in 176px). Now: labels + two grow-to-fit number
-                 inputs, always inside the row width. -->
+            <!-- Track volume for audio tracks (CapCut §5.3). Track pan is NOT
+                 here: the Web Audio mixer has no panner (the FFmpeg filter that
+                 used to carry it retired with the engine), so a Pan input would
+                 edit a number nothing plays. The `pan` FIELD stays in the
+                 schema — an opened project keeps its value — and the player
+                 says the value is not applied. -->
             <div v-if="track.type === 'audio'" class="flex items-center gap-1.5 min-w-0">
               <label
                 :for="`track-volume-${track.id}`"
@@ -1463,22 +1462,16 @@ onUnmounted(() => {
                 :model-value="track.volume ?? 100"
                 @update:model-value="updateTrackVolume(track.id, Number($event))"
               />
-              <label
-                :for="`track-pan-${track.id}`"
-                class="text-[9px] text-muted shrink-0"
-                :title="t('tmcut.tracks.pan')"
-              >Pan</label>
-              <UInput
-                :id="`track-pan-${track.id}`"
-                :aria-label="t('tmcut.tracks.pan')"
-                type="number"
-                min="-100"
-                max="100"
-                step="5"
-                size="xs"
-                class="flex-1 min-w-0"
-                :model-value="track.pan ?? 0"
-                @update:model-value="updateTrackPan(track.id, Number($event))"
+              <!-- A stored pan survives in the file; nothing applies it. Say so
+                   instead of resetting it — the value belongs to the project,
+                   and silently zeroing it would destroy work on open. -->
+              <UIcon
+                v-if="(track.pan ?? 0) !== 0"
+                name="i-lucide-triangle-alert"
+                class="size-3.5 shrink-0 text-warning"
+                :title="t('tmcut.tracks.panNotApplied')"
+                :aria-label="t('tmcut.tracks.panNotApplied')"
+                tabindex="0"
               />
             </div>
           </div>

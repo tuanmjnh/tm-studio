@@ -17,7 +17,7 @@
  */
 import type { CSSProperties } from 'vue'
 import type { TmcutGradeOp } from 'tmcut-core'
-import { EFFECT_REGISTRY, clampEffectParam, fxCapabilities, lutGrade } from 'tmcut-core'
+import { EFFECT_REGISTRY, clampEffectParam, exportBakesEffect, fxCapabilities, lutGrade } from 'tmcut-core'
 import { TRANSITION_CATALOG } from './fxCatalog'
 
 export type FxPreviewKind = 'effect' | 'transition' | 'filter'
@@ -28,7 +28,13 @@ export interface FxPreviewStatus {
   /** False when no definition/adapter matches — the UI must say so. */
   known: boolean
   fidelity: FxFidelity
-  exportSupported: boolean
+  /** The registry ships a complete face a preview renderer can paint. */
+  previewReady: boolean
+  /**
+   * The FILE exporter bakes this effect. A different question with a different
+   * owner (`exportBakesEffect` in core) — never derived from `previewReady`.
+   */
+  exportReady: boolean
 }
 
 export interface FxPreview {
@@ -639,15 +645,22 @@ function splitFrame(spec: FxTransitionPreview, scenes: FxPreviewScenes): CSSProp
 
 export function effectPreviewStatus(type: string): FxPreviewStatus {
   const caps = fxCapabilities(type)
-  if (!caps) return { known: false, fidelity: 'illustrative', exportSupported: false }
-  return { known: Boolean(EFFECT_BUILDERS[type]), fidelity: caps.fidelity, exportSupported: caps.exportSupported }
+  if (!caps) return { known: false, fidelity: 'illustrative', previewReady: false, exportReady: false }
+  return {
+    known: Boolean(EFFECT_BUILDERS[type]),
+    fidelity: caps.fidelity,
+    previewReady: caps.previewReady,
+    exportReady: exportBakesEffect(type)
+  }
 }
 
 /** Fidelity of the transition family: only the fade/tint morphs are a true match. */
 function transitionStatus(spec: FxTransitionPreview | undefined): FxPreviewStatus {
-  if (!spec) return { known: false, fidelity: 'illustrative', exportSupported: false }
+  if (!spec) return { known: false, fidelity: 'illustrative', previewReady: false, exportReady: false }
   const exact = spec.primitive === 'fade' || spec.primitive === 'tint'
-  return { known: true, fidelity: exact ? 'exact' : 'approximate', exportSupported: true }
+  // The exporter refuses a project with a clip transition by name ('transition'),
+  // so no transition is in the file today whatever the preview shows.
+  return { known: true, fidelity: exact ? 'exact' : 'approximate', previewReady: true, exportReady: false }
 }
 
 function filterStatus(preset: string): FxPreviewStatus {
@@ -657,7 +670,8 @@ function filterStatus(preset: string): FxPreviewStatus {
     known,
     // An id outside the enum reports `known: false` and paints nothing.
     fidelity: !known || !caps ? 'illustrative' : lutGrade(preset) === null ? 'exact' : caps.fidelity,
-    exportSupported: caps?.exportSupported ?? false
+    previewReady: Boolean(caps?.previewReady && known),
+    exportReady: exportBakesEffect('lut3d')
   }
 }
 

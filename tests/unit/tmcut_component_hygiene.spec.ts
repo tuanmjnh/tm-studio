@@ -172,13 +172,20 @@ describe('editor header keeps navigation and accessible project naming', () => {
 
 describe('timeline audio controls expose localized accessible names', () => {
   const timeline = read('app/components/tmcut/TmcutTimeline.vue')
-  for (const field of ['volume', 'pan']) {
-    it(`associates the ${field} field with its visible label`, () => {
-      assert.ok(timeline.includes(`:for="\`track-${field}-\${track.id}\`"`))
-      assert.ok(timeline.includes(`:id="\`track-${field}-\${track.id}\`"`))
-      assert.ok(timeline.includes(`:aria-label="t('tmcut.tracks.${field}')"`))
-    })
-  }
+
+  it('associates the volume field with its visible label', () => {
+    assert.ok(timeline.includes(':for="`track-volume-${track.id}`"'))
+    assert.ok(timeline.includes(':id="`track-volume-${track.id}`"'))
+    assert.ok(timeline.includes(':aria-label="t(\'tmcut.tracks.volume\')"'))
+  })
+
+  // Pan is not a control any more: the mixer has no panner, so the input could
+  // only edit a number nothing plays. The field stays in the project schema and
+  // the row warns when a stored value is non-neutral — see
+  // tmcut_capability_honesty.spec.ts, which pins that half.
+  it('offers no pan field, because nothing applies pan', () => {
+    assert.ok(!timeline.includes('track-pan-'), 'the pan input came back without a mixer leg')
+  })
 })
 
 describe('preview stage keeps the still-image layer off video sources', () => {

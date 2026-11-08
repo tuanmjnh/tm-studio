@@ -118,9 +118,10 @@ interface FxThumbBadge { icon: string, key: string, tone: 'neutral' | 'warning',
  */
 const badge = computed<FxThumbBadge | null>(() => {
   if (!props.showBadge || !preview.value.status.known) return null
-  const { fidelity, exportSupported } = preview.value.status
+  const { fidelity, previewReady, exportReady } = preview.value.status
   let info: FxThumbBadge | null = null
-  if (!exportSupported) info = { icon: 'i-lucide-triangle-alert', key: 'tmcut.fxThumb.exportUnsupported', tone: 'warning', urgent: true }
+  if (!previewReady) info = { icon: 'i-lucide-eye-off', key: 'tmcut.fxThumb.noPreview', tone: 'warning', urgent: true }
+  else if (!exportReady) info = { icon: 'i-lucide-triangle-alert', key: 'tmcut.fxThumb.previewOnly', tone: 'warning', urgent: true }
   else if (fidelity === 'illustrative') info = { icon: 'i-lucide-lightbulb', key: 'tmcut.fxThumb.fidelityIllustrative', tone: 'neutral', urgent: true }
   else if (fidelity === 'approximate') info = { icon: 'i-lucide-eye', key: 'tmcut.fxThumb.fidelityApproximate', tone: 'neutral', urgent: false }
   if (!info) return null

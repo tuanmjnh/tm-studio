@@ -17,7 +17,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { TICKS_PER_SECOND } from '../src/time.mjs'
 import { createFrameScheduler } from '../src/scheduler.mjs'
-import { ENCODE_REFUSAL_REASONS, planEncodeContent } from '../src/exportContent.mjs'
+import { ENCODE_REFUSAL_REASONS, exportBakesEffect, planEncodeContent } from '../src/exportContent.mjs'
 
 const T = TICKS_PER_SECOND
 
@@ -136,6 +136,28 @@ describe('planEncodeContent — what the exporter cannot paint yet', () => {
   it('an effect is refused: the preview applies it as CSS filters, the file cannot', () => {
     const project = projectOf([['row-a', [clip('a', 0, 6, { effects: [{ type: 'brightness', params: { value: 1.2 } }] })]]])
     assert.deepEqual(planEncodeContent(project).reasons, ['effects'])
+  })
+
+  // A refusal that only says "effects" makes the user hunt through every clip
+  // for the one that blocks the file. The verdict names them, from the same
+  // walk, and `exportBakesEffect` is the single answer per type — the UI only
+  // translates the names.
+  it('a refused effect is named, once per type, and only when the painter cannot bake it', () => {
+    const project = projectOf([
+      ['row-a', [
+        clip('a', 0, 4, { effects: [{ type: 'blur', params: {} }, { type: 'vignette', params: {} }] }),
+        clip('b', 4, 4, { effects: [{ type: 'blur', params: { amount: 10 } }] })
+      ]]
+    ])
+    const verdict = planEncodeContent(project)
+    assert.deepEqual(verdict.reasons, ['effects'])
+    assert.deepEqual(verdict.blockedEffects, ['blur', 'vignette'])
+    assert.equal(exportBakesEffect('blur'), false)
+  })
+
+  it('an unhidden, effect-free project names no blocked effect', () => {
+    const verdict = planEncodeContent(projectOf([['row-a', [clip('a', 0, 6)]]]))
+    assert.deepEqual(verdict.blockedEffects, [])
   })
 
   it('a mask is refused', () => {

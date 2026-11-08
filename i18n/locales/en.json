@@ -540,7 +540,7 @@
       "noPreview": "No preview for this item",
       "fidelityApproximate": "Approximate preview",
       "fidelityIllustrative": "Illustrative only",
-      "exportUnsupported": "Not in export"
+      "previewOnly": "Preview only — not exportable yet"
     },
     "tracks": {
       "mute": "Mute track",
@@ -558,7 +558,8 @@
       "pan": "Track balance (-100 Left to +100 Right)",
       "order": "Stacking order",
       "moveUp": "Move up (render above)",
-      "moveDown": "Move down (render below)"
+      "moveDown": "Move down (render below)",
+      "panNotApplied": "Stored balance is not applied — the mixer has no stereo pan yet"
     },
     "keyframeLane": {
       "title": "Keyframes",
@@ -974,8 +975,6 @@
       "presetYoutube": "YouTube 1080p",
       "presetSquare": "Instagram 1:1",
       "presetNeedsCanvas": "Needs a {ratio} canvas — set it in the editor",
-      "transitionsTitle": "{n} transition(s) will be blended",
-      "transitionsDesc": "Transitions will be seamlessly blended using xfade & acrossfade.",
       "encoder": "Encoder",
       "encoderCpu": "CPU (libx264) - Maximum compatibility",
       "encoderGpu": "NVIDIA GPU (h264_nvenc) - Ultra fast",
@@ -998,6 +997,8 @@
       "errorDesc": "An error occurred while exporting the video",
       "close": "Close",
       "badgeMaster": "MASTER ENCODE",
+      "blockersTitle": "This project cannot be exported yet",
+      "blockersEffects": "Effects the file cannot bake: {effects}",
       "fileName": "File name",
       "posterEmpty": "No preview frame yet",
       "specDuration": "Export duration",
@@ -1254,7 +1255,7 @@
       "shortcutsBtn": "Shortcuts",
       "hardwareStatus": "Detected hardware & export engine",
       "clipCount": "{count} clips",
-            "resizeMedia": "Resize media panel",
+      "resizeMedia": "Resize media panel",
       "resizeInspector": "Resize inspector panel",
       "resizeTimeline": "Resize timeline"
     },

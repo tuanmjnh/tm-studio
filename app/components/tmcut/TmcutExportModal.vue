@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from 'vue'
-import { selectFileRows } from 'tmcut-core'
+import { selectFileRows, planEncodeContent } from 'tmcut-core'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
@@ -15,7 +15,7 @@ import { useTmcutUsageTracker } from '~/composables/useTmcutUsageTracker'
 const open = defineModel<boolean>('open', { default: false })
 
 const { t } = useI18n()
-const { currentProject, contentDuration, timelineTransitionCount } = useTmcutProject()
+const { currentProject, contentDuration } = useTmcutProject()
 const { formatTimecode } = useTmcutPlayback()
 const { findAssetBySrc, mediaUrl, resolveMediaSrc, bytesForAsset } = useTmcutMedia()
 // ADR-014: the host answer, not a global sniff. Zero-FFmpeg slice I deleted the
@@ -237,6 +237,26 @@ function explainContentReasons(reasons: readonly string[]): string[] {
   return reasons.map(reason => t(WEB_CONTENT_REFUSAL_KEYS[reason] ?? 'tmcut.export.webRefuseUnknown', { reason }))
 }
 
+/**
+ * What stands between this project and a file, said before the user starts a
+ * render rather than after it fails. Core owns the verdict; this only turns its
+ * vocabulary into sentences and names the effects the painter cannot bake, so
+ * nobody has to hunt through the timeline for the clip that blocks the export.
+ */
+const exportBlockers = computed(() => {
+  const plan = planEncodeContent((currentProject.value ?? {}) as never)
+  return {
+    reasons: explainContentReasons(plan.reasons),
+    effects: plan.blockedEffects.map(type => effectName(type))
+  }
+})
+
+/** A registry type as a person reads it, through the same keys the inspector uses. */
+function effectName(type: string): string {
+  const key = type === 'eq-grade' ? 'eqGrade' : type
+  return t(`tmcut.effects.${key}`)
+}
+
 async function runWebExport(): Promise<void> {
   isWebRendering.value = true
   webProgress.value = 0
@@ -400,18 +420,29 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- Transitions confirmation badge (Roadmap R3) -->
+          <!-- The export's own verdict, said before the render starts. The
+               banner that used to sit here promised "transitions will be
+               blended with xfade & acrossfade" — an emitter slice I deleted, on
+               a project the painter refuses. A control that can only be
+               refused is worse than no control, and a promise the file cannot
+               keep is worse than both. -->
           <div
-            v-if="timelineTransitionCount > 0"
-            class="flex items-start gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2"
+            v-if="exportBlockers.reasons.length > 0"
+            class="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2"
           >
-            <UIcon name="i-lucide-sparkles" class="size-4 text-primary shrink-0 mt-0.5" />
+            <UIcon name="i-lucide-triangle-alert" class="size-4 text-warning shrink-0 mt-0.5" />
             <div class="flex flex-col gap-0.5 min-w-0">
-              <span class="text-xs font-medium text-primary">
-                {{ t('tmcut.export.transitionsTitle', { n: timelineTransitionCount }) }}
+              <span class="text-xs font-medium text-warning">
+                {{ t('tmcut.export.blockersTitle') }}
               </span>
               <span class="text-[11px] leading-snug text-toned">
-                {{ t('tmcut.export.transitionsDesc') }}
+                {{ exportBlockers.reasons.join(' · ') }}
+              </span>
+              <span
+                v-if="exportBlockers.effects.length > 0"
+                class="text-[11px] leading-snug text-warning"
+              >
+                {{ t('tmcut.export.blockersEffects', { effects: exportBlockers.effects.join(', ') }) }}
               </span>
             </div>
           </div>
