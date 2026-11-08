@@ -7270,3 +7270,164 @@ con trỏ sang spec mới giữ vế dữ liệu).
 - **Current engine regression/visual tests**: chạy theo kết quả thực tế ở §57.4 — 909 core spec + 126
   unit spec đều xanh, nhưng chúng kiểm **luật** (hình học plate, grid frame, mix packet), không kiểm
   từng pixel của một file render thật.
+
+## 58. Báo cáo cuối Zero-FFmpeg A–K (đo lại ngày 2026-11-08)
+
+§57 đóng slice L. Mục này không mở slice mới: nó đo lại **toàn bộ** chương trình trên cây hiện tại và nói
+rõ ba loại sự thật khác nhau — cái **đã ship và đã đo**, cái là **giới hạn sản phẩm** (chủ ý, không phải
+thiếu sót), và cái **còn mở** vì chưa có bằng chứng hoặc vì chờ chủ repo quyết. Mọi con số dưới đây lấy
+từ lượt chạy hôm nay trên `HEAD 7ec21e4`, không phải từ trí nhớ của phiên trước.
+
+### 58.1 Thang gate trên cây được đo
+
+| Gate | Lệnh | Kết quả | Bằng chứng |
+|---|---|---|---|
+| Build core | `pnpm build:core` | PASS | exit 0 |
+| 1 Types | `npx nuxt typecheck` | PASS | exit 0, **0** × `error TS`; `.nuxt/eslint.config.mjs` sinh lại 26 290 byte lúc 19:41 |
+| 2 Lint | `npx eslint` trên 7 file của slice L, chạy **sau** gate 1 | PASS | exit 0, 0 problem |
+| 3 Core types | `pnpm typecheck:core` | PASS | exit 0 |
+| 4 Boundaries | `pnpm check:core` | PASS | exit 0 |
+| 5 Core tests | `pnpm test:core` | PASS | **909/909**, 135 suite |
+| 6 Unit suite | `npx tsx tests/unit/run-all.mts` | PASS | **126/126** spec, exit 0 |
+| 7 Electron | `pnpm test:electron` | PASS | **59/59**, 13 suite |
+| 8 Build | `npx nuxt build` | PASS | exit 0, 52,1 s, `.output` **25 MB** (9,8 MB gzip), 32 MB trên đĩa |
+| 9 Doc guards | 6 guard chạy riêng | PASS | xem §58.1.1 |
+| 10 Live | 5 route trên `:4003` | **PARTIAL** | xem §58.1.2 |
+| 11 Package | `npx electron-builder --dir --win` | **BLOCKED** | xem §58.1.3 |
+
+#### 58.1.1 Sáu doc guard, chạy sau khi văn bản cuối đã viết
+
+| Guard | Kết quả |
+|---|---|
+| `tmcut_doc_table_shape` | exit 0 |
+| `tmcut_docs_link_integrity` | exit 0 |
+| `tmcut_doc_line_length` | exit 0 (trần 1356, bảng được miễn) |
+| `tmcut_doc_citations` | exit 0 |
+| `tmcut_doc_charset` | exit 0 |
+| `docs_markdown` | 12/12 check, exit 0 |
+
+#### 58.1.2 Live sweep: 4 sạch, 1 có lỗi môi trường
+
+| Route | Console `[error]`/`[warn]`/`[issue]` |
+|---|---|
+| `/tmcut` | **0** |
+| `/tmcut/autocut` | **0** |
+| `/tmcut/editor` | 1 dòng: `401 error.invalidToken` từ `/api/v1/ai/relay/catalog`, lặp 4 lần |
+| `/tmcut/templates` | 1 dòng `401 error.invalidToken`, lặp 2 lần |
+| `/tmcut/factory` | 1 dòng `401 error.invalidToken`, 1 lần |
+
+Ba route ấy gọi catalog AI lúc mount, và browser context của lượt quét **không có phiên hub** — đây là điều
+kiện môi trường đã biết từ trước slice L, không phải hồi quy. Gate ghi **PARTIAL** chứ không PASS, vì không
+biến một 401 thành "sạch" chỉ vì nó giải thích được.
+
+Phần **thay đổi của slice L đo được trên DOM thật** ở `/tmcut/editor`: `[id^="track-volume-"]` = **1**,
+`[id^="track-pan-"]` = **0**, và mở modal Export in ra đúng ba câu:
+
+```text
+This project cannot be exported yet
+This export cannot bake clip effects — remove them
+Effects the file cannot bake: Vignette
+```
+
+Đó là slice L tự chứng minh trên trình duyệt thật: badge/copy capability đã đổi, control pan đã đi, và
+export **nói tên** thứ chặn nó thay vì render một video sai.
+
+#### 58.1.3 Package: vẫn BLOCKED, và lý do không đổi sau khi đo lại
+
+Đo lại hôm nay: `reg query` trên `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock` trả
+`EXIT=1` với "Invalid syntax" (khoá không tồn tại), và `whoami /priv` **không** liệt kê
+`SeCreateSymbolicLinkPrivilege`. Nghĩa là Developer Mode **chưa được bật trên máy này**, nên lần thử của
+chủ repo chưa xảy ra — không phải nó đã chạy và vẫn hỏng.
+
+Nguyên nhân đã đo ở §56.6 mục 9 và không thay đổi: `@electron/asar` 3.4.1 ném `EPERM` ở syscall `symlink`
+(`lib/disk.js:212-217`), không phải file lock, không phải antivirus; `app.asar` (363 090 003 byte, 30 829
+entry) **vẫn ghi xong** trước bước symlink, nên đó là bằng chứng output chứ không phải input. Gói Windows
+thật vì thế chưa có; CI Linux vẫn chỉ là kiểm thử bổ sung.
+
+### 58.2 DoD §25 — 25 mục, đo từng mục
+
+| # | Mục | Kết quả | Bằng chứng đo hôm nay |
+|---|---|---|---|
+| 1 | Không FFmpeg/FFprobe trong dependency tree | **PASS** | `grep` trên `package.json` + `pnpm-lock.yaml`: **0** hit |
+| 2 | Không binary trong repo/build | **PASS** | `git ls-files "*.exe"` = **0**; `.output` sau build: **0** `.exe`, **0** tên chứa ffmpeg/ffprobe |
+| 3 | Không spawn/exec media | **PASS** | 3 file import `child_process`: MCP server, dev launcher, và `execFile` của yt-dlp `--version` — không cái nào xử lý media |
+| 4 | Không FFmpeg IPC/config/env | **PASS** | `main.cjs`/`preload.cjs`/`media-protocol.cjs`/`ipcPolicy.cjs`: **0** hit; không biến môi trường nào còn đọc |
+| 5 | Không docs hướng dẫn cài FFmpeg | **PARTIAL** | tài liệu zero-FFmpeg chỉ nói lệnh cấm; `docs/video-editor-stack.md` (chủ repo) còn lệnh cài `@ffmpeg/ffmpeg` |
+| 6 | Không FFmpeg/FFmpeg.wasm fallback | **PASS** | 0 hit `@ffmpeg`/`ffmpeg.wasm` trong code, dep và build |
+| 7 | Probe bằng MediaProbeService | **PASS** | slice B, dùng trên cả hai host |
+| 8 | Unknown metadata biểu diễn đúng | **PASS** | `mediaInfo.mjs` phát `DURATION_UNKNOWN`, `VIDEO_NOT_DECODABLE`, `frame-rate-unknown` thay vì đoán |
+| 9 | Capability detection | **PASS** | `PLATFORM_CAPABILITIES` + matrix spec §56.3, 7 khoá, đếm theo từng khoá |
+| 10 | Compatibility tests | **PASS** | `tmcut_real_containers.spec.ts`, 7 check trên 4 fixture thật (mp4/mkv/mov/webm) |
+| 11 | Thumbnail/preview/transform không cần FFmpeg | **PASS** | `CanvasSink` trong `frameDecode.ts`; không binary nào trong đường này |
+| 12 | WebCodecs encode khi supported | **PASS** | export MVP chạy thật, file mp4 §52.5 |
+| 13 | JavaScript muxer | **PASS** | mediabunny `Mp4OutputFormat` |
+| 14 | Deterministic frame timing | **PASS** | `createFrameScheduler`, grid đếm theo `canvas.fps` |
+| 15 | Audio/video sync | **PASS** | §52.5: offset **0,000 ms**, dung sai đo được 22,68 µs |
+| 16 | Backpressure | **PASS** | `planEncodeQueue` + `inFlight`; writer await `add()` |
+| 17 | Cancel/cleanup | **PASS** | abort trước/sau khi chạy, `dispose()` trong `finally`, reader+mixer đóng mọi nhánh |
+| 18 | MediaRecorder không phải offline export chính | **PASS** | chỉ còn ở `useTmcutRecorder` (thu micro), không ở đường export |
+| 19 | Unsupported codec báo rõ | **PASS** | `runtime-refused` mang câu của chính capability, không thay bằng chữ chung |
+| 20 | Web hoạt động không cần native media tool | **PASS** | build web exit 0, 25 MB, không binary media |
+| 21 | Electron dùng chung engine | **PASS** | desktop đọc `packages/core/src` (ADR-022), matrix parity §56.3 |
+| 22 | Project trao đổi được trong phạm vi capability | **PASS (có phạm vi)** | schema v3 khoá bằng guard; phạm vi = project không effect/transition/text/mask/blend/rotation, và phần ngoài phạm vi được **gọi tên** chứ không bị bỏ im |
+| 23 | Unit/integration/visual tests pass | **PASS** | 909 core + 126 unit + 59 electron + 6 doc guard, tất cả exit 0 |
+| 24 | Large-file/memory tests | **CHƯA ĐO** | chỉ có **luật** ngân sách (byte cache, trần 512 frame) và test trả tài nguyên; **không** có phép đo file nhiều GB |
+| 25 | Browser compatibility report | **CHƯA CÓ** | bằng chứng rải rác (Chromium 156 web đo thật, Electron 44.10.0 **chưa** đo); không có artifact báo cáo riêng |
+
+Hai mục 24 và 25 là **chưa**, không phải "đã xong". Không có phép đo nào bị đổi tên để chúng thành xanh.
+
+### 58.3 Ba loại sự thật
+
+**Đã ship và có bằng chứng chạy:** engine thay thế hoàn chỉnh cho import → probe → thumbnail → preview
+composite → audio mix → encode → mux → download, không binary, không spawn media, chạy cùng một core ở web
+và Electron. 187 commit, trong đó 67 commit thuộc chương trình này.
+
+**Giới hạn sản phẩm (chủ ý, đã ghi tên trong code và UI):**
+
+| Giới hạn | Vì sao | Người dùng thấy gì |
+|---|---|---|
+| Effect chưa được nung vào file | painter chỉ `drawImage` tấm plate; quyết định 4 của chủ repo: **không mở rộng exporter lượt này** | banner "This project cannot be exported yet" + tên effect; badge "Preview only — not exportable yet" |
+| Transition chưa export | hai plate cross-fade là một compositor | `transition` nằm trong danh sách từ chối, có câu giải thích |
+| Text overlay chưa export | lớp chữ vẽ bằng DOM, canvas painter chưa có bản sao | `text` nằm trong danh sách từ chối |
+| Mask / blend / rotation / reverse / stabilize / stacked rows | chưa có twin đo được trên canvas | mỗi cái một lý do có tên, cùng một câu giải thích |
+| Pan | mixer Web Audio không có panner | control **đã gỡ**; project có `pan ≠ 0` hiện cảnh báo, **không** reset |
+| Stabilization | không có tương đương WebCodecs/Web Audio | tính năng đã khai tử khi cắt engine, ghi ở ADR-028 |
+
+**Còn mở vì thiếu bằng chứng, không phải vì thiếu code:** gate package Windows (§58.1.3), DoD 24 và 25,
+parity pixel tái lập được (§57.5), và báo cáo live sạch trên ba route cần phiên hub.
+
+### 58.4 Sáu quyết định của chủ repo — thi hành tới đâu
+
+| # | Quyết định | Trạng thái |
+|---|---|---|
+| 1 | Giữ `backup/ffmpeg-engine-2026-11-03/` | **Giữ nguyên, không xoá, không di chuyển.** Nhưng xem §58.5 mục A: thư mục này **đang được track** trong git |
+| 2 | Thử lại packaging sau khi bật Developer Mode | **Chưa thử lại được** — Developer Mode vẫn tắt (§58.1.3). Không đổi `asar=false`, không sửa config để né lỗi |
+| 3 | V4 docs: chưa di chuyển | **Giữ nguyên vị trí**; register §10 mục 4 đã ghi `DEFERRED / OWNER APPROVAL REQUIRED` |
+| 4 | Badge xuống "Preview only", tách hai capability, export nói tên effect | **Xong ở slice L** và đo được trên DOM thật (§58.1.2) |
+| 5 | Ẩn pan, giữ dữ liệu, cảnh báo khi `pan ≠ 0` | **Xong ở slice L**; spec giữ cả vế "field còn" và vế "input không còn" |
+| 6 | Chấp nhận bằng chứng parity lịch sử §53.11 | **Đã ghi đúng** ở §57.5, kèm câu "chưa kiểm độc lập" |
+
+### 58.5 Còn chờ chủ repo quyết (danh sách gộp, một lượt)
+
+**A. `backup/` đang được track, khác với giả định của quyết định 1.** `git ls-files backup/` trả **76**
+file; chúng vào repo ở commit `36e4c0a` ngày 2026-11-05, trước khi có quyết định giữ-untracked. Không có
+`.gitignore` nào phủ thư mục này. Tôi **không** tự `git rm --cached` (đó là thao tác khó đảo và chạm lịch
+sử). Cần một trong hai: (a) chấp nhận nó là lịch sử đã commit, hoặc (b) cho phép gỡ khỏi index bằng
+`git rm -r --cached backup/` + thêm một dòng `.gitignore`.
+
+**B. `docs/video-editor-stack.md` vẫn dạy cài `@ffmpeg/ffmpeg`.** Tài liệu thuộc quyền chủ repo, nên theo
+quyết định 3 tôi để nguyên. Đây là chỗ duy nhất khiến DoD 5 còn `PARTIAL`. Sửa hay giữ là quyết định của
+chủ repo.
+
+**C. Developer Mode chưa bật.** Không có gì để sửa trong repo cho tới khi máy có
+`SeCreateSymbolicLinkPrivilege`; sau đó chỉ cần chạy lại `npx electron-builder --dir --win` với cấu hình
+asar hiện tại.
+
+**D. Có làm exporter nung effect không, và theo thứ tự nào.** Quyết định 4 chốt **không** mở rộng lượt này,
+nên slice L dừng ở việc nói thật. Nếu mở lại, thứ tự rẻ nhất trước: nhóm effect chỉ là một chuỗi filter
+trên plate (blur/sharpen/negate/sepia/mono/vivid…) → nhóm cần overlay (vignette/letterbox/grain) → nhóm cần
+compositor phụ (chromatic/afterimage). Mỗi effect chuyển khỏi danh sách từ chối **trong cùng commit** với
+leg painter và test preview/export của nó.
+
+**E. DoD 24 và 25.** Cần quyết định có làm hay không: một phép đo file lớn (ví dụ 1 GB) với trần bộ nhớ,
+và một báo cáo tương thích trình duyệt dạng artifact (Chromium web đã đo; Electron 44.10.0 chưa).
