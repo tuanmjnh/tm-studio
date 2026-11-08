@@ -105,6 +105,40 @@ async function main() {
     assert.equal(platform.info.capabilities.cloudRender, false, 'a local file needs no server')
   })
 
+  await check('both hosts answer the full capability matrix, key by key', async () => {
+    // Brief item 6 asks for parity *per capability*, not a spot check of a few
+    // booleans. Two failures are therefore pinned here: a key that stops being
+    // declared (silently false everywhere) and a host and core disagreeing on
+    // the key set. The matrix is the contract; the values are each host's answer.
+    const { PLATFORM_CAPABILITIES } = await import('tmcut-core')
+    await freshStore()
+    const web = useTmcutPlatform({ isDesktop: { value: false }, resolveSrc: () => '' })
+    const desktop = useTmcutPlatform({ isDesktop: { value: true }, resolveSrc: () => '' })
+
+    const MATRIX: Record<string, { web: boolean, electron: boolean }> = {
+      filesystem: { web: false, electron: true },
+      webCodecs: { web: true, electron: true },
+      webGPU: { web: false, electron: false },
+      hardwareEncoding: { web: false, electron: false },
+      backgroundRender: { web: false, electron: false },
+      cloudRender: { web: false, electron: false },
+      largeFileAccess: { web: false, electron: true }
+    }
+    assert.deepEqual(Object.keys(MATRIX).sort(), [...PLATFORM_CAPABILITIES].sort(),
+      'a capability key exists in one place and not the other')
+    for (const [key, expected] of Object.entries(MATRIX)) {
+      assert.equal(web.info.capabilities[key], expected.web, `web.${key}`)
+      assert.equal(desktop.info.capabilities[key], expected.electron, `electron.${key}`)
+    }
+    // The one host difference that matters for media: desktop reads the file
+    // from disk, web cannot. Everything the timeline needs is true on both.
+    const shared = PLATFORM_CAPABILITIES.filter(key => key !== 'filesystem' && key !== 'largeFileAccess')
+    for (const key of shared) {
+      assert.equal(web.info.capabilities[key], desktop.info.capabilities[key],
+        `${key} must be the same answer on both hosts — nothing renders in one and not the other`)
+    }
+  })
+
   await check('the adapter carries no host render engine', async () => {
     await freshStore()
     const platform = useTmcutPlatform({ isDesktop: { value: true }, resolveSrc: () => '' })

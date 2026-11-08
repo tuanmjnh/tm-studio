@@ -7044,3 +7044,115 @@ repoint vào dòng còn sống hoặc đổi thành tên file không kèm `#L`, 
   phần exe" đã thoả (repo: **0** `.exe` tracked, 0 trong working tree); việc xoá hay giữ thư mục backup
   là quyết định riêng của chủ repo.
 - **Electron đóng gói** — không lượt nào trong J chạy `electron-builder`; parity bản asar thuộc slice K.
+
+## 56. Slice K — bề mặt phát hành: mười chỗ engine có thể quay lại, và hai guard mới (đo ngày 2026-11-08)
+
+Slice J đóng phần cú pháp trong core. Slice K hỏi câu khác: **cái gì có thể mang engine trở lại mà không
+chạm vào một dòng code nào trong `app/`?** Câu trả lời là sáu bề mặt — manifest, lockfile, tệp đóng gói,
+cầu IPC, route server, và CI — cộng ba bề mặt đã có guard từ trước (binary, spawn, process census).
+
+### 56.1 Đo trên cây sau slice J
+
+| Bề mặt | Lệnh đo | Kết quả |
+|---|---|---|
+| Dependency | `grep -ciE "ffmpeg\|ffprobe" package.json pnpm-lock.yaml` | **0** / **0** |
+| Script build | nghĩa chuỗi `scripts` của `package.json` | **0** khớp |
+| Binary tracked | `git ls-files '*.exe'` | **0** |
+| Binary working tree | `find . -name '*.exe'` trừ `node_modules`/`.output` | **0** |
+| `resources/` | `ls resources` | `fontmanager.node`, `tmcut-catalog` — không có media binary |
+| Đóng gói | `extraResources` trong `electron-builder.yml` | `yt-dlp.exe`, `**/*.json`, `**/*.node`, `tmcut-catalog/**` |
+| IPC | `ipcMain.handle(` trong `electron/main.cjs` | **24** handler, **0** kênh media |
+| `child_process` | `grep -rln child_process electron server shared` | **3** file: `main.cjs` (spawn MCP server), `dev-electron-launcher.cjs` (spawn dev), `paths.cjs` (execFile **version probe** của yt-dlp) |
+| `execFile` | `grep -n "execFile(" electron/tools/paths.cjs` | **1** call, gate `if (type !== 'ytDlp') return resolve(false)` đứng trước |
+| Route server | `walk('server/api')` | không route nào import `child_process` hay nhắc tên đã nghỉ hưu |
+| CI | `ls .github` | **không có** thư mục workflow |
+| Tên còn lại trong code | `grep -rnE "ffmpeg\|ffprobe" app server shared electron scripts` | **43 file**, tất cả là comment/prose giải thích lịch sử — không một call site nào |
+
+Con số cuối là chỗ dễ tự lừa nhất: "43 file nhắc tới" nghe như engine chưa đi. Đọc từng dòng thì mỗi dòng
+là một câu *kể lại* việc nó đã đi (`ffprobe leg went with the binary`, `retired with ffmpeg (slice I)`).
+Xoá chúng đi mới là làm mất lịch sử; để nguyên mới là trung thực. Vì vậy guard dưới đây không grep từ khoá
+trên toàn cây — nó đọc đúng **sáu artefact** mà một dependency hay một file đóng gói đi qua.
+
+### 56.2 Hai guard mới, và cái RED đầu tiên đã bắt được gì
+
+`tests/unit/tmcut_release_surface.spec.ts` — **8 check**, đọc artefact chứ không đọc source:
+
+1. `package.json` + `pnpm-lock.yaml` không khớp tên đã nghỉ hưu;
+2. nghĩa chuỗi `scripts` trong manifest cũng không;
+3. `git ls-files '*.exe'` rỗng;
+4. `electron-builder.yml` sau khi **bỏ comment** không khai báo tên đã nghỉ hưu, và danh sách
+   `extraResources` chỉ được chứa đúng **một** `.exe` (`yt-dlp.exe`) — danh sách này nhỏ nên pin được;
+5. **24** handler IPC không có kênh nào là media;
+6. `paths.cjs` chỉ có **một** `execFile`, đối số là `filePath`, và gate `type !== 'ytDlp'` còn nguyên;
+7. mọi file dưới `server/api` không import process API, không `spawn`, không nhắc tên đã nghỉ hưu;
+8. mọi file dưới `.github` (nếu có) cùng luật đó.
+
+RED đầu tiên **không** phải một false positive: check 4 fail vì `electron-builder.yml` còn câu comment
+*"AutoCut ffmpeg argv — once both callers…"*. Đó là lịch sử đúng, nên sửa chỗ **đọc**: config phải được
+đánh giá theo nghĩa (bỏ comment) chứ không theo ký tự. Sau khi bỏ comment, check xanh — và một mutation
+chứng minh nó vẫn cắn: thêm `fluent-ffmpeg` vào `devDependencies` → check 1 **FAIL**, `package.json`
+phục hồi byte-identical (md5 khớp trước/sau).
+
+### 56.3 Capability matrix: parity phải đếm theo từng khoá
+
+Brief K mục 6 đòi parity theo *capability matrix*, không phải vài boolean tiêu biểu.
+`tests/unit/tmcut_platform_adapter.spec.ts` có thêm check "both hosts answer the full capability matrix,
+key by key":
+
+| Capability | web | electron | Vì sao |
+|---|---|---|---|
+| `filesystem` | false | **true** | desktop đọc file qua `media://local`; tab không có đường đó |
+| `largeFileAccess` | false | **true** | cùng lý do, ở mức kích thước |
+| `webCodecs` | true | true | encoder duy nhất còn lại, chạy in-process trên cả hai |
+| `webGPU` | false | false | chưa có consumer nào |
+| `hardwareEncoding` | false | false | runtime tự chọn backend; app không còn bộ chọn profile |
+| `backgroundRender` | false | false | không còn hàng đợi render nào |
+| `cloudRender` | false | false | timeline export không rời tab |
+
+Ba vế được pin, mỗi vế một lỗi thật: (a) tập khoá của guard == `PLATFORM_CAPABILITIES` của core — lệch
+một khoá là FAIL; (b) từng giá trị của từng host; (c) năm khoá **không thuộc** đường đọc file phải trả
+lời **giống nhau** trên hai host, vì một khả năng chỉ có ở một host là một pipeline thứ hai. Mutation:
+xoá dòng `webGPU` khỏi bảng → FAIL `a capability key exists in one place and not the other`; lật
+`web.cloudRender` → FAIL ở spot-check trước đó (đúng thứ tự — spot-check canh giá trị, matrix canh
+tập khoá). Cả hai mutation đã revert, file khớp md5.
+
+### 56.4 Bảng gate
+
+| Gate | Lệnh | Kết quả | Bằng chứng |
+|---|---|---|---|
+| Build core | `pnpm build:core` | PASS | exit 0 |
+| 1 Types | `npx nuxt typecheck` | PASS | exit 0, **0** × `error TS` |
+| 2 Lint | `npx eslint <file chạm>` sau gate 1 | PASS | 0 problem |
+| 3 Core types | `pnpm typecheck:core` | PASS | exit 0 |
+| 4 Boundaries | `pnpm check:core` | PASS | core không import gì platform-specific |
+| 5 Core tests | `pnpm test:core` | PASS | **906/906** |
+| 6 Unit suite | `npx tsx tests/unit/run-all.mts` | PASS | **125/125** (thêm `tmcut_release_surface`) |
+| 7 Live | 5 route trên `:4003` | PASS | 200 ×5, console 0 `[error]`/`[warn]`/`[issue]` |
+| 8 Doc guards | 6 guard | PASS | xem §56.5 |
+
+### 56.5 Doc guards
+
+| Guard | Kết quả |
+|---|---|
+| `tmcut_docs_link_integrity` | **4/4** exit 0 |
+| `tmcut_doc_citations` | **5/5** exit 0 |
+| `tmcut_doc_table_shape` | **3/3** exit 0 |
+| `tmcut_doc_line_length` | **4/4** exit 0 |
+| `tmcut_doc_charset` | **3/3** exit 0 |
+| `docs_markdown` | **12** check exit 0 |
+
+### 56.6 Còn mở trong slice K
+
+Brief K còn ba mục chưa đóng, và không mục nào là "code đã xong, chỉ thiếu tick":
+
+- **Mục 1–3 (fixture + so sánh frame cũ/mới)**: bốn fixture container thật đã có
+  (`tests/fixtures/containers/`), và `tmcut_real_containers.spec.ts` đọc chúng qua demuxer thật. Nhưng
+  phép so **pixel giữa engine cũ và engine mới** thì không chạy được nữa: binary đã xoá ở slice I, nên
+  không còn bên "cũ" để render. Bằng chứng parity hiện có là §53.11 (WebCodecs vs FFmpeg đo **trước**
+  khi xoá) — một con số lịch sử, không phải một gate chạy lại được.
+- **Mục 8 (docs consolidation/archive)**: bộ V4 roadmap vẫn nằm nguyên trong `docs/`; mục 4 §10 của ADR
+  register đã quyết định archive cả bộ ở slice K. Việc này chạm nhiều file tài liệu của **chủ repo**
+  (`docs/video-editor-stack.md`, `docs/design/`), nên nó cần một lượt riêng chứ không gộp vào đây.
+- **Mục 9 phần "release artifacts"**: chưa chạy `electron-builder` trên máy này, nên chưa có bằng chứng
+  bản asar đóng gói không chứa binary. Guard ở §56.2 pin **input** của bước đóng gói
+  (`electron-builder.yml`), không pin **output**.
