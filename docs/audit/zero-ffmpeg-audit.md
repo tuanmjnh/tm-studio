@@ -7153,6 +7153,16 @@ Brief K còn ba mục chưa đóng, và không mục nào là "code đã xong, c
 - **Mục 8 (docs consolidation/archive)**: bộ V4 roadmap vẫn nằm nguyên trong `docs/`; mục 4 §10 của ADR
   register đã quyết định archive cả bộ ở slice K. Việc này chạm nhiều file tài liệu của **chủ repo**
   (`docs/video-editor-stack.md`, `docs/design/`), nên nó cần một lượt riêng chứ không gộp vào đây.
-- **Mục 9 phần "release artifacts"**: chưa chạy `electron-builder` trên máy này, nên chưa có bằng chứng
-  bản asar đóng gói không chứa binary. Guard ở §56.2 pin **input** của bước đóng gói
-  (`electron-builder.yml`), không pin **output**.
+- **Mục 9 phần "release artifacts"**: `npx nuxt build` xong (exit 0, 48.6 s, output 25 MB), nhưng
+  `npx electron-builder --dir --win` **không dựng được bản đóng gói hoàn chỉnh trên máy này**. Nó dừng
+  ở bước tạo symlink cho asar (thông báo đòi bật Windows Developer Mode); chạy lại với `-c.asar=false`
+  thì dừng ở `EPERM … symlink .nitro/devalue@6.0.3`. Cả hai là quyền symlink của Windows, không phải
+  cấu hình project. Cây `release/win-unpacked` dựng dở vẫn đo được: `resources/app` nặng 545 MB,
+  `packages/core/src` có 62 file `.mjs` và **không** có `probe.mjs` lẫn `stabilize.mjs`, không một
+  `ffmpeg.exe`/`ffprobe.exe` nào dưới `win-unpacked`, và `.exe` duy nhất ngoài shell `electron.exe` là
+  ba `esbuild.exe` của build tooling trong `node_modules`. File duy nhất mang tên ffmpeg là
+  `ffmpeg.dll`, byte-identical (md5 `aa60b6cbd14cf6e670090ff8a7680008`) với
+  `node_modules/electron/dist/ffmpeg.dll` — tức thư viện Chromium của Electron, không phải engine đã
+  nghỉ hưu ở slice I. Guard §56.2 vẫn chỉ pin **input** của bước đóng gói (`electron-builder.yml`);
+  bằng chứng **output** ở đây là một lần đo thủ công trên cây dựng dở, và `release/` bị gitignore nên
+  không đi theo commit.
