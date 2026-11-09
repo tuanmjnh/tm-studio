@@ -1,0 +1,171 @@
+{
+ "runtime": {
+  "electron": "44.10.0",
+  "chrome": "152.0.7977.169",
+  "node": "24.22.1",
+  "v8": "15.2.124.45-electron.0",
+  "os": "10.0.19045"
+ },
+ "os": {
+  "platform": "win32",
+  "arch": "x64",
+  "type": "Windows_NT",
+  "release": "10.0.19045",
+  "totalMemGB": 64,
+  "cpu": "Intel(R) Xeon(R) CPU E5-2680 v4 @ 2.40GHz"
+ },
+ "log": [
+  {
+   "k": "device",
+   "v": {
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.169 Electron/44.10.0 Safari/537.36",
+    "cores": 28,
+    "memoryGB": 32,
+    "target": "1920x1080 60s @30fps",
+    "fills": 24
+   }
+  },
+  {
+   "k": "heap_start_mb",
+   "v": 3
+  },
+  {
+   "k": "generated",
+   "v": {
+    "bytesMB": 10,
+    "encodeSeconds": 19.146,
+    "realtimeRatio": 3.1338138514572234,
+    "peakEncoderQueue": 0,
+    "peakHeapMB": 13,
+    "heapAfterMB": 25
+   }
+  },
+  {
+   "k": "probe",
+   "v": {
+    "format": "MP4",
+    "durationSec": 59.966667,
+    "resolution": "1920x1080",
+    "codec": "avc",
+    "packetsPerSecond": 0.00002999999850000007,
+    "probeMs": 37
+   }
+  },
+  {
+   "k": "decode",
+   "v": {
+    "framesAsked": 240,
+    "framesDecoded": 240,
+    "wallSeconds": 3.931,
+    "framesPerSecond": 61.05316713304503,
+    "heapTrace": [
+     {
+      "atSec": 0,
+      "heapMB": 28
+     },
+     {
+      "atSec": 14.9,
+      "heapMB": 28
+     },
+     {
+      "atSec": 29.7,
+      "heapMB": 28
+     },
+     {
+      "atSec": 44.6,
+      "heapMB": 29
+     }
+    ],
+    "heapAfterMB": 29
+   }
+  },
+  {
+   "k": "cancel",
+   "v": {
+    "framesBeforeCancel": 90,
+    "heapBeforeMB": 29,
+    "heapAfterMB": 30,
+    "cancelled": true
+   }
+  },
+  {
+   "k": "storage",
+   "v": {
+    "quotaMB": 151572,
+    "usageMB": 0
+   }
+  },
+  {
+   "k": "done",
+   "v": true
+  }
+ ],
+ "rssTrace": [
+  {
+   "at": 1794189660893,
+   "totalMB": 357,
+   "processes": 4
+  },
+  {
+   "at": 1794189662902,
+   "totalMB": 367,
+   "processes": 4
+  },
+  {
+   "at": 1794189664908,
+   "totalMB": 370,
+   "processes": 4
+  },
+  {
+   "at": 1794189666913,
+   "totalMB": 374,
+   "processes": 4
+  },
+  {
+   "at": 1794189668924,
+   "totalMB": 380,
+   "processes": 4
+  },
+  {
+   "at": 1794189670933,
+   "totalMB": 383,
+   "processes": 4
+  },
+  {
+   "at": 1794189672945,
+   "totalMB": 386,
+   "processes": 4
+  },
+  {
+   "at": 1794189674956,
+   "totalMB": 393,
+   "processes": 4
+  },
+  {
+   "at": 1794189676957,
+   "totalMB": 394,
+   "processes": 4
+  },
+  {
+   "at": 1794189678957,
+   "totalMB": 440,
+   "processes": 4
+  },
+  {
+   "at": 1794189680963,
+   "totalMB": 443,
+   "processes": 4
+  },
+  {
+   "at": 1794189682971,
+   "totalMB": 451,
+   "processes": 4
+  },
+  {
+   "at": 1794189683440,
+   "totalMB": 451,
+   "processes": 4
+  }
+ ],
+ "peakRSSMB": 451
+}

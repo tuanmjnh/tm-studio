@@ -1,0 +1,19 @@
+{
+ "note": "headless Chrome 156 stalled in the generate stage; VideoEncoder produced no progress within 120s while Electron 44 completed the same page. Recorded as a runtime limitation, not a product defect.",
+ "log": [
+  {
+   "k": "device",
+   "v": {
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+    "cores": 28,
+    "memoryGB": 32,
+    "target": "640x360 10s @30fps",
+    "fills": 8
+   }
+  },
+  {
+   "k": "heap_start_mb",
+   "v": 3
+  }
+ ]
+}

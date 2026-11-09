@@ -1,0 +1,131 @@
+{
+ "runtime": {
+  "electron": "44.10.0",
+  "chrome": "152.0.7977.169",
+  "node": "24.22.1",
+  "v8": "15.2.124.45-electron.0",
+  "os": "10.0.19045"
+ },
+ "os": {
+  "platform": "win32",
+  "arch": "x64",
+  "type": "Windows_NT",
+  "release": "10.0.19045",
+  "totalMemGB": 64,
+  "cpu": "Intel(R) Xeon(R) CPU E5-2680 v4 @ 2.40GHz"
+ },
+ "log": [
+  {
+   "k": "device",
+   "v": {
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.169 Electron/44.10.0 Safari/537.36",
+    "cores": 28,
+    "memoryGB": 32,
+    "target": "1280x720 30s @30fps",
+    "fills": 12
+   }
+  },
+  {
+   "k": "heap_start_mb",
+   "v": 4
+  },
+  {
+   "k": "generated",
+   "v": {
+    "bytesMB": 3,
+    "encodeSeconds": 5.251,
+    "realtimeRatio": 5.713197486193106,
+    "peakEncoderQueue": 0,
+    "peakHeapMB": 7,
+    "heapAfterMB": 12
+   }
+  },
+  {
+   "k": "probe",
+   "v": {
+    "format": "MP4",
+    "durationSec": 29.966667,
+    "resolution": "1280x720",
+    "codec": "avc",
+    "packetsPerSecond": 0.00002999999850000007,
+    "probeMs": 21
+   }
+  },
+  {
+   "k": "decode",
+   "v": {
+    "framesAsked": 240,
+    "framesDecoded": 240,
+    "wallSeconds": 2.7715,
+    "framesPerSecond": 86.59570629622948,
+    "heapTrace": [
+     {
+      "atSec": 0,
+      "heapMB": 14
+     },
+     {
+      "atSec": 7.4,
+      "heapMB": 15
+     },
+     {
+      "atSec": 14.7,
+      "heapMB": 15
+     },
+     {
+      "atSec": 22.1,
+      "heapMB": 15
+     }
+    ],
+    "heapAfterMB": 15
+   }
+  },
+  {
+   "k": "cancel",
+   "v": {
+    "framesBeforeCancel": 90,
+    "heapBeforeMB": 15,
+    "heapAfterMB": 16,
+    "cancelled": true
+   }
+  },
+  {
+   "k": "storage",
+   "v": {
+    "quotaMB": 151573,
+    "usageMB": 0
+   }
+  },
+  {
+   "k": "done",
+   "v": true
+  }
+ ],
+ "rssTrace": [
+  {
+   "at": 1794189637620,
+   "totalMB": 328,
+   "processes": 4
+  },
+  {
+   "at": 1794189639627,
+   "totalMB": 338,
+   "processes": 4
+  },
+  {
+   "at": 1794189641634,
+   "totalMB": 375,
+   "processes": 4
+  },
+  {
+   "at": 1794189643637,
+   "totalMB": 381,
+   "processes": 4
+  },
+  {
+   "at": 1794189644945,
+   "totalMB": 389,
+   "processes": 4
+  }
+ ],
+ "peakRSSMB": 389
+}

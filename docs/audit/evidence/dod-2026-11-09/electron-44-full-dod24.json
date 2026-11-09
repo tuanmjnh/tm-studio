@@ -1,0 +1,195 @@
+{
+ "runtime": {
+  "electron": "44.10.0",
+  "chrome": "152.0.7977.169",
+  "node": "24.22.1",
+  "v8": "15.2.124.45-electron.0",
+  "os": "10.0.19045"
+ },
+ "os": {
+  "platform": "win32",
+  "arch": "x64",
+  "type": "Windows_NT",
+  "release": "10.0.19045",
+  "totalMemGB": 64,
+  "cpu": "Intel(R) Xeon(R) CPU E5-2680 v4 @ 2.40GHz"
+ },
+ "log": [
+  {
+   "k": "device",
+   "v": {
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.169 Electron/44.10.0 Safari/537.36",
+    "cores": 28,
+    "memoryGB": 32,
+    "target": "1920x1080 45s @30fps",
+    "fills": 20
+   }
+  },
+  {
+   "k": "heap_start_mb",
+   "v": 3
+  },
+  {
+   "k": "generated",
+   "v": {
+    "bytesMB": 7,
+    "encodeSeconds": 14.647,
+    "realtimeRatio": 3.0723014951867276,
+    "peakEncoderQueue": 0,
+    "peakHeapMB": 10,
+    "heapAfterMB": 18
+   }
+  },
+  {
+   "k": "probe",
+   "v": {
+    "format": "MP4",
+    "durationSec": 44.966667,
+    "resolution": "1920x1080",
+    "codec": "avc",
+    "packetsPerSecond": 0.00002999999850000007,
+    "probeMs": 39
+   }
+  },
+  {
+   "k": "decode",
+   "v": {
+    "framesAsked": 240,
+    "framesDecoded": 240,
+    "wallSeconds": 3.894799999982119,
+    "framesPerSecond": 61.620622368568824,
+    "heapTrace": [
+     {
+      "atSec": 0,
+      "heapMB": 22
+     },
+     {
+      "atSec": 11.1,
+      "heapMB": 23
+     },
+     {
+      "atSec": 22.2,
+      "heapMB": 23
+     },
+     {
+      "atSec": 33.4,
+      "heapMB": 23
+     }
+    ],
+    "heapAfterMB": 23
+   }
+  },
+  {
+   "k": "cancel",
+   "v": {
+    "framesBeforeCancel": 90,
+    "heapBeforeMB": 23,
+    "heapAfterMB": 24,
+    "cancelled": true
+   }
+  },
+  {
+   "k": "storage",
+   "v": {
+    "quotaMB": 151572,
+    "usageMB": 0
+   }
+  },
+  {
+   "k": "audio",
+   "v": {
+    "seconds": 20,
+    "renderMs": 46,
+    "encodeMs": 217,
+    "framesEncoded": 960000,
+    "chunksOut": 938,
+    "bytesOutKB": 288,
+    "largestAudioDataBytes": 8192,
+    "heapMB": 39
+   }
+  },
+  {
+   "k": "webgl_churn",
+   "v": {
+    "texturesCreated": 200,
+    "heapStartMB": 39,
+    "heapEndMB": 39,
+    "glErrorBeforeLose": 0
+   }
+  },
+  {
+   "k": "opfs",
+   "v": {
+    "wroteMB": 64,
+    "writeMs": 155,
+    "readBackOk": true,
+    "usageBeforeMB": 0,
+    "usageDuringMB": 64,
+    "usageAfterMB": 0,
+    "quotaMB": 151572
+   }
+  },
+  {
+   "k": "done",
+   "v": true
+  }
+ ],
+ "rssTrace": [
+  {
+   "at": 1794189853397,
+   "totalMB": 359,
+   "processes": 4
+  },
+  {
+   "at": 1794189855401,
+   "totalMB": 368,
+   "processes": 4
+  },
+  {
+   "at": 1794189857414,
+   "totalMB": 371,
+   "processes": 4
+  },
+  {
+   "at": 1794189859423,
+   "totalMB": 380,
+   "processes": 4
+  },
+  {
+   "at": 1794189861433,
+   "totalMB": 381,
+   "processes": 4
+  },
+  {
+   "at": 1794189863433,
+   "totalMB": 387,
+   "processes": 4
+  },
+  {
+   "at": 1794189865437,
+   "totalMB": 390,
+   "processes": 4
+  },
+  {
+   "at": 1794189867450,
+   "totalMB": 416,
+   "processes": 4
+  },
+  {
+   "at": 1794189869459,
+   "totalMB": 419,
+   "processes": 4
+  },
+  {
+   "at": 1794189871459,
+   "totalMB": 445,
+   "processes": 4
+  },
+  {
+   "at": 1794189872906,
+   "totalMB": 523,
+   "processes": 4
+  }
+ ],
+ "peakRSSMB": 523
+}

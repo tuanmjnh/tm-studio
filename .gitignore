@@ -20,6 +20,8 @@ node_modules
 # Logs
 /logs
 *.log
+# Build/probe logs quoted as evidence in docs/audit are part of the record.
+!docs/audit/evidence/**/*.log
 
 # Misc
 .DS_Store

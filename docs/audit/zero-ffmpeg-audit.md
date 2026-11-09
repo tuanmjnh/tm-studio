@@ -7371,8 +7371,8 @@ thật vì thế chưa có; CI Linux vẫn chỉ là kiểm thử bổ sung.
 | 21 | Electron dùng chung engine | **PASS** | desktop đọc `packages/core/src` (ADR-022), matrix parity §56.3 |
 | 22 | Project trao đổi được trong phạm vi capability | **PASS (có phạm vi)** | schema v3 khoá bằng guard; phạm vi = project không effect/transition/text/mask/blend/rotation, và phần ngoài phạm vi được **gọi tên** chứ không bị bỏ im |
 | 23 | Unit/integration/visual tests pass | **PASS** | 909 core + 126 unit + 59 electron + 6 doc guard, tất cả exit 0 |
-| 24 | Large-file/memory tests | **CHƯA ĐO** | chỉ có **luật** ngân sách (byte cache, trần 512 frame) và test trả tài nguyên; **không** có phép đo file nhiều GB |
-| 25 | Browser compatibility report | **CHƯA CÓ** | bằng chứng rải rác (Chromium 156 web đo thật, Electron 44.10.0 **chưa** đo); không có artifact báo cáo riêng |
+| 24 | Large-file/memory tests | **ĐÃ ĐO (§59.5)** | 4 lượt trên Electron 44.10.0: 720p/30 s, 1080p/60 s, 1080p/45 s đủ 6 chặng, và **file 1 GiB** (1080p/286,8 s, 30 Mbps). Decode 240/240 frame ở 61–88 fps, heap phẳng 22–30 MB, RSS đỉnh 389/451/523/**602** MB, huỷ giữa encode +1 MB, OPFS 64 MB ghi/đọc/xoá về 0. File 1 GiB ghi thẳng ra đĩa nên RSS đứng ~380 MB suốt 115 s encode |
+| 25 | Browser compatibility report | **ĐÃ CÓ (§59.6)** | một trang 32 phép thử, bốn runtime: Chrome 156 **32/32**, Edge 157 **32/32**, Electron 44.10.0 **32/32**, Firefox 159 **30/32** (thiếu encode AAC và WebGPU adapter) |
 
 Hai mục 24 và 25 là **chưa**, không phải "đã xong". Không có phép đo nào bị đổi tên để chúng thành xanh.
 
@@ -7431,3 +7431,185 @@ leg painter và test preview/export của nó.
 
 **E. DoD 24 và 25.** Cần quyết định có làm hay không: một phép đo file lớn (ví dụ 1 GB) với trần bộ nhớ,
 và một báo cáo tương thích trình duyệt dạng artifact (Chromium web đã đo; Electron 44.10.0 chưa).
+
+## 59. Bảy quyết định của chủ repo, thi hành và đo lại (2026-11-09)
+
+Mục này thay thế §58.5 bằng trạng thái thật sau khi chủ repo trả lời cả bảy mục. Mỗi mục ghi đúng việc đã
+làm, bằng chứng lấy từ lần chạy trên máy này, và phần còn hở.
+
+### 59.1 Quyết định 1 — `backup/ffmpeg-engine-2026-11-03/` bỏ tracking, giữ file và lịch sử
+
+`git rm -r --cached -- backup/ffmpeg-engine-2026-11-03/` ở commit `d57be97`; `.gitignore` có mục
+`backup/` kèm lý do. Kiểm lại sau commit:
+
+| Kiểm | Kết quả |
+|---|---|
+| `git ls-files backup/` | 0 file (đã untrack) |
+| File vật lý còn trên đĩa | **76** file, không đổi byte (MD5 trước/sau trùng, `backup-before.md5` = `backup-after.md5` = 7632 byte) |
+| Lịch sử | commit `36e4c0a` còn nguyên; không `reset`, không `clean`, không filter-branch |
+| File bị di chuyển hay sửa | không có |
+
+### 59.2 Quyết định 2 — đóng gói Windows: PASS, và lý do cũ không phải lý do thật
+
+Lần đo trước (§58.1.3) nói Developer Mode tắt, `@electron/asar` ném `EPERM` ở syscall `symlink`. Đo lại
+hôm nay: Developer Mode **đã bật** nên bước asar qua được, và lỗi còn lại nằm ở chỗ khác —
+`tm-studio-0.1.0-setup.exe` (bước NSIS tự chạy chính nó để nhả uninstaller) trả mã 2.
+
+Chuỗi phép đo tách được nguyên nhân, và **không phải** cấu hình project:
+
+| Phép đo | Kết quả |
+|---|---|
+| File NSIS tự viết 37 515 byte (không liên quan repo) chạy từ `%TEMP%` trên C: | exit 0 sau 260 ms, marker ghi được |
+| Cùng file đó chép vào `D:\Applications\tm-tools` rồi chạy | exit 0 sau 254 ms |
+| Cùng file đó chép vào `D:\Applications\tm-studio` (bất kỳ thư mục con) | treo, không chạy `.onInit`, bị kill sau 60 s |
+| `tm-tools-1.0.0-setup.exe` (bản build thật, đã cài được) chép sang `tm-studio` | cùng hành vi treo |
+| `icacls` trên thư mục | `tm-tools` = `Medium Mandatory Level`; `tm-studio` = `Low Mandatory Level` |
+| `icacls` trên chính các `.exe` | `tm-tools` exe = Medium; `tm-studio` exe = Low |
+
+Kết luận: `D:\Applications` mang nhãn integrity **Low** (`Everyone:(CI)(DENY)(S,DC)` cộng
+`Mandatory Label\Low Mandatory Level`), nên mọi file mới dưới `tm-studio` thừa kế Low. Một NSIS installer
+không chạy được ở Low integrity — nó treo trước cả `.onInit`. Đây là thuộc tính của ổ đĩa/thư mục, không
+phải của `electron-builder.yml`, không phải antivirus (`Get-MpThreatDetection` không có bản ghi nào khớp,
+ASR rules rỗng, Controlled Folder Access = 0), và không phải file lock.
+
+Cách xử lý đã dùng, tối thiểu và đảo được: nâng nhãn của riêng thư mục đầu ra lên Medium
+(`icacls release /setintegritylevel "(OI)(CI)M"`), rồi build lại. Không đổi `asar`, không thêm
+`asar: false`, không sửa `files`/`extraResources` để né lỗi.
+
+Bằng chứng sau khi nâng nhãn:
+
+| Kiểm | Kết quả |
+|---|---|
+| `npx electron-builder --win nsis` | **exit 0** (`PKG_EXIT=0` trong `pkg-final2.txt`) |
+| Artifact | `tm-studio-0.1.0-setup.exe` **219 173 763 byte** + `.blockmap` 224 769 byte (bản cũ chỉ 602 876 byte vì thiếu khối dữ liệu) |
+| `app.asar` | 30 829 entry; có `packages/core/src/index.mjs`, `shared/`, `electron/main.cjs`, `.output/server`; **0** entry khớp mẫu `ffmpeg` hoặc `ffprobe` |
+| `extraResources` | `resources/resources/` có `fontmanager.node` và `tmcut-catalog/` (không có `yt-dlp.exe` vì file không tồn tại trên đĩa máy này) |
+| Cài silent vào thư mục tạm | exit 0 sau 20,6 s, 871 MB, có `TMCut Studio.exe` và `Uninstall TMCut Studio.exe` |
+| Khởi chạy bản đã cài | chạy được, giữ tiến trình (đo bằng `Get-Process` sau 12 s) |
+
+Điều này **chưa** chứng minh: cài trên máy sạch, ký số (không có certificate), tự cập nhật, và ổ đĩa
+không mang nhãn Low. Ba mục đó ghi ở §59.8.
+
+### 59.3 Quyết định 3 — `docs/video-editor-stack.md` sửa tại chỗ
+
+Commit `a6ab42f`, 96 dòng đổi, **không** archive/đổi tên/di chuyển. §1 viết lại thành stack chính thức
+2026-11-08: TMCut không có FFmpeg/FFprobe/FFmpeg.wasm/wrapper/binary media nào (ADR-028), không fallback;
+một Media Engine dùng chung Browser + Electron; bảng lớp = `tmcut-core` / `mediabunny` / WebCodecs /
+Web Audio / Canvas 2D + WebGL2 (+ WebGPU khi có) / OPFS-IndexedDB. Mục `@ffmpeg/ffmpeg` đổi thành
+"ĐÃ NGHỈ HƯU" và **không còn dòng cài đặt**. §6 ghi rõ combo JSON là ứng viên cho prototype mới, không
+mô tả repo này.
+
+Sáu doc guard chạy lại sau khi viết xong, tất cả exit 0 (log `stack-*.txt`):
+`tmcut_doc_table_shape`, `tmcut_docs_link_integrity`, `tmcut_doc_line_length` (trần 1356, bảng được miễn),
+`tmcut_doc_citations`, `tmcut_doc_charset`, `docs_markdown` (12/12).
+
+### 59.4 Quyết định 4 — effect vẫn chỉ ở preview, exporter không mở
+
+Không đổi phạm vi A–K, không thêm painter cho effect nào. Trạng thái giữ nguyên như slice L:
+`exportBakesEffect(type)` trả `false` cho mọi type đang có, `planEncodeContent` trả `reasons` chứa
+`effects` và `blockedEffects` nêu đúng tên từng type, badge đọc **Preview Only** (không dùng
+`exportSupported`), và modal liệt kê effect bị chặn. Spec
+`packages/core/test/export-content-eligibility.test.mjs` giữ cả vế "từ chối" và vế "nêu tên".
+
+Mở rộng exporter thành roadmap riêng, chia theo nhóm effect, mỗi nhóm cần so sánh pixel preview/export
+trước khi chuyển khỏi danh sách từ chối. Thứ tự nhóm **chưa** chốt — đúng như quyết định 4.
+
+### 59.5 DoD 24 — file lớn và bộ nhớ: đã đo, bằng số thật
+
+Thiết bị: `Windows 10.0.19045`, x64, Xeon E5-2680 v4, 28 logical core, RAM hệ thống 64 GB
+(`deviceMemory` trình duyệt báo 32 GB). Runtime đo: **chính Electron của app** (Electron 44.10.0 /
+Chromium 152.0.7977.169 / Node 24.22.1 / V8 15.2.124.45-electron.0). Mỗi lượt sinh file bằng đúng đường
+đóng gói của sản phẩm (`VideoSample` → `VideoEncoder` qua mediabunny `VideoSampleSource` +
+`Mp4OutputFormat`), rồi probe, decode bằng `CanvasSink`, huỷ giữa encode, và đo lại.
+
+| Lượt | File | Encode | Probe | Decode 240 frame | Heap (đầu → cuối) | RSS đỉnh tiến trình |
+|---|---|---|---|---|---|---|
+| 720p/30 s | 3 MB | 5,25 s (5,7× realtime) | 21 ms | 240/240, **86,6 fps**, 2,77 s | 14 → 15 MB | **389 MB** |
+| 1080p/60 s | 10 MB | 19,15 s (3,1×) | 37 ms | 240/240, **61,1 fps**, 3,93 s | 28 → 29 MB | **451 MB** |
+| 1080p/45 s (đủ 6 chặng) | 7 MB | 14,65 s (3,1×) | 39 ms | 240/240, **61,6 fps**, 3,89 s | 22 → 23 MB | **523 MB** |
+| **1080p/286,8 s (file 1 GiB)** | **1026,5 MB** | 115,80 s (2,48×) | **29 ms** | 240/240, **86,2 fps**, 2,79 s | 3,1 → 17,4 MB | **602 MB** |
+
+Chi tiết từng chặng của lượt đủ:
+
+| Chặng | Số đo |
+|---|---|
+| Encode video | 45 s / 30 fps, 7 MB ra, queue encoder đỉnh 0 chunk, heap đỉnh 10 MB |
+| Probe | MP4, 44,967 s, 1920×1080, `avc`, 39 ms |
+| Decode bền | 240/240 frame; heap 22 → 23 MB qua 4 mốc (0 s / 11,1 s / 22,2 s / 33,4 s) — **không tăng theo thời gian** |
+| Huỷ giữa encode | 90 frame đã đẩy, `output.cancel()`, heap 23 → 24 MB (+1 MB), không rò rỉ giữ canvas |
+| Audio (đường sản phẩm) | `OfflineAudioContext` render 20 s trong 46 ms; `AudioEncoder` 938 chunk / 288 KB trong 217 ms; `allocationSize` lớn nhất **8 192 byte** mỗi `AudioData`; heap sau chặng 39 MB |
+| WebGL2 churn | 200 texture + 200 framebuffer tạo/xoá, heap **39 → 39 MB** (không đổi), `gl.getError()` = 0 trước `loseContext()` |
+| OPFS | ghi 64 MB trong 155 ms, đọc lại đúng kích thước, xoá xong `usage` về **0 MB**; quota 151 572 MB |
+| Backpressure | queue encoder đỉnh 0 chunk ở cả ba lượt (producer chờ `source.add`, không dồn) |
+
+Lượt thứ tư nhắm đúng chỗ ba lượt đầu bỏ trống — **file 1 GiB**. File được sinh bằng chính đường đóng gói của
+sản phẩm nhưng ghi thẳng ra đĩa qua `StreamTarget` → OPFS (`file.createWritable()`), nên 1 GiB không bao giờ
+nằm trong RAM; sau đó đọc lại bằng `handle.getFile()` và probe/decode qua đúng `BlobSource` mà file người dùng
+chọn đi qua.
+
+| Chặng của file 1 GiB | Số đo |
+|---|---|
+| Sinh file | 8 604 frame, 1 076 338 175 byte (**1026,5 MB**), 115,80 s encode, 2,48× realtime |
+| RSS suốt encode | **377–383 MB** đứng yên từ giây thứ 5 đến giây 116 (24 mốc) — **không tăng theo số byte đã ghi** |
+| Probe | MP4, 286,767 s, 1920×1080, `avc`, bitrate trung bình **30,3 Mbps**, `canDecode=true`, **29 ms** |
+| Decode 240 frame **từ giữa file** (giây 143,4) | 240/240, **86,2 fps**, 2,79 s; heap 29,1 → 24,8 MB (đỉnh 35,9 MB) |
+| Seek rải rác 30 mốc khắp file | 30/30 canvas, 6,36 s |
+| RSS đỉnh cả lượt | **602 MB** (chạm ở lúc finalize + decode), tiến trình lớn nhất 310 MB |
+| OPFS sau khi xoá | `usage` về **0 MB**; quota 153 220 MB |
+| Heap | 3,1 MB lúc bắt đầu → 17,4 MB sau finalize → 24,8 MB sau decode |
+
+Trần thật đọc được từ số đo: decode 1080p giữ **~1 frame/canvas pool** (heap phẳng 22–30 MB ở mọi độ dài
+file), nên chi phí decode không phụ thuộc độ dài file; cái tăng theo file là bộ nhớ của **Blob nguồn** và
+RSS của tiến trình renderer (389 → 523 → 602 MB khi thêm phân giải, chặng audio/WebGL/OPFS, và file 1 GiB).
+
+**Không** đặt ngưỡng PASS tuỳ ý: bốn lượt này là mốc đo, không phải hạn mức. Giới hạn của phép đo 1 GiB:
+file do trang đo sinh ra (nội dung nhiễu tổng hợp ở 30 Mbps), ghi vào OPFS trên **cùng ổ** — chưa đo file
+1 GiB nằm trên ổ mạng/ổ ngoài, và chưa đo khi RAM hệ thống bị ép (máy này 64 GB).
+
+### 59.6 DoD 25 — tương thích trình duyệt: bốn runtime, đo bằng cùng một trang
+
+Cùng một trang đo (32 phép thử: WebCodecs decode/encode, codec, VideoFrame, OffscreenCanvas, WebGL2,
+WebGPU, Web Audio, OPFS, IndexedDB, quota, demux 4 container thật, mux MP4 + WebM, làn tải file), chạy
+trong bốn môi trường:
+
+| Runtime | Phiên bản | Kết quả | Cụ thể |
+|---|---|---|---|
+| Chrome | 156.0.0.0 trên Windows 10 | **32/32 Supported** | WebGL2 "OpenGL ES 3.0 Chromium", max texture 16384; WebGPU có adapter; demux MP4/MKV/MOV/WebM đều `canDecode=true`; mux MP4 1 775 B, WebM 1 430 B |
+| Edge | 157.0.0.0 (`157.0.4341.42`) trên Windows 10 | **32/32 Supported** | giống Chrome ở mọi dòng, mux MP4 1 775 B, WebM 1 430 B |
+| **Electron của app** | 44.10.0 (Chromium 152.0.7977.169) | **32/32 Supported** | đủ codec decode+encode kể cả audio `mp4a.40.2` và `opus`; mux MP4 1 775 B, WebM 1 430 B; quota 152 478 MB |
+| Firefox | 159.0.1 trên Windows 10 | **30/32 Supported, 2 Unsupported** | thiếu **encode audio AAC (`mp4a.40.2`)**, và **WebGPU không có adapter**; mọi dòng còn lại OK, kể cả demux 4 container và mux MP4/WebM |
+
+Ghi chú đo:
+
+- Electron lần đầu báo 3 dòng storage `Unsupported` — đó là do profile Electron mặc định đang bị khoá
+  (`Access is denied` trên quota DB trong log). Chạy lại với `--user-data-dir` riêng thì 32/32. Con số
+  trong bảng là lần chạy sạch; lần hỏng là bằng chứng về môi trường, không phải về sản phẩm.
+- Edge phải chạy lại một lần với GPU bật mới đủ 32/32; lần đầu thiếu WebGL2 ở chế độ headless.
+- **Chrome headless không dùng được cho phép đo nặng**: cùng trang DoD 24, headless Chrome 156 treo ở
+  chặng encode (không qua `heap_start_mb` trong 120 s), trong khi Electron 44 chạy xong cùng trang. Đó là
+  giới hạn của headless, ghi lại để lần sau không đoán.
+- **Firefox**: 2 dòng `Unsupported` là thật và có tên. Nếu Firefox vào phạm vi sản phẩm thì export phải
+  hoặc chọn codec audio khác (Opus) hoặc báo `Partially Supported` cho file có audio AAC; WebGPU chỉ là
+  đường tăng tốc tuỳ chọn nên không chặn.
+
+### 59.7 Ba trạng thái giữ nguyên như chủ repo yêu cầu
+
+| Trạng thái | Cách ghi trong tài liệu này |
+|---|---|
+| 3/5 route live trả `401 error.invalidToken` (không có phiên TM Hub) | **PARTIAL**, không phải hồi quy. Đo lại khi có phiên hợp lệ. |
+| `ffmpeg.dll` cùng MD5 với bản Electron phân phối | Là thư viện Chromium của Electron, **không** xoá, **không** gọi là engine cũ. |
+| §53.11 parity pixel lịch sử | **Giữ nguyên tính lịch sử**, không tuyên bố tái lập được. |
+
+### 59.8 Còn mở vì thiếu bằng chứng, không vì thiếu code
+
+1. **File 1 GiB — đã đo, còn hai biến thể chưa đo.** §59.5 có số cho file 1 GiB do trang đo sinh ra và ghi
+   vào OPFS trên cùng ổ. Chưa đo: file 1 GiB nằm trên ổ mạng/ổ ngoài (đường đọc khác `BlobSource`), và chạy
+   khi RAM hệ thống bị ép (máy này 64 GB nên chưa chạm trần).
+2. **Cài trên máy sạch và ký số.** Bản cài đã chạy trên máy này; chưa thử máy không có Developer Mode,
+   chưa có certificate nên installer không được ký, và tự cập nhật chưa kiểm.
+3. **Nhãn integrity của ổ đĩa.** Máy này có `D:\Applications` ở Low integrity; đó là lý do phải nâng nhãn
+   thư mục `release/` mới build được. Máy khác không có vấn đề này thì không cần bước đó. Ghi lại để lần
+   sau không nhầm là lỗi project.
+4. **Firefox trong phạm vi sản phẩm hay không.** Báo cáo đã có số; quyết định hỗ trợ Firefox và cách xử
+   lý audio AAC là của chủ repo.
+5. **Ba route cần phiên hub** vẫn PARTIAL như §59.7.
