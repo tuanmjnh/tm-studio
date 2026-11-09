@@ -1,13 +1,4 @@
 // Roadmap v3 §26 Phase 10 — usage tracker, telemetry, crash recovery tests
-// Mock localStorage for Node.js test environment
-globalThis.localStorage = {
-  store: {},
-  getItem(key) { return this.store[key] || null },
-  setItem(key, value) { this.store[key] = String(value) },
-  removeItem(key) { delete this.store[key] },
-  clear() { this.store = {} }
-}
-
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
@@ -38,6 +29,16 @@ import {
   generateSupportBundle,
   getRecoveryManifest
 } from '../src/index.mjs'
+
+// Mock localStorage for the Node test environment. The core reads storage
+// lazily on each call, so installing it after the imports is enough.
+globalThis.localStorage = {
+  store: {},
+  getItem(key) { return this.store[key] || null },
+  setItem(key, value) { this.store[key] = String(value) },
+  removeItem(key) { delete this.store[key] },
+  clear() { this.store = {} }
+}
 
 // ---- Usage Tracker ----
 
@@ -84,6 +85,13 @@ test('usage tracker: checkLimit warns at 90% for AI tokens', () => {
   assert.equal(check.reason, 'ai-tokens-near-limit')
 })
 
+test('usage tracker: records exports once per call', () => {
+  resetUsageStore()
+  recordExport({ durationSec: 12 })
+  recordExport({ durationSec: 8 })
+  assert.equal(getUsageSummary().exports, 2)
+})
+
 test('usage tracker: exportUsageData returns raw store', () => {
   resetUsageStore()
   recordAiUsage(100)
@@ -98,6 +106,7 @@ test('usage tracker: exportUsageData returns raw store', () => {
 test('telemetry: disabled by default, events not recorded', () => {
   setTelemetryEnabled(false)
   clearTelemetryEvents()
+  assert.equal(isTelemetryEnabled(), false, 'consent must default to off')
   recordTelemetryEvent('editor', 'clip-add', { clipCount: 1 })
   const events = getTelemetryEvents()
   assert.equal(events.length, 0)
@@ -241,7 +250,11 @@ test('a missing filesystem is reported as not-applicable, never as fail', async 
   const node = await describeDiskAccess({ stat: async () => ({}) })
   assert.equal(node.status, 'ok')
 
-  const broken = await describeDiskAccess({ stat: async () => { throw new Error('EACCES') } })
+  const broken = await describeDiskAccess({
+    stat: async () => {
+      throw new Error('EACCES')
+    }
+  })
   assert.equal(broken.status, 'fail', 'a real filesystem error is still a failure')
   assert.match(broken.detail, /EACCES/)
 })

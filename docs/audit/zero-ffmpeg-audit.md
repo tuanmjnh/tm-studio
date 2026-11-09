@@ -7738,6 +7738,30 @@ CORB hết, chỉ còn 401 đã biết; bundle production không còn chuỗi `b
 
 - Chưa đăng nhập được bằng tài khoản thật (không dùng credential hub), nên "avatar của tài khoản hiện ra"
   chỉ chứng minh được bằng code + test, không bằng ảnh chụp có ảnh thật.
-- Lỗi lint có sẵn trong `UserMenu.vue` (24) và `phase10.test.mjs` (7) vẫn còn. Chúng nhiều hơn một lần sửa
-  gọn, và nằm ngoài phạm vi hai lỗi này; sửa cả file là một lượt định dạng riêng.
+
+### 61.5 Dọn nốt hai file nợ lint (sửa lại §61.4 cũ)
+
+Lượt trước tôi để lại 24 lỗi trong `UserMenu.vue` và 7 lỗi trong `phase10.test.mjs`, ghi là "có sẵn, ngoài
+phạm vi". Nhưng chính hai file đó là thứ lượt này đã sửa, nên để nguyên là tự mâu thuẫn: một file vừa được
+sửa vẫn còn đỏ lint thì không gọi là xong.
+
+`phase10.test.mjs` sửa tay: dời `import` lên trước mock (ESM hoist nên mock vẫn ăn), tách dòng hai câu lệnh,
+thêm newline cuối. Hai import bị báo unused (`recordExport`, `isTelemetryEnabled`) **không xoá** — chúng là
+hàm có thật trong core và việc chúng không có test mới là lỗ hổng, nên thêm hai test dùng chúng.
+
+`UserMenu.vue` sửa bằng `--fix` trên đúng một file (19 lỗi + 6 warning). Diff đã đọc: chỉ là thụt lề và tách
+thuộc tính, không dòng logic nào di chuyển. File được `tmcut_component_hygiene.spec.ts` biên dịch trong
+toàn bộ `app/**/*.vue`, nên phần template đã đổi có test máy kiểm.
+
+| Cổng | Lệnh | Kết quả |
+|---|---|---|
+| Lint | `npx eslint` 7 file đã sửa (sau khi regenerate config) | exit 0, **0 lỗi, 0 warning** |
+| Core | `node --test packages/core/test/*.test.mjs` | 912/912 (thêm 1 test `recordExport`) |
+| Unit | `npx tsx tests/unit/run-all.mts` | 129/129 |
+| Electron | `node --test electron/tools/*.test.mjs` | 59/59 |
+| Build | `pnpm build` | exit 0, 0 cảnh báo |
+| Live | 5 route | CORB 0; chỉ `[info] <Suspense>` + 401 của §59.7 |
+| Hygiene / Boundary | `check:hygiene`, `check-boundaries.mjs` | PASS / PASS |
+
+Còn lại đúng những gì §61.4 nói: chưa có phiên hub thật.
 
