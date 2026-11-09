@@ -34,6 +34,7 @@ import {
   getCrashLog,
   clearCrashLog,
   runHealthChecks,
+  describeDiskAccess,
   generateSupportBundle,
   getRecoveryManifest
 } from '../src/index.mjs'
@@ -224,6 +225,25 @@ test('runHealthChecks names the engine that exists, not the one slice I cut', as
   const names = checks.map(check => check.name)
   assert.ok(!names.includes('ffmpeg'), `diagnostics still probe a removed engine: ${names.join(', ')}`)
   assert.ok(names.includes('webcodecs'), `diagnostics do not report the encoder the app uses: ${names.join(', ')}`)
+})
+
+// A renderer has no `fs`, so the module handed to the probe has no `stat`.
+// Calling it threw, the catch reported `fail`, and the Support panel in Settings
+// showed a red `disk-access: fail` badge on every healthy browser and Electron
+// renderer — a missing capability reported as a broken one, which is the
+// opposite of what a diagnostic is for.
+test('a missing filesystem is reported as not-applicable, never as fail', async () => {
+  const browser = await describeDiskAccess({})
+  assert.equal(browser.status, 'warn', 'a browser has no fs: warn, not fail')
+  assert.doesNotMatch(browser.detail, /fail/i)
+  assert.match(browser.detail, /not available|renderer|browser|no filesystem/i, 'the detail must say why, not just be quiet')
+
+  const node = await describeDiskAccess({ stat: async () => ({}) })
+  assert.equal(node.status, 'ok')
+
+  const broken = await describeDiskAccess({ stat: async () => { throw new Error('EACCES') } })
+  assert.equal(broken.status, 'fail', 'a real filesystem error is still a failure')
+  assert.match(broken.detail, /EACCES/)
 })
 
 test('generateSupportBundle produces anonymized bundle', () => {

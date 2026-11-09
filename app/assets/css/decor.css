@@ -24,6 +24,9 @@
   /* Floor grid */
   --tm-grid-line: rgba(9, 9, 11, 0.055);
   --tm-grid-cell: 64px;
+
+  /* Lens-streak mask radii (see .tm-streak) */
+  --tm-lens-radius: 58% 50%;
 }
 
 .dark {
@@ -111,8 +114,12 @@
     var(--tm-aurora-3) 68%,
     transparent 100%
   );
-  -webkit-mask-image: radial-gradient(58% 50% at 50% 50%, black 0%, transparent 76%);
-  mask-image: radial-gradient(58% 50% at 50% 50%, black 0%, transparent 76%);
+  /* The radii live in a custom property on purpose. Spelled literally, the
+     minifier folds `ellipse 58% 50% at 50% 50%` down to `58% 50%`, and
+     autoprefixer then reads that as the pre-2012 `0 0, closest-side` form and
+     warns about a gradient nobody wrote. A var() cannot be folded. */
+  -webkit-mask-image: radial-gradient(ellipse var(--tm-lens-radius) at 50% 50%, black 0%, transparent 76%);
+  mask-image: radial-gradient(ellipse var(--tm-lens-radius) at 50% 50%, black 0%, transparent 76%);
   opacity: 0.6;
 }
 

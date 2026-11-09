@@ -7613,3 +7613,78 @@ Ghi chú đo:
 4. **Firefox trong phạm vi sản phẩm hay không.** Báo cáo đã có số; quyết định hỗ trợ Firefox và cách xử
    lý audio AAC là của chủ repo.
 5. **Ba route cần phiên hub** vẫn PARTIAL như §59.7.
+
+## 60. Build script đầy đủ và hai cảnh báo build (2026-11-09)
+
+### 60.1 Bộ script build
+
+`package.json` có thêm bốn lệnh, port từ `tm-tools`:
+
+| Lệnh | Việc làm |
+|---|---|
+| `pnpm build:electron` | `pnpm build` rồi `electron-builder --config electron-builder.yml --publish never` |
+| `pnpm build:electron:win` | Như trên, thêm `--win` → NSIS installer trong `release/` |
+| `pnpm build:electron:dir` | Như trên, thêm `--dir` → app chưa đóng gói trong `release/win-unpacked` |
+| `pnpm check:hygiene` | Fail nếu có `.js` nằm cạnh `.ts` nguồn trong `app/`, `server/`, `shared/` |
+
+`--publish never` là bắt buộc, không phải phòng xa: `electron-builder.yml` khai một repo GitHub, và chính
+sách mặc định của electron-builder 26 là `onTagOrDraft` — chạy trên một tag sẽ tạo release thật.
+
+`tests/unit/tmcut_build_scripts.spec.ts` giữ 13 điều kiện, gồm cả thứ tự (Nuxt build phải chạy trước
+electron-builder). Spec đã đỏ trước khi thêm script và đỏ lần nữa khi đảo thứ tự.
+
+### 60.2 Cảnh báo `Gradient has outdated direction syntax`
+
+Nguyên nhân không phải CSS viết sai. `lightningcss@1.32.0` (minifier của Nuxt) rút gọn
+`ellipse 58% 50% at 50% 50%` thành `58% 50%` vì cả `ellipse` lẫn `at 50% 50%` đều là mặc định CSS; sau đó
+`autoprefixer@10.6.2` đọc `radial-gradient(58% 50%, …)` như cú pháp tiền-2012 `0 0, closest-side` và cảnh báo.
+
+Đã đo bốn cách chữa, chỉ một cách đúng:
+
+| Cách | Kết quả |
+|---|---|
+| Viết thêm `ellipse` | Minifier bỏ lại lần nữa → vẫn cảnh báo |
+| `circle 58% 50%` | Hết cảnh báo nhưng khai báo sai (`CSS.supports` = false) |
+| `/* autoprefixer: ignore next */` | lightningcss xoá comment trong chế độ minify |
+| Radii trong custom property | Hết cảnh báo, `CSS.supports` = true |
+
+Chọn cách cuối: `.tm-streak` đọc `--tm-lens-radius: 58% 50%`, vì minifier không hằng-hoá được `var()`.
+Giá trị tính toán trong Chromium vẫn là `radial-gradient(58% 50%, rgb(0,0,0) 0%, rgba(0,0,0,0) 76%)` —
+đúng byte-for-byte như trước, nên hình không đổi.
+
+### 60.3 Cảnh báo `fs/promises externalized`
+
+Cảnh báo này là thật và nó che một lỗi chẩn đoán. `runHealthChecks()` gọi `fs.stat` trên module rỗng do
+bundler externalise, phép gọi ném lỗi, và bảng Support trong Settings hiện `disk-access: fail` đỏ trên
+mọi phiên browser/Electron khoẻ mạnh.
+
+Hai thay đổi: trạng thái "không có filesystem" là `warn` kèm lý do (chỉ stat ném lỗi mới là `fail`), và
+builtin được lấy qua `process.getBuiltinModule('fs/promises')` — Node 22.3+ trả module thật, renderer trả
+`undefined`, bundler không còn gì để externalise. Bundle client chỉ còn chuỗi `fs/promises` làm đối số.
+
+### 60.4 Kết quả đo
+
+| Cổng | Lệnh | Kết quả |
+|---|---|---|
+| Types | `npx nuxt typecheck` | exit 0, 0 × `error TS`; config ESLint regenerated |
+| Lint | `npx eslint` trên 4 file đã sửa | exit 0 cho spec/script; 9 lỗi còn lại trong `crashRecovery.mjs` là có sẵn trên dòng không sửa (HEAD có 10) |
+| Core | `node --test packages/core/test/*.test.mjs` | 910/910 |
+| Unit | `npx tsx tests/unit/run-all.mts` | 128/128, gồm 6 doc guard |
+| Electron | `node --test electron/tools/*.test.mjs` | 59/59 |
+| Build web | `pnpm build` | exit 0, **0 cảnh báo** (trước đó 3) |
+| Đóng gói | `pnpm build:electron:dir` | exit 0, `release/win-unpacked` |
+| Asar | liệt kê `app.asar` | 30 828 mục, 516 mục `.output/server`, `\electron\main.cjs` + `\packages\core\src\index.mjs`, **0** mục ffmpeg |
+| Hygiene | `pnpm check:hygiene` | exit 0 |
+| Boundary | `node packages/core/tools/check-boundaries.mjs` | PASS |
+| Live | `/login`, `/tmcut`, `/tmcut/autocut`, `/tmcut/editor`, `/tmcut/templates`, `/tmcut/factory` | chỉ `[info] <Suspense>` và 401 đã biết của §59.7 |
+
+### 60.5 Chưa chứng minh
+
+- Cảnh báo `npm warn Unknown project config "node-linker"` đến từ `npx` (npm đọc `.npmrc` của pnpm), không
+  phải từ `pnpm build`: chạy `pnpm build` cho ra 0 dòng notice.
+- Chín lỗi lint có sẵn trong `crashRecovery.mjs` (empty `catch`, ba tham chiếu `no-undef`,
+  `eol-last`) vẫn còn; chúng nằm ngoài phần đã sửa và không thuộc lượt này.
+- 401 trên ba route cần phiên hub vẫn là PARTIAL như §59.7, không phải hồi quy.
+- `electron-builder` in cảnh báo phụ thuộc optional nền tảng (oxc/sharp/rollup cho arm64, linux, …). Đó là
+  danh sách nền tảng khác, không phải thiếu gói cho win32-x64.
+

@@ -139,21 +139,47 @@ function sanitizeContext(input) {
 }
 
 /**
+ * Probe the filesystem, given whatever module object the host offers.
+ *
+ * The browser build has no filesystem, so the call is not a filesystem failure
+ * there — there is no filesystem to check. Reporting that as `fail` turned
+ * every healthy browser session into a red diagnostics badge, so an absent
+ * `fs` is `warn` with a reason, and only a stat that throws is `fail`.
+ */
+export async function describeDiskAccess(fsModule) {
+  if (!fsModule || typeof fsModule.stat !== 'function') {
+    return { status: 'warn', detail: 'No filesystem in this context (browser or renderer)' }
+  }
+  try {
+    await fsModule.stat('.')
+    return { status: 'ok', detail: 'Working directory writable' }
+  } catch (e) {
+    return { status: 'fail', detail: String(e.message || e) }
+  }
+}
+
+/**
+ * Load a Node builtin without a specifier the client bundler can see.
+ *
+ * `import('fs/promises')` in a module the renderer also bundles gets
+ * externalised to an empty object, and the build prints a warning on every
+ * run. `process.getBuiltinModule` is Node 22.3+, returns nothing outside Node,
+ * and leaves the bundler nothing to rewrite.
+ */
+function nodeBuiltin(name) {
+  const get = globalThis.process?.getBuiltinModule
+  return typeof get === 'function' ? get.call(globalThis.process, name) : null
+}
+
+/**
  * Run health checks (async, for support diagnostics).
  * Returns { checks: [{ name, status: 'ok'|'warn'|'fail', detail }], summary }.
  */
 export async function runHealthChecks() {
   const checks = []
 
-  // Disk space
-  try {
-    const fs = await import('fs/promises')
-    const stat = await fs.stat('.')
-    // Can't easily get free space in pure Node without native, so we skip detail
-    checks.push({ name: 'disk-access', status: 'ok', detail: 'Working directory writable' })
-  } catch (e) {
-    checks.push({ name: 'disk-access', status: 'fail', detail: String(e.message || e) })
-  }
+  const disk = await describeDiskAccess(nodeBuiltin('fs/promises'))
+  checks.push({ name: 'disk-access', ...disk })
 
   // Encoder capability (slice J: FFmpeg is gone, WebCodecs is the only engine).
   // This runs in whichever context called it — a renderer sees the real

@@ -35,6 +35,14 @@ pnpm dev:electron   # Nuxt dev + Electron together
 pnpm typecheck      # Run typecheck (vue-tsc) — always run after type changes
 pnpm lint           # ESLint check on modified files
 pnpm build          # Nuxt production build
+pnpm build:electron:win    # Nuxt build + NSIS installer in release/
+pnpm build:electron:dir    # Nuxt build + unpacked app in release/win-unpacked
+pnpm build:electron        # Same, for whatever platform you are on
+pnpm check:hygiene  # Fail if compiled .js sits next to its .ts source
+
+# Packaging runs `--publish never`: electron-builder.yml names a GitHub repo, and
+# a local build must not create a release. Publishing is a separate, deliberate step.
+# Run the core build first when packages/core changed: pnpm build:core
 
 # Central Seeding via tm-hub:
 # cd ../tm-hub && pnpm seed --app=studio        # update routes, roles, & configs
