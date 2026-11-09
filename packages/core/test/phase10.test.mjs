@@ -250,10 +250,38 @@ test('generateSupportBundle produces anonymized bundle', () => {
   clearRecoveryCheckpoint()
   clearCrashLog()
   setTelemetryEnabled(false)
+  clearTelemetryEvents()
+  resetUsageStore()
   const bundle = generateSupportBundle('1.0.0')
   assert.equal(bundle.appVersion, '1.0.0')
   assert.ok(bundle.generatedAt)
   assert.ok(bundle.checkpoint === null)
   assert.ok(Array.isArray(bundle.recentCrashes))
   assert.equal(bundle.telemetryEventCount, 0)
+})
+
+// The bundle promised telemetry and usage but never imported the modules that
+// hold them, so `typeof getTelemetryEvents === 'function'` was always false.
+// Every bundle reported "0 events, no usage" no matter what the session had
+// recorded — a support bundle that quietly lies is worse than one that is empty.
+test('the support bundle reports the telemetry and usage that actually exist', () => {
+  clearRecoveryCheckpoint()
+  clearCrashLog()
+  resetUsageStore()
+
+  setTelemetryEnabled(true)
+  recordTelemetryEvent('export', 'started', { durationMs: 1200 })
+  recordTelemetryEvent('export', 'completed', { durationMs: 3400 })
+  recordAiUsage(2500, { provider: 'openai', model: 'gpt-4' })
+
+  const bundle = generateSupportBundle('1.0.0')
+
+  assert.equal(bundle.telemetryEventCount, 2, 'the bundle must count the events the session recorded')
+  assert.equal(bundle.config.telemetryEnabled, true, 'the bundle must report real consent, not a false default')
+  assert.equal(bundle.usageSummary.aiTokens, 2500, 'the bundle must carry the usage summary, not an empty object')
+  assert.equal(bundle.usageSummary.byProvider.openai.tokens, 2500)
+
+  setTelemetryEnabled(false)
+  clearTelemetryEvents()
+  resetUsageStore()
 })

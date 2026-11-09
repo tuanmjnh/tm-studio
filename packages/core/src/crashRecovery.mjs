@@ -12,6 +12,9 @@
 //  - Health checks (disk space, FFmpeg, GPU, permissions)
 // =============================================================================
 
+import { getTelemetryEvents, isTelemetryEnabled } from './telemetry.mjs'
+import { getUsageSummary } from './usageTracker.mjs'
+
 const RECOVERY_KEY = 'tmcut.recovery.v1'
 const CRASH_LOG_KEY = 'tmcut.crashlog.v1'
 const MAX_CRASH_ENTRIES = 20
@@ -22,7 +25,10 @@ function getStorage() {
     if (typeof globalThis !== 'undefined' && globalThis[key]) {
       return globalThis[key]
     }
-  } catch {}
+  } catch {
+    // A storage getter that throws means there is no storage here, which is
+    // the same answer as the getter being absent.
+  }
   return null
 }
 
@@ -42,7 +48,10 @@ function writeRecovery(data) {
     if (storage) {
       storage.setItem(RECOVERY_KEY, JSON.stringify(data))
     }
-  } catch {}
+  } catch {
+    // A quota or serialisation failure must not break the edit the user is
+    // doing; the next checkpoint tries again.
+  }
 }
 
 /** Called periodically by the editor to checkpoint critical state. */
@@ -79,7 +88,9 @@ export function clearRecoveryCheckpoint() {
     if (storage) {
       storage.removeItem(RECOVERY_KEY)
     }
-  } catch {}
+  } catch {
+    // Nothing to clear when storage is gone; the checkpoint is already lost.
+  }
 }
 
 /** Record a crash (called from main process on uncaught exception). */
@@ -99,7 +110,10 @@ export function recordCrash(error, context = {}) {
     if (storage) {
       storage.setItem(CRASH_LOG_KEY, JSON.stringify(crashes))
     }
-  } catch {}
+  } catch {
+    // This runs while handling a crash. Throwing a second error here would
+    // replace the original one, so a failed write is dropped on purpose.
+  }
 }
 
 /** Get crash log (for support bundle). */
@@ -120,7 +134,9 @@ export function clearCrashLog() {
     if (storage) {
       storage.removeItem(CRASH_LOG_KEY)
     }
-  } catch {}
+  } catch {
+    // Same as the checkpoint: a missing storage already means no log to clear.
+  }
 }
 
 /** Sanitize context — no PII, paths, or secrets. */
@@ -245,8 +261,8 @@ export async function runHealthChecks() {
 export function generateSupportBundle(appVersion = 'unknown') {
   const checkpoint = getLastCheckpoint()
   const crashes = getCrashLog()
-  const telemetry = typeof getTelemetryEvents === 'function' ? getTelemetryEvents() : []
-  const usage = typeof getUsageSummary === 'function' ? getUsageSummary() : {}
+  const telemetry = getTelemetryEvents()
+  const usage = getUsageSummary()
 
   return {
     schemaVersion: 1,
@@ -260,7 +276,7 @@ export function generateSupportBundle(appVersion = 'unknown') {
     usageSummary: usage,
     // Config snapshot (safe keys only)
     config: {
-      telemetryEnabled: typeof isTelemetryEnabled === 'function' ? isTelemetryEnabled() : false,
+      telemetryEnabled: isTelemetryEnabled(),
       language: getStorage()?.getItem('i18n:locale') || 'vi'
     }
   }

@@ -18,7 +18,9 @@ const colors = ['red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 
 const neutrals = ['slate', 'gray', 'zinc', 'neutral', 'stone', 'taupe', 'mauve', 'mist', 'olive']
 
 const avatar = computed(() => ({
-  src: auth.user.value?.avatar || 'https://github.com/benjamincanac.png',
+  // `useAuth()` assigns avatarUrl; `avatar` is declared on the type but never
+  // populated. With no src the UAvatar falls back to the user's initials.
+  src: auth.user.value?.avatarUrl || undefined,
   alt: auth.user.value?.name || 'User'
 }))
 

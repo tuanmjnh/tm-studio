@@ -7688,3 +7688,56 @@ builtin được lấy qua `process.getBuiltinModule('fs/promises')` — Node 22
 - `electron-builder` in cảnh báo phụ thuộc optional nền tảng (oxc/sharp/rollup cho arm64, linux, …). Đó là
   danh sách nền tảng khác, không phải thiếu gói cho win32-x64.
 
+## 61. Support bundle và avatar: hai chỗ báo sai, sửa bằng test (2026-11-09)
+
+Hai lỗi này không lộ ra ở typecheck hay ở bất kỳ suite nào — chúng chỉ hiện khi đọc code và khi nhìn console
+của trình duyệt thật.
+
+### 61.1 Support bundle luôn báo rỗng
+
+`generateSupportBundle` viết `typeof getTelemetryEvents === 'function' ? … : []` nhưng chưa bao giờ import
+ba hàm đó. Điều kiện `typeof` vì thế **luôn sai**, nên mọi bundle đều nói "0 sự kiện, không có usage" dù
+phiên làm việc đã ghi bao nhiêu. Đây đúng là loại lỗi tệ nhất trong một support bundle: không phải trống,
+mà là trống một cách trông-có-vẻ-đúng.
+
+Đã import `getTelemetryEvents`, `isTelemetryEnabled` từ `telemetry.mjs` và `getUsageSummary` từ
+`usageTracker.mjs`. Hai module đó không import gì nên không tạo vòng lặp.
+
+Test mới ghi 2 sự kiện + 2500 token, rồi đòi bundle trả đúng số đó. Đo trên trình duyệt thật:
+`{"telemetryEventCount":2,"telemetryEnabled":true,"aiTokens":2500}`.
+
+### 61.2 Avatar của mọi người dùng là ảnh của người lạ
+
+`UserMenu.vue` đọc `auth.user.value?.avatar`, nhưng `useAuth()` chỉ gán `avatarUrl` (`avatar?` có trong type
+nên typecheck vẫn qua). Biểu thức luôn `undefined`, nên **mọi** người dùng đăng nhập đều rơi vào ảnh
+hardcode `https://github.com/benjamincanac.png` — avatar GitHub của tác giả Nuxt UI, sót lại từ template.
+
+Hai hệ quả, một trong đó hiện trong console:
+
+1. Ảnh của chính tài khoản không bao giờ hiện.
+2. Chromium chặn response cross-origin đó bằng CORB, nên mỗi trang có app shell ghi
+   `[issue] Response was blocked by CORB (Cross-Origin Read Blocking)`.
+
+Sửa: đọc `avatarUrl`, không có thì để trống — `UAvatar` tự rơi về chữ cái đầu của tên. Đo lại 5 route:
+CORB hết, chỉ còn 401 đã biết; bundle production không còn chuỗi `benjamincanac`.
+
+### 61.3 Kết quả đo
+
+| Cổng | Lệnh | Kết quả |
+|---|---|---|
+| Types | `npx nuxt typecheck` | exit 0, 0 × `error TS`; config regenerated (12:22:42) |
+| Lint | `npx eslint` 4 file | `crashRecovery.mjs` 0 lỗi; `UserMenu.vue` 24 lỗi có sẵn = HEAD (thêm 0); `phase10.test.mjs` 7 lỗi có sẵn = HEAD (thêm 0); spec mới 0 |
+| Core | `node --test packages/core/test/*.test.mjs` | 911/911 |
+| Unit | `npx tsx tests/unit/run-all.mts` | 129/129 |
+| Electron | `node --test electron/tools/*.test.mjs` | 59/59 |
+| Build | `pnpm build` | exit 0, 0 cảnh báo |
+| Live | 5 route | CORB 0, chỉ `[info] <Suspense>` + 401 của §59.7 |
+| Bundle | grep `benjamincanac` trong `.output/public` | 0 |
+
+### 61.4 Chưa chứng minh
+
+- Chưa đăng nhập được bằng tài khoản thật (không dùng credential hub), nên "avatar của tài khoản hiện ra"
+  chỉ chứng minh được bằng code + test, không bằng ảnh chụp có ảnh thật.
+- Lỗi lint có sẵn trong `UserMenu.vue` (24) và `phase10.test.mjs` (7) vẫn còn. Chúng nhiều hơn một lần sửa
+  gọn, và nằm ngoài phạm vi hai lỗi này; sửa cả file là một lượt định dạng riêng.
+
