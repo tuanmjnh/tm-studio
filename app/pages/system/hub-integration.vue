@@ -83,19 +83,25 @@ async function runLiveTest() {
   notify.success(t('common.success'), t('hub_integration.test_success'))
 }
 
-const envSnippet = `# tm-studio/.env - Cấu hình kết nối Control Plane
+// Only public, non-sensitive runtime configuration. The shared JWT secret and
+// the hub app secret are control-plane credentials: they belong in the hub's
+// environment and, for a desktop install, in a per-device credential — never
+// in a snippet a page hands out, and never baked into a client build.
+const envSnippet = `# tm-studio/.env - public runtime configuration
 PORT=4003
 APP_PORT=3456
 AUTH_PROVIDER=hub
 
-# 1. URL của TM Hub (chạy local trên 4000 hoặc URL triển khai cloud)
+# 1. URL của TM Hub (local trên 4000 hoặc URL triển khai cloud)
 NUXT_PUBLIC_HUB_URL=${hubUrl}
 
 # 2. Định danh AppId đã đăng ký trong bảng apps của TM Hub
 NUXT_PUBLIC_HUB_APP_ID=${appId}
 
-# 3. Khóa bí mật JWT dùng chung (phải trùng khớp với AUTH_JWT_SECRET của Hub — copy từ tm-hub/.env)
-AUTH_JWT_SECRET=<copy từ tm-hub/.env>`
+# 3. Không đặt bí mật dùng chung ở đây. JWT do Hub ký và client xác thực bằng
+#    public key (JWKS); credential riêng của từng thiết bị do Hub cấp tự động ở
+#    lần đăng nhập đầy đủ và Main giữ trong OS keychain.
+#    Chi tiết: docs/architecture/electron-build-security.md`
 
 const codeUseHubSnippet = `import { useHub } from '~/composables/useHub'
 

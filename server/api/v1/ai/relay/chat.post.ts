@@ -1,15 +1,18 @@
 import { readBody } from 'h3'
 import { ofetch } from 'ofetch'
 import { relayUpstreamError } from '../../../../utils/aiRelay'
+import { resolveHubServiceIdentity } from '../../../../utils/hubIdentity'
 
 /**
- * AI relay proxy — chat (R151). The web (browser) runtime cannot hold the
- * hub app secret, so the renderer calls this endpoint and Nitro forwards to
- * the hub relay with X-App-Id + X-App-Secret server-side. Decrypted provider
- * credentials live and die inside the hub process.
+ * AI relay proxy — chat (R151). The renderer cannot hold a hub credential, so
+ * it calls this endpoint and Nitro forwards to the hub relay with this server's
+ * service identity — a per-device credential in the desktop app, App Secret in
+ * a hosted deployment. Decrypted provider credentials live and die inside the
+ * hub process.
  *
  * Auth: server/middleware/auth.ts already requires a valid tm-studio user JWT
- * for every /api/** route, so nobody anonymous reaches the secret-backed call.
+ * for every /api/** route, so nobody anonymous reaches the credential-backed
+ * call.
  *
  * Body: { connectionId, messages: [{role, content}], model?, maxTokens?, temperature? }
  * Response: the hub relay envelope { success, data: { ok, content, provider, model, usage } }.
@@ -21,13 +24,13 @@ export default defineEventHandler(async (event) => {
 
   const config = useRuntimeConfig(event)
   const hubUrl = String(config.public.hubUrl || '').replace(/\/+$/, '')
-  const hubAppId = String(config.public.hubAppId || '')
-  const hubAppSecret = String(config.hubAppSecret || '')
-  if (!hubUrl || !hubAppId || !hubAppSecret) {
+  // Device credential first (desktop), App Secret second (hosted server).
+  const identity = resolveHubServiceIdentity()
+  if (!hubUrl || !identity) {
     throw createError({
       statusCode: 503,
       statusMessage: 'error.aiRelayNotConfigured',
-      message: 'AI relay is not configured on this server (NUXT_HUB_APP_SECRET missing)'
+      message: 'AI relay is not configured on this server (no device credential or App Secret)'
     })
   }
 
@@ -61,9 +64,9 @@ export default defineEventHandler(async (event) => {
   if (typeof body.temperature === 'number' && body.temperature >= 0 && body.temperature <= 2) payload.temperature = body.temperature
 
   try {
-    return await ofetch(`${hubUrl}/api/v1/apps/${hubAppId}/ai/relay/chat`, {
+    return await ofetch(`${hubUrl}/api/v1/apps/${identity.appId}/ai/relay/chat`, {
       method: 'POST',
-      headers: { 'X-App-Id': hubAppId, 'X-App-Secret': hubAppSecret },
+      headers: identity.headers,
       body: payload
     })
   } catch (err: unknown) {

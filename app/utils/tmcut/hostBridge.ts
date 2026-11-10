@@ -29,3 +29,14 @@ export function tmcutHostBridge() {
 export function tmcutHostIpc() {
   return tmcutHostBridge()?.tmcut
 }
+
+/**
+ * The Main-process auth broker (v2), or undefined on the web runtime.
+ *
+ * Signing in with a device identity must happen in Main: it holds the machine
+ * id and receives the optional device credential. Going through this accessor
+ * keeps that boundary inside the one reader of the preload global.
+ */
+export function hubAuthBridge() {
+  return tmcutHostBridge()?.deviceAuth
+}

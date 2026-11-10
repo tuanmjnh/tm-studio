@@ -16,7 +16,7 @@ const profileForm = reactive({
 watch(() => auth.user.value, (u) => {
   if (u) {
     profileForm.name = u.name || ''
-    profileForm.avatarUrl = u.avatar || ''
+    profileForm.avatarUrl = u.avatarUrl || ''
   }
 }, { immediate: true })
 

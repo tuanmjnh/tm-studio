@@ -86,6 +86,18 @@ function harness(initialCookies: Record<string, string> = {}) {
     computed,
     readonly,
     Headers,
+    // The transpiled composable requires its value imports. The browser device
+    // identity is a pure helper with its own coverage, and the host bridge only
+    // reads the preload global — neither is under test here.
+    require: (id: string) => {
+      if (/deviceIdentity$/.test(id)) {
+        return { browserDeviceInfo: () => ({ deviceId: 'test-device', identityKind: 'browser-profile', deviceType: 'web', platform: 'web' }) }
+      }
+      if (/hostBridge$/.test(id)) {
+        return { hubAuthBridge: () => undefined }
+      }
+      assert.fail(`unexpected runtime require ${id}`)
+    },
     getCurrentInstance: () => null,
     useState: (name: string, init: () => unknown) => {
       if (!states.has(name)) states.set(name, ref(init()))

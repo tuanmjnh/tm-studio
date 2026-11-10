@@ -2793,6 +2793,27 @@
     "checkFailed": "Failed to check for updates",
     "notSupportedInBrowser": "Auto update is only supported in the Electron desktop application."
   },
+  "devices": {
+    "myTitle": "My devices",
+    "myDescription": "Every device signed in to this account on this app. Rename or revoke one here; revoking signs it out immediately.",
+    "myEmpty": "No devices registered yet",
+    "current": "This device",
+    "name": "Device name",
+    "rename": "Rename",
+    "renameTitle": "Rename device",
+    "renamedToast": "Device renamed",
+    "forget": "Revoke device",
+    "revokeTitle": "Revoke this device?",
+    "revokeDesc": "The device loses its sessions and any stored service credential. If it is this device, you will be signed out.",
+    "revokedToast": "Device revoked",
+    "lastSeen": "Last seen",
+    "status": {
+      "active": "Active",
+      "pending": "Pending approval",
+      "blocked": "Blocked",
+      "revoked": "Revoked"
+    }
+  },
   "profile": {
     "title": "My Profile",
     "description": "View and update your personal account information.",

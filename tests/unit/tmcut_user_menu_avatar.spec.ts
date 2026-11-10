@@ -21,7 +21,7 @@
  */
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -68,5 +68,57 @@ describe('the signed-in avatar comes from the auth user', () => {
   it('the field the menu reads is the one the auth composable assigns', () => {
     const auth = read('app/composables/useAuth.ts')
     assert.match(auth, /avatarUrl:/, 'useAuth no longer assigns avatarUrl — update UserMenu and this guard together')
+  })
+})
+
+describe('the avatar falls back to something the install owns', () => {
+  const menu = read('app/components/dashboard/UserMenu.vue')
+
+  it('a bundled default image is the middle step, not a third-party URL', () => {
+    // Order: account picture → the app's own bundled default → initials.
+    // A remote placeholder is a third-party dependency with no uptime
+    // promise, and the previous one was a stranger's GitHub photo.
+    assert.match(menu, /DEFAULT_AVATAR_URL/, 'UserMenu must name the bundled fallback explicitly')
+    assert.match(menu, /'\/avatar-default\.svg'/, 'the fallback is a file this install ships')
+    const fallback = menu.match(/DEFAULT_AVATAR_URL\s*=\s*'([^']+)'/)
+    assert.ok(fallback, 'the bundled fallback URL must be a literal')
+    assert.doesNotMatch(fallback[1]!, /^(https?:)?\/\//, 'the fallback must not be fetched from another host')
+  })
+
+  it('the default image really exists in public/', () => {
+    const asset = join(ROOT, 'public', 'avatar-default.svg')
+    assert.ok(existsSync(asset), 'public/avatar-default.svg is missing — the fallback would 404')
+    const svg = readFileSync(asset, 'utf8')
+    assert.match(svg, /<svg[\s>]/, 'the fallback must be an SVG document')
+    // No <text> and no script: it renders the same on every machine and
+    // cannot execute, and initials come from the auth user at runtime.
+    assert.doesNotMatch(svg, /<script/i, 'the fallback image must not carry script')
+  })
+
+  it('the initials are derived from the name and handed to the avatar as its last resort', () => {
+    // UAvatar draws `text` when src is absent or the image fails. Passing it
+    // explicitly makes step 3 (initials) a decision this file owns, rather
+    // than an implicit consequence of `alt` splitting.
+    assert.match(menu, /const initials = computed/, 'the initials derivation must be visible')
+    assert.match(menu, /text:\s*initials/, 'the computed initials must reach the avatar component')
+    assert.match(menu, /fallback to|steps, in order/i, 'the three-step order must be documented where it is implemented')
+  })
+})
+
+describe('the picture survives a reload and a profile save', () => {
+  const auth = read('app/composables/useAuth.ts')
+
+  it('both auth paths map avatarUrl from the hub payload', () => {
+    // `applyAuthData` (login/register) and `fetchUser` (/auth/me) are separate
+    // mappers; a field added to one and forgotten in the other disappears on
+    // the first reload.
+    const assignments = [...auth.matchAll(/avatarUrl:\s*data\.[\w.]+/g)].map(m => m[0])
+    assert.ok(assignments.length >= 2, `expected both mappers to assign avatarUrl, found ${assignments.length}`)
+  })
+
+  it('the profile page reads the field useAuth assigns', () => {
+    const page = read('app/pages/system/settings/profile.vue')
+    assert.doesNotMatch(page, /u\.avatar\b(?!Url)/, 'the profile form still reads the unpopulated `avatar` field')
+    assert.match(page, /u\.avatarUrl/, 'the profile form must seed from avatarUrl')
   })
 })

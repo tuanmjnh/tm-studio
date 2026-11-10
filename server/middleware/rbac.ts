@@ -1,38 +1,26 @@
-function checkPermission(userPermissions: string[], module: string, action: string): boolean {
-  if (userPermissions.includes('*')) return true
-  const candidates = [`${module}.${action}`, `${module}:${action}`]
-  if (action === 'write') {
-    candidates.push(`${module}.upload`, `${module}.create`, `${module}.update`, `${module}.manage`)
-    candidates.push(`${module}:upload`, `${module}:create`, `${module}:update`, `${module}:manage`)
-  }
-  if (action === 'manage') {
-    candidates.push(`${module}.create`, `${module}.update`, `${module}.delete`, `${module}.write`)
-    candidates.push(`${module}:create`, `${module}:update`, `${module}:delete`, `${module}:write`)
-  }
-  if (module === 'logs' && action === 'read') {
-    candidates.push('apps.logs.read', 'apps:logs.read')
-  }
-  return candidates.some(c => userPermissions.includes(c))
-}
+import { evaluateServerAccess, type ServerAuth } from '../utils/serverAccess'
 
-const permissionMap: Record<string, string> = {}
+/**
+ * One authorization pass per /api/** request.
+ *
+ * `auth.ts` runs first and answers "is this a valid hub token for this appId",
+ * which is identity, not permission. This middleware answers "may this caller
+ * use this route" and is default-deny, so a handler that forgets a check is
+ * still covered. The previous version declared an empty permission map and
+ * looped over it — a policy that could not fail.
+ */
+export default defineEventHandler((event) => {
+  const decision = evaluateServerAccess(
+    event.path,
+    event.method || 'GET',
+    (event.context.auth as ServerAuth | undefined) ?? null
+  )
 
-export default defineEventHandler(async (event) => {
-  const auth = event.context.auth
-  if (!auth) return
-
-  if (auth.permissions?.includes('*') || auth.role === 'root') return
-
-  const path = event.path
-  const method = event.method || 'GET'
-
-  for (const [prefix, permission] of Object.entries(permissionMap)) {
-    if (path.startsWith(prefix)) {
-      const action = method === 'GET' ? 'read' : method === 'POST' ? 'write' : method === 'DELETE' ? 'delete' : 'write'
-      const module = permission.split(':')[0] || ''
-      if (!checkPermission(auth.permissions || [], module, action)) {
-        throw createError({ statusCode: 403, statusMessage: 'error.forbidden', message: `Insufficient permissions for ${module}:${action}` })
-      }
-    }
+  if (!decision.allowed) {
+    throw createError({
+      statusCode: decision.statusCode,
+      statusMessage: decision.statusMessage,
+      message: decision.message
+    })
   }
 })

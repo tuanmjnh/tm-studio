@@ -153,6 +153,17 @@ const appUpdater = {
   }
 }
 
+// v2 device-auth boundary. Main owns the machine id and the device credential;
+// these calls return a session or a TOTP challenge, never a secret.
+const deviceAuth = {
+  info: () => ipcRenderer.invoke('auth:device-info'),
+  login: credentials => ipcRenderer.invoke('auth:login', credentials),
+  verifyTotp: input => ipcRenderer.invoke('auth:verify-totp', input),
+  passkeyStart: () => ipcRenderer.invoke('auth:passkey-start'),
+  passkeyFinish: credential => ipcRenderer.invoke('auth:passkey-finish', credential),
+  register: input => ipcRenderer.invoke('auth:register', input)
+}
+
 contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
   versions: {
@@ -192,6 +203,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on(channel, listener)
     return () => ipcRenderer.removeListener(channel, listener)
   },
+  deviceAuth,
   tools: { aiGateway, videoGeneration },
   dialog,
   fileManager,

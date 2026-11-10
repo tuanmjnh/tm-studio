@@ -2793,6 +2793,27 @@
     "checkFailed": "Không thể kiểm tra bản cập nhật",
     "notSupportedInBrowser": "Tính năng auto update chỉ khả dụng trên ứng dụng Desktop Electron."
   },
+  "devices": {
+    "myTitle": "Thiết bị của tôi",
+    "myDescription": "Mọi thiết bị đã đăng nhập vào tài khoản này trên ứng dụng. Đổi tên hoặc thu hồi tại đây; thu hồi sẽ đăng xuất thiết bị ngay lập tức.",
+    "myEmpty": "Chưa có thiết bị nào được đăng ký",
+    "current": "Thiết bị này",
+    "name": "Tên thiết bị",
+    "rename": "Đổi tên",
+    "renameTitle": "Đổi tên thiết bị",
+    "renamedToast": "Đã đổi tên thiết bị",
+    "forget": "Thu hồi thiết bị",
+    "revokeTitle": "Thu hồi thiết bị này?",
+    "revokeDesc": "Thiết bị mất phiên đăng nhập và mọi thông tin xác thực dịch vụ đã lưu. Nếu đây là thiết bị hiện tại, bạn sẽ bị đăng xuất.",
+    "revokedToast": "Đã thu hồi thiết bị",
+    "lastSeen": "Lần cuối",
+    "status": {
+      "active": "Hoạt động",
+      "pending": "Chờ duyệt",
+      "blocked": "Đã chặn",
+      "revoked": "Đã thu hồi"
+    }
+  },
   "profile": {
     "title": "Hồ sơ của tôi",
     "description": "Xem và cập nhật thông tin tài khoản cá nhân của bạn.",

@@ -1,4 +1,5 @@
 import type { RouteTreeNode } from '#shared/types/rbac'
+import { isRootOnlyPath } from '#shared/rbac'
 
 export default defineNuxtRouteMiddleware(async (to) => {
   if (import.meta.server) return
@@ -23,6 +24,14 @@ export default defineNuxtRouteMiddleware(async (to) => {
 
   const isRoot = user.role === 'root' || user.permissions?.includes('*')
   if (isRoot) return
+
+  // The hub seeds /system/hub-integration into the non-root role's route list,
+  // so the tree would let an admin in. The page exposes control-plane wiring
+  // and live hub probes; the server refuses the same paths, and hiding the
+  // route keeps the UI from offering a door that answers 403.
+  if (isRootOnlyPath(to.path)) {
+    return navigateTo(firstAllowedPath(await useNavMenu().fetchRoutes()) || '/')
+  }
 
   const nav = useNavMenu()
   const routes = await nav.fetchRoutes()

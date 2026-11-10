@@ -12,6 +12,22 @@ import type { HubAiConnection, HubAiModel, HubAiProviderItem } from '~/composabl
 import type { HubConnectionStatus } from 'tm-hub-client'
 import { getErrorMessage } from '~/shared/utils/errors'
 
+/**
+ * Provider governance: the hub's AI-management capabilities are required to
+ * read the provider catalogue and to write connections or discover models.
+ * The route tree usually carries this page only for admin roles, but the check
+ * is on the page so a direct URL entry cannot render controls that answer 403.
+ */
+definePageMeta({
+  middleware: () => {
+    if (!import.meta.client) return
+    const auth = useAuth()
+    if (!auth.isAuthenticated.value) return navigateTo('/login')
+    const isRoot = auth.user.value?.role === 'root' || auth.user.value?.permissions?.includes('*')
+    if (!isRoot && !auth.can('ai', 'read')) return navigateTo('/')
+  }
+})
+
 const { t } = useI18n()
 const notify = useNotify()
 const { appId, hubUrl, hubFetch } = useHub()

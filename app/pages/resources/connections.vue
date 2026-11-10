@@ -6,10 +6,13 @@ type ConnectionProvider = HubConnectionProvider & { quick?: boolean, ai?: boolea
 
 definePageMeta({
   middleware: () => {
-    if (import.meta.client) {
-      const a = useAuth()
-      if (!a.isAuthenticated.value) return navigateTo('/login')
-    }
+    if (!import.meta.client) return
+    const a = useAuth()
+    if (!a.isAuthenticated.value) return navigateTo('/login')
+    // Reading connections needs the hub's `connections.read`; without it the
+    // page would render a provider grid that every request answers 403.
+    const isRoot = a.user.value?.role === 'root' || a.user.value?.permissions?.includes('*')
+    if (!isRoot && !a.can('connections', 'read')) return navigateTo('/')
   },
   alias: ['/system/connections', '/settings/connections']
 })

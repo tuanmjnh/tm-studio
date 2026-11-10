@@ -12,7 +12,14 @@
 // The bare `AI_API_KEY` global
 // slot MUST match (the surface suffix is optional — this exact subtlety
 // is what §206.2 audited in the old inline capture).
-const SECRET_SLOT_RE = /^(AI_API_KEY(_.+)?|TMCUT_GEMINI_API_KEY)$/
+// NUXT_HUB_APP_SECRET is the hosted-server hub credential the relay forwards
+// server-to-server. It reaches Nitro through `loadUserConfig`, so it sits in
+// config.env on disk like any API key — encrypted at rest by the same
+// keychain, never a constant evaluated in the build config.
+//
+// HUB_DEVICE_SECRET is the per-device credential (v2) issued to this install at
+// sign-in; the same vault slot family, encrypted at rest and masked on read.
+const SECRET_SLOT_RE = /^(AI_API_KEY(_.+)?|TMCUT_GEMINI_API_KEY|NUXT_HUB_APP_SECRET|HUB_DEVICE_SECRET)$/
 
 /** True when a config key is an API-key slot (encrypted at rest, masked
  *  to the renderer, re-encrypted by the migration). */

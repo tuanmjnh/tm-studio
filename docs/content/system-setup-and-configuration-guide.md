@@ -58,9 +58,22 @@ AUTH_PROVIDER=hub
 NUXT_PUBLIC_HUB_URL=http://localhost:4000
 NUXT_PUBLIC_HUB_APP_ID=tm-studio_dtn6n4
 
-# Phải trùng khớp với AUTH_JWT_SECRET của tm-hub/.env
-AUTH_JWT_SECRET=your-shared-jwt-secret
+# Xác thực access token bằng khoá công khai của Hub (không phải secret)
+AUTH_JWT_JWKS_URL=http://localhost:4000/api/v1/auth/jwks
+# hoặc dán trực tiếp public JWK set nếu client đóng gói không gọi được Hub lúc verify:
+# AUTH_JWT_PUBLIC_KEYS=[{"kty":"RSA","kid":"...","n":"...","e":"AQAB"}]
 ```
+
+> **Không cần `AUTH_JWT_SECRET` trong bản desktop.** Hub ký RS256 và công bố public key tại
+> `GET /api/v1/auth/jwks`. `AUTH_JWT_SECRET` (HS256) chỉ còn để xác thực token Hub mint **trước** khi
+> rotate; một deployment web có thể đặt nó nếu còn token cũ. Nếu không có key material cục bộ, app hỏi
+> `POST /api/v1/auth/introspect` thay vì từ chối mọi request.
+
+> **Relay AI không còn App Secret trong app đóng gói.** Lần đăng nhập đầu tiên trên Electron đăng ký
+> thiết bị với Hub; credential theo thiết bị (`HUB_DEVICE_ID`/`HUB_DEVICE_SECRET`) do Main nhận một lần,
+> lưu trong OS keychain và dùng cho `X-Device-Id` / `X-Device-Secret` ở route relay. `NUXT_HUB_APP_SECRET`
+> chỉ dành cho một deployment server tin cậy, không dành cho installer. Xem thiết bị đã đăng ký tại
+> `/system/settings/devices`.
 
 > **Lưu ý bảo mật**: Không commit `.env`. Khóa API cho AI provider và tài nguyên media được lưu trữ tập trung và giải mã tại TM Hub; TM Studio chỉ sử dụng token và relay.
 

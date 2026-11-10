@@ -120,6 +120,21 @@ export function hasAllRoutes(allowedRoutes?: string[] | null): boolean {
 }
 
 /**
+ * Pages that describe how the control plane is wired — app identity, relay
+ * configuration, live hub probes. They are read-only for anyone with a
+ * session, but the content is infrastructure and the hub seeds them into the
+ * non-root role's route list anyway, so the page guard has to name them
+ * instead of trusting the tree.
+ */
+export const ROOT_ONLY_PATHS: readonly string[] = ['/system/hub-integration']
+
+/** True for a root-only page and anything nested under it. */
+export function isRootOnlyPath(path: string): boolean {
+  const clean = path.split(/[?#]/)[0] || ''
+  return ROOT_ONLY_PATHS.some(base => clean === base || clean.startsWith(`${base}/`))
+}
+
+/**
  * Group flat permission codes (`apps.read`, `apps.logs.read`) back into
  * `{ module, actions }` entries. Split at the FIRST dot only — actions may
  * contain dots (e.g. `logs.read`).

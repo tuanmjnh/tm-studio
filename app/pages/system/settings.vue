@@ -10,6 +10,7 @@ const navItems = computed<NavigationMenuItem[]>(() => [
   { label: t('profile.info'), icon: 'i-lucide-user-circle', to: '/system/settings/profile' },
   { label: t('profile.security'), icon: 'i-lucide-shield', to: '/system/settings/security' },
   { label: t('profile.sessions'), icon: 'i-lucide-monitor-smartphone', to: '/system/settings/sessions' },
+  { label: t('devices.myTitle'), icon: 'i-lucide-laptop-minimal', to: '/system/settings/devices' },
   { label: t('notifications.pushTitle'), icon: 'i-lucide-radio-tower', to: '/system/settings/push' }
 ])
 </script>

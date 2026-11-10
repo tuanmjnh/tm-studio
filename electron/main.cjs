@@ -18,14 +18,16 @@ const { spawn } = require('child_process')
 // API-key slots are encrypted AT REST with the OS keychain
 // (safeStorage: DPAPI/Keychain/libsecret). Boundary rule: the FILE holds
 // tokens, process.env holds plaintext.
-const { encrypt, decrypt, isEncryptionAvailable, magicPrefix } = require('./tools/ai-secure.cjs')
+const { decrypt, isEncryptionAvailable, magicPrefix } = require('./tools/ai-secure.cjs')
 // The line transform behind the startup migration AND the vault page's
 // "Encrypt now" button is pure (key-migrate.cjs).
 const { migrateKeyContent } = require('./tools/key-migrate.cjs')
 // The config.env parser is shared by get-config, ai-key-status and
 // set-config — one implementation, so "file missing" can never be read
 // differently by two handlers. Shape: { exists, values }.
-const { readConfigFile } = require('./tools/config-file.cjs')
+const { readConfigFile, writeConfigValues } = require('./tools/config-file.cjs')
+const { applyPublicConfig } = require('./tools/public-config.cjs')
+const { createHubLoginBroker } = require('./tools/hub-login-broker.cjs')
 const { mediaSchemePrivileges, createMediaHandler } = require('./media-protocol.cjs')
 
 // Secret config slots: ONE definition (secret-slots.cjs) shared by the
@@ -154,9 +156,23 @@ function loadUserConfig() {
   }
 }
 
-async function startServer() {
-  loadUserConfig()
+/**
+ * Hub URL / app id / public JWKs baked at build time. Applied on the shared
+ * startup path so dev and packaged resolve the same values: dev loads the
+ * renderer from the Nuxt dev server and never starts Nitro, so a call inside
+ * `startServer()` alone would leave the auth broker and the AI relay with an
+ * empty app id. `applyPublicConfig` only fills keys the environment does not
+ * already have, so `config.env` still wins.
+ */
+function applyBakedPublicConfig() {
+  applyPublicConfig(
+    app.isPackaged
+      ? path.join(process.resourcesPath, 'resources', 'public-config.json')
+      : path.join(__dirname, '..', 'resources', 'public-config.json')
+  )
+}
 
+async function startServer() {
   process.env.NITRO_PORT = String(PORT)
   process.env.NITRO_HOST = '127.0.0.1'
 
@@ -397,20 +413,63 @@ ipcMain.handle('set-config', (event, values) => {
   const existing = readConfigFile(configFile)
   const incoming = values && typeof values === 'object' ? values : {}
   const merged = { ...existing.values, ...incoming }
-  const lines = Object.entries(merged)
-    // A masked value coming BACK from get-config ('********') means the UI
-    // echoed the placeholder — keep the stored token.
-    .filter(([k, v]) => !(SECRET_SLOT_RE.test(k) && String(v) === '********'))
-    .map(([k, v]) => {
-      const stored = SECRET_SLOT_RE.test(k) ? encrypt(String(v)) : String(v)
-      return `${k}=${stored}`
-    })
-  fs.writeFileSync(configFile, lines.join('\n') + '\n', 'utf8')
+  // One writer: the masked-echo rule and at-rest encryption live in
+  // config-file.cjs, shared with the device credential broker.
+  writeConfigValues(configFile, merged)
   for (const [key, value] of Object.entries(incoming)) {
     if (SECRET_SLOT_RE.test(key) && String(value) === '********') continue
     process.env[key] = String(value)
   }
   return { success: true, path: configFile }
+})
+
+// v2 device-auth boundary. The renderer never talks to Hub for a full-session
+// auth call: Main derives the device identity, receives the optional device
+// service credential, writes it into the vault and returns only the session.
+const hubAuth = createHubLoginBroker({
+  configFile: userConfigPath,
+  readConfigFile,
+  writeConfigValues,
+  // No keychain, no credential on disk. The session still completes; the user
+  // re-enrols on a later sign-in instead of leaving a plaintext secret behind.
+  canPersistSecret: isEncryptionAvailable
+})
+
+ipcMain.handle('auth:device-info', (event) => {
+  if (!isTrustedSender(event)) return null
+  return hubAuth.deviceInfo()
+})
+
+ipcMain.handle('auth:login', async (event, credentials) => {
+  if (!isTrustedSender(event)) return { success: false, code: 'untrusted' }
+  const email = String(credentials?.email || '').trim()
+  const password = String(credentials?.password || '')
+  if (!email || !password) return { success: false, code: 'invalidRequest' }
+  return await hubAuth.login({ email, password })
+})
+
+ipcMain.handle('auth:verify-totp', async (event, input) => {
+  if (!isTrustedSender(event)) return { success: false, code: 'untrusted' }
+  return await hubAuth.verifyTotp(input)
+})
+
+ipcMain.handle('auth:passkey-start', async (event) => {
+  if (!isTrustedSender(event)) return { success: false, code: 'untrusted' }
+  return await hubAuth.passkeyStart()
+})
+
+ipcMain.handle('auth:passkey-finish', async (event, credential) => {
+  if (!isTrustedSender(event)) return { success: false, code: 'untrusted' }
+  return await hubAuth.passkeyFinish(credential)
+})
+
+ipcMain.handle('auth:register', async (event, input) => {
+  if (!isTrustedSender(event)) return { success: false, code: 'untrusted' }
+  const email = String(input?.email || '').trim()
+  const password = String(input?.password || '')
+  const name = String(input?.name || '').trim()
+  if (!email || !password || !name) return { success: false, code: 'invalidRequest' }
+  return await hubAuth.register({ email, password, name })
 })
 
 ipcMain.handle('open-path', async (event, fullPath) => {
@@ -468,7 +527,10 @@ app.whenReady().then(() => {
   // User config is loaded for every session so dev and prod see the same
   // env (set-if-unset semantics), then any pre-encryption plaintext keys
   // are migrated to keychain tokens before anything else touches the file.
+  // The baked public config is applied right after it because the Hub URL and
+  // app id gate the auth broker and the AI relay in both modes.
   loadUserConfig()
+  applyBakedPublicConfig()
   migrateStoredKeysToSecureStorage()
   protocol.handle('media', createMediaHandler(appOrigins))
 

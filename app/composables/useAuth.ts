@@ -1,5 +1,27 @@
 import type { AuthResponse, AuthUser, ForgotPasswordRequest, LoginPlatform, LoginRequest, RegisterRequest, ResetPasswordRequest, TotpChallenge } from '#shared/types/auth'
 import type { LoginStartResponse } from '#shared/types/webauthn'
+import { browserDeviceInfo } from '~/shared/utils/deviceIdentity'
+import { hubAuthBridge } from '~/utils/tmcut/hostBridge'
+
+/**
+ * Turn a broker failure into an Error the existing `getErrorMessage` pipeline
+ * understands: a Hub i18n key on `statusMessage`, so "device blocked" and
+ * "approval required" keep their dedicated copy instead of a generic 403.
+ */
+function hubBrokerError(result: { code: string, status?: number, statusMessage?: string, message?: string }): Error {
+  // `notConfigured` is raised when the app id is empty. The Hub URL cannot be
+  // the cause: the broker falls back to http://localhost:4000, so naming the
+  // URL here only sent people looking in the wrong place.
+  const message = result.code === 'notConfigured'
+    ? 'Hub App ID is not configured: this build has no baked app id and config.env has none'
+    : result.code === 'unreachable'
+      ? 'TM Hub did not answer'
+      : result.message || 'Authentication failed'
+  const error = new Error(message) as Error & { statusCode?: number, statusMessage?: string }
+  error.statusCode = result.status ?? (result.code === 'rejected' ? 401 : undefined)
+  error.statusMessage = result.statusMessage
+  return error
+}
 
 interface HubUserData {
   id: string
@@ -148,10 +170,28 @@ export const useAuth = () => {
     if (loading.value) return Promise.reject(new Error('Request in progress'))
     loading.value = true
     try {
+      // Electron: Main owns the device identity and the optional service
+      // credential, so the renderer never posts to Hub itself here. Web keeps
+      // the direct call with a browser-profile UUID.
+      const broker = hubAuthBridge()
+      if (broker) {
+        const result = await broker.login({ email: credentials.email || credentials.username || '', password: credentials.password })
+        if (!result.success) throw hubBrokerError(result)
+        const data = result.data as HubLoginData
+        if (data.totpRequired && data.pendingTotpToken && data.user) {
+          return {
+            totpRequired: true,
+            pendingTotpToken: data.pendingTotpToken,
+            user: { id: data.user.id, email: data.user.email, name: data.user.name }
+          }
+        }
+        return applyAuthData(data as HubAuthData)
+      }
+
       const { data } = await $fetch<{ success: boolean, data: HubLoginData }>(`${hubUrl}/api/v1/auth/login`, {
         method: 'POST',
         headers: { 'X-App-Id': appId },
-        body: { ...credentials, appId }
+        body: { ...credentials, appId, device: import.meta.client ? browserDeviceInfo() : undefined }
       })
 
       if (data.totpRequired && data.pendingTotpToken && data.user) {
@@ -172,10 +212,19 @@ export const useAuth = () => {
     if (loading.value) return Promise.reject(new Error('Request in progress'))
     loading.value = true
     try {
+      // The device identity must travel with the second factor too: that is the
+      // only full-session step, and the only point a credential may be issued.
+      const broker = hubAuthBridge()
+      if (broker) {
+        const result = await broker.verifyTotp({ code, pendingTotpToken })
+        if (!result.success) throw hubBrokerError(result)
+        return applyAuthData(result.data as HubAuthData)
+      }
+
       const { data } = await $fetch<{ success: boolean, data: HubAuthData }>(`${hubUrl}/api/v1/auth/totp/login`, {
         method: 'POST',
         headers: { 'X-App-Id': appId },
-        body: { code, pendingTotpToken, appId }
+        body: { code, pendingTotpToken, appId, device: browserDeviceInfo() }
       })
       return applyAuthData(data)
     } finally {
@@ -187,11 +236,17 @@ export const useAuth = () => {
     if (loading.value) return Promise.reject(new Error('Request in progress'))
     loading.value = true
     try {
-      const start = await $fetch<{ success: boolean, data: LoginStartResponse }>(`${hubUrl}/api/v1/auth/passkey/login/start`, {
-        method: 'POST',
-        headers: { 'X-App-Id': appId },
-        body: { appId }
-      })
+      const broker = hubAuthBridge()
+      const start = broker
+        ? await broker.passkeyStart().then((result) => {
+            if (!result.success) throw hubBrokerError(result)
+            return { success: true, data: result.data as LoginStartResponse }
+          })
+        : await $fetch<{ success: boolean, data: LoginStartResponse }>(`${hubUrl}/api/v1/auth/passkey/login/start`, {
+            method: 'POST',
+            headers: { 'X-App-Id': appId },
+            body: { appId }
+          })
       const opts = start.data
 
       const publicKey: PublicKeyCredentialRequestOptions = {
@@ -222,10 +277,17 @@ export const useAuth = () => {
         }
       }
 
+      const finishBroker = hubAuthBridge()
+      if (finishBroker) {
+        const result = await finishBroker.passkeyFinish(serialized)
+        if (!result.success) throw hubBrokerError(result)
+        return applyAuthData(result.data as HubAuthData)
+      }
+
       const finish = await $fetch<{ success: boolean, data: HubAuthData }>(`${hubUrl}/api/v1/auth/passkey/login/finish`, {
         method: 'POST',
         headers: { 'X-App-Id': appId },
-        body: { appId, credential: serialized }
+        body: { appId, credential: serialized, device: browserDeviceInfo() }
       })
       return applyAuthData(finish.data)
     } finally {
@@ -237,40 +299,19 @@ export const useAuth = () => {
     if (loading.value) return Promise.reject(new Error('Request in progress'))
     loading.value = true
     try {
-      const { data } = await $fetch<{ success: boolean, data: HubAuthData }>(`${hubUrl}/api/v1/auth/register`, {
-        method: 'POST',
-        headers: { 'X-App-Id': appId },
-        body: { ...input, appId }
-      })
+      const broker = hubAuthBridge()
+      const data = broker
+        ? await broker.register(input).then((result) => {
+            if (!result.success) throw hubBrokerError(result)
+            return result.data as HubAuthData
+          })
+        : (await $fetch<{ success: boolean, data: HubAuthData }>(`${hubUrl}/api/v1/auth/register`, {
+            method: 'POST',
+            headers: { 'X-App-Id': appId },
+            body: { ...input, appId, device: import.meta.client ? browserDeviceInfo() : undefined }
+          })).data
 
-      const formattedUser: AuthUser = {
-        id: data.user.id,
-        email: data.user.email,
-        name: data.user.name,
-        username: data.user.username,
-        role: data.user.roles?.[0] || 'user',
-        permissions: data.user.permissions || [],
-        platform: data.user.platform || 'web',
-        createdAt: data.user.createdAt || new Date().toISOString(),
-        updatedAt: data.user.updatedAt || new Date().toISOString()
-      }
-
-      user.value = formattedUser
-      accessToken.value = data.accessToken
-      refreshToken.value = data.refreshToken
-
-      const cookieAccess = useCookie('accessToken', { maxAge: data.expiresIn, path: '/', sameSite: 'lax' })
-      const cookieRefresh = useCookie('refreshToken', { maxAge: 604800, path: '/', sameSite: 'lax' })
-
-      cookieAccess.value = data.accessToken
-      cookieRefresh.value = data.refreshToken
-
-      return {
-        accessToken: data.accessToken,
-        refreshToken: data.refreshToken,
-        expiresIn: data.expiresIn,
-        user: formattedUser
-      }
+      return applyAuthData(data)
     } finally {
       loading.value = false
     }

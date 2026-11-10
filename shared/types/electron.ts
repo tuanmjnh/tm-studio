@@ -1,6 +1,7 @@
 import type { ApiResponse } from '~~/shared/contracts/common'
 import type { SystemInfoResponse, OpenDirectoryInput, StorageUsage } from '~~/shared/contracts/system.ipc'
 import type { EventBusContracts } from '~~/shared/contracts/events'
+import type { HubDeviceInfo } from '~~/shared/types/device'
 
 export interface FileStat {
   name: string
@@ -676,6 +677,8 @@ export interface ElectronAPI {
   getPathForFile(file: File): string
   getConfig(): Promise<Record<string, string>>
   setConfig(values: Record<string, string>): Promise<{ success: boolean, path: string }>
+  /** v2 device-auth boundary: Main holds the machine id and the device credential. */
+  deviceAuth?: DeviceAuthNamespace
   /** R140 (§204): at-rest key vault status — counts only, never tokens. */
   aiKeyStatus(): Promise<{ ok: boolean, data?: AiKeyVaultStatus }>
   /** R143 (§206): re-run the idempotent at-rest migration; fresh counts. */
@@ -718,4 +721,61 @@ declare global {
   interface Window {
     electronAPI?: ElectronAPI
   }
+}
+
+/** Hub session payload as returned to the renderer (a device credential never appears here). */
+export interface DeviceAuthSession {
+  accessToken: string
+  refreshToken: string
+  expiresIn: number
+  user: {
+    id: string
+    email: string
+    name: string
+    username?: string | null
+    avatarUrl?: string | null
+    roles?: string[]
+    permissions?: string[]
+    allowedRoutes?: string[]
+    appId?: string
+    prefix?: string
+    platform?: string
+    createdAt?: string
+    updatedAt?: string
+  }
+}
+
+/** TOTP challenge: authenticating with a password only, no session and no credential. */
+export interface DeviceAuthTotpChallenge {
+  totpRequired: true
+  pendingTotpToken: string
+  user: { id: string, email: string, name: string }
+}
+
+export type DeviceAuthResult
+  = | {
+    success: true
+    data: DeviceAuthSession | DeviceAuthTotpChallenge
+    /** True when Main stored a newly issued device credential in the vault. */
+    credentialPersisted?: boolean
+  }
+  | {
+    success: false
+    code: 'notConfigured' | 'unreachable' | 'rejected' | 'invalidRequest' | 'untrusted'
+    status?: number
+    statusMessage?: string
+    message?: string
+  }
+
+/**
+ * Main-process auth boundary for Electron. Every call carries the machine-derived
+ * device identity; only the session (or a TOTP challenge) comes back.
+ */
+export interface DeviceAuthNamespace {
+  info(): Promise<HubDeviceInfo | null>
+  login(credentials: { email: string, password: string }): Promise<DeviceAuthResult>
+  verifyTotp(input: { code: string, pendingTotpToken: string }): Promise<DeviceAuthResult>
+  passkeyStart(): Promise<{ success: true, data: unknown } | { success: false, code: string, statusMessage?: string, message?: string }>
+  passkeyFinish(credential: unknown): Promise<DeviceAuthResult>
+  register(input: { email: string, password: string, name: string }): Promise<DeviceAuthResult>
 }

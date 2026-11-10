@@ -17,11 +17,30 @@ const isHelpModalOpen = ref(false)
 const colors = ['red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose']
 const neutrals = ['slate', 'gray', 'zinc', 'neutral', 'stone', 'taupe', 'mauve', 'mist', 'olive']
 
+// Three steps, in order: the account's own picture, an image this install
+// ships, then initials. The middle step exists so a fresh install with no
+// uploaded avatar still shows a face — and so the fallback never points at
+// another site (the old one was a stranger's GitHub photo, and Chromium
+// blocked it with CORB on every page carrying this menu).
+const DEFAULT_AVATAR_URL = '/avatar-default.svg'
+
+const displayName = computed(() => auth.user.value?.name || auth.user.value?.email || t('common.guest'))
+
+const initials = computed(() => {
+  const source = displayName.value.trim()
+  if (!source) return ''
+  const words = source.split(/\s+/).filter(Boolean)
+  // A single word (a username, an email local part) gives two letters; a name
+  // gives the first letter of each of its first two words.
+  return (words.length === 1 ? words[0]!.slice(0, 2) : `${words[0]![0] ?? ''}${words[1]![0] ?? ''}`).toUpperCase()
+})
+
 const avatar = computed(() => ({
-  // `useAuth()` assigns avatarUrl; `avatar` is declared on the type but never
-  // populated. With no src the UAvatar falls back to the user's initials.
-  src: auth.user.value?.avatarUrl || undefined,
-  alt: auth.user.value?.name || 'User'
+  src: auth.user.value?.avatarUrl || DEFAULT_AVATAR_URL,
+  // `text` is what UAvatar draws once src is missing or the image errors, so
+  // the initials are the last resort rather than an accidental `alt` split.
+  text: initials.value,
+  alt: displayName.value
 }))
 
 const items = computed<DropdownMenuItem[][]>(() => [

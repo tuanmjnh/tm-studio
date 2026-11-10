@@ -7765,3 +7765,79 @@ toàn bộ `app/**/*.vue`, nên phần template đã đổi có test máy kiểm
 
 Còn lại đúng những gì §61.4 nói: chưa có phiên hub thật.
 
+
+## 62. Build security, root-only và avatar (đo ngày 2026-11-09)
+
+Chỉ thị kiến trúc ba phần (Q1 build secret, Q2 root-only, Q3 avatar) thi hành theo P0→P5; quyết định và số liệu
+đầy đủ ở [docs/architecture/electron-build-security.md](file:///D:/Applications/tm-studio/docs/architecture/electron-build-security.md).
+Mục này giữ những gì **đo trực tiếp trên artifact** và những gì **không chứng minh được**.
+
+### 62.1 Một dòng config đã ship một secret
+
+`nuxt.config.ts` từng đọc `process.env.NUXT_HUB_APP_SECRET` trong `runtimeConfig`. Nuxt serialize giá trị đó
+lúc build, nên literal 64 ký tự nằm trong `.output/server/chunks/_/nitro.mjs` và trong
+`release/win-unpacked/resources/app.asar.unpacked/.output/...` — 603 file được quét, một chỗ có.
+`AUTH_JWT_SECRET` không bao giờ có mặt, vì config đọc nó lúc chạy chứ không lúc build. Khác biệt nằm ở chỗ
+**biểu thức trong `nuxt.config.ts`**, không ở việc biến là "private".
+
+Sửa: `runtimeConfig.hubAppSecret = ''`, relay đọc `process.env` qua `server/utils/hubAppSecret.ts` mỗi request.
+Đo lại sau `pnpm build` (604 file) và sau `electron-builder --win` (540 file): **không secret nào**. Có test
+`tmcut_build_secrets.spec.ts` (5 check) chặn tái phát; nó bỏ comment trước khi so, để chính comment giải thích
+quy tắc không bị tính là vi phạm.
+
+### 62.2 RBAC phía server là policy rỗng
+
+`server/middleware/rbac.ts` có `permissionMap = {}` nên vòng lặp không chạy. `POST /api/v1/ai/discover` bắt
+Nitro fetch một URL do người gọi chọn — mọi tài khoản đăng nhập đều dùng được server làm proxy. Thay bằng
+`server/utils/serverAccess.ts`: hàm thuần, default-deny, allowlist tường minh; `rbac.ts` chỉ còn một lời gọi.
+
+Đo bằng token ký cục bộ (không in secret), dev `:4003`:
+
+```
+non-root POST /api/v1/ai/discover      -> 403 error.forbidden
+admin    POST /api/v1/ai/discover      -> 200
+root     POST /api/v1/ai/discover      -> 200
+non-root GET  /api/v1/process/runs     -> 200
+non-root GET  /api/v1/ai/relay/catalog -> 401 error.unauthorized  (policy cho qua, Hub từ chối)
+non-root GET  /api/v1/unknown-route    -> 403 error.forbidden     (default-deny)
+```
+
+Cùng 5 check trên server **đã build** (`.output/server/index.mjs`, `:4099`): 5/5, nên policy ship trong artifact
+chứ không chỉ ở dev. Token ký HS256 cục bộ bằng đúng secret dev — chưa phải tài khoản Hub thật.
+
+### 62.3 Avatar
+
+`UserMenu.vue` đọc `auth.user.avatarUrl`; fallback là `/avatar-default.svg` đóng gói trong `public/`; cuối cùng
+là chữ cái đầu qua `text` của `UAvatar`. Trang profile đọc `u.avatarUrl` thay vì `u.avatar` chưa bao giờ được
+gán. 8 check trong `tmcut_user_menu_avatar.spec.ts`.
+
+Phía tm-hub cần commit phần `me.get.ts` / `me.put.ts` đang uncommitted (thêm `avatar_url` + `name` vào select,
+echo `avatarUrl` cùng tên trường); nếu không, `fetchUser` vẫn nhận `avatarUrl: null` và rơi xuống bước 2.
+
+### 62.4 JWT và P4
+
+`tokenVerify.ts` xác thực theo thứ tự public JWK inline → JWKS URL → introspection → HS256. 16 check trong
+`tmcut_token_verify.spec.ts`, gồm `alg: none`, `purpose: totp`, JWK có `d`, và cache introspection tới hạn.
+`POST /api/v1/auth/introspect` đã kiểm tra trên Hub production: token rác trả `valid:false`, không có header
+trả 400.
+
+**BLOCKED:** Hub chưa phát hành JWKS (ba URL thử đều trả SPA HTML) và chưa có API device enrollment. Vì vậy
+bước 2 của P3 và toàn bộ P4 chưa đóng được; tm-studio không nhét app secret vào build để lấp, mà đọc env lúc
+chạy và để slot đó được mã hoá trong `userData/config.env`.
+
+### 62.5 Gate của slice này
+
+| Gate | Lệnh | Kết quả |
+|---|---|---|
+| Types | `npx nuxt typecheck` | exit 0, 0 `error TS` |
+| Lint | `npx eslint` 21 file đã sửa (sau gate types) | exit 0, 0 problem |
+| Unit | `npx tsx tests/unit/run-all.mts` | 132/132 |
+| Build | `pnpm build` | exit 0 |
+| Package | `electron-builder --win --publish never` | exit 0, `tm-studio-1.0.0-setup.exe` |
+| Secrets | quét `.output` (604) + artifact (540) | 0 |
+| Live dev | 6 check policy | 6/6 |
+| Live built | 5 check policy | 5/5 |
+
+Chưa chứng minh: cài trên máy sạch; hai user Windows; đăng nhập bằng tài khoản Hub thật trong bản đóng gói;
+first-run enrollment/revoke **trong bản đóng gói** (đường code v2 đã có, xem
+`docs/architecture/electron-build-security.md` §8); ký số installer; avatar render trong app đã cài.
