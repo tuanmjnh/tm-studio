@@ -1,7 +1,7 @@
 # TMCut Studio — Đặc tả Giao diện Spatial 3D Glassmorphism (Dark & Light Mode), Bộ Prompt Google Stitch & Kiến trúc Nuxt UI v4 + Three.js
 
-> **Trạng thái:** ACTIVE — Tài liệu chuẩn thiết kế & triển khai UI/UX (Bản đầy đủ thay thế toàn bộ bản cũ)
-> **Cập nhật lần cuối:** 2026-10-31
+> **Trạng thái:** **SUPERSEDED (2026-11-01)** — bản đặc tả UI đang dùng là `docs/design/TMCut Studio-Interface Specification Linear Flat Glassmorphism & Bento UI (Dark & Light Mode).md`, tài liệu đó tự khai thay thế bản 3D này. Giữ lại để tra cứu lịch sử: Three.js/TresJS **không** có trong `package.json`, và `app/` không mở context WebGL nào — phần 3D ở đây là một định hướng chưa từng được triển khai.
+> **Cập nhật lần cuối:** 2026-10-31 (nội dung); trạng thái sửa ngày 2026-11-11
 > **Áp dụng cho:** `tm-studio` (`D:\Applications\tm-studio`, port 4003, App ID `tm-studio_749app`)
 > **Nền tảng kỹ thuật:** Nuxt 4 + Vue 3 + **Nuxt UI v4** + **Tailwind CSS v4** + Three.js (TresJS) + Electron
 

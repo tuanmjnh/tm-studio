@@ -12,10 +12,10 @@ thức được giữ lại để tham chiếu lịch sử, và trạng thái c�
 | Probe / demux / mux | `mediabunny` | đọc metadata, `CanvasSink` cho thumbnail, `Mp4OutputFormat` cho file ra |
 | Decode / encode | WebCodecs (`VideoDecoder`, `VideoEncoder`, `AudioDecoder`, `AudioEncoder`) | đường duy nhất; hỏi `isConfigSupported` trước khi chạy |
 | Audio | Web Audio API | mix, gain, waveform; PCM offline cho export |
-| Composition | Canvas 2D + WebGL2, WebGPU khi runtime có | preview composite và painter của exporter |
+| Composition | Preview: DOM + CSS `filter` trên các surface media. Export: Canvas 2D (`ctx.filter`, `drawImage`) | painter của exporter và composite của preview — **không có WebGL2 hay WebGPU renderer trong code**; xem ghi chú dưới bảng |
 | Lưu bytes | OPFS, fallback IndexedDB | client byte cache khoá theo fingerprint |
 
-Ba điều người đọc tài liệu này phải nhớ:
+Bốn điều người đọc tài liệu này phải nhớ:
 
 - **Browser và Electron dùng chung một Media Engine.** Electron chỉ là shell; nó không có engine riêng và
   không có đường media thứ hai (ADR-032).
@@ -23,6 +23,10 @@ Ba điều người đọc tài liệu này phải nhớ:
   hướng dẫn cài.
 - **Một hàm, một engine.** Preview và export đọc cùng một evaluator, nên không có chuyện monitor và file
   trả lời hai câu khác nhau (ADR-031).
+- **Không có GPU renderer.** Bảng trên từng ghi "Canvas 2D + WebGL2, WebGPU" như một kế hoạch; code hiện tại
+  không có renderer đó. `app/composables/useTmcutPlatform.ts` khai `webGPU: false` cho cả hai host, không
+  file nào trong `app/` mở context WebGL, và lần `getContext('webgl2')` duy nhất trong repo là một health
+  check ở `packages/core/src/crashRecovery.mjs`. Đây là giới hạn sản phẩm, không phải thiếu sót cần che.
 
 ---
 
@@ -31,14 +35,21 @@ Ba điều người đọc tài liệu này phải nhớ:
 **Nguyên tắc phân vai:**
 - **Core Engine** = "xương sống" — quản lý timeline, composition, và gọi render.
 - **Motion Layer** = tạo hiệu ứng chuyển động (CSS/JS/GSAP/timeline).
-- **GPU Effects Layer** = xử lý pixel-level bằng WebGL/WebGPU (filter, blur, transition).
+- **Effects Layer** = xử lý pixel-level bằng CSS `filter` trên DOM (preview) và `ctx.filter` trên Canvas 2D
+  (export). Không có lớp WebGL/WebGPU nào tồn tại trong code; nếu sau này thêm GPU compositor thì nó là
+  renderer thứ hai và phải đi kèm test riêng, không được thay thế ngầm lớp này.
 - **Render Layer** = đóng gói frame → video file.
 
 ---
 
 ## 3. Bảng phân loại nhanh (Capability Matrix)
 
-| # | Package / Tên | Vai trò | Dùng để xây app? | Dùng để làm hiệu ứng? | Cần cho pipeline? |
+> **Đây là bảng nghiên cứu, không phải danh sách dependency.** Đo trên `package.json` hôm nay: **0 trong 12**
+> thư viện ở cột "Package" có mặt trong dependency tree — kể cả những hàng từng ghi "⭐ Bắt buộc".
+> Cột cuối ghi *đánh giá tại thời điểm khảo sát*, không phải trạng thái đã chọn. Stack thật nằm ở §1;
+> chỉ `mediabunny` (hàng 16) là dependency.
+
+| # | Package / Tên | Vai trò | Dùng để xây app? | Dùng để làm hiệu ứng? | Đánh giá tại thời điểm khảo sát |
 |---|---|---|---|---|---|
 | 1 | `@diffusionstudio/core` | Core Engine | ✅ | ✅ (2D composition) | ⭐ Khuyến nghị |
 | 2 | `@johnesleyer/tiramisu` | Core Engine (WebGL) | ✅ | ✅ (shader effects) | Thay thế #1 |
@@ -66,6 +77,11 @@ Ba điều người đọc tài liệu này phải nhớ:
 ## 4. CHI TIẾT TỪNG THƯ VIỆN
 
 ### 4.1. CORE ENGINE (Xương sống ứng dụng)
+
+> **Vai trò này đã có chủ.** "Core engine" trong sản phẩm là `tmcut-core` (`packages/core`), viết trong
+> repo này, không phải một thư viện ngoài. `@diffusionstudio/core` bên dưới là thư viện đã khảo sát và
+> **không được cài** — quyết định chốt là sở hữu luật dựng phim trong nhà để preview và export đọc cùng
+> một evaluator. Đo hôm nay: `@diffusionstudio/core` không có trong `package.json`.
 
 #### 🔹 `@diffusionstudio/core`
 - **Vai trò:** 2D motion graphics engine + video renderer, xây dựng riêng cho WebCodecs.
@@ -148,6 +164,12 @@ Ba điều người đọc tài liệu này phải nhớ:
 ---
 
 ### 4.3. GPU EFFECTS LAYER
+
+> **Cả bốn thư viện trong mục này đều là nghiên cứu, không phải dependency.** Không thư viện nào có mặt
+> trong `package.json`, và **không có GPU effects layer nào trong code**: preview áp look bằng CSS `filter`
+> trên phần tử DOM, export áp bằng `ctx.filter` trên Canvas 2D. Mục này giữ lại để tham chiếu nếu sau này
+> quyết định thêm GPU compositor — khi đó nó phải là renderer thứ hai có test riêng, không thay thế ngầm
+> đường DOM/canvas hiện tại (xem ghi chú §1).
 
 #### 🔹 `longpipe` ⚠️
 - **Vai trò:** SDK hiệu ứng video trên WebGPU/WebGL2.
