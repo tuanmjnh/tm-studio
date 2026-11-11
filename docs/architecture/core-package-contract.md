@@ -112,17 +112,23 @@ Not proven by it:
   asserts the tail overrun stays inside one packet rather than pretending it is exact. A consumer
   that needs sample-exact ends would need a tail law this seam does not have.
 - **Audio from a committed container fixture.** All four `tests/fixtures/containers/*` are
-  video-only, so that check reports a declared SKIP rather than a pass. The multi-packet stream is
-  built at run time instead of committed.
-- **AAC.** The in-page fixture encodes Opus, the one lossy codec this browser will encode. AAC would
-  need a committed file and an encoder the browser does not offer.
+  video-only. Sound is covered twice instead: a multi-packet Opus stream is built at run time, and
+  `tests/fixtures/audio/aac-tone-then-silence.m4a` is committed and measured as a real file.
+- **AAC encoding in the exporter.** The harness asks `AudioEncoder` about both AAC spellings and
+  prints the answer, and nothing more: it never encodes AAC and never asserts that the exporter can.
+  On Edge `157.0.4341.46` the answer is `mp4a.40.2` supported / `aac` rejected for stereo 48 kHz,
+  and refused for mono and 32 kHz — the answer is configuration-scoped, so the harness records the
+  config it asked about rather than a codec-level verdict. See
+  [the evidence README](../audit/evidence/dod-2026-11-09/README.md).
 - **The Electron renderer.** The check runs in a Chromium launched by `playwright-core`; the packaged
   app is a separate runtime.
-- **CI.** The repository has no CI configuration, so this runs where a browser and a dev server
-  exist and reports SKIP elsewhere. When a CI job is added, set `TMCUT_BROWSER_REQUIRED=1` in it:
-  the harness then exits non-zero on a skip instead of green over nothing. That switch is
+- **CI.** `.github/workflows/ci.yml` runs this on `windows-latest` with `TMCUT_BROWSER_REQUIRED=1`
+  and the `msedge` channel, on the same commit as the quality gates. A skip, a launch failure or a
+  short run exits non-zero, so a green browser job means the checks ran. That switch is
   regression-tested by `tests/unit/tmcut_browser_harness.spec.ts`, which runs the harness against a
-  dead port and asserts both outcomes.
+  dead port and asserts both outcomes. What CI still cannot see: the packaged Electron runtime, a
+  machine without Edge, and `pnpm lint` over the whole tree (the repository carries pre-existing
+  lint debt, so CI lints changed files only).
 
 ## 7. Restart conditions for the `media-core` extraction
 

@@ -7595,6 +7595,11 @@ Ghi chú đo:
 - **Firefox**: 2 dòng `Unsupported` là thật và có tên. Nếu Firefox vào phạm vi sản phẩm thì export phải
   hoặc chọn codec audio khác (Opus) hoặc báo `Partially Supported` cho file có audio AAC; WebGPU chỉ là
   đường tăng tốc tuỳ chọn nên không chặn.
+- **Audio AAC không phải một dòng.** Bảng trên gộp demux, decode và encode AAC thành một ô, nhưng ba
+  khả năng đó trả lời độc lập và encode còn phụ thuộc cấu hình (số kênh, sample rate). Ba dòng tách
+  riêng, đo trên Edge `157.0.4341.46` với fixture `tests/fixtures/audio/aac-tone-then-silence.m4a`,
+  nằm ở [evidence/dod-2026-11-09/README.md](evidence/dod-2026-11-09/README.md#aac-split-into-demux--decode--encode-measured-2026-11-11).
+  Lượt đo này không sửa export: app vẫn hỏi trước khi encode và từ chối khi câu trả lời là không.
 
 ### 59.7 Ba trạng thái giữ nguyên như chủ repo yêu cầu
 

@@ -355,7 +355,7 @@ Every command below exists in `package.json`.
 | Core boundaries | `pnpm check:core` | forbidden-import scan on the core |
 | Core tests | `pnpm test:core` | 919 tests across 136 suites |
 | Unit specs | `pnpm test:unit` | 140 specs: behaviour, source contracts, documentation guards |
-| Browser integration | `pnpm test:browser` | 13 checks over the real media modules in Chromium; needs `pnpm dev` and a browser |
+| Browser integration | `pnpm test:browser` | 17 checks over the real media modules in Chromium; needs `pnpm dev` and a browser |
 | Electron tests | `pnpm test:electron` | 6 node:test files over Electron tool modules |
 | Everything | `pnpm test` | unit suite then Electron suite (not the browser check) |
 | Hygiene | `pnpm check:hygiene` | fails if compiled `.js` sits next to its `.ts` source |
@@ -371,7 +371,8 @@ Distinctions that matter:
   out of `pnpm test` because it needs a browser and a running dev server, and it prints SKIP with
   the reason when either is missing rather than passing silently. Set `TMCUT_BROWSER_REQUIRED=1`
   in CI: that turns a skip into a non-zero exit, so a job that exists to measure decode cannot go
-  green having measured nothing. Locally the default stays permissive.
+  green having measured nothing. Locally the default stays permissive. CI runs it in
+  `.github/workflows/ci.yml` on Windows, where Microsoft Edge is present.
 - **Electron tests** exercise the main-process tool modules in plain Node, not in a live window.
 - **Hygiene** guards against a `.js` twin shadowing its `.ts` source at resolution time.
 
@@ -380,8 +381,11 @@ Two working notes:
 - Run `pnpm typecheck` **before** linting a file you touched. `nuxt typecheck` regenerates
   `.nuxt/eslint.config.mjs`, which the root config re-exports; a lint result obtained before that
   regeneration can be stale.
-- `pnpm lint` is `eslint .`. When a change touches a handful of files, lint those files by name
-  rather than the whole tree, so pre-existing debt elsewhere is not attributed to the change.
+- `pnpm lint` is `eslint .`, and the repository currently carries 1024 pre-existing errors across
+  75 files. CI therefore lints **only the files a change touches**: a required repo-wide step would
+  be red before any change lands, which trains everyone to ignore it. Paying that debt down is a
+  separate piece of work; until then, lint the files you change by name so old debt is never
+  attributed to a new change.
 
 The documentation guards are part of the unit suite: link integrity, table shape, prose line
 length, character set, source citation resolution, and the markdown reader itself.

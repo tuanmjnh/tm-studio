@@ -1,0 +1,208 @@
+name: CI
+
+# Two required checks and nothing else.
+#
+# Job A answers "does the source still build and pass its suites". Job B answers
+# the one question Node cannot: does the browser runtime actually decode. They
+# are separate jobs on purpose — Job B needs Windows and a real Edge, and a
+# failure there should name the browser, not smear across the type checker.
+#
+# Windows installer packaging is deliberately NOT here. Packaging fails for
+# permission reasons (symlink privileges, drive integrity labels) that have
+# nothing to do with source quality, and mixing them makes a red build ambiguous.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Node 24 satisfies the `engines` range in package.json and matches the lockfile.
+  NODE_VERSION: '24'
+
+jobs:
+  quality-gates:
+    name: Quality gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The changed-files lint below diffs against the base commit, so the
+          # history has to be there rather than a shallow single commit.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Typecheck runs FIRST because `nuxt typecheck` regenerates
+      # .nuxt/eslint.config.mjs. Linting before this step answers a question
+      # about a config file that is about to be replaced.
+      - name: Typecheck (app)
+        run: pnpm typecheck
+
+      # ESLint on the files this change touches, not the whole tree.
+      #
+      # The repository carries 1024 pre-existing lint errors across 75 files.
+      # A repo-wide `pnpm lint` in a required job would be red before any change
+      # lands, which teaches everyone to ignore it. This gate fails only when the
+      # change under review introduces a problem — the same rule as AGENTS.md
+      # ("ESLint check on modified files").
+      - name: Lint changed files
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="origin/${{ github.base_ref }}"
+          elif [ "${{ github.event_name }}" = "push" ] && [ -n "${{ github.event.before }}" ] \
+            && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+            BASE="${{ github.event.before }}"
+          else
+            BASE="$(git rev-parse HEAD^)"
+          fi
+
+          echo "Lint base: $BASE"
+          mapfile -t CHANGED < <(git diff --name-only --diff-filter=ACMR "$BASE"...HEAD -- \
+            '*.ts' '*.mts' '*.js' '*.cjs' '*.mjs' '*.vue')
+
+          if [ "${#CHANGED[@]}" -eq 0 ]; then
+            echo "No lintable files changed; nothing for ESLint to judge."
+            exit 0
+          fi
+
+          printf 'Linting %d file(s):\n' "${#CHANGED[@]}"
+          printf '  %s\n' "${CHANGED[@]}"
+          pnpm exec eslint "${CHANGED[@]}"
+
+      - name: Build the core package
+        run: pnpm build:core
+
+      - name: Typecheck the core package
+        run: pnpm typecheck:core
+
+      - name: Core import boundaries
+        run: pnpm check:core
+
+      - name: Core test suite
+        run: pnpm test:core
+
+      - name: Unit specs
+        run: pnpm test:unit
+
+      - name: Electron tests
+        run: pnpm test:electron
+
+      - name: Source hygiene (no emitted twins)
+        run: pnpm check:hygiene
+
+  browser-media:
+    name: Browser media integration
+    # Windows: the only runner that ships Microsoft Edge, which is the browser
+    # the packaged app's renderer is built on. playwright-core resolves that
+    # system Edge, so no browser download and no extra dependency is needed.
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Record the runtime under test
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci-artifacts
+          {
+            echo "node: $(node --version)"
+            echo "pnpm: $(pnpm --version)"
+            echo "os: $(uname -a)"
+          } | tee ci-artifacts/runtime.txt
+
+          # Edge ships on windows-latest. If this fails, the browser job is about
+          # to fail too, and the log should say why before the harness runs.
+          powershell -NoProfile -Command \
+            "\$p = 'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe'; \
+             if (-not (Test-Path \$p)) { Write-Error 'Microsoft Edge not found'; exit 1 }; \
+             (Get-Item \$p).VersionInfo.ProductVersion" \
+            | tee ci-artifacts/edge-version.txt
+
+      # The dev server and the harness share one step on purpose. A process
+      # started in one step is not guaranteed to still be running in the next:
+      # GitHub tears down the process group between steps. Here the server's
+      # lifetime is bounded by the same shell that consumes it.
+      #
+      # TMCUT_BROWSER_REQUIRED=1 is what makes this a measurement rather than a
+      # formality: without a browser, without the dev server, or without a full
+      # run of the checks, the harness exits non-zero instead of printing SKIP
+      # and exiting 0. That switch is guarded by
+      # tests/unit/tmcut_browser_harness.spec.ts, which exercises the skip path
+      # against a dead port.
+      - name: Browser media integration
+        shell: bash
+        env:
+          TMCUT_BROWSER_REQUIRED: '1'
+          TMCUT_BROWSER_CHANNEL: msedge
+          TMCUT_DEV_URL: http://localhost:4003
+        run: |
+          set -euo pipefail
+          pnpm dev > ci-artifacts/dev-server.log 2>&1 &
+          DEV_PID=$!
+          trap 'kill "$DEV_PID" 2>/dev/null || true' EXIT
+
+          up=no
+          for i in $(seq 1 90); do
+            if curl -fsS -o /dev/null http://localhost:4003/login; then
+              echo "dev server answered after ${i}s"
+              up=yes
+              break
+            fi
+            sleep 1
+          done
+          if [ "$up" != yes ]; then
+            echo "dev server never answered on :4003"
+            tail -50 ci-artifacts/dev-server.log
+            exit 1
+          fi
+
+          # The harness counts its own checks and exits non-zero on any failure.
+          # No pipe here: a pipeline would mask the exit code behind `tee`.
+          # `set +e` around the call because errexit would end the script before
+          # the log is printed.
+          set +e
+          pnpm test:browser > ci-artifacts/browser-media.log 2>&1
+          EXIT=$?
+          set -e
+          cat ci-artifacts/browser-media.log
+          exit $EXIT
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-media-${{ github.run_id }}
+          path: ci-artifacts/
+          if-no-files-found: warn
+          retention-days: 7

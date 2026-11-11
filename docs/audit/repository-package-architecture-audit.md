@@ -531,7 +531,7 @@ The criteria, re-measured when the decision was taken:
 Criterion (b) is now answered by a browser instead of Node: `tests/e2e/browser_media_integration.mts`
 loads the real modules into Chromium and measures probe, capability, three byte-distinct frames, PCM
 amplitude, head alignment and tail overrun on a multi-packet Opus stream, corrupt-input handling and
-cancellation (`pnpm test:browser`, 13 checks). That closes the
+AAC demux/decode/encode and cancellation (`pnpm test:browser`, 17 checks). That closes the
 question "does the browser-first runtime actually decode" — it does not close the extraction, because
 criteria (c) and the dependency mechanism below are unrelated to it.
 
@@ -586,7 +586,7 @@ and prose. The gates below were re-run after that change:
 | Core types | `npx tsc --noEmit -p packages/core/tsconfig.check.json` | exit 0 |
 | Core boundaries | `node packages/core/tools/check-boundaries.mjs` | exit 0, PASS |
 | Unit suite | `npx tsx tests/unit/run-all.mts` | **139/139** specs, exit 0 |
-| Browser decode | `pnpm test:browser` | exit 0 — **13 checks** on the `msedge` channel: probe, WebCodecs, 6-key capability record, both seams, three byte-distinct frames, a WAV that decodes to the authored peak, five ranged reads of a multi-packet Opus stream (head alignment plus a bounded tail overrun), corrupt input, two aborts, no page error; one declared **PARTIAL** because every committed fixture is video-only |
+| Browser decode | `pnpm test:browser` | exit 0 — **17 checks** on the `msedge` channel: probe, WebCodecs, 6-key capability record, both seams, three byte-distinct frames, a WAV that decodes to the authored peak, five ranged reads of a multi-packet Opus stream (head alignment plus a bounded tail overrun), AAC demux from a committed fixture, AAC decode through the container's own decoder config, AAC encode answers for both spellings, corrupt input, two aborts, no page error; one declared **PARTIAL** because the video containers carry no sound |
 | Electron suite | `node --test "electron/tools/*.test.mjs"` | **80/80**, exit 0 |
 | Hygiene | `npx tsx scripts/check-source-hygiene.mts` | exit 0, no emitted twins |
 

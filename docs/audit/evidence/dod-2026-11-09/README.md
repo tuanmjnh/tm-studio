@@ -18,6 +18,38 @@ them is a real difference in the runtime.
 `chrome-headless-note.json` records a separate finding: the DoD 24 page never passes its first
 encode stage under headless Chrome, so headless is not a valid harness for the heavy measurements.
 
+### AAC, split into demux / decode / encode (measured 2026-11-11)
+
+The matrix above reports audio AAC as one line per runtime, which hides that demuxing a file,
+decoding its samples and encoding new ones are three different capabilities with three different
+answers. They are measured separately here by
+[`tests/e2e/browser_media_integration.mts`](../../../../tests/e2e/browser_media_integration.mts)
+against the committed fixture
+[`tests/fixtures/audio/aac-tone-then-silence.m4a`](../../../../tests/fixtures/audio/aac-tone-then-silence.m4a)
+(provenance, checksum and generation command: [its README](../../../../tests/fixtures/audio/README.md)).
+
+| Capability | How it is asked | Edge `157.0.4341.46`, Windows 10 | Notes |
+|---|---|---|---|
+| **AAC demux** | Mediabunny reads the container and reports track codec/rate/channels/duration | **Supported** | One audio track, zero video, `aac`, 48 000 Hz, mono, 1.000 s, `importStatus: ready` |
+| **AAC decode** | `AudioDecoder.isConfigSupported` with **the container's own** decoder config (`mp4a.40.2`), then a real decode | **Supported** | 48 128 samples for a 1.0 s ask; tone half peaks 0.513 (authored 0.5), silence half 0.0012 |
+| **AAC encode** | `AudioEncoder.isConfigSupported` for both spellings, stereo 48 kHz, 128 kbps | **Supported for `mp4a.40.2`; `aac` rejected** | The two spellings are not synonyms on this runtime, which is why the export ladder asks both |
+
+Two things this table deliberately does not say:
+
+- **It is not the same build, and the older row does not name its config.** The DoD 25 runs above
+  were taken on `157.0.4341.42`; this one on `157.0.4341.46`. The `.42` row records `encode audio
+  mp4a.40.2: supported=true` without saying how many channels or what rate it asked about, so it
+  cannot be compared with the row below — and the encode answer is configuration-scoped (see the
+  last paragraph). Recording the build string is the only way to keep a change between builds from
+  reading as a regression in the source.
+- **Encode support is not an export claim.** The exporter asks before it encodes and refuses
+  honestly when the answer is no. Nothing in the app was changed to match this measurement; the
+  measurement is what the app would be told if it asked today.
+
+An encode answer is configuration-scoped, not codec-scoped: on `.46`, `mp4a.40.2` is supported at
+stereo 44.1/48 kHz and refused at mono 48 kHz, mono 32 kHz and 6-channel 48 kHz. A one-line
+"supports AAC encode: yes" would therefore be wrong in both directions.
+
 ## DoD 24 — large-file and memory (§59.5)
 
 Generated inside the app's Electron runtime with the shipping encoder path (WebCodecs →
