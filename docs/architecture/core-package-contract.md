@@ -97,13 +97,25 @@ core reports 6 capability keys; start/middle/end decode to three byte-distinct P
 decodes to 8000 Hz mono PCM at the authored amplitude (0.366 ≈ 12000/32768); a corrupt container
 answers `null`; an aborted ask returns `null` on both seams.
 
+The harness also builds a **multi-packet Opus stream in the page** — `AudioBufferSource` over the
+mediabunny the app already depends on, so no new dependency and no committed fixture — and ranges it
+five ways. Its four blocks descend 0.8 / 0.4 / 0.2 / 0.1, which is what makes the measurement
+discriminating: an untrimmed head leaks the louder block before the ask and the head amplitude
+doubles. Measured on 2026-11-11 in Edge: all five ranges start at the block they asked for
+(0.81 / 0.40 / 0.80 / 0.20 / 0.20 against 0.8 / 0.4 / 0.8 / 0.2 / 0.2), and every answer runs 3–13 ms
+past its ask — never more than one packet. Removing `pcmHeadTrim` from a scratch copy fails two of
+the five, so the check tests the trim rather than the decoder.
+
 Not proven by it:
 
-- **Range trimming of a multi-packet audio stream.** WAV is a single packet, so
-  `pcmHeadTrim` did not have to cut anything — both windows returned the whole file. Proving the trim
-  needs a fixture with several audio packets, which the repository does not carry.
+- **Tail trimming.** There is none, by design: `decodePcm` trims the head only, and the harness now
+  asserts the tail overrun stays inside one packet rather than pretending it is exact. A consumer
+  that needs sample-exact ends would need a tail law this seam does not have.
 - **Audio from a committed container fixture.** All four `tests/fixtures/containers/*` are
-  video-only, so that check reports a declared SKIP rather than a pass.
+  video-only, so that check reports a declared SKIP rather than a pass. The multi-packet stream is
+  built at run time instead of committed.
+- **AAC.** The in-page fixture encodes Opus, the one lossy codec this browser will encode. AAC would
+  need a committed file and an encoder the browser does not offer.
 - **The Electron renderer.** The check runs in a Chromium launched by `playwright-core`; the packaged
   app is a separate runtime.
 - **CI.** The repository has no CI configuration, so this runs where a browser and a dev server

@@ -48,6 +48,11 @@ export interface TmcutPcmAsk extends TmcutMediaRead {
  * whole packets, so Chromium answered an ask of 0.5 s with the packet starting at
  * 0.48762 s, and 546 samples of tone at the head of a level window were enough to
  * call a quiet second loud half a second later than it is. `pcmHeadTrim` is core's.
+ *
+ * Only the head is trimmed. The run can end up to one packet past `outSec`, which
+ * the browser harness measures rather than assumes: five ranged reads of a
+ * real Opus stream came back 3 to 13 ms long at 48 kHz. That is fine for a level
+ * window and would not be for a sample-exact join.
  */
 export async function decodePcm(ask: TmcutPcmAsk): Promise<{ sampleRate: number, channels: Float32Array[] } | null> {
   const from = Number(ask.inSec)

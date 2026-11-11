@@ -355,7 +355,7 @@ Every command below exists in `package.json`.
 | Core boundaries | `pnpm check:core` | forbidden-import scan on the core |
 | Core tests | `pnpm test:core` | 919 tests across 136 suites |
 | Unit specs | `pnpm test:unit` | 140 specs: behaviour, source contracts, documentation guards |
-| Browser integration | `pnpm test:browser` | 11 checks over the real media modules in Chromium; needs `pnpm dev` and a browser |
+| Browser integration | `pnpm test:browser` | 13 checks over the real media modules in Chromium; needs `pnpm dev` and a browser |
 | Electron tests | `pnpm test:electron` | 6 node:test files over Electron tool modules |
 | Everything | `pnpm test` | unit suite then Electron suite (not the browser check) |
 | Hygiene | `pnpm check:hygiene` | fails if compiled `.js` sits next to its `.ts` source |

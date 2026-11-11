@@ -23,8 +23,11 @@
  *                   instant rather than a still that would pass a shape-only check
  *   5. audio      — a generated WAV decodes to real PCM whose peak matches the
  *                   authored amplitude; no committed fixture carries audio
- *   6. errors     — a corrupt container answers `null` instead of throwing
- *   7. cancel     — an already-aborted ask returns `null` for both seams
+ *   6. audio range — a multi-packet Opus file is built in the page and asked for
+ *                   several sub-ranges: the head must be aligned to the ask, and
+ *                   the tail overrun must stay inside one packet
+ *   7. errors     — a corrupt container answers `null` instead of throwing
+ *   8. cancel     — an already-aborted ask returns `null` for both seams
  *
  * Run:
  *   node node_modules/tsx/dist/cli.mjs tests/e2e/browser_media_integration.mts
@@ -219,6 +222,65 @@ try {
     let peak = 0
     if (pcm) for (const channel of pcm.channels) for (const value of channel) peak = Math.max(peak, Math.abs(value))
 
+    // A multi-packet stream, because a WAV is one packet and cannot exercise a
+    // range at all. Opus in WebM, encoded in this page with the mediabunny the app
+    // already depends on and WebCodecs it already uses. Four 250 ms blocks at
+    // 0.8/0.4/0.2/0.1 of full scale — descending on purpose: an untrimmed head
+    // leaks the louder block before the ask, which an ascending ladder would hide.
+    const ranges: Array<{
+      inSec: number
+      outSec: number
+      askedSamples: number
+      deliveredSamples: number
+      headPeak: number
+      expectedHead: number
+    }> = []
+    let multiPacket: { codec: string | null, tracks: number } | null
+    try {
+      const mb = await import(/* @vite-ignore */ '/_nuxt/@id/mediabunny')
+      const toneRate = 48000
+      const toneSamples = toneRate
+      const levels = [0.8, 0.4, 0.2, 0.1]
+      const tone = new Float32Array(toneSamples)
+      for (let i = 0; i < toneSamples; i++) {
+        const block = Math.min(levels.length - 1, Math.floor(i / (toneSamples / levels.length)))
+        tone[i] = Math.sin(2 * Math.PI * 440 * (i / toneRate)) * levels[block]!
+      }
+      const output = new mb.Output({ format: new mb.WebMOutputFormat(), target: new mb.BufferTarget() })
+      const source = new mb.AudioBufferSource({ codec: 'opus', quality: mb.QUALITY_HIGH })
+      output.addAudioTrack(source)
+      await output.start()
+      const audioBuffer = new AudioBuffer({ length: toneSamples, numberOfChannels: 1, sampleRate: toneRate })
+      audioBuffer.copyToChannel(tone, 0)
+      await source.add(audioBuffer)
+      source.close()
+      await output.finalize()
+      const stream = new Blob([new Uint8Array(output.target.buffer)], { type: 'audio/webm' })
+      const streamInfo = await probe.probeMedia({ name: 'blocks.webm', size: stream.size, mimeType: 'audio/webm', blob: stream })
+      multiPacket = { codec: streamInfo.audioTracks[0]?.codec ?? null, tracks: streamInfo.audioTracks.length }
+
+      for (const [from, to] of [[0, 0.5], [0.25, 0.5], [0.1, 0.4], [0.5, 0.75], [0.6, 0.9]] as const) {
+        const part = await sound.decodePcm({ bytes: stream, src: null, signal, inSec: from, outSec: to })
+        if (!part) continue
+        const channel = part.channels[0]!
+        const block = Math.min(levels.length - 1, Math.floor((from * toneRate) / (toneSamples / levels.length)))
+        let head = 0
+        const headSamples = Math.min(channel.length, Math.round(part.sampleRate * 0.02))
+        for (let i = 0; i < headSamples; i++) head = Math.max(head, Math.abs(channel[i]!))
+        ranges.push({
+          inSec: from,
+          outSec: to,
+          askedSamples: Math.round((to - from) * part.sampleRate),
+          deliveredSamples: channel.length,
+          headPeak: head,
+          expectedHead: levels[block]!
+        })
+      }
+    } catch (error) {
+      multiPacket = null
+      say(`note: the multi-packet fixture could not be built — ${String(error).slice(0, 120)}`)
+    }
+
     // Cancellation, on both seams, with an already-aborted signal.
     const aborted = new AbortController()
     aborted.abort()
@@ -246,6 +308,8 @@ try {
       pcm: pcm ? { sampleRate: pcm.sampleRate, channels: pcm.channels.length, samples: pcm.channels[0]?.length ?? 0, peak } : null,
       cancelledFrame: cancelledFrame === null,
       cancelledPcm: cancelledPcm === null,
+      multiPacket,
+      ranges,
       packets: packets
     }
   }, { b64: fixtureBase64, seconds: FIXTURE_SECONDS, packets: FIXTURE_PACKETS })
@@ -290,7 +354,34 @@ try {
     skipCheck('PCM decode from a committed fixture', 'every containers/ fixture is video-only')
   }
 
-  // 6. errors
+  // 6. a real multi-packet range: head alignment, and how far past the ask it runs
+  if (!measured.multiPacket || measured.multiPacket.tracks === 0) {
+    skipCheck('PCM range on a multi-packet stream', 'this browser could not produce an Opus stream to range over')
+  } else if (measured.ranges.length < 5) {
+    check('every asked range decoded on a multi-packet stream', false,
+      `${measured.ranges.length} of 5 ranges returned samples`)
+  } else {
+    // The head is the part the seam actually trims, so it is the part that must
+    // be exact: the first 20 ms of each answer has to carry the amplitude of the
+    // source block the ask started in, not the block before it.
+    const misaligned = measured.ranges.filter(range => Math.abs(range.headPeak - range.expectedHead) > 0.02)
+    check('every range starts where it was asked to', misaligned.length === 0,
+      misaligned.length === 0
+        ? measured.ranges.map(r => `${r.inSec}s head=${r.headPeak.toFixed(2)}`).join(' ')
+        : misaligned.map(r => `${r.inSec}s head=${r.headPeak.toFixed(3)} wanted=${r.expectedHead}`).join('; '))
+
+    // The tail is not trimmed by the seam — measured, not assumed. Every answer
+    // ran 144 or 624 samples (3 or 13 ms at 48 kHz) past the ask, one Opus packet.
+    // Pinning the bound is what would catch a decoder that started returning
+    // whole seconds.
+    const overruns = measured.ranges.map(range => range.deliveredSamples - range.askedSamples)
+    const worstMs = Math.max(...measured.ranges.map(range =>
+      Math.round((range.deliveredSamples - range.askedSamples) / (range.askedSamples / (range.outSec - range.inSec)) * 1000)))
+    check('the tail overrun stays inside one packet', overruns.every(overrun => overrun >= 0 && worstMs <= 25),
+      `worst ${worstMs}ms over the ask across ${measured.ranges.length} ranges`)
+  }
+
+  // 7. errors
   check('a corrupt container answers null instead of throwing', measured.corruptFrame === 'resolved',
     measured.corruptFrame)
 
