@@ -372,7 +372,7 @@ Runs performed for this audit (documentation-only change):
 | Core tests | `node --test "packages/core/test/*.test.mjs"` | **919 pass / 0 fail**, 136 suites, exit 0 |
 | Core types | `npx tsc --noEmit -p packages/core/tsconfig.check.json` | exit 0 |
 | Core boundaries | `node packages/core/tools/check-boundaries.mjs` | exit 0, PASS |
-| Unit suite | `npx tsx tests/unit/run-all.mts` | **139/139** specs, exit 0 |
+| Unit suite | `npx tsx tests/unit/run-all.mts` | **139/139** specs, exit 0 — the count at the time of this pass; two later passes added a spec each, see §15 |
 | Electron suite | `node --test "electron/tools/*.test.mjs"` | **80/80**, exit 0 |
 | Hygiene | `npx tsx scripts/check-source-hygiene.mts` | exit 0, no emitted twins |
 
