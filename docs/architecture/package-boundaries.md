@@ -89,7 +89,7 @@ Nothing was relocated, no `packages/media-core` directory was created, and the s
 |---|---|---|
 | (a) no module imports from `app/` | the four modules import only `mediabunny`, `tmcut-core` and each other | already true — no move needed |
 | (b) one fixture decodes headlessly | under plain Node 24.22.2, `probeMedia` on `tests/fixtures/containers/h264.mp4` answers **1 video track** (`avc`, 64x36), but `VideoDecoder` and `AudioDecoder` are `undefined`, so `decodeFrame` and `decodePcm` both return `null` | **not met in Node** — now measured in Chromium by `tests/e2e/browser_media_integration.mts` (`pnpm test:browser`, 11 checks) |
-| (c) the three existing consumers pass their specs unchanged | **27 literal path assertions across 9 spec files** name `app/utils/tmcut/{frameDecode,audioDecode,mediaProbe,mediaElement}.ts` | **not met** — a move breaks them, and repointing them is the "spec edited to fit the extraction" that §5 rule 2 forbids |
+| (c) the three existing consumers pass their specs unchanged | **27 path occurrences across 9 spec files** name `app/utils/tmcut/{frameDecode,audioDecode,mediaProbe,mediaElement}.ts`: 17 as string literals a test compares against, 6 as import specifiers, 4 in prose comments. Moving the files breaks all but the last group | **not met** — a move breaks them, and repointing them is the "spec edited to fit the extraction" that §5 rule 2 forbids |
 
 Two further facts make the move a net loss today, independent of the gate:
 

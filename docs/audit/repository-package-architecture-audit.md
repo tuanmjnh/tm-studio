@@ -507,7 +507,7 @@ guess. Two changes to the presumptive order are justified by code:
 | Step | Package | Exit criteria before extraction | Why this position |
 |---|---|---|---|
 | 0 | `core` | already met: 919 tests, boundary check, typecheck all green | it is the dependency of everything else |
-| 1 | `media-core` | (a) met; (b) **not met in Node** — no WebCodecs, so a fixture probes but does not decode; now measured in Chromium instead; (c) **not met** — 27 literal path assertions in 9 specs pin the four paths | `BLOCKED / DEFERRED` 2026-11-11; see the note below the table |
+| 1 | `media-core` | (a) met; (b) **not met in Node** — no WebCodecs, so a fixture probes but does not decode; now measured in Chromium instead; (c) **not met** — 27 path occurrences in 9 specs pin the four paths, 23 of which a move would break | `BLOCKED / DEFERRED` 2026-11-11; see the note below the table |
 | 2 | `export` | (a) `webExportHost` is the single assembly point and stays so; (b) one real encode produces a file with the measured A/V offset; (c) the modal's refusal path is unchanged | consumes step 1, which is held |
 | 3 | `rendering` | (a) the pure three modules move with zero import changes; (b) a golden-frame comparison covers the DOM and canvas legs | needs step 1's decoded surface interface, which is held |
 | 4 | `platform-adapters` | (a) a host interface covers files, storage, worker and download; (b) both hosts implement it; (c) `hostBridge.ts` remains the only bridge reader | only worth it when a second host (or a headless CLI) exists |
@@ -517,8 +517,8 @@ Steps 1 to 3 are the only ones with material to move today. Steps 4 and 5 should
 until a concrete second consumer exists.
 
 **Step 1 is `BLOCKED / DEFERRED`, not failed — decided by the repository owner on 2026-11-11.** The
-four media modules stay where they are; no empty package was created; the `27` path assertions are
-untouched.
+four media modules stay where they are; no empty package was created; all `27` path occurrences in
+the specs are untouched.
 
 The criteria, re-measured when the decision was taken:
 
@@ -526,7 +526,7 @@ The criteria, re-measured when the decision was taken:
 |---|---|---|
 | (a) the four modules import nothing from `app/` | they import `mediabunny`, `tmcut-core` and each other | already true |
 | (b) one fixture decodes headlessly | plain Node 24.22.2 probes the fixture (`1` video track, `avc`, 64x36) but has no `VideoDecoder`/`AudioDecoder`, so `decodeFrame` and `decodePcm` return `null` | **not met in Node** |
-| (c) the three existing consumers keep their specs unchanged | `27` literal path assertions in `9` unit specs name the four module paths | **not met by the move** |
+| (c) the three existing consumers keep their specs unchanged | `27` path occurrences in `9` unit specs name the four module paths — `17` string literals a test compares against, `6` import specifiers, `4` prose comments; a move breaks the first two groups | **not met by the move** |
 
 Criterion (b) is now answered by a browser instead of Node: `tests/e2e/browser_media_integration.mts`
 loads the real modules into Chromium and measures probe, capability, three byte-distinct frames, PCM

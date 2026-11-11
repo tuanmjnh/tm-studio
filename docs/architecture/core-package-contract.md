@@ -82,10 +82,11 @@ Ordered by dependency, not preference. None of these is authorised by this note.
 3. **Type checking covers package sources.** Either `packages/**` joins the app program, or every
    package carries its own `tsconfig` and CI runs each, and the app's declarations come from the
    package's `dist/*.d.ts` rather than from `src/`.
-4. **The 27 path assertions are preserved or migrated by approval.** They are the guards that keep
+4. **The 27 path occurrences are preserved or migrated by approval.** They are the guards that keep
    one module per responsibility (`tmcut_frame_service.spec.ts:419-431`,
-   `tmcut_media_probe.spec.ts:354-375`). Editing them to follow a move converts a regression guard
-   into a description of wherever the file happens to live.
+   `tmcut_media_probe.spec.ts:354-375`). A move breaks 23 of them — 17 literals and 6 import
+   specifiers; the other 4 are prose comments. Editing them to follow a move converts a regression
+   guard into a description of wherever the file happens to live.
 5. **The move buys something measurable** — a second consumer, an independent publish, or a build
    that can be tested alone. Relocating four modules inside one app buys none of these.
 
@@ -115,5 +116,5 @@ All five, in this order. Until then `packages/media-core` is `BLOCKED / DEFERRED
 1. The browser integration check runs green in the environment where the extraction is reviewed.
 2. A dependency mechanism exists that a package can use, with a regression test (item 4.2).
 3. Typecheck and build handle package sources and declarations explicitly (item 4.3).
-4. The 27 path assertions are preserved as-is, or a migration is approved in writing (item 4.4).
+4. The 27 path occurrences are preserved as-is, or a migration is approved in writing (item 4.4).
 5. The extraction has a stated consumer or publish target beyond "the tree looks like the blueprint".
