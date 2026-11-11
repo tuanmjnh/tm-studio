@@ -15,12 +15,12 @@ verified from source it is marked **unverified** rather than written as fact.
 | Item | Value | Evidence |
 |---|---|---|
 | Root package | `tm-studio` 1.0.0, private, ESM | `package.json:2-7` |
-| Package manager | `pnpm@12.15.0` | `package.json:85` |
-| Node floor | `^22.22.3 \|\| ^24.15.0 \|\| >=26.0.0`, pinned to `24.22.2` | `package.json:82-84` (`engines`), `.nvmrc` |
+| Package manager | `pnpm@12.15.0` | `package.json:86` |
+| Node floor | `^22.22.3 \|\| ^24.15.0 \|\| >=26.0.0`, pinned to `24.22.2` | `package.json:83-85` (`engines`), `.nvmrc` |
 | Workspace | one glob, `packages/*` | `pnpm-workspace.yaml:1-2` |
 | Workspace packages | **exactly one**: `tmcut-core` | `packages/` holds only `core/` |
 | App framework | Nuxt 4, SPA only | `nuxt.config.ts:13` (`ssr: false`) |
-| Desktop shell | Electron `^44.9.1`, entry `electron/main.cjs` | `package.json:8`, `package.json:73` |
+| Desktop shell | Electron `^44.9.1`, entry `electron/main.cjs` | `package.json:8`, `package.json:74` |
 | Dev port | 4003 | `package.json:14` |
 | App surface | 272 files / 71 170 lines | `find app -name '*.ts' -o -name '*.vue'` |
 | Electron | 41 files / 9 034 lines | `find electron -name '*.cjs' -o -name '*.mjs'` |
@@ -201,8 +201,8 @@ The core's non-import of the outside world is enforced mechanically by
 platform-specific".
 
 One nuance the boundary checker does not catch, and the reader should know about:
-`packages/core/src/crashRecovery.mjs:191` reaches `fs/promises` through
-`process.getBuiltinModule`, and `packages/core/src/crashRecovery.mjs:219` reads a WebGL context
+`packages/core/src/crashRecovery.mjs:186` reads `globalThis.process.getBuiltinModule` and
+`:197` hands it `fs/promises`, and `packages/core/src/crashRecovery.mjs:219` reads a WebGL context
 off `globalThis.document` when one exists. Both are capability *probes* inside a function that
 takes the host objects as parameters, not module-scope imports, so they are legal under the
 current rule. Any future extraction that moves `crashRecovery` into a package with a stricter

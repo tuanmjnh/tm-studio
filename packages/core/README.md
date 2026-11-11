@@ -207,10 +207,10 @@ ipcRenderer · ipcMain · @nuxt/ · ~/
 Run it with `pnpm check:core`. Current result: exit 0, "core imports nothing platform-specific".
 
 Two probes are legal under that rule and worth knowing about, because a stricter boundary would
-have to split them: `crashRecovery.mjs:191` obtains `fs/promises` via `process.getBuiltinModule`
-and `crashRecovery.mjs:219` reads a WebGL context from `globalThis.document` when one exists.
-Both are capability checks inside a function that receives the host objects as parameters, not
-module-scope imports.
+have to split them: `crashRecovery.mjs:186` reads `globalThis.process?.getBuiltinModule` and `:197`
+passes it `fs/promises`, and `crashRecovery.mjs:219` reads a WebGL context from
+`globalThis.document` when one exists. Both are capability checks inside a function that receives
+the host objects as parameters, not module-scope imports.
 
 The package also must never be imported by name into the Electron main process and must never be
 read from `dist/`. Both are pinned by `tests/unit/tmcut_core_source.spec.ts`.

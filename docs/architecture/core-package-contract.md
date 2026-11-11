@@ -16,7 +16,7 @@ The measurement behind it: `docs/audit/repository-package-architecture-audit.md`
 |---|---|---|
 | What is the package called? | `tmcut-core` | `packages/core/package.json:2` |
 | Is it published? | No publish has happened; `files: ["dist"]` is the npm surface | `packages/core/package.json:27-29` |
-| Is it installed as a dependency? | **No, deliberately.** Neither `dependencies` nor `devDependencies` names it | `package.json:37-81`; guard at `tests/unit/tmcut_core_source.spec.ts:235-250` |
+| Is it installed as a dependency? | **No, deliberately.** Neither `dependencies` nor `devDependencies` names it | `package.json:38-82`; guard at `tests/unit/tmcut_core_source.spec.ts:235-241` |
 | Does `dist/` exist on this machine? | Yes, and it is **not** a source dependency. gitignored; no source file may resolve into it | `tests/unit/tmcut_core_source.spec.ts:80` |
 | How many modules? | 63 `.mjs` on disk, of which 62 are re-exported by the barrel (two appear twice); 432 named exports | `packages/core/src/index.mjs` |
 

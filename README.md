@@ -299,7 +299,7 @@ What each area is for:
 | Requirement | Value | Source |
 |---|---|---|
 | Node.js | `^22.22.3 \|\| ^24.15.0 \|\| >=26.0.0` — the range Nuxt 4.6 itself declares, because Nuxt is the strictest package in the tree; Node 23 and 25 are excluded by that range. `.nvmrc` pins `24.22.2`, the version this repository is developed on | `package.json` (`engines`), `.nvmrc`, and `node_modules/nuxt/package.json` (`engines.node`) |
-| pnpm | `12.15.0` | `package.json:85` (`packageManager`) |
+| pnpm | `12.15.0` | `package.json:86` (`packageManager`) |
 | Windows, desktop build only | Developer Mode on, and an output directory whose integrity label is Medium | the asar step needs `SeCreateSymbolicLinkPrivilege`, and an NSIS installer will not start from a Low-integrity folder; see the zero-FFmpeg audit sections 58.1.3 and 59.2 |
 | TM Hub | reachable at `NUXT_PUBLIC_HUB_URL`, default `http://localhost:4000` | `nuxt.config.ts` runtimeConfig |
 | Free port | 4003 | `package.json:14` |
