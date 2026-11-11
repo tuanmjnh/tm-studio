@@ -31,6 +31,7 @@
     "test": "tsx tests/unit/run-all.mts && node --test \"electron/tools/*.test.mjs\"",
     "test:unit": "tsx tests/unit/run-all.mts",
     "test:electron": "node --test \"electron/tools/*.test.mjs\"",
+    "test:browser": "tsx tests/e2e/browser_media_integration.mts",
     "test:tmcut": "tsx tests/unit/run-all.mts",
     "bake:public-config": "node electron/tools/public-config.cjs"
   },

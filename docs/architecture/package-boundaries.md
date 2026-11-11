@@ -81,15 +81,15 @@ Measured prerequisite: `webExportHost.ts:28-29` imports `createPlateReader` and
 `createExportMixLeg`, and `exportMixLeg.ts:26` imports `decodePcm`. The dependency already points
 one way, which is why this is step 1.
 
-**Status 2026-11-11: HELD — not extracted.** The dependency direction above is real, but three
-measurements say the exit criteria cannot be met by the move this section describes. The files stay
-where they are.
+**Status 2026-11-11: `BLOCKED / DEFERRED` — not extracted, not failed.** The owner reviewed the
+measurements below and decided not to move the four modules while the exit criteria cannot be met.
+Nothing was relocated, no `packages/media-core` directory was created, and the specs were not edited.
 
 | Criterion | What was measured | Verdict |
 |---|---|---|
 | (a) no module imports from `app/` | the four modules import only `mediabunny`, `tmcut-core` and each other | already true — no move needed |
-| (b) one fixture decodes headlessly | under plain Node 24.22.2, `probeMedia` on `tests/fixtures/containers/h264.mp4` answers **1 video track**, but `VideoDecoder` and `AudioDecoder` are `undefined`, so `decodeFrame` and `decodePcm` both return `null` | **fails** — a headless decode is a browser-runtime test, and `package.json` has no runner for the `tests/e2e/*.mts` probes |
-| (c) the three existing consumers pass their specs unchanged | **27 literal path assertions across 9 spec files** name `app/utils/tmcut/{frameDecode,audioDecode,mediaProbe,mediaElement}.ts` | **fails** — a move breaks them, and repointing them is the "spec edited to fit the extraction" that §5 rule 2 forbids |
+| (b) one fixture decodes headlessly | under plain Node 24.22.2, `probeMedia` on `tests/fixtures/containers/h264.mp4` answers **1 video track** (`avc`, 64x36), but `VideoDecoder` and `AudioDecoder` are `undefined`, so `decodeFrame` and `decodePcm` both return `null` | **not met in Node** — now measured in Chromium by `tests/e2e/browser_media_integration.mts` (`pnpm test:browser`, 11 checks) |
+| (c) the three existing consumers pass their specs unchanged | **27 literal path assertions across 9 spec files** name `app/utils/tmcut/{frameDecode,audioDecode,mediaProbe,mediaElement}.ts` | **not met** — a move breaks them, and repointing them is the "spec edited to fit the extraction" that §5 rule 2 forbids |
 
 Two further facts make the move a net loss today, independent of the gate:
 
@@ -98,12 +98,14 @@ Two further facts make the move a net loss today, independent of the gate:
   is deliberately **not** installed (`tests/unit/tmcut_core_source.spec.ts:235-250` pins that). A
   package there would need either the retired `file:` dependency (ADR-022) or a relative import
   across the package boundary.
-- **Type checking.** `.nuxt/tsconfig.app.json` includes `../app/**` and `../shared/**`, not
-  `../packages/**`, so a `.ts` module moved there leaves the app's typecheck program.
+- **Type checking.** `.nuxt/tsconfig.app.json` maps `tmcut-core` in `paths` (`:89-91`) but its
+  `include` array holds `../app/**`, `../shared/**.d.ts` and `../i18n/**` — not `../packages/**`. A
+  `.ts` module moved there leaves the program `nuxt typecheck` runs.
 
 The lesson is the one §2.5 already states for `platform-adapters`: while there is one consumer, this
-is a file move, not a boundary. What would reopen it is a second real consumer of the decode seams,
-or a headless runtime that actually has WebCodecs.
+is a file move, not a boundary. The dependency mechanism a second package could actually use, the
+eight per-consumer resolution rows, and the five restart conditions are in
+[core-package-contract.md](file:///D:/Applications/tm-studio/docs/architecture/core-package-contract.md).
 
 ### 2.3 `export` (proposed — step 2)
 

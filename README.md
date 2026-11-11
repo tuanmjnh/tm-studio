@@ -88,9 +88,11 @@ Not implemented, listed so the difference stays visible:
 - Export of transitions, text overlays, masks, blend modes, or stacked footage rows.
 - Cloud or background render. Both capability flags are `false` on both hosts.
 - Extraction of `media-core`, `export`, `rendering` and `platform-adapters` into workspace
-  packages. Step 1 was assessed and held on 2026-11-11 — its headless-decode and unchanged-specs
-  criteria cannot both be met while the tree has one consumer. See
-  [package boundaries](file:///D:/Applications/tm-studio/docs/architecture/package-boundaries.md) §2.2.
+  packages. Step 1 is `BLOCKED / DEFERRED` as of 2026-11-11: the owner reviewed the measurements and
+  chose not to move the four media modules while the exit criteria cannot be met, so the code stays
+  where it is and no empty package was created. The dependency mechanism a package would need is
+  written up in [core-package-contract.md](file:///D:/Applications/tm-studio/docs/architecture/core-package-contract.md);
+  the criteria are in [package boundaries](file:///D:/Applications/tm-studio/docs/architecture/package-boundaries.md) §2.2.
 
 ---
 
@@ -353,8 +355,9 @@ Every command below exists in `package.json`.
 | Core boundaries | `pnpm check:core` | forbidden-import scan on the core |
 | Core tests | `pnpm test:core` | 919 tests across 136 suites |
 | Unit specs | `pnpm test:unit` | 139 specs: behaviour, source contracts, documentation guards |
+| Browser integration | `pnpm test:browser` | 11 checks over the real media modules in Chromium; needs `pnpm dev` and a browser |
 | Electron tests | `pnpm test:electron` | 6 node:test files over Electron tool modules |
-| Everything | `pnpm test` | unit suite then Electron suite |
+| Everything | `pnpm test` | unit suite then Electron suite (not the browser check) |
 | Hygiene | `pnpm check:hygiene` | fails if compiled `.js` sits next to its `.ts` source |
 
 Distinctions that matter:
@@ -362,6 +365,11 @@ Distinctions that matter:
 - **Core tests** are pure domain assertions under `node --test`, with no bundler and no DOM.
 - **Unit specs** are standalone scripts, one process per file; a spec may report SKIP, and the
   runner reports SKIP as SKIP rather than PASS.
+- **Browser integration** is the only gate that decodes real pixels and samples. Plain Node can
+  demux a fixture but has no `VideoDecoder`/`AudioDecoder`, so a decode check there answers `null`;
+  `tests/e2e/browser_media_integration.mts` runs the same modules in Chromium instead. It is kept
+  out of `pnpm test` because it needs a browser and a running dev server, and it prints SKIP with
+  the reason when either is missing rather than passing silently.
 - **Electron tests** exercise the main-process tool modules in plain Node, not in a live window.
 - **Hygiene** guards against a `.js` twin shadowing its `.ts` source at resolution time.
 
@@ -475,10 +483,14 @@ as a defect.
 
 ## 13. License and contribution
 
-The repository ships an [MIT LICENSE](file:///D:/Applications/tm-studio/LICENSE) file. Note that
-its copyright line still reads `2025 Nuxt UI Templates` — it was inherited with the project
-template and has not been rewritten. Treat the effective licensing as **unverified** until the
-owner states the intended copyright holder.
+**License verification: PENDING / OWNER REVIEW.** The `LICENSE` file is unmodified and stays that
+way until its provenance is verified.
+
+The repository ships an [MIT LICENSE](file:///D:/Applications/tm-studio/LICENSE) file. Its copyright
+line still reads `2025 Nuxt UI Templates`: it was inherited with the project template and has never
+been rewritten. The effective licensing is therefore **unverified** — do not treat this repository as
+licensed for reuse until the owner confirms the intended copyright holder. Changing that name, or
+replacing the licence, is the owner's decision and not a documentation edit.
 
 Contribution practice, as the repository actually enforces it:
 

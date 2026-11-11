@@ -507,7 +507,7 @@ guess. Two changes to the presumptive order are justified by code:
 | Step | Package | Exit criteria before extraction | Why this position |
 |---|---|---|---|
 | 0 | `core` | already met: 919 tests, boundary check, typecheck all green | it is the dependency of everything else |
-| 1 | `media-core` | (a) met; (b) **not met** — plain Node has no WebCodecs, so a fixture probes but does not decode; (c) **not met** — 27 literal path assertions in 9 specs pin the four paths | held 2026-11-11; see the note below the table |
+| 1 | `media-core` | (a) met; (b) **not met in Node** — no WebCodecs, so a fixture probes but does not decode; now measured in Chromium instead; (c) **not met** — 27 literal path assertions in 9 specs pin the four paths | `BLOCKED / DEFERRED` 2026-11-11; see the note below the table |
 | 2 | `export` | (a) `webExportHost` is the single assembly point and stays so; (b) one real encode produces a file with the measured A/V offset; (c) the modal's refusal path is unchanged | consumes step 1, which is held |
 | 3 | `rendering` | (a) the pure three modules move with zero import changes; (b) a golden-frame comparison covers the DOM and canvas legs | needs step 1's decoded surface interface, which is held |
 | 4 | `platform-adapters` | (a) a host interface covers files, storage, worker and download; (b) both hosts implement it; (c) `hostBridge.ts` remains the only bridge reader | only worth it when a second host (or a headless CLI) exists |
@@ -516,17 +516,37 @@ guess. Two changes to the presumptive order are justified by code:
 Steps 1 to 3 are the only ones with material to move today. Steps 4 and 5 should not start
 until a concrete second consumer exists.
 
-**Step 1 was attempted on 2026-11-11 and held, on its own criteria.** Criterion (a) already holds.
-Criterion (b) cannot: plain Node 24.22.2 probes the fixture (`1` video track) but has no
-`VideoDecoder` or `AudioDecoder`, so both decode calls return `null`; a real headless decode is a
-browser test, and nothing in `package.json` runs the `tests/e2e/*.mts` probes. Criterion (c) fails by
-construction: `27` literal path assertions in `9` unit specs name the four module paths, so the move
-breaks them, and editing them is the "spec edited to fit the extraction" that
-[package-boundaries.md](file:///D:/Applications/tm-studio/docs/architecture/package-boundaries.md)
-section 5 forbids. Two supporting facts: `tmcut-core` reaches `src` only through the Nuxt alias and
-the test tsconfig path (the package is deliberately not installed), and `.nuxt/tsconfig.app.json`
-does not include `packages/`, so a `.ts` module moved there leaves the app's typecheck program. The
-measurements are recorded in that document's section 2.2. Steps 2 and 3 inherit the hold.
+**Step 1 is `BLOCKED / DEFERRED`, not failed — decided by the repository owner on 2026-11-11.** The
+four media modules stay where they are; no empty package was created; the `27` path assertions are
+untouched.
+
+The criteria, re-measured when the decision was taken:
+
+| Criterion | Measured | Verdict |
+|---|---|---|
+| (a) the four modules import nothing from `app/` | they import `mediabunny`, `tmcut-core` and each other | already true |
+| (b) one fixture decodes headlessly | plain Node 24.22.2 probes the fixture (`1` video track, `avc`, 64x36) but has no `VideoDecoder`/`AudioDecoder`, so `decodeFrame` and `decodePcm` return `null` | **not met in Node** |
+| (c) the three existing consumers keep their specs unchanged | `27` literal path assertions in `9` unit specs name the four module paths | **not met by the move** |
+
+Criterion (b) is now answered by a browser instead of Node: `tests/e2e/browser_media_integration.mts`
+loads the real modules into Chromium and measures probe, capability, three byte-distinct frames, PCM
+amplitude, corrupt-input handling and cancellation (`pnpm test:browser`, 11 checks). That closes the
+question "does the browser-first runtime actually decode" — it does not close the extraction, because
+criteria (c) and the dependency mechanism below are unrelated to it.
+
+Two facts hold the extraction regardless of (b):
+
+- **Resolution.** `tmcut-core` reaches `src` through the Nuxt alias and the `tsconfig.test.json` path
+  mapping only; the package is deliberately not installed (ADR-022/G13). A module in a second package
+  can use none of that without a new mechanism.
+- **Type checking.** `.nuxt/tsconfig.app.json` maps `tmcut-core` in `paths` (`:89-91`) but its
+  `include` array does not contain `packages/`, so a `.ts` module moved there leaves the program
+  `nuxt typecheck` runs.
+
+Both are written up, with the eight consumer-resolution rows and the restart conditions, in
+[docs/architecture/core-package-contract.md](file:///D:/Applications/tm-studio/docs/architecture/core-package-contract.md).
+Steps 2 (`export`) and 3 (`rendering`) inherit the hold: neither is built on a package that has no
+proven boundary.
 
 ### 14.4 One recommendation that is a "no"
 
