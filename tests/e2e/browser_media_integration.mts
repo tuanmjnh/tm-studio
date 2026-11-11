@@ -33,6 +33,11 @@
  * and exits 0; `tests/unit/helpers/spec_status.ts` turns that into SKIP, never
  * PASS, so a machine without a browser cannot claim it measured one.
  *
+ * A CI machine is not such a machine. Set `TMCUT_BROWSER_REQUIRED=1` there and a
+ * skip becomes exit 1: the job exists to measure decode, so "I could not" is a
+ * failure with a reason rather than a green run over nothing. The default stays
+ * permissive so a laptop without the dev server is not told it broke something.
+ *
  * Browser resolution, in order: `TMCUT_BROWSER_CHANNEL` (a playwright channel
  * name), a Playwright-installed Chromium, then the Edge that ships on Windows.
  * Electron is not used here: the check is about the web runtime the renderer is
@@ -55,8 +60,18 @@ function say(message: string): void {
   console.log(message)
 }
 
+/**
+ * A run that measured nothing. Exit code follows `TMCUT_BROWSER_REQUIRED`: off by
+ * default so a laptop is not failed for having no dev server, on in CI so a job
+ * that exists to measure decode cannot pass without measuring it.
+ */
 function bail(reason: string): never {
+  const required = process.env.TMCUT_BROWSER_REQUIRED === '1'
   say(`${SKIP}  browser media integration: ${reason}`)
+  if (required) {
+    say(`browser media integration: TMCUT_BROWSER_REQUIRED=1 and nothing was measured — failing`)
+    process.exit(1)
+  }
   process.exit(0)
 }
 

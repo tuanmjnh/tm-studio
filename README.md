@@ -266,7 +266,7 @@ tm-studio/
 │   ├── tools/                 check-boundaries.mjs
 │   └── dist/                  npm publish output only (gitignored)
 ├── tests/
-│   ├── unit/                  139 specs incl. 6 documentation guards
+│   ├── unit/                  140 specs incl. 6 documentation guards
 │   └── e2e/                   live browser / Electron probe scripts
 ├── docs/                      ADRs, audits, architecture, guides
 ├── i18n/locales/              en.json, vi.json
@@ -354,7 +354,7 @@ Every command below exists in `package.json`.
 | Core typecheck | `pnpm typecheck:core` | the core's `.d.ts` against its `types/` |
 | Core boundaries | `pnpm check:core` | forbidden-import scan on the core |
 | Core tests | `pnpm test:core` | 919 tests across 136 suites |
-| Unit specs | `pnpm test:unit` | 139 specs: behaviour, source contracts, documentation guards |
+| Unit specs | `pnpm test:unit` | 140 specs: behaviour, source contracts, documentation guards |
 | Browser integration | `pnpm test:browser` | 11 checks over the real media modules in Chromium; needs `pnpm dev` and a browser |
 | Electron tests | `pnpm test:electron` | 6 node:test files over Electron tool modules |
 | Everything | `pnpm test` | unit suite then Electron suite (not the browser check) |
@@ -369,7 +369,9 @@ Distinctions that matter:
   demux a fixture but has no `VideoDecoder`/`AudioDecoder`, so a decode check there answers `null`;
   `tests/e2e/browser_media_integration.mts` runs the same modules in Chromium instead. It is kept
   out of `pnpm test` because it needs a browser and a running dev server, and it prints SKIP with
-  the reason when either is missing rather than passing silently.
+  the reason when either is missing rather than passing silently. Set `TMCUT_BROWSER_REQUIRED=1`
+  in CI: that turns a skip into a non-zero exit, so a job that exists to measure decode cannot go
+  green having measured nothing. Locally the default stays permissive.
 - **Electron tests** exercise the main-process tool modules in plain Node, not in a live window.
 - **Hygiene** guards against a `.js` twin shadowing its `.ts` source at resolution time.
 

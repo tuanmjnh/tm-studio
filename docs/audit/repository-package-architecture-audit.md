@@ -28,7 +28,7 @@ verified from source it is marked **unverified** rather than written as fact.
 | Shared contracts | 17 files / 1 817 lines | `find shared -name '*.ts'` |
 | Core source | 63 modules / 15 413 lines | `wc -l packages/core/src/*.mjs` |
 | Core tests | 66 files / 12 336 lines | `wc -l packages/core/test/*.mjs` |
-| Unit specs | 139 files | `ls tests/unit/*.spec.ts` |
+| Unit specs | 140 files | `ls tests/unit/*.spec.ts` |
 
 The repository is one application plus one pure domain package. There is no `packages/editor`,
 `packages/rendering`, `packages/media-core`, or any other package a target blueprint might
@@ -588,6 +588,12 @@ and prose. The gates below were re-run after that change:
 | Browser decode | `pnpm test:browser` | exit 0 — **11 checks** on the `msedge` channel: probe, WebCodecs, 6-key capability record, both seams, three byte-distinct frames, a WAV that decodes to the authored peak, corrupt input, two aborts, no page error; one declared **PARTIAL** because every committed fixture is video-only |
 | Electron suite | `node --test "electron/tools/*.test.mjs"` | **80/80**, exit 0 |
 | Hygiene | `npx tsx scripts/check-source-hygiene.mts` | exit 0, no emitted twins |
+
+A fourth pass closed the reporting hole that table exposed. The harness exits 0 when it skips, which
+is right on a laptop and wrong in CI: a job that exists to measure decode would stay green having
+measured nothing. `TMCUT_BROWSER_REQUIRED=1` now makes a skip exit 1, and
+`tests/unit/tmcut_browser_harness.spec.ts` pins both outcomes by running the harness against a dead
+port, so the switch cannot rot silently. The suite grew to **140/140** specs with that file.
 
 That pass also content-checked the `144` plain `file:line` citations the documents carry. The guards
 cover `file:///…#L` links only, so six citations that named the right file and the wrong line were

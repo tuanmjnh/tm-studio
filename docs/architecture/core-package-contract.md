@@ -107,7 +107,10 @@ Not proven by it:
 - **The Electron renderer.** The check runs in a Chromium launched by `playwright-core`; the packaged
   app is a separate runtime.
 - **CI.** The repository has no CI configuration, so this runs where a browser and a dev server
-  exist and reports SKIP elsewhere.
+  exist and reports SKIP elsewhere. When a CI job is added, set `TMCUT_BROWSER_REQUIRED=1` in it:
+  the harness then exits non-zero on a skip instead of green over nothing. That switch is
+  regression-tested by `tests/unit/tmcut_browser_harness.spec.ts`, which runs the harness against a
+  dead port and asserts both outcomes.
 
 ## 7. Restart conditions for the `media-core` extraction
 
