@@ -26,8 +26,16 @@
  *   6. audio range — a multi-packet Opus file is built in the page and asked for
  *                   several sub-ranges: the head must be aligned to the ask, and
  *                   the tail overrun must stay inside one packet
- *   7. errors     — a corrupt container answers `null` instead of throwing
- *   8. cancel     — an already-aborted ask returns `null` for both seams
+ *   7. AAC demux  — the committed `aac-tone-then-silence.m4a` is one AAC track,
+ *                   read from the container rather than assumed from its name
+ *   8. AAC decode — asked about with the container's own decoder config. When
+ *                   the answer is yes, a real sample must decode to tone then
+ *                   silence; when it is no, the answer must be `null` with no
+ *                   substitute. Both branches are measured, not predicted.
+ *   9. AAC encode — the encoder's answer for both AAC spellings, recorded. It is
+ *                   a capability report, not a claim that export uses AAC.
+ *  10. errors     — a corrupt container answers `null` instead of throwing
+ *  11. cancel     — an already-aborted ask returns `null` for both seams
  *
  * Run:
  *   node node_modules/tsx/dist/cli.mjs tests/e2e/browser_media_integration.mts
@@ -54,6 +62,9 @@ import { SKIP, PARTIAL } from '../unit/helpers/spec_status'
 const ROOT = path.resolve(import.meta.dirname, '..', '..')
 const DEV_URL = process.env.TMCUT_DEV_URL || 'http://localhost:4003'
 const FIXTURE = path.join(ROOT, 'tests', 'fixtures', 'containers', 'h264.mp4')
+
+/** The one committed fixture with sound: AAC-LC 48 kHz mono, 1 s, tone then silence. */
+const AAC_FIXTURE = path.join(ROOT, 'tests', 'fixtures', 'audio', 'aac-tone-then-silence.m4a')
 
 /** The fixture, measured: 6 packets at 10 fps over 0.6 s, 64x36, video only. */
 const FIXTURE_SECONDS = 0.6
@@ -109,9 +120,16 @@ async function launch(): Promise<{ browser: Browser, via: string }> {
 }
 
 if (!existsSync(FIXTURE)) bail(`fixture missing: ${path.relative(ROOT, FIXTURE)}`)
+// Committed, so its absence is a broken checkout rather than a machine without a
+// browser: that is a failure even where the harness is otherwise allowed to skip.
+if (!existsSync(AAC_FIXTURE)) {
+  say(`browser media integration: committed fixture missing: ${path.relative(ROOT, AAC_FIXTURE)}`)
+  process.exit(1)
+}
 if (!(await reachable(DEV_URL))) bail(`no dev server at ${DEV_URL} — start \`pnpm dev\``)
 
 const fixtureBase64 = readFileSync(FIXTURE).toString('base64')
+const aacBase64 = readFileSync(AAC_FIXTURE).toString('base64')
 const { browser, via } = await launch()
 say(`browser: ${via}`)
 
@@ -153,7 +171,7 @@ try {
   })
   await page.goto(`${DEV_URL}/login`, { waitUntil: 'domcontentloaded' })
 
-  const measured = await page.evaluate(async ({ b64, seconds, packets }) => {
+  const measured = await page.evaluate(async ({ b64, aacB64, seconds, packets }) => {
     const seamed = (file: string) => `/_nuxt/@fs/${file.replace(/\\/g, '/')}`
     const at = (p: string) => seamed(`D:/Applications/tm-studio/${p}`)
 
@@ -281,6 +299,59 @@ try {
       say(`note: the multi-packet fixture could not be built — ${String(error).slice(0, 120)}`)
     }
 
+    // AAC, as three separate questions rather than one verdict. Demuxing is the
+    // container's job and works without a decoder; decoding is the runtime's, and
+    // the config asked about comes from the container instead of from a guess;
+    // encoding is a WebCodecs answer that this check records but never exercises.
+    // The fixture is 1 s of 440 Hz at half scale, then 0.5 s of digital silence.
+    const aacBytes = Uint8Array.from(atob(aacB64), c => c.charCodeAt(0))
+    const aac = new Blob([aacBytes], { type: 'audio/mp4' })
+    const aacInfo = await probe.probeMedia({ name: 'aac-tone-then-silence.m4a', size: aac.size, mimeType: 'audio/mp4', blob: aac })
+    const aacTrack = aacInfo.audioTracks[0] ?? null
+
+    // The container's own answer, not a hand-written `{codec:'aac'}` — a config
+    // this check invented could disagree with the file it claims to describe.
+    const aacDecoderConfig = await (async () => {
+      const mb = await import(/* @vite-ignore */ '/_nuxt/@id/mediabunny')
+      const input = new mb.Input({ formats: mb.ALL_FORMATS, source: new mb.BlobSource(aac) })
+      const [track] = await input.getAudioTracks()
+      const config = track ? await track.getDecoderConfig() : null
+      input.dispose()
+      return config ? { codec: config.codec, sampleRate: config.sampleRate ?? null, numberOfChannels: config.numberOfChannels ?? null } : null
+    })()
+    let aacDecodeSupported: boolean | null = null
+    if (aacDecoderConfig && typeof globalThis.AudioDecoder === 'function') {
+      aacDecodeSupported = await globalThis.AudioDecoder
+        .isConfigSupported({ codec: aacDecoderConfig.codec, sampleRate: 48000, numberOfChannels: 1 })
+        .then(answer => answer.supported === true)
+        .catch(() => false)
+    }
+
+    // Decoding is only asked for when the runtime said yes. When it said no there
+    // is nothing to measure, and the seam is expected to answer `null` rather
+    // than invent samples — so that is the branch asserted below.
+    const aacRun = await sound.decodePcm({ bytes: aac, src: null, signal, inSec: 0, outSec: 1 })
+    let aacTonePeak = 0
+    let aacSilencePeak = 0
+    if (aacRun) {
+      const channel = aacRun.channels[0]!
+      const half = Math.floor(channel.length / 2)
+      for (let i = 0; i < half; i++) aacTonePeak = Math.max(aacTonePeak, Math.abs(channel[i]!))
+      for (let i = half; i < channel.length; i++) aacSilencePeak = Math.max(aacSilencePeak, Math.abs(channel[i]!))
+    }
+
+    // Encoder answers, both spellings. `aac` and `mp4a.40.2` are not synonyms to
+    // this runtime, which is why the ladder asks for both and this records both.
+    const aacEncode: Record<string, boolean | string> = {}
+    if (typeof globalThis.AudioEncoder === 'function') {
+      for (const codec of ['mp4a.40.2', 'aac']) {
+        aacEncode[codec] = await globalThis.AudioEncoder
+          .isConfigSupported({ codec, sampleRate: 48000, numberOfChannels: 2, bitrate: 128000 })
+          .then(answer => answer.supported === true)
+          .catch(error => `threw:${String(error).slice(0, 40)}`)
+      }
+    }
+
     // Cancellation, on both seams, with an already-aborted signal.
     const aborted = new AbortController()
     aborted.abort()
@@ -308,11 +379,38 @@ try {
       pcm: pcm ? { sampleRate: pcm.sampleRate, channels: pcm.channels.length, samples: pcm.channels[0]?.length ?? 0, peak } : null,
       cancelledFrame: cancelledFrame === null,
       cancelledPcm: cancelledPcm === null,
+      aac: {
+        kind: aacInfo.kind,
+        demuxable: aacInfo.compatibility.canDemux,
+        canDecodeAudio: aacInfo.compatibility.canDecodeAudio,
+        canExportSourceCodec: aacInfo.compatibility.canExportSourceCodec,
+        importStatus: aacInfo.importStatus,
+        limitations: aacInfo.compatibility.limitations,
+        videoTracks: aacInfo.videoTracks.length,
+        audioTracks: aacInfo.audioTracks.length,
+        codec: aacTrack?.codec ?? null,
+        sampleRate: aacTrack?.sampleRate ?? null,
+        channels: aacTrack?.channels ?? null,
+        duration: aacTrack?.duration ?? null,
+        reportedCanDecode: aacTrack?.canDecode ?? null,
+        decoderConfig: aacDecoderConfig,
+        decodeSupported: aacDecodeSupported,
+        decoded: aacRun
+          ? {
+              sampleRate: aacRun.sampleRate,
+              channels: aacRun.channels.length,
+              samples: aacRun.channels[0]?.length ?? 0,
+              tonePeak: aacTonePeak,
+              silencePeak: aacSilencePeak
+            }
+          : null,
+        encode: aacEncode
+      },
       multiPacket,
       ranges,
       packets: packets
     }
-  }, { b64: fixtureBase64, seconds: FIXTURE_SECONDS, packets: FIXTURE_PACKETS })
+  }, { b64: fixtureBase64, aacB64: aacBase64, seconds: FIXTURE_SECONDS, packets: FIXTURE_PACKETS })
 
   // 1. probe
   check('probe reads the container and one video track',
@@ -350,11 +448,61 @@ try {
         : 'decodePcm returned null')
   }
   if (measured.audioTracks === 0) {
-    // Worth stating rather than hiding: the committed video fixtures carry no sound.
-    skipCheck('PCM decode from a committed fixture', 'every containers/ fixture is video-only')
+    // Worth stating rather than hiding: the video containers carry no sound.
+    skipCheck('PCM decode from the video fixture', 'the containers/ fixtures are video-only')
   }
 
-  // 6. a real multi-packet range: head alignment, and how far past the ask it runs
+  // 7. AAC, as demux, decode and encode — three answers, not one verdict.
+  check('the AAC fixture demuxes to one audio track and no video',
+    measured.aac.kind === 'audio'
+    && measured.aac.demuxable === true
+    && measured.aac.audioTracks === 1
+    && measured.aac.videoTracks === 0
+    && measured.aac.codec === 'aac'
+    && measured.aac.sampleRate === 48000
+    && measured.aac.channels === 1
+    && Math.abs((measured.aac.duration ?? 0) - 1) < 0.05,
+    `kind=${measured.aac.kind} tracks=${measured.aac.audioTracks}a/${measured.aac.videoTracks}v codec=${measured.aac.codec} ${measured.aac.sampleRate}Hz ${measured.aac.channels}ch ${measured.aac.duration}s`)
+
+  check('demuxing alone is enough to import it, whatever the decoder says',
+    measured.aac.importStatus === 'ready' || measured.aac.importStatus === 'partial',
+    `importStatus=${measured.aac.importStatus} canDemux=${measured.aac.demuxable} canDecodeAudio=${measured.aac.canDecodeAudio}`)
+
+  check('the decoder config comes from the container, not from this check',
+    measured.aac.decoderConfig !== null && measured.aac.decoderConfig.codec === 'mp4a.40.2',
+    measured.aac.decoderConfig ? JSON.stringify(measured.aac.decoderConfig) : 'no decoder config')
+
+  if (measured.aac.decodeSupported === null) {
+    skipCheck('AAC decode', 'this host has no AudioDecoder, so there is no answer to record')
+  } else if (!measured.aac.decodeSupported) {
+    // The runtime said no. The seam must then answer `null`: a decoder that
+    // produced samples anyway would be a substitute, which this repo forbids.
+    // An honest "unsupported" is the correct outcome here, not a failure — the
+    // report below records it as a capability limitation of this host.
+    check('an unsupported AAC decode answers null rather than inventing samples',
+      measured.aac.decoded === null,
+      measured.aac.decoded ? `decoded ${measured.aac.decoded.samples} samples despite an unsupported config` : 'null')
+    skipCheck('AAC decode', `AudioDecoder rejected ${measured.aac.decoderConfig?.codec} on this runtime`)
+  } else {
+    check('the committed AAC sample decodes to tone then silence',
+      measured.aac.decoded !== null
+      && measured.aac.decoded.sampleRate === 48000
+      && measured.aac.decoded.channels === 1
+      && Math.abs(measured.aac.decoded.tonePeak - 0.5) < 0.05
+      && measured.aac.decoded.silencePeak < 0.01,
+      measured.aac.decoded
+        ? `${measured.aac.decoded.samples} samples, tone peak=${measured.aac.decoded.tonePeak.toFixed(3)} silence peak=${measured.aac.decoded.silencePeak.toFixed(4)}`
+        : 'decodePcm returned null for a supported config')
+  }
+
+  // Encoding is recorded, never exercised: nothing in this repo exports AAC
+  // without asking first, and an answer here is not a claim about the exporter.
+  const aacEncode = measured.aac.encode
+  const encodable = Object.entries(aacEncode).filter(([, value]) => value === true).map(([codec]) => codec)
+  const aacRows = Object.entries(aacEncode).map(([codec, value]) => `${codec}=${value}`).join(' ')
+  say(`AAC encode on this runtime: ${encodable.length > 0 ? encodable.join(', ') : 'no spelling supported'} (${aacRows})`)
+
+  // 8. a real multi-packet range: head alignment, and how far past the ask it runs
   if (!measured.multiPacket || measured.multiPacket.tracks === 0) {
     skipCheck('PCM range on a multi-packet stream', 'this browser could not produce an Opus stream to range over')
   } else if (measured.ranges.length < 5) {
@@ -381,11 +529,11 @@ try {
       `worst ${worstMs}ms over the ask across ${measured.ranges.length} ranges`)
   }
 
-  // 7. errors
+  // 9. errors
   check('a corrupt container answers null instead of throwing', measured.corruptFrame === 'resolved',
     measured.corruptFrame)
 
-  // 7. cancel
+  // 10. cancel
   check('an aborted frame ask returns null', measured.cancelledFrame)
   check('an aborted PCM ask returns null', measured.cancelledPcm)
   check('the page raised no uncaught error', pageErrors.length === 0, pageErrors.join('; '))
