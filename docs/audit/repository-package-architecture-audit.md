@@ -50,7 +50,7 @@ and `shared/`.
 | Test: `node --test "test/*.test.mjs"` | `packages/core/package.json:33` |
 | Boundary check: `node tools/check-boundaries.mjs` | `packages/core/package.json:34` |
 | Type check: `tsc --noEmit` (uses `tsconfig.check.json`) | `packages/core/package.json:36` |
-| Public barrel: 63 re-export lines over 63 modules | `packages/core/src/index.mjs:1-65` |
+| Public barrel: 64 re-export lines over 62 unique modules (two modules are re-exported twice) | `packages/core/src/index.mjs:1-65` |
 | Type surface bound to the engine by `src/index.d.ts` + `types/` | `packages/core/tsconfig.check.json:9` |
 
 `dist/` exists on this machine but is **not** a source dependency. `tests/unit/tmcut_core_source.spec.ts:80`

@@ -18,7 +18,7 @@ The measurement behind it: `docs/audit/repository-package-architecture-audit.md`
 | Is it published? | No publish has happened; `files: ["dist"]` is the npm surface | `packages/core/package.json:27-29` |
 | Is it installed as a dependency? | **No, deliberately.** Neither `dependencies` nor `devDependencies` names it | `package.json:37-81`; guard at `tests/unit/tmcut_core_source.spec.ts:235-250` |
 | Does `dist/` exist on this machine? | Yes, and it is **not** a source dependency. gitignored; no source file may resolve into it | `tests/unit/tmcut_core_source.spec.ts:80` |
-| How many modules? | 63 `.mjs`, 432 named exports behind one barrel | `packages/core/src/index.mjs` |
+| How many modules? | 63 `.mjs` on disk, of which 62 are re-exported by the barrel (two appear twice); 432 named exports | `packages/core/src/index.mjs` |
 
 The consequence that matters for every row below: `tmcut-core` is consumed **as source**, not as a
 built artifact. Anything that changes where that source is found is a change to all four consumers

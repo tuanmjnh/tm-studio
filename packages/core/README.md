@@ -21,7 +21,7 @@ source tree by relative path. `dist/` exists only for npm and is never a source 
 
 | Path | Contents | Notes |
 |---|---|---|
-| `src/` | 63 `.mjs` modules, one public barrel (`src/index.mjs`) | what every host loads |
+| `src/` | 63 `.mjs` modules on disk; the barrel (`src/index.mjs`) re-exports 62 of them in 64 lines, because two are re-exported twice | what every host loads |
 | `types/` | DSL v3 type surface: `dsl.ts`, `media.ts`, `mediaInfo.ts`, `pixels.ts`, `platform.ts`, `runtime.ts`, `editor-api.ts`, `edl.ts`, `history.ts` | type-only; no runtime code |
 | `src/index.d.ts` | binds the type surface to the runtime API | checked against `types/` by `pnpm typecheck:core` |
 | `test/` | 66 `node:test` files, **919 tests across 136 suites** | no bundler, no DOM, no Electron |

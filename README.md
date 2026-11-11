@@ -434,6 +434,7 @@ Read these in this order unless you have a reason not to.
 | [Zero-FFmpeg audit](file:///D:/Applications/tm-studio/docs/audit/zero-ffmpeg-audit.md) | the measurement record; sections 58 to 64 describe the current tree |
 | [Repository and package audit](file:///D:/Applications/tm-studio/docs/audit/repository-package-architecture-audit.md) | what packages exist, what lives in the app, what is missing |
 | [Package boundaries](file:///D:/Applications/tm-studio/docs/architecture/package-boundaries.md) | dependency rules and extraction order, with exit criteria |
+| [Core package contract](file:///D:/Applications/tm-studio/docs/architecture/core-package-contract.md) | what a second workspace package could rely on: resolution per consumer, public exports, restart conditions |
 
 ### Architecture and security
 
@@ -521,7 +522,8 @@ API, **không có FFmpeg và không có FFprobe** ở bất kỳ đâu trong s�
 - Đăng nhập, phân quyền, menu và danh mục AI do **TM Hub** quyết định; studio chỉ là satellite.
 - Chạy thử: `pnpm install`, `pnpm dev` (cổng 4003) hoặc `pnpm dev:electron`.
 - Kiểm tra: `pnpm typecheck`, `pnpm test:core`, `pnpm test:unit`, `pnpm check:core`,
-  `pnpm check:hygiene`.
+  `pnpm check:hygiene`; kiểm tra decode thật trong trình duyệt bằng `pnpm test:browser`
+  (cần `pnpm dev` và một browser).
 - Giới hạn đã biết: exporter chỉ nung được 7/29 effect; transition, text, mask, blend và stacked
   rows bị từ chối có nêu tên; chưa có GPU renderer; chưa export được HTML-video ra file trực tiếp
   từ studio đó.
