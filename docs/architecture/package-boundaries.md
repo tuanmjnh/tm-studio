@@ -95,12 +95,13 @@ Two further facts make the move a net loss today, independent of the gate:
 
 - **Core resolution.** `tmcut-core` reaches `src` through a Nuxt alias (`nuxt.config.ts:21,107`) and
   a `tsconfig.test.json` path. Neither reaches a file under `packages/media-core/`, and the package
-  is deliberately **not** installed (`tests/unit/tmcut_core_source.spec.ts:235-250` pins that). A
+  is deliberately **not** installed (`tests/unit/tmcut_core_source.spec.ts:235-241` pins that). A
   package there would need either the retired `file:` dependency (ADR-022) or a relative import
   across the package boundary.
-- **Type checking.** `.nuxt/tsconfig.app.json` maps `tmcut-core` in `paths` (`:89-91`) but its
-  `include` array holds `../app/**`, `../shared/**.d.ts` and `../i18n/**` — not `../packages/**`. A
-  `.ts` module moved there leaves the program `nuxt typecheck` runs.
+- **Type checking.** `.nuxt/tsconfig.app.json` maps `tmcut-core` in `paths` but its `include` array
+  holds `../app/**`, `../shared/**.d.ts` and `../i18n/**` — not `../packages/**`. A `.ts` module moved
+  there leaves the program `nuxt typecheck` runs. The file is generated and gitignored, so it is
+  cited by key name, not by line.
 
 The lesson is the one §2.5 already states for `platform-adapters`: while there is one consumer, this
 is a file move, not a boundary. The dependency mechanism a second package could actually use, the

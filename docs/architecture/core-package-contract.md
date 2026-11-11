@@ -62,11 +62,11 @@ one of: the retired `file:` dependency (which re-opens G13), a relative hop acro
 boundary, or a new alias entry per package — and each is a new mechanism, not an existing one.
 
 **(b) The app's typecheck program does not include `packages/`.** `.nuxt/tsconfig.app.json` carries
-the `tmcut-core` **path mapping** at `:89-91`, but its 19-entry `include` array lists `../app/**`,
-`../shared/**.d.ts`, `../i18n/**` and Nuxt-generated files — **not** `../packages/**`. A `.ts`
-module moved under `packages/` therefore leaves the program that `nuxt typecheck` runs. Core escapes
-this today because it is `.mjs`, consumed through the mapping and checked by its own
-`tsconfig.check.json`.
+the `tmcut-core` **path mapping** in its `paths`, but its 19-entry `include` array lists `../app/**`,
+`../shared/**.d.ts`, `../i18n/**` and Nuxt-generated files — **not** `../packages/**`. That file is
+generated and gitignored, so it is cited by key name rather than by line. A `.ts` module moved under
+`packages/` therefore leaves the program that `nuxt typecheck` runs. Core escapes this today because
+it is `.mjs`, consumed through the mapping and checked by its own `tsconfig.check.json`.
 
 ## 5. What would have to be true before extraction
 

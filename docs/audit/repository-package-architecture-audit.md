@@ -274,9 +274,9 @@ The desktop shell is a host, not a second engine.
 | `electron/main.cjs` | window lifecycle, registers controllers | `main.cjs:1-20` |
 | `electron/ipcPolicy.cjs` | sender-origin gate + push/outbound channel allowlists | `ipcPolicy.cjs:1-25` |
 | `electron/preload.cjs` | context-bridged API surface | referenced by `shared/types/electron.ts` |
-| `electron/media-protocol.cjs` | `media://local/...` with real 206 range responses | described at `app/utils/tmcut/mediaProbe.ts:1-12` |
+| `electron/media-protocol.cjs` | `media://local/...` with real 206 range responses | `media-protocol.cjs:131-159` |
 | `electron/tools/tmcut.controller.cjs` | TMCut IPC handlers | `tmcut.controller.cjs:7-9` |
-| `electron/tools/video-generation/video-probe.mjs` | in-process demux probe via mediabunny `FilePathSource` | `video-probe.mjs:12` |
+| `electron/tools/video-generation/video-probe.mjs` | in-process demux probe via mediabunny `FilePathSource` | `video-probe.mjs:11` |
 | `electron/tools/ai-gateway.cjs`, `ai-secure.cjs`, `config-file.cjs` | local AI vault (encrypted slots) | AGENTS.md, "AI 3-layer architecture" |
 | `electron/tools/kling-adapter.mjs`, `runway-adapter.mjs` | provider adapters registered by the controller | `video-generation/controller.mjs:11-12,45-55` |
 
@@ -307,9 +307,9 @@ Nitro is a **storage and relay** server, not a render server.
 | Stock | `server/api/v1/stock/*`, `shared/utils/stockGuards.ts` | proxy guard for provider URLs |
 | TTS and push | `server/api/v1/media/tts*`, `server/api/push/fcm-token.ts` | voice and notifications |
 
-There is no render queue and no media binary. `app/composables/useTmcutPlatform.ts:24-26` states
+There is no render queue and no media binary. `app/composables/useTmcutPlatform.ts:12-17` states
 that the capture session host was retired with the FFmpeg engine and that `open()` now rejects
-on both hosts.
+on both hosts (`:159-161`).
 
 ---
 
@@ -393,7 +393,7 @@ deliberately absent are listed in 12.2, not here.
 | Gap | Evidence | Effect |
 |---|---|---|
 | No GPU renderer exists | `useTmcutPlatform.ts:95,109` set `webGPU: false`; no `navigator.gpu`, `requestAdapter`, or `getContext('webgpu')` anywhere in `app/`, `shared/`, `electron/`, `server/` | preview is HTML media + DOM + CSS; a GPU label would be a false claim |
-| `capture` capability rejects on both hosts | `useTmcutPlatform.ts:24-26` | HTML-video capture sessions have no engine; the studio renders HTML-video through an iframe seek loop instead |
+| `capture` capability rejects on both hosts | `useTmcutPlatform.ts:12-17`, `:159-161` | HTML-video capture sessions have no engine; the studio renders HTML-video through an iframe seek loop instead |
 | WebCodecs export refuses several authoring features | `EXPORT_BAKED_EFFECTS` has 7 of 29 effect types (`exportContent.mjs:97`); `planEncodeContent` refuses transitions, text, mask, blend, stacked rows | a project using them is refused by name, never silently mis-rendered |
 | No `packages/*` other than `core` | `ls packages` | every runtime seam is app-local; a second host would copy `app/utils/tmcut` |
 | `shared/contracts/events.ts` describes a profile product, not the studio | `shared/contracts/events.ts:1-8` | dead weight in the shared layer |
@@ -498,7 +498,7 @@ guess. Two changes to the presumptive order are justified by code:
 
 1. **`media-core` must come before `export`**, not after. `webExportHost.ts:28-29` imports
    `createPlateReader` from `frameDecode.ts` and `createExportMixLeg` from `exportMixLeg.ts`,
-   and the mix leg imports `decodePcm` from `audioDecode.ts:26`. A `media-core` package is a
+   and the mix leg imports `decodePcm` from `audioDecode.ts:52`. A `media-core` package is a
    *prerequisite* of an `export` package, not a sibling.
 2. **`rendering` must come after `media-core`**, because `paintSurfaces.ts` describes which
    decoded surface carries which authored clip — it needs the media read interface to exist
@@ -539,9 +539,9 @@ Two facts hold the extraction regardless of (b):
 - **Resolution.** `tmcut-core` reaches `src` through the Nuxt alias and the `tsconfig.test.json` path
   mapping only; the package is deliberately not installed (ADR-022/G13). A module in a second package
   can use none of that without a new mechanism.
-- **Type checking.** `.nuxt/tsconfig.app.json` maps `tmcut-core` in `paths` (`:89-91`) but its
-  `include` array does not contain `packages/`, so a `.ts` module moved there leaves the program
-  `nuxt typecheck` runs.
+- **Type checking.** `.nuxt/tsconfig.app.json` maps `tmcut-core` in `paths` but its `include` array
+  does not contain `packages/`, so a `.ts` module moved there leaves the program `nuxt typecheck`
+  runs. That file is generated and gitignored, so it is cited by key name rather than by line.
 
 Both are written up, with the eight consumer-resolution rows and the restart conditions, in
 [docs/architecture/core-package-contract.md](file:///D:/Applications/tm-studio/docs/architecture/core-package-contract.md).

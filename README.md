@@ -76,7 +76,7 @@ These work, but not for every input. The application says so rather than mis-ren
 | Export coverage | 7 of 29 effect types are baked into the file; transitions, text, mask, blend, rotation, stacked rows and the remaining effects are refused by name | `packages/core/src/exportContent.mjs:97`, `planEncodeContent` at `:253` |
 | Codec support | whatever the runtime's WebCodecs advertises; an unsupported codec is reported as a capability limitation, never swapped for a fallback | `exportEncodePlan.ts`, core `exportEncode.mjs` |
 | GPU rendering | none. The browser may have a GPU; this editor does not use it for painting | `useTmcutPlatform.ts:95,109` |
-| HTML-video capture | no capture session exists on either host; the studio renders HTML-video by seeking an iframe, not by capturing frames | `useTmcutPlatform.ts:24-26` |
+| HTML-video capture | no capture session exists on either host; the studio renders HTML-video by seeking an iframe, not by capturing frames | `useTmcutPlatform.ts:12-17` (`open()` throws at `:159-161`), `TmcutHtmlVideoStudio.vue:15` |
 | Audio pan | the `pan` field is preserved in stored projects but no mixer applies it | `capability_honesty` spec, ADR-028 |
 | Firefox | encode of AAC and WebGPU adapter were missing in the recorded 32-test compatibility run | `docs/audit/zero-ffmpeg-audit.md` §59.6 |
 
@@ -474,7 +474,7 @@ as a defect.
 | Export bakes 7 of 29 effect types | a project with any other effect is refused, with the effect named | `packages/core/src/exportContent.mjs:97,253` |
 | Transitions, text, mask, blend, rotation and stacked rows are not exported | the export modal lists them as blockers instead of producing a wrong file | `planEncodeContent`, `EXPORT_REFUSAL_REASONS` |
 | No GPU renderer | preview is bounded by DOM/CSS compositing | `useTmcutPlatform.ts:95,109` |
-| No HTML-video capture session | HTML-video stays inside its own studio view | `useTmcutPlatform.ts:24-26` |
+| No HTML-video capture session | HTML-video stays inside its own studio view | `useTmcutPlatform.ts:12-17`, `TmcutHtmlVideoStudio.vue:15` |
 | Pan is stored but not applied | a project with a non-zero pan shows a warning; the value is never reset | ADR-028; the capability-honesty spec |
 | Windows installer needs Developer Mode and a Medium-integrity output folder | the audit measured two distinct blockers: the asar symlink step needs `SeCreateSymbolicLinkPrivilege`, and an NSIS installer inherits a Low-integrity label from its parent folder and hangs before `.onInit` | zero-FFmpeg audit sections 58.1.3, 59.2 |
 | Live QA on three routes needs a hub session | `/tmcut/editor`, `/tmcut/templates`, `/tmcut/factory` call the AI catalogue on mount and log 401 without one | zero-FFmpeg audit section 58.1.2 |
