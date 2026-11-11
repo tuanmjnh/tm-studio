@@ -768,6 +768,23 @@ export type DeviceAuthResult
   }
 
 /**
+ * Device credential metadata. The issued credential stays in the main process
+ * vault and is never part of this surface.
+ */
+export interface DeviceStatus {
+  enrolled: boolean
+  deviceId: string
+  appId: string
+  userId: string
+  /** Hub this build currently points at. */
+  hubUrl?: string
+  /** Hub that issued the stored credential (absent on pre-scoping rows). */
+  hubOrigin?: string
+  expiresAt: string
+  scopes: string[]
+}
+
+/**
  * Main-process auth boundary for Electron. Every call carries the machine-derived
  * device identity; only the session (or a TOTP challenge) comes back.
  */
@@ -778,4 +795,7 @@ export interface DeviceAuthNamespace {
   passkeyStart(): Promise<{ success: true, data: unknown } | { success: false, code: string, statusMessage?: string, message?: string }>
   passkeyFinish(credential: unknown): Promise<DeviceAuthResult>
   register(input: { email: string, password: string, name: string }): Promise<DeviceAuthResult>
+  credentialStatus(): Promise<DeviceStatus>
+  /** Local-only: removes the stored credential. Revoking the Hub record is a root action on the Hub. */
+  forgetCredential(): Promise<{ success: boolean, enrolled?: boolean, code?: 'untrusted' }>
 }

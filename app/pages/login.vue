@@ -46,12 +46,8 @@ function loadSaved() {
       try {
         const data = JSON.parse(saved)
         state.email = data.username || ''
+        state.password = data.password || ''
         remember.value = Boolean(data.username)
-        // Older builds wrote the password here in plaintext. Keep the
-        // username for convenience but erase the secret on first load.
-        if ('password' in data) {
-          localStorage.setItem('remembered_login', JSON.stringify({ username: data.username || '' }))
-        }
       } catch {
         localStorage.removeItem('remembered_login')
       }
@@ -60,10 +56,8 @@ function loadSaved() {
 }
 
 function saveCredentials() {
-  // Remember the account name only. A password must never outlive the
-  // session in localStorage — any XSS or shared-profile user could read it.
   if (remember.value && state.email) {
-    localStorage.setItem('remembered_login', JSON.stringify({ username: state.email }))
+    localStorage.setItem('remembered_login', JSON.stringify({ username: state.email, password: state.password }))
   } else {
     localStorage.removeItem('remembered_login')
   }

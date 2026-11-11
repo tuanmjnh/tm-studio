@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
 import type { HubDeviceView } from '#shared/types/device'
+import type { DeviceStatus } from '#shared/types/electron'
 import { browserDeviceInfo } from '~/shared/utils/deviceIdentity'
 import { hubAuthBridge } from '~/utils/tmcut/hostBridge'
 import { getErrorMessage } from '~/shared/utils/errors'
@@ -9,11 +10,32 @@ import { formatDate } from '~/shared/utils/helper'
 const { t } = useI18n()
 const notify = useNotify()
 const { hubFetch } = useHub()
+const runtimeConfig = useRuntimeConfig()
 
 const devices = ref<HubDeviceView[]>([])
 const loading = ref(true)
 const busyId = ref('')
 const currentDeviceId = ref('')
+
+// The credential this install holds locally. Distinct from the Hub registry
+// list below: the registry is the server's view, this is what this machine
+// would present on its next call.
+const credential = ref<DeviceStatus | null>(null)
+const forgetting = ref(false)
+const forgetOpen = ref(false)
+
+async function loadCredential() {
+  const broker = hubAuthBridge()
+  if (!broker?.credentialStatus) {
+    credential.value = null
+    return
+  }
+  try {
+    credential.value = await broker.credentialStatus()
+  } catch {
+    credential.value = null
+  }
+}
 
 // The current identity comes from the source that authenticated this session:
 // Main in Electron, the localStorage UUID on the web.
@@ -30,6 +52,7 @@ async function load() {
   loading.value = true
   try {
     currentDeviceId.value = await resolveCurrentDeviceId()
+    await loadCredential()
     const res = await hubFetch<{ success: boolean, data: HubDeviceView[] }>('/api/v1/auth/user-devices', {
       query: currentDeviceId.value ? { currentDeviceId: currentDeviceId.value } : undefined
     })
@@ -42,6 +65,52 @@ async function load() {
 }
 
 onMounted(load)
+
+/**
+ * The stored credential belongs to one Hub. When this build points somewhere
+ * else, the credential is kept but never sent: the fix is to sign in against
+ * the current Hub, not to debug a session that was never valid here.
+ */
+const credentialHubOrigin = computed(() => String(credential.value?.hubOrigin || ''))
+const credentialForeign = computed(() => {
+  if (!credential.value?.enrolled || !credentialHubOrigin.value) return false
+  return normalizeHubUrl(credentialHubOrigin.value) !== normalizeHubUrl(credential.value.hubUrl || String(runtimeConfig.public.hubUrl || ''))
+})
+
+/**
+ * A credential enrolled before origins were recorded cannot be proven to belong
+ * to any Hub, so the server refuses to send it. It is not deleted — signing in
+ * again binds it to the Hub this build points at.
+ */
+const credentialUnbound = computed(() => Boolean(credential.value?.enrolled) && !credentialHubOrigin.value)
+
+function normalizeHubUrl(value: string): string {
+  return String(value || '').trim().replace(/\/+$/, '').toLowerCase()
+}
+
+/**
+ * Forget the local copy only. Anyone signed in on this device may do it; the
+ * Hub record is untouched, because revoking it is a root action on the Hub.
+ */
+async function forgetLocalCredential() {
+  const broker = hubAuthBridge()
+  if (!broker?.forgetCredential || forgetting.value) return
+  forgetting.value = true
+  try {
+    const result = await broker.forgetCredential()
+    if (!result.success) {
+      notify.error(t('devices.forgetFailed'), '')
+      return
+    }
+    forgetOpen.value = false
+    await loadCredential()
+    notify.success(t('devices.forgotten'), '')
+  } catch (err) {
+    notify.error(t('devices.forgetFailed'), err instanceof Error ? err.message : '')
+  } finally {
+    forgetting.value = false
+  }
+}
 
 const isRenameOpen = ref(false)
 const renameTarget = ref<HubDeviceView | null>(null)
@@ -158,6 +227,105 @@ const describe = (device: HubDeviceView): string =>
       />
     </div>
 
+    <UCard v-if="credential?.enrolled" class="mb-24 lg:mb-0">
+      <template #header>
+        <div class="flex items-center gap-2">
+          <UIcon name="i-lucide-laptop-minimal-check" class="size-4 text-primary" />
+          <h3 class="text-sm font-semibold">
+            {{ t('devices.localTitle') }}
+          </h3>
+        </div>
+      </template>
+
+      <div class="space-y-4">
+        <p class="text-xs text-muted">
+          {{ t('devices.localDescription') }}
+        </p>
+
+        <dl class="grid gap-3 sm:grid-cols-3">
+          <div class="panel-flat rounded-lg p-3">
+            <dt class="text-xs text-muted">
+              {{ t('devices.deviceId') }}
+            </dt>
+            <dd class="mt-1 truncate font-mono text-xs text-highlighted" :title="credential.deviceId">
+              {{ credential.deviceId.slice(0, 24) }}
+            </dd>
+          </div>
+          <div class="panel-flat rounded-lg p-3">
+            <dt class="text-xs text-muted">
+              {{ t('devices.scopes') }}
+            </dt>
+            <dd class="mt-1 truncate text-sm font-semibold text-highlighted">
+              {{ credential.scopes.join(', ') || '—' }}
+            </dd>
+          </div>
+          <div class="panel-flat rounded-lg p-3">
+            <dt class="text-xs text-muted">
+              {{ t('devices.expires') }}
+            </dt>
+            <dd class="mt-1 text-sm font-semibold text-highlighted">
+              {{ credential.expiresAt ? formatDate(credential.expiresAt) : '—' }}
+            </dd>
+          </div>
+        </dl>
+
+        <UAlert
+          v-if="credentialForeign"
+          color="warning"
+          variant="subtle"
+          icon="i-lucide-triangle-alert"
+          :title="t('devices.credentialWrongHub')"
+          :description="`${t('devices.credentialWrongHubDesc')} ${credentialHubOrigin}`"
+        >
+          <template #actions>
+            <UButton
+              color="neutral"
+              variant="ghost"
+              size="sm"
+              icon="i-lucide-log-in"
+              :label="t('devices.reEnroll')"
+              to="/login"
+            />
+          </template>
+        </UAlert>
+
+        <UAlert
+          v-else-if="credentialUnbound"
+          color="info"
+          variant="subtle"
+          icon="i-lucide-info"
+          :title="t('devices.credentialUnbound')"
+          :description="t('devices.credentialUnboundDesc')"
+        >
+          <template #actions>
+            <UButton
+              color="neutral"
+              variant="ghost"
+              size="sm"
+              icon="i-lucide-log-in"
+              :label="t('devices.reEnroll')"
+              to="/login"
+            />
+          </template>
+        </UAlert>
+      </div>
+
+      <template #footer>
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <p class="text-xs text-muted">
+            {{ t('devices.localHint') }}
+          </p>
+          <UButton
+            color="error"
+            variant="soft"
+            icon="i-lucide-unplug"
+            :label="t('devices.forgetLocal')"
+            @click="forgetOpen = true"
+          />
+        </div>
+      </template>
+    </UCard>
+
     <UCard class="mb-24 lg:mb-0">
       <div v-if="loading && devices.length === 0" class="space-y-3">
         <USkeleton v-for="i in 3" :key="i" class="h-16 w-full rounded-lg" />
@@ -261,6 +429,18 @@ const describe = (device: HubDeviceView): string =>
       icon="i-lucide-unplug"
       :loading="revoking"
       @confirm="confirmRevoke"
+    />
+
+    <BaseConfirmModal
+      v-model:open="forgetOpen"
+      :title="t('devices.forgetLocalTitle')"
+      :description="t('devices.forgetLocalDesc')"
+      :confirm-label="t('devices.forgetLocal')"
+      :cancel-label="t('common.cancel')"
+      color="error"
+      icon="i-lucide-unplug"
+      :loading="forgetting"
+      @confirm="forgetLocalCredential"
     />
   </div>
 </template>

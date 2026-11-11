@@ -10,6 +10,7 @@ import { useTmcutTelemetry } from '~/composables/useTmcutTelemetry'
 import { createWebExportHost } from '~/utils/tmcut/webExportHost'
 import { planWebExport } from '~/utils/tmcut/webExportChoice'
 import type { WebExportRefusalCode } from '~/utils/tmcut/webExportChoice'
+import { humanizeKey } from '~/utils/tmcut/fxLibrary'
 import { useTmcutUsageTracker } from '~/composables/useTmcutUsageTracker'
 
 const open = defineModel<boolean>('open', { default: false })
@@ -240,16 +241,32 @@ function explainContentReasons(reasons: readonly string[]): string[] {
 /**
  * What stands between this project and a file, said before the user starts a
  * render rather than after it fails. Core owns the verdict; this only turns its
- * vocabulary into sentences and names the effects the painter cannot bake, so
- * nobody has to hunt through the timeline for the clip that blocks the export.
+ * vocabulary into sentences and names what the painter cannot bake, so nobody
+ * has to hunt through the timeline for the clip that blocks the export.
+ *
+ * `blockedEffects` names each refused INSTANCE (`lut3d:film`, or a bare type),
+ * because two presets of one effect are not the same refusal — the user has to
+ * know which one to change.
  */
 const exportBlockers = computed(() => {
   const plan = planEncodeContent((currentProject.value ?? {}) as never)
   return {
     reasons: explainContentReasons(plan.reasons),
-    effects: plan.blockedEffects.map(type => effectName(type))
+    effects: plan.blockedEffects.map(name => effectLabel(name))
   }
 })
+
+const exportBlocked = computed(() => exportBlockers.value.reasons.length > 0)
+
+/**
+ * A refused instance as a person reads it: the preset's own library name for a
+ * `lut3d:<preset>`, else the registry type through the inspector's keys.
+ */
+function effectLabel(name: string): string {
+  const [type, preset] = name.split(':')
+  const suffix = preset ? ` (${t(`tmcut.fxLib.lut.${preset}`, humanizeKey(preset))})` : ''
+  return `${effectName(type ?? name)}${suffix}`
+}
 
 /** A registry type as a person reads it, through the same keys the inspector uses. */
 function effectName(type: string): string {
@@ -340,6 +357,10 @@ function downloadWebResult(): void {
 
 async function startExport() {
   if (!currentProject.value) return
+  // The verdict is shown above the button, so a click here can only mean the
+  // banner was ignored. Refusing in the same place that renders it keeps one
+  // answer; the toast is a last resort, not the way the user learns.
+  if (exportBlocked.value) return
   isExporting.value = true
   exportDone.value = false
   exportError.value = ''
@@ -704,6 +725,8 @@ onUnmounted(() => {
               variant="solid"
               icon="i-lucide-download"
               size="sm"
+              :disabled="exportBlocked"
+              :title="exportBlocked ? t('tmcut.export.blockedButtonHint') : undefined"
               @click="startExport"
             >
               {{ t('tmcut.export.startExport') }}

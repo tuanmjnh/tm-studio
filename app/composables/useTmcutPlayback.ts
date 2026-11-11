@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import { TICKS_PER_SECOND, audioMixAt, createFramePace, createFrameScheduler, elementRate, renderAt, ticksToSec } from 'tmcut-core'
+import { TICKS_PER_SECOND, audioMixAt, createFramePace, createFrameScheduler, elementRate, planPlaybackFollow, renderAt, ticksToSec } from 'tmcut-core'
 import type { CoreFramePace, TmcutClock } from 'tmcut-core'
 import { useTmcutProject } from './useTmcutProject'
 import type { TmcutTimelineItem } from './useTmcutProject'
@@ -215,6 +215,9 @@ export function useTmcutPlayback() {
     // A position the pace did not produce invalidates its anchor, so the next
     // frame measures from HERE instead of carrying the old interval along.
     resetPace()
+    // A deliberate move is not a stall: the freeze budget restarts from the
+    // seek so a scrub or a jump cannot be reported as a dead decoder.
+    resetFollowState()
 
     if (videoRef.value && activeVideoClip.value) {
       try {
@@ -278,18 +281,23 @@ export function useTmcutPlayback() {
       }
       return
     }
-    if (Math.abs(el.currentTime - target) > 0.3) {
-      try {
-        el.currentTime = target
-      } catch {
-        // ignore seeks on unloaded metadata; retried next frame
-      }
-    }
     el.playbackRate = mediaRate(clip)
     if (isPlaying.value) {
+      // The same follow law as the main picture: a secondary element that is
+      // starved is not seeked, because every write aborts the range load it is
+      // waiting on. Seeks that a slower source would turn into a storm are the
+      // reason a two-row project froze while a one-row project played.
+      followElement(el, target)
       if (el.paused) el.play().catch(() => {})
-    } else if (!el.paused) {
-      el.pause()
+    } else {
+      if (Math.abs(el.currentTime - target) > 0.3) {
+        try {
+          el.currentTime = target
+        } catch {
+          // ignore seeks on unloaded metadata; retried next frame
+        }
+      }
+      if (!el.paused) el.pause()
     }
   }
 
@@ -331,6 +339,87 @@ export function useTmcutPlayback() {
 
   // Playback animation loop
   let animId: number | null = null
+
+  /**
+   * How long each element's picture has failed to move while `isPlaying` says it
+   * should be moving. Read by the follow law: a frozen picture past the budget
+   * is a stall, not a slow fetch (see `planPlaybackFollow` in core). Per
+   * element, because the crossfade partner and each stacked row are different
+   * media clocks and one stalling says nothing about another.
+   */
+  const frozenSince = new WeakMap<object, number | null>()
+  const lastPosition = new WeakMap<object, number>()
+  /**
+   * True when the MAIN picture froze past the budget. The player paints this as
+   * a failure instead of an endless "Buffering…": the old flag was cleared only
+   * by `playing`/`canplay`, so a decoder that never recovered left the spinner
+   * on for the whole session.
+   */
+  const playbackStalled = ref(false)
+
+  function noteElementPosition(el: HTMLVideoElement | HTMLAudioElement): void {
+    const position = el.currentTime
+    const previous = lastPosition.get(el)
+    if (previous === undefined || Math.abs(position - previous) > 1e-4) {
+      lastPosition.set(el, position)
+      frozenSince.set(el, null)
+      return
+    }
+    if (frozenSince.get(el) === null || frozenSince.get(el) === undefined) {
+      frozenSince.set(el, performance.now())
+    }
+  }
+
+  function frozenMsOf(el: HTMLVideoElement | HTMLAudioElement): number {
+    const since = frozenSince.get(el)
+    return since == null ? 0 : Math.max(0, performance.now() - since)
+  }
+
+  function resetFollowState(): void {
+    lastPosition.delete(videoRef.value as object)
+    frozenSince.delete(videoRef.value as object)
+    playbackStalled.value = false
+  }
+
+  /**
+   * Apply the follow law to one footage element (playback stall slice A1/A2).
+   *
+   * The old law wrote `currentTime` whenever the element trailed the wall clock
+   * by more than 0.3 s. On a source slower than real time that is EVERY tick,
+   * and each write aborts the range load that would have filled the buffer —
+   * measured as 40 seeks in 12 s with `readyState` pinned at 1 and the buffer
+   * frozen at 0.8 s, against the same source growing 3.0 → 6.7 s with the law
+   * removed.
+   *
+   * `planPlaybackFollow` (core) answers what is legal; this applies it. Only the
+   * MAIN picture moves the playhead: while it cannot present, the playhead is
+   * held on the picture instead of running ahead of it, so the drift stays
+   * bounded and the transport readout cannot detach from what the viewer sees.
+   */
+  function followElement(
+    el: HTMLVideoElement | HTMLAudioElement,
+    targetSec: number,
+    options: { main?: boolean } = {}
+  ): void {
+    noteElementPosition(el)
+    const plan = planPlaybackFollow({
+      targetSec,
+      elementSec: el.currentTime,
+      readyState: el.readyState,
+      seeking: el.seeking,
+      frozenMs: frozenMsOf(el)
+    })
+    if (plan.action === 'seek') {
+      try {
+        el.currentTime = plan.playheadSec
+      } catch {
+        // Metadata not ready; the next tick asks again with fresh numbers.
+      }
+    }
+    if (!options.main) return
+    playbackStalled.value = plan.action === 'stalled'
+    if (plan.action === 'hold' || plan.action === 'stalled') playhead.value = plan.playheadSec
+  }
 
   // The pace (Zero-FFmpeg slice F6e/F6b): core owns the wall-clock → frame
   // conversion. The handle is bound to the project's canvas clock, so it is
@@ -400,6 +489,8 @@ export function useTmcutPlayback() {
         if (!videoRef.value.paused) videoRef.value.pause()
         const clip = activeVideoClip.value
         if (clip) {
+          // Seek-driven by construction (an element cannot run backwards), so
+          // this leg keeps its own write and is exempt from the stall budget.
           const targetTime = clip.mediaCurrentTime
           if (Math.abs(videoRef.value.currentTime - targetTime) > 0.25) {
             try {
@@ -433,15 +524,14 @@ export function useTmcutPlayback() {
       playhead.value = newTime
     }
 
-    // Keep active video element in sync + self-heal: resume the element if
-    // it stalled (gap exit with unchanged src, autoplay race, slow metadata)
-    // so the frame counter and the picture can never drift apart.
+    // Keep the active element in sync through the one follow law. A reverse
+    // clip paints by seeking (an element only runs forward), so it is exempt
+    // from the stall budget; every forward clip goes through `followElement`,
+    // which refuses to seek an element that cannot present and holds the
+    // playhead on the picture while it is starved.
     if (videoRef.value) {
       if (activeVideoClip.value) {
         const targetTime = activeVideoClip.value.mediaCurrentTime
-        // Reverse clips cannot play natively (the element only runs
-        // forward): step by seeking, exactly like the J shuttle branch
-        // above. Forward clips keep playing with drift-correction seeks.
         if (activeVideoClip.value.clip.reverse) {
           if (!videoRef.value.paused) videoRef.value.pause()
           if (Math.abs(videoRef.value.currentTime - targetTime) > 0.25) {
@@ -453,19 +543,12 @@ export function useTmcutPlayback() {
           }
         } else {
           // The same rate law every other footage element runs on: shuttle x
-          // core's speed for this clip at this tick. The drift-correcting seek
-          // below stays the anchor either way. Embedded audio warps with the
-          // rate here — the export keeps it at the base speed (documented v1
-          // gap). Applied while the element is paused too, so a resumed
-          // element never plays one frame at the wrong rate.
+          // core's speed for this clip at this tick. Applied while the element
+          // is paused too, so a resumed element never plays one frame at the
+          // wrong rate. Embedded audio warps with the rate here — the export
+          // keeps it at the base speed (documented v1 gap).
           videoRef.value.playbackRate = mediaRate(activeVideoClip.value.clip)
-          if (Math.abs(videoRef.value.currentTime - targetTime) > 0.3) {
-            try {
-              videoRef.value.currentTime = targetTime
-            } catch {
-              // ignore seeks on unloaded metadata; retried next frame
-            }
-          }
+          followElement(videoRef.value, targetTime, { main: true })
           if (videoRef.value.paused) {
             videoRef.value.play().catch(() => {})
           }
@@ -493,6 +576,7 @@ export function useTmcutPlayback() {
     }
     isPlaying.value = true
     resetPace()
+    resetFollowState()
     if (videoRef.value) {
       videoRef.value.playbackRate = mediaRate(activeVideoClip.value?.clip)
       videoRef.value.play().catch(() => {})
@@ -505,6 +589,7 @@ export function useTmcutPlayback() {
   function pause() {
     isPlaying.value = false
     resetPace()
+    resetFollowState()
     shuttleRate.value = 1 // K / pause always returns to normal speed
     if (animId) {
       cancelAnimationFrame(animId)
@@ -651,6 +736,7 @@ export function useTmcutPlayback() {
     previewVolume,
     previewMuted,
     audioMix,
+    playbackStalled,
     zoomIn,
     zoomOut
   }

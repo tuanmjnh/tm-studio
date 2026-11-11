@@ -1,7 +1,6 @@
 import { readBody } from 'h3'
 import { ofetch } from 'ofetch'
-import { relayUpstreamError } from '../../../../utils/aiRelay'
-import { resolveHubServiceIdentity } from '../../../../utils/hubIdentity'
+import { relayUpstreamError, requireHubServiceIdentity } from '../../../../utils/aiRelay'
 
 /**
  * AI relay proxy — chat (R151). The renderer cannot hold a hub credential, so
@@ -25,14 +24,7 @@ export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig(event)
   const hubUrl = String(config.public.hubUrl || '').replace(/\/+$/, '')
   // Device credential first (desktop), App Secret second (hosted server).
-  const identity = resolveHubServiceIdentity()
-  if (!hubUrl || !identity) {
-    throw createError({
-      statusCode: 503,
-      statusMessage: 'error.aiRelayNotConfigured',
-      message: 'AI relay is not configured on this server (no device credential or App Secret)'
-    })
-  }
+  const identity = requireHubServiceIdentity(hubUrl)
 
   const body = await readBody<{
     connectionId?: unknown

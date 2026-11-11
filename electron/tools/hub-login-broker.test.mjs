@@ -52,16 +52,34 @@ const SESSION = {
   user: { id: 'u1', email: 'a@b.c', name: 'A', appId: APP }
 }
 
+const DEVICE_ENV = [
+  'HUB_DEVICE_ID',
+  'HUB_DEVICE_SECRET',
+  'HUB_DEVICE_USER_ID',
+  'HUB_DEVICE_APP_ID',
+  'HUB_DEVICE_HUB_ORIGIN',
+  'HUB_DEVICE_EXPIRES_AT',
+  'HUB_DEVICE_SCOPES'
+]
+
 beforeEach(() => {
   calls = []
   vaultWrites = []
   vaultShouldThrow = false
-  delete process.env.HUB_DEVICE_SECRET
+  for (const key of [...DEVICE_ENV, 'NUXT_PUBLIC_HUB_URL', 'NUXT_PUBLIC_HUB_APP_ID']) delete process.env[key]
+  delete values.HUB_DEVICE_ID
+  delete values.HUB_DEVICE_SECRET
+  delete values.HUB_DEVICE_USER_ID
+  delete values.HUB_DEVICE_APP_ID
+  delete values.HUB_DEVICE_HUB_ORIGIN
+  delete values.HUB_DEVICE_EXPIRES_AT
+  delete values.HUB_DEVICE_SCOPES
+  values.NUXT_PUBLIC_HUB_URL = HUB
+  values.NUXT_PUBLIC_HUB_APP_ID = APP
 })
 
 afterEach(() => {
-  delete process.env.HUB_DEVICE_SECRET
-  delete process.env.HUB_DEVICE_ID
+  for (const key of DEVICE_ENV) delete process.env[key]
 })
 
 describe('deviceInfo', () => {
@@ -184,5 +202,63 @@ describe('notConfigured', () => {
       fetchImpl: async () => { throw new Error('should not be called') }
     })
     assert.equal((await unconfigured.login({ email: 'a@b.c', password: 'pw' })).code, 'notConfigured')
+  })
+})
+
+describe('credential scope', () => {
+  async function enroll(hubUrl = HUB) {
+    values.NUXT_PUBLIC_HUB_URL = hubUrl
+    respond = () => ({
+      status: 200,
+      body: {
+        success: true,
+        data: {
+          ...SESSION,
+          deviceCredential: { deviceId: 'dc-9', secret: SECRET, expiresAt: '', scopes: ['ai.relay'] }
+        }
+      }
+    })
+    await broker.login({ email: 'a@b.c', password: 'pw' })
+  }
+
+  it('records the issuing Hub and reports it alongside the metadata', async () => {
+    await enroll()
+    const status = broker.credentialStatus()
+    assert.equal(status.enrolled, true)
+    assert.equal(status.hubOrigin, HUB)
+    assert.equal(status.appId, APP)
+    assert.deepEqual(status.scopes, ['ai.relay'])
+    assert.equal(JSON.stringify(status).includes(SECRET), false)
+  })
+
+  it('reports an unenrolled device without inventing metadata', () => {
+    const status = broker.credentialStatus()
+    assert.equal(status.enrolled, false)
+    assert.equal(status.hubOrigin, '')
+    assert.deepEqual(status.scopes, [])
+  })
+
+  it('forget clears every credential slot in the vault and the environment', async () => {
+    await enroll()
+    assert.equal(broker.forgetCredential().success, true)
+
+    assert.equal(values.HUB_DEVICE_ID, '')
+    assert.equal(values.HUB_DEVICE_SECRET, '')
+    assert.equal(values.HUB_DEVICE_HUB_ORIGIN, '')
+    assert.equal(process.env.HUB_DEVICE_ID, '')
+    assert.equal(process.env.HUB_DEVICE_SECRET, '')
+    // The public Hub target is not a credential: forgetting must not unset it.
+    assert.equal(values.NUXT_PUBLIC_HUB_URL, HUB)
+    assert.equal(values.NUXT_PUBLIC_HUB_APP_ID, APP)
+    assert.equal(broker.credentialStatus().enrolled, false)
+  })
+
+  it('re-enrolling on another Hub replaces the stale origin instead of keeping both', async () => {
+    await enroll()
+    await enroll('https://hub.prod.test')
+
+    const status = broker.credentialStatus()
+    assert.equal(status.hubOrigin, 'https://hub.prod.test')
+    assert.equal(values.HUB_DEVICE_SECRET, SECRET)
   })
 })

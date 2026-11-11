@@ -7505,6 +7505,10 @@ Sáu doc guard chạy lại sau khi viết xong, tất cả exit 0 (log `stack-*
 
 ### 59.4 Quyết định 4 — effect vẫn chỉ ở preview, exporter không mở
 
+> **⚠️ ĐÃ ĐẢO NGƯỢC ngày 2026-11-10 — xem §64.** Mục này giữ nguyên như bằng chứng của quyết định cũ;
+> trạng thái hiện tại là danh sách `EXPORT_BAKED_EFFECTS` (7 effect có look là một chuỗi CSS `filter`).
+> Đọc §64 trước khi dùng bất kỳ câu nào dưới đây để trả lời "hôm nay exporter làm gì".
+
 Không đổi phạm vi A–K, không thêm painter cho effect nào. Trạng thái giữ nguyên như slice L:
 `exportBakesEffect(type)` trả `false` cho mọi type đang có, `planEncodeContent` trả `reasons` chứa
 `effects` và `blockedEffects` nêu đúng tên từng type, badge đọc **Preview Only** (không dùng
@@ -7841,3 +7845,167 @@ chạy và để slot đó được mã hoá trong `userData/config.env`.
 Chưa chứng minh: cài trên máy sạch; hai user Windows; đăng nhập bằng tài khoản Hub thật trong bản đóng gói;
 first-run enrollment/revoke **trong bản đóng gói** (đường code v2 đã có, xem
 `docs/architecture/electron-build-security.md` §8); ký số installer; avatar render trong app đã cài.
+
+---
+
+## 63. Remember password: đảo ngược quyết định của task #25 (đo ngày 2026-11-10)
+
+**Quyết định của chủ repo:** checkbox ở `/login` phải nhớ cả mật khẩu, không chỉ tên tài khoản, và hành vi
+phải giống tm-tools. Điều này đảo ngược có chủ đích slice "remember-me stores only the account name" (task
+#25), vốn được viết sau một sự cố mật khẩu thô trong `localStorage`.
+
+### 63.1 Thay đổi
+
+`app/pages/login.vue`:
+
+- `saveCredentials()` ghi `{ username: state.email, password: state.password }` khi `remember` bật; xoá key
+  khi tắt. Đây là payload giống hệt [tm-tools/app/pages/login.vue](../../../tm-tools/app/pages/login.vue).
+- `loadSaved()` khôi phục cả hai trường và bật lại checkbox. Nhánh "legacy scrub" cũ (ghi đè entry thành
+  `{ username }` mỗi lần load) đã bị gỡ: nếu giữ, nó xoá đúng mật khẩu vừa được lưu ở lần mở trang sau.
+- Entry hỏng vẫn bị `removeItem` (tm-tools hiện `catch (e) { void e }` để lại rác; tm-studio không copy lỗi
+  này).
+
+`i18n/locales/{en,vi}.json`: `auth.rememberMe` đổi thành "Remember me" / "Ghi nhớ đăng nhập" vì nhãn cũ
+("Remember my email") không còn đúng nghĩa.
+
+### 63.2 Mô hình đe doạ đã chấp nhận
+
+Mật khẩu nằm **plaintext** trong `localStorage`:
+
+- Web: đọc được bởi bất kỳ XSS nào, bởi extension, và bởi ai dùng chung profile trình duyệt.
+- Electron: cùng payload trong `localStorage` của profile app (`<userData>/Local Storage`). Nó **không** đi
+  qua `safeStorage`/DPAPI như các slot API key. Bản đóng gói không bảo vệ thêm.
+
+Repo đã có sẵn hạ tầng để siết riêng Electron (`electron/tools/ai-secure.cjs`, `SECRET_SLOT_RE`) nếu sau này
+muốn route credential qua DPAPI mà không đổi hành vi web. Đó là việc riêng, chưa làm trong slice này.
+
+### 63.3 Guard và bằng chứng
+
+`tests/unit/tmcut_login_remember.spec.ts` được viết lại (7 check) để pin hợp đồng mới: lưu đủ hai trường khi
+bật, xoá khi tắt, khôi phục cả hai khi load, không còn nhánh scrub, entry hỏng vẫn bị xoá, và mật khẩu chỉ
+được ghi vào `localStorage` từ đúng một chỗ.
+
+Các assertion mới được chạy trên bản `HEAD` của `login.vue` (code trước thay đổi) và **fail cả 4** — tức spec
+bảo vệ đúng hành vi, không phải test viết sau để khớp code.
+
+Đo live trên `http://localhost:4003/login` với login response được stub (không dùng tài khoản thật):
+
+| Kịch bản | Kết quả đo |
+|---|---|
+| Tick Remember, đăng nhập | `remembered_login` = `{"username":"remuser","password":"…"}` |
+| Reload trang | email + password tự điền lại, checkbox checked |
+| Bỏ tick, đăng nhập | key = `null`; không còn mật khẩu ở bất kỳ key `localStorage` nào |
+| Console sau reload sạch | chỉ `<Suspense>` (nhiễu đã biết), 0 error |
+
+| Gate | Lệnh | Kết quả |
+|---|---|---|
+| Types | `npx nuxt typecheck` | exit 0, 0 `error TS` |
+| Lint | `npx eslint app/pages/login.vue tests/unit/tmcut_login_remember.spec.ts` | spec 0 problem; `login.vue` 55 problem, **giống hệt baseline HEAD** (41 error + 14 warning, toàn bộ ở template, không dòng nào trong vùng đã sửa) |
+| Unit | `npx tsx tests/unit/run-all.mts` | 135/135, exit 0 |
+| Live | login page, 4 kịch bản | PASS |
+
+Chưa chứng minh: hành vi trên **bản đóng gói Electron** (mới đo trên dev server); hao mòn theo thời gian nếu
+Hub đổi mật khẩu (entry sẽ điền mật khẩu cũ và đăng nhập fail một lần); tương tác với password manager của
+trình duyệt.
+
+## 64. Mở exporter theo từng effect: đảo ngược quyết định 4 của §59.4 (đo ngày 2026-11-10)
+
+§59.4 chốt "effect vẫn chỉ ở preview, exporter không mở", với lý do đúng: một effect thiếu look trong file
+tệ hơn một lần từ chối thật thà. Nhưng nó gộp hai câu hỏi khác nhau vào một danh sách rỗng: "effect nào
+preview vẽ được" và "effect nào file bake được". Kết quả là 21 effect của registry đều chặn **toàn bộ**
+lần xuất — kể cả `negate`, thứ chỉ là `invert(1)`, và canvas 2D đọc đúng ngữ pháp `filter` đó.
+
+Slice này đảo **đúng một vế**: mở danh sách theo từng effect, gate bằng một điều kiện đo được, không mở
+theo nhóm cho có.
+
+### 64.1 Điều kiện để một effect vào danh sách
+
+Canvas 2D đọc CSS `filter` qua `ctx.filter` — cùng ngữ pháp preview dùng trên phần tử DOM. Vậy tiêu chí
+là: **toàn bộ look của effect là một chuỗi `filter`**. Bảy type thoả: `blur`, `mono`, `negate`, `sepia`,
+`sharpen`, `vibrance`, `vivid`. Mọi type cần thêm thứ khác vẫn bị từ chối:
+
+| Cần gì thêm | Type ở lại phía từ chối |
+|---|---|
+| Overlay plate (gradient/grid) | `vignette`, `letterbox`, `grain`, `pixelate`, `chromakey` |
+| Transform | `mirror-h`, `mirror-v`, `rotate-90`, `stabilize` |
+| Ghost layer | `chromatic`, `afterimage` |
+| Nhiễu/biến thiên theo thời gian | `vhs`, `film-grain` |
+| LUT / colorbalance | `lut3d`, `eq-grade`, `bleach-bypass`, `emboss`, `edge-detect` |
+
+`lut3d`/`eq-grade` không vào chỉ vì một lý do: chuỗi filter của chúng là xấp xỉ (`CSS has no
+colorbalance`), còn tiêu chí ở trên là "đúng ảnh preview đã cho xem", không phải "gần giống".
+
+### 64.2 Hai chủ, một danh sách
+
+Danh sách là **dữ liệu công khai** trong core (`EXPORT_BAKED_EFFECTS`), không phải một `Set` giấu trong
+`if`. Painter trong `app/utils/tmcut/exportEffectPaint.ts` giữ registry riêng (`EXPORT_EFFECT_TYPES`) và
+spec `tests/unit/tmcut_export_effect_paint.spec.ts` so **hai danh sách bằng nhau** — lệch một type là hoặc
+mất look lặng lẽ, hoặc từ chối một project không có lý do. Cùng spec đó so chuỗi filter của painter với
+`effectCss` của preview cho 9 case, nên painter không thể tự nghĩ ra công thức thứ hai.
+
+Trước khi sửa, spec này **fail** vì `exportEffectPaint.ts` chưa tồn tại (`ERR_MODULE_NOT_FOUND`) — tức nó
+được viết trước code, không phải viết sau để khớp.
+
+### 64.3 Ba spec cũ giữ "mọi effect đều bị chặn" đã đổi hợp đồng
+
+`export-content-eligibility.test.mjs`, `tmcut_fx_preview.spec.ts`, `effects.test.mjs` đều pin
+`exportBakesEffect(type) === false` cho **mọi** type. Chúng được sửa thành đúng câu chúng muốn nói: danh
+sách là dữ liệu, `baked.length > 0`, `baked.length < registry`, và fixture "bị từ chối" đổi sang type
+không bake (`chromakey`, `vignette`). Ba check mới thêm vào eligibility: effect không có chân painter bị từ
+chối; effect painter bake được thì **không** chặn file; một effect không bake vẫn chặn **cả file**.
+
+Hai spec khác fail vì lý do hợp lệ khác, và được sửa đúng chỗ:
+
+- `tmcut_export_process_census.spec.ts` bắt được `exportEffectPaint.ts` là module mới trong graph xuất —
+  đúng việc của nó. Census được cập nhật để **nêu tên** ba module mới (`exportEffectPaint`, `fxPreview`,
+  `fxCatalog`) và chứng minh chúng không mở process. Nhân đây áp luật sẵn có của chính spec cho check
+  package: `import type` bị xoá khi compile nên không tính là edge runtime (`fxPreview` chỉ `import type`
+  `vue`).
+- `tmcut_web_codecs_export.spec.ts` fail vì chuỗi `'effects'` trong `Pick<CoreEvaluatedLayer, … |
+  'effects'>` đọc như từ vựng từ chối. Spec đúng khi bắt; cách sửa là **gõ effect chain bằng type của
+  core** thay vì chuỗi tên field, không phải nới regex.
+
+### 64.4 `ctx.filter` được đo trên pixel thật, không chỉ trên type
+
+Node không có canvas 2D, nên spec chỉ chứng minh `draw` **ghi** thuộc tính `filter` (set cho plate, clear
+ngay sau đó để plate sau và nền frame không bị nhuộm). Việc Chromium thực sự đổi pixel được đo trên
+`http://localhost:4003` bằng `OffscreenCanvas`:
+
+| Lệnh | trước | sau |
+|---|---|---|
+| `filter = 'invert(1)'` | `[255,0,0]` | `[0,255,255]` |
+| `filter = 'grayscale(1)'` | `[255,0,0]` | `[54,54,54]` |
+| `ctx.filter` mặc định | `'none'` | — |
+
+Dòng cuối là lý do phải clear sau mỗi plate: mặc định là `'none'`, nên một filter để sót sẽ nhuộm plate
+kế tiếp.
+
+Wiring được chứng minh là **có tác dụng**, không chỉ tồn tại: bỏ `exportEffectFilter(...)` khỏi lời gọi
+`surface.draw` làm check "a baked effect reaches the canvas as the preview's own filter text" fail; khôi
+phục thì pass, hash file về đúng byte cũ.
+
+### 64.5 Copy và badge
+
+- Nhãn từ chối `effects` đổi từ "không bake được hiệu ứng của clip — bỏ chúng" thành "chỉ bake được hiệu
+  ứng màu và bộ lọc — bỏ các hiệu ứng còn lại", đúng câu core đang nói (en + vi).
+- Badge `TmcutFxThumb` vốn đọc `exportBakesEffect` nên tự đúng: 7 type mất badge **Preview Only**, phần
+  còn lại giữ.
+- `blockersEffects` đã nêu tên từng type bị chặn từ trước, nên không phải sửa.
+
+### 64.6 Gate
+
+| Gate | Lệnh | Kết quả |
+|---|---|---|
+| Types | `npx nuxt typecheck` | exit 0, 0 `error TS`; `.nuxt/eslint.config.mjs` regenerate (21:17) |
+| Lint | `npx eslint` trên 11 file đã sửa | exit 0, 0 problem |
+| Unit | `npx tsx tests/unit/run-all.mts` | **136/136**, exit 0, 0 FAIL (trước slice: 134/136) |
+| Core | `node --test packages/core/test/*.test.mjs` | **914/914**, exit 0 |
+| Live | 5 route TMCut trên :4003 | chỉ `<Suspense>` (nhiễu đã biết), 0 `[error]`/`[warn]` |
+| Pixel | `ctx.filter` trên Chromium thật | `invert(1)`, `grayscale(1)` đổi pixel đúng; mặc định `none` |
+
+Baseline lint của `packages/core/src/index.d.ts` là 3 error **có sẵn trên HEAD** (dòng 18, 301, 1013); file
+này không nằm trong danh sách lint của slice vì lỗi không ở dòng đã thêm.
+
+Chưa chứng minh: **không** chạy một file xuất thật có effect rồi so pixel preview/export — bảy type này có
+spec so chuỗi filter, và `ctx.filter` được đo trên canvas, nhưng **chưa** có phép đo end-to-end trên một
+project thật. Đó là điều kiện để mở nhóm kế tiếp (overlay plate), và phải đo trước khi mở.

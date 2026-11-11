@@ -55,12 +55,16 @@ const ENTRY = 'app/utils/tmcut/webExportHost.ts'
  * `mediabunny`) is not part of this graph, and a later check names the packages
  * that are allowed.
  */
-function localImports(rel: string): string[] {
-  const source = read(rel)
-  const runtime = source
+/** Source with `import type` lines removed: the edges that reach the bundle. */
+function runtimeSource(rel: string): string {
+  return read(rel)
     .split('\n')
     .filter(line => !/^\s*import\s+type\b/.test(line))
     .join('\n')
+}
+
+function localImports(rel: string): string[] {
+  const runtime = runtimeSource(rel)
   const specifiers = [...runtime.matchAll(/from\s+'([^']+)'/g)].map(m => m[1]!)
   const out: string[] = []
   for (const spec of specifiers) {
@@ -115,13 +119,23 @@ function main() {
   //    (the shared surface law, §53.7). The list below is the measurement, not
   //    the guess — which is the whole reason to compare a whole set instead of
   //    asserting a couple of `includes`.
+  //
+  //    Slice E1 added three more, and each is pure: `exportEffectPaint.ts` is
+  //    the painter's effect vocabulary, and it borrows the monitor's own filter
+  //    text from `fxPreview.ts` (its only edge to `vue` is `import type`, which
+  //    erases) plus `fxCatalog.ts` (a plain data table). The alternative — a
+  //    second copy of the filter formulas in the exporter — is the drift this
+  //    graph is meant to make visible.
   const reachable = graph(ENTRY)
   const EXPECTED = [
     'app/utils/tmcut/audioDecode.ts',
+    'app/utils/tmcut/exportEffectPaint.ts',
     'app/utils/tmcut/exportEncodePlan.ts',
     'app/utils/tmcut/exportEncodeSession.ts',
     'app/utils/tmcut/exportMixLeg.ts',
     'app/utils/tmcut/frameDecode.ts',
+    'app/utils/tmcut/fxCatalog.ts',
+    'app/utils/tmcut/fxPreview.ts',
     'app/utils/tmcut/paintSurfaces.ts',
     'app/utils/tmcut/webCodecsExport.ts',
     'app/utils/tmcut/webExportHost.ts'
@@ -178,12 +192,14 @@ function main() {
 
   // 3. The packages the graph may use are the browser's. `mediabunny` demuxes
   //    and muxes in-process, and `tmcut-core` is pure; a Node-only package here
-  //    would be a process by another name.
+  //    would be a process by another name. Same runtime-edge rule as above: a
+  //    type-only `vue` edge (fxPreview naming `CSSProperties`) compiles away and
+  //    is not a package the browser bundle pulls in.
   check('the graph imports only the browser and pure-core packages', () => {
     const allowed = new Set(['tmcut-core', 'mediabunny'])
     const local = (spec: string) => spec.startsWith('.') || spec.startsWith('~/') || spec.startsWith('app/')
     for (const file of reachable) {
-      const specs = [...read(file).matchAll(/from\s+'([^']+)'/g)].map(m => m[1]!)
+      const specs = [...runtimeSource(file).matchAll(/from\s+'([^']+)'/g)].map(m => m[1]!)
       for (const spec of specs) {
         if (local(spec)) continue
         assert.ok(allowed.has(spec), `${file} imports the package ${spec}, which the census does not allow`)

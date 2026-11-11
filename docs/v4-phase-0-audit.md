@@ -1,7 +1,14 @@
 # TMCut V4 — Phase 0 Audit & Contract Freeze
 
-> **Trạng thái:** PASS (2026-11-01) — deliverable của Phase 0 trong `docs/tmcut-v4-universal-rendering-multiplatform-roadmap.md`
-> **Nguồn sự thật:** code trong repo tại commit `6e8ef99`; mọi con số dưới đây đo trực tiếp, không lấy từ blueprint.
+> **⚠️ HISTORICAL — SUPERSEDED.** Tài liệu này là bản chụp trạng thái ngày **2026-11-01** tại commit
+> `6e8ef99`, khi FFmpeg còn là renderer duy nhất. Kể từ ADR-028…ADR-033 (2026-11-02) engine FFmpeg/FFprobe đã
+> bị gỡ khỏi repo. **Không dùng tài liệu này để trả lời "hôm nay code làm gì".** Trạng thái hiện tại đọc
+> [docs/audit/zero-ffmpeg-audit.md](audit/zero-ffmpeg-audit.md) và
+> [docs/adr/zero-ffmpeg-decisions.md](adr/zero-ffmpeg-decisions.md). Nội dung dưới đây được giữ nguyên làm
+> bằng chứng lịch sử cho các quyết định đã dẫn tới việc gỡ engine — không phải hướng dẫn thi hành.
+>
+> **Trạng thái gốc:** PASS (2026-11-01) — deliverable của Phase 0 trong `docs/tmcut-v4-universal-rendering-multiplatform-roadmap.md`
+> **Nguồn sự thật gốc:** code trong repo tại commit `6e8ef99`; mọi con số dưới đây đo trực tiếp, không lấy từ blueprint.
 > **Quy ước:** `ticks` = `TICKS_PER_SECOND = 120_000` ([time.mjs:9](file:///D:/Applications/tm-studio/packages/core/src/time.mjs#L9)).
 
 ---

@@ -472,6 +472,19 @@ ipcMain.handle('auth:register', async (event, input) => {
   return await hubAuth.register({ email, password, name })
 })
 
+// Credential metadata + local forget. Nothing here reaches the Hub: "Forget
+// this device" removes the local copy only, while revoking the Hub record stays
+// a root-only Hub API action (its own route enforces that server-side).
+ipcMain.handle('device:status', (event) => {
+  if (!isTrustedSender(event)) return { enrolled: false, deviceId: '', appId: '', userId: '', expiresAt: '', scopes: [] }
+  return hubAuth.credentialStatus()
+})
+
+ipcMain.handle('device:forget', (event) => {
+  if (!isTrustedSender(event)) return { success: false, code: 'untrusted' }
+  return hubAuth.forgetCredential()
+})
+
 ipcMain.handle('open-path', async (event, fullPath) => {
   if (!isTrustedSender(event)) return false
   const { shell } = require('electron')

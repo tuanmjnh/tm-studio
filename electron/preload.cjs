@@ -161,7 +161,11 @@ const deviceAuth = {
   verifyTotp: input => ipcRenderer.invoke('auth:verify-totp', input),
   passkeyStart: () => ipcRenderer.invoke('auth:passkey-start'),
   passkeyFinish: credential => ipcRenderer.invoke('auth:passkey-finish', credential),
-  register: input => ipcRenderer.invoke('auth:register', input)
+  register: input => ipcRenderer.invoke('auth:register', input),
+  // Local credential metadata and local forget. The secret itself never leaves
+  // Main, and forgetting does not revoke anything on the Hub.
+  credentialStatus: () => ipcRenderer.invoke('device:status'),
+  forgetCredential: () => ipcRenderer.invoke('device:forget')
 }
 
 contextBridge.exposeInMainWorld('electronAPI', {

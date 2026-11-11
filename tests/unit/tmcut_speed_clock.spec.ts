@@ -35,12 +35,20 @@ const tk = (sec: number) => Math.round(sec * TICKS)
 // The composable registers stacked elements through an `instanceof
 // HTMLVideoElement` guard, so the stub has to BE one for the runtime that
 // evaluates that guard. Node has no DOM: declare the class, then extend it.
+//
+// `readyState`/`seeking` are modelled because the follow law reads them
+// (`planPlaybackFollow`): an element that cannot present is held, not seeked,
+// and the playhead rides the picture. These checks are about the RATE, so the
+// stub is a healthy playing element — the starved case is `tmcut_playback_follow`
+// and `tmcut_playback_stall`'s.
 class VideoStub {
   currentTime = 0
   playbackRate = 1
   paused = true
   volume = 1
   muted = false
+  readyState = 4
+  seeking = false
   play() {
     this.paused = false
     return Promise.resolve()

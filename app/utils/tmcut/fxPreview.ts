@@ -17,7 +17,7 @@
  */
 import type { CSSProperties } from 'vue'
 import type { TmcutGradeOp } from 'tmcut-core'
-import { EFFECT_REGISTRY, clampEffectParam, exportBakesEffect, fxCapabilities, lutGrade } from 'tmcut-core'
+import { EFFECT_REGISTRY, clampEffectParam, exportBakesEffectInstance, fxCapabilities, lutGrade } from 'tmcut-core'
 import { TRANSITION_CATALOG } from './fxCatalog'
 
 export type FxPreviewKind = 'effect' | 'transition' | 'filter'
@@ -32,7 +32,8 @@ export interface FxPreviewStatus {
   previewReady: boolean
   /**
    * The FILE exporter bakes this effect. A different question with a different
-   * owner (`exportBakesEffect` in core) — never derived from `previewReady`.
+   * owner (`exportBakesEffectInstance` in core) — never derived from
+   * `previewReady`.
    */
   exportReady: boolean
 }
@@ -650,7 +651,7 @@ export function effectPreviewStatus(type: string): FxPreviewStatus {
     known: Boolean(EFFECT_BUILDERS[type]),
     fidelity: caps.fidelity,
     previewReady: caps.previewReady,
-    exportReady: exportBakesEffect(type)
+    exportReady: exportBakesEffectInstance({ type, params: {} })
   }
 }
 
@@ -671,7 +672,8 @@ function filterStatus(preset: string): FxPreviewStatus {
     // An id outside the enum reports `known: false` and paints nothing.
     fidelity: !known || !caps ? 'illustrative' : lutGrade(preset) === null ? 'exact' : caps.fidelity,
     previewReady: Boolean(caps?.previewReady && known),
-    exportReady: exportBakesEffect('lut3d')
+    // Per preset, not per type: `film` carries a grain plate and stays refused.
+    exportReady: exportBakesEffectInstance({ type: 'lut3d', params: { lut: preset } })
   }
 }
 

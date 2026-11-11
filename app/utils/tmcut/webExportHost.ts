@@ -61,7 +61,7 @@ export interface WebExportHostDeps {
   ports?: Parameters<typeof createWebCodecsExport>[0]['ports']
 }
 
-/** What a painted surface needs: one rectangle, one image, one alpha. */
+/** What a painted surface needs: one rectangle, one image, one alpha, one filter. */
 export interface WebExportCanvas {
   element: unknown
   begin(fill: string): void
@@ -69,7 +69,7 @@ export interface WebExportCanvas {
     source: { sx: number, sy: number, sw: number, sh: number }
     dest: { dx: number, dy: number, dw: number, dh: number }
     alpha: number
-  }): void
+  }, filter?: string): void
   dispose(): void
 }
 
@@ -123,13 +123,20 @@ export function createExportCanvas(width: number, height: number): WebExportCanv
       context.fillStyle = fill
       context.fillRect(0, 0, width, height)
     },
-    draw(plate, rect) {
+    draw(plate, rect, filter) {
       context.globalAlpha = rect.alpha
+      // The effect chain rides on `ctx.filter`, which reads the same grammar the
+      // preview's CSS `filter` uses — so `exportEffectFilter` hands the monitor's
+      // own words here instead of a second set of numbers. Set on every draw (and
+      // cleared after) because the filter belongs to THIS plate, not to the frame
+      // background or the next row.
+      if (filter) context.filter = filter
       context.drawImage(
         plate.image as CanvasImageSource,
         rect.source.sx, rect.source.sy, rect.source.sw, rect.source.sh,
         rect.dest.dx, rect.dest.dy, rect.dest.dw, rect.dest.dh
       )
+      if (filter) context.filter = 'none'
       context.globalAlpha = 1
     },
     dispose() {

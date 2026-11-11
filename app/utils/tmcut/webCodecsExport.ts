@@ -33,11 +33,12 @@
 //    is a second clock, and two clocks is the bug this programme is retiring.
 
 import { createFrameScheduler, encodeCanvasFill, planEncodeContent, planEncodePlate } from 'tmcut-core'
-import type { CoreEncodePlateRect, CoreEvaluatedLayer, TmcutCanvas, TmcutProject, TmcutTrack } from 'tmcut-core'
+import type { CoreEncodePlateRect, CoreEvaluatedLayer, TmcutCanvas, TmcutClipEffect, TmcutProject, TmcutTrack } from 'tmcut-core'
 import { createEncodeCapability } from './exportEncodePlan'
 import type { TmcutEncodeCapability, TmcutEncodeDecision } from './exportEncodePlan'
 import { createEncodeSession } from './exportEncodeSession'
 import type { TmcutEncodePorts, TmcutEncodeSession, TmcutPcmRequest } from './exportEncodeSession'
+import { exportEffectFilter } from './exportEffectPaint'
 
 /** One decoded picture, with the intrinsic size `planEncodePlate` places by. */
 export interface TmcutExportPlate {
@@ -64,7 +65,10 @@ export type TmcutExportPlateReader = (ask: TmcutExportPlateAsk) => Promise<Tmcut
 export interface TmcutExportSurface {
   role: 'paint' | 'outgoing'
   clip: { src?: string | null }
-  layer: Pick<CoreEvaluatedLayer, 'layout' | 'transform' | 'opacity'>
+  layer: Pick<CoreEvaluatedLayer, 'layout' | 'transform' | 'opacity'> & {
+    /** The clip's authored chain; `exportEffectFilter` reduces it to one CSS filter. */
+    effects?: readonly TmcutClipEffect[]
+  }
   mediaTimeSec: number
 }
 
@@ -76,7 +80,13 @@ export interface TmcutExportCanvas {
   /** Whatever a `VideoFrame` can be made from. */
   element: unknown
   begin(fill: string): void
-  draw(plate: TmcutExportPlate, rect: CoreEncodePlateRect): void
+  /**
+   * `filter` is the effect chain's CSS filter string (core's answer for this
+   * clip), applied to the plate only — not to the frame fill behind it. The
+   * preview applies it to the media element inside its layer box, so painting it
+   * here over the same plate rect is what makes the two faces agree.
+   */
+  draw(plate: TmcutExportPlate, rect: CoreEncodePlateRect, filter?: string): void
   dispose(): void
 }
 
@@ -255,7 +265,7 @@ export function createWebCodecsExport(deps: TmcutWebCodecsExportDeps) {
         if (!rect) {
           throw new Error(`${src ?? 'a clip with no source'} has a fit this painter cannot place`)
         }
-        surface.draw(plate, rect)
+        surface.draw(plate, rect, exportEffectFilter(who.layer.effects))
         plate.release?.()
       }
       return surface.element

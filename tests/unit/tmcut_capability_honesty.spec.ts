@@ -69,3 +69,26 @@ describe('a pan control may only exist where playback applies pan', () => {
     assert.match(player, /not applied|no stereo field|chưa áp dụng/i, 'the player does not say pan is unapplied')
   })
 })
+
+describe('the footer names the engine that actually runs', () => {
+  const workspace = read('app/components/tmcut/TmcutEditorWorkspace.vue')
+
+  it('it does not advertise a GPU renderer the app does not have', () => {
+    // docs/audit/playback-buffering-audit.md, "The two engine labels are one
+    // layer": `'gpu' in navigator` says what the browser could run, not what
+    // this editor paints with. There is no WebGPU/WebGL2 renderer in app/.
+    assert.doesNotMatch(workspace, /hasWebGPU/, 'the footer still sniffs for a GPU backend')
+    assert.doesNotMatch(workspace, /'WebGPU'|"WebGPU"|`WebGPU/, 'the footer still claims WebGPU')
+    assert.doesNotMatch(workspace, /'WebGL'|"WebGL"|`WebGL/, 'the footer still claims WebGL')
+  })
+
+  it('it names the preview engine and the encoder that do run', () => {
+    assert.match(workspace, /t\('tmcut\.workspace\.engineLabel'\)/)
+    for (const locale of ['en', 'vi']) {
+      const label = JSON.parse(read(`i18n/locales/${locale}.json`))?.tmcut?.workspace?.engineLabel
+      assert.equal(typeof label, 'string', `${locale} is missing tmcut.workspace.engineLabel`)
+      assert.match(label, /WebCodecs/, `${locale} must name the encoder that writes the file`)
+      assert.doesNotMatch(label, /WebGPU|WebGL/, `${locale} must not name a renderer that does not run`)
+    }
+  })
+})

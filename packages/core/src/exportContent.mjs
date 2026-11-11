@@ -40,6 +40,7 @@ import { resolveClipLayout } from './canvas.mjs'
 import { clipSpan } from './timeline.mjs'
 import { fpsToRational, TICKS_PER_SECOND } from './time.mjs'
 import { blendModeOf } from './blend.mjs'
+import { EFFECT_REGISTRY, lutGrade } from './effects.mjs'
 import { projectTracks } from './evaluate.mjs'
 import { normalizeMask } from './mask.mjs'
 import { selectFileRows } from './paintStack.mjs'
@@ -78,24 +79,101 @@ export const ENCODE_REFUSAL_REASONS = Object.freeze([
   'rotation'
 ])
 
-/** Effects the WebCodecs painter bakes today. Empty on purpose — see above. */
-const EXPORT_BAKED_EFFECTS = new Set([])
+/**
+ * Effects the WebCodecs painter bakes today.
+ *
+ * Published as data so a test can hold the painter to this same list: a type
+ * here that no painter leg draws is a file silently missing a look, and a type
+ * the painter draws but this list omits is a project refused for nothing.
+ *
+ * The bar for joining: the painter must produce the picture the monitor showed,
+ * not an approximation. Slice E1 took the seven effects whose whole look is a
+ * CSS filter string, because canvas 2D reads that same grammar in
+ * `ctx.filter` — the export emits the preview's own words, so the two faces
+ * cannot drift. Everything needing an overlay plate (vignette, letterbox,
+ * grain), a transform (mirror, rotate), a ghost layer or time-varying noise
+ * stays out until a leg draws it and a pixel gate measures it.
+ */
+export const EXPORT_BAKED_EFFECTS = Object.freeze([
+  'blur',
+  'mono',
+  'negate',
+  'sepia',
+  'sharpen',
+  'vibrance',
+  'vivid'
+])
+
+const EXPORT_BAKED = new Set(EXPORT_BAKED_EFFECTS)
 
 /**
  * Does the file export bake this effect into the picture?
  *
  * The registry's `renderReady` answers a different question (does a preview
- * have a complete face to paint), so it cannot answer this one: the painter
- * here draws one `drawImage` of the decoded plate and has no measured twin for
- * any effect, which is why `planEncodeContent` names 'effects' for a clip that
- * carries even one. When a painter leg learns to bake a named effect, that
- * effect moves into this set in the same commit that moves the refusal.
+ * have a complete face to paint), so it cannot answer this one. This list is
+ * the exporter's own answer, and the painter in `app/utils/tmcut/exportEffectPaint.ts`
+ * is held to it by `tests/unit/tmcut_export_effect_paint.spec.ts`.
  *
  * @param {unknown} type registry effect type
  * @returns {boolean} true only for effects the exporter paints itself
  */
 export function exportBakesEffect(type) {
-  return EXPORT_BAKED_EFFECTS.has(type)
+  return EXPORT_BAKED.has(type)
+}
+
+/**
+ * Does the file exporter bake THIS effect instance?
+ *
+ * The bare type is not enough for `lut3d`: its look depends on the preset the
+ * instance names, and presets differ in kind — most are a pure colour/filter
+ * chain, `film` carries grain, and an unknown id is not identity. Asking the
+ * type-level question refused every `lut3d` clip, including the 18 presets whose
+ * whole look is a CSS filter the painter already emits verbatim.
+ *
+ * The law, per instance: an effect is baked when its type is in
+ * `EXPORT_BAKED_EFFECTS`, or when it is a `lut3d` whose grade needs no plate —
+ * every preset op is a colour/filter instruction the painter can express. An
+ * unknown or absent preset is not identity: it is a picture nobody measured, so
+ * it is refused rather than painted as a no-op.
+ *
+ * @param {{ type?: unknown, params?: Record<string, unknown> } | null | undefined} effect
+ * @returns {boolean}
+ */
+export function exportBakesEffectInstance(effect) {
+  const type = effect?.type
+  if (typeof type !== 'string') return false
+  if (EXPORT_BAKED.has(type)) return true
+  if (type !== 'lut3d') return false
+  const preset = effect.params?.lut
+  if (!isRegisteredLut(preset)) return false
+  const grade = lutGrade(preset)
+  // `lutGrade` returns null for the registered no-op (`neutral`): identity is
+  // the honest picture, so there is nothing a painter has to add.
+  if (grade === null) return true
+  return grade.every(op => op.op !== 'grain')
+}
+
+/** Is this preset id one the registry ships? An unregistered id is not identity. */
+function isRegisteredLut(preset) {
+  const spec = EFFECT_REGISTRY.lut3d?.params?.find(param => param.name === 'lut')
+  return Array.isArray(spec?.options) && spec.options.includes(preset)
+}
+
+/**
+ * The name a refused instance is reported under.
+ *
+ * `lut3d:film` rather than `lut3d`: two presets of one type are not the same
+ * refusal, and the user has to be told WHICH preset to change. A bare type is
+ * its own name, so a caller that has no params still gets a usable label.
+ *
+ * @param {{ type?: unknown, params?: Record<string, unknown> } | null | undefined} effect
+ * @returns {string}
+ */
+export function refusedEffectName(effect) {
+  const type = typeof effect?.type === 'string' ? effect.type : ''
+  if (type !== 'lut3d') return type
+  const preset = effect.params?.lut
+  return typeof preset === 'string' && preset ? `${type}:${preset}` : type
 }
 
 function isFiniteNumber(value) {
@@ -212,12 +290,10 @@ export function planEncodeContent(input) {
     for (const clip of items) {
       if (!(clipSpan(clip).duration > 0)) continue
       if (Array.isArray(clip.effects) && clip.effects.length > 0) {
-        const unbaked = clip.effects
-          .map(effect => effect?.type)
-          .filter(type => typeof type === 'string' && !exportBakesEffect(type))
+        const unbaked = clip.effects.filter(effect => !exportBakesEffectInstance(effect))
         if (unbaked.length > 0) {
           reasons.add('effects')
-          for (const type of unbaked) blockedEffects.add(type)
+          for (const effect of unbaked) blockedEffects.add(refusedEffectName(effect))
         }
       }
       if (normalizeMask(clip.mask)) reasons.add('mask')

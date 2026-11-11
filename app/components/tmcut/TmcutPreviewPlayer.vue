@@ -60,7 +60,8 @@ const {
   loopPlayback,
   previewVolume,
   previewMuted,
-  audioMix
+  audioMix,
+  playbackStalled
 } = useTmcutPlayback()
 
 const internalVideoRef = ref<HTMLVideoElement | null>(null)
@@ -435,13 +436,30 @@ const mediaLoadError = ref(false)
 
 // Playback buffering: a stalled decode used to look like a frozen frame with
 // no feedback (the playhead keeps running on its own clock). The video
-// element's own events are the only honest source for this state.
+// element's own state is the only honest source for this, so the flag is read
+// from the element rather than latched from one event: `waiting` only says a
+// stall began, and the old code cleared it on `playing`/`canplay` alone — a
+// decoder that never recovered left "Buffering…" on for the whole session.
+//
+// `playbackStalled` is the other half (stall slice A3): when the picture has
+// not moved for core's whole budget the preview STOPS calling it buffering and
+// says the decode failed, because an endless spinner is the one thing worse
+// than an error.
 const isBuffering = ref(false)
 function onVideoWaiting() {
   if (isPlaying.value && activeVideoClip.value) isBuffering.value = true
 }
 function onVideoPlaying() {
   isBuffering.value = false
+}
+// Data arriving is the only thing that clears a buffering state; `playing`
+// alone is not enough because a seek clears it before frames exist.
+function onVideoProgress() {
+  const el = internalVideoRef.value
+  if (!el) return
+  if (el.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA && !el.seeking) {
+    isBuffering.value = false
+  }
 }
 
 watch(currentMediaSrc, () => {
@@ -1809,6 +1827,9 @@ onUnmounted(() => {
             @waiting="onVideoWaiting"
             @playing="onVideoPlaying"
             @canplay="onVideoPlaying"
+            @progress="onVideoProgress"
+            @timeupdate="onVideoProgress"
+            @seeked="onVideoProgress"
             @error="onMediaError('video')"
           />
           <div
@@ -1913,11 +1934,13 @@ onUnmounted(() => {
           @loadedmetadata="onAudioLoaded(a)"
         />
 
-        <!-- Buffering indicator: the playhead keeps running on its own clock,
-             so a stalled decoder needs an explicit state or the frame just
-             looks frozen. -->
+        <!-- Buffering indicator: honest about which state it is in. A slow fetch
+             says "Buffering…"; a picture frozen past the budget says the decode
+             failed, because an endless spinner hides the fault instead of
+             reporting it. The playhead now sits on the picture while this shows
+             (core's follow law), so the readout cannot run away underneath it. -->
         <div
-          v-if="isBuffering && !mediaLoadError"
+          v-if="isBuffering && !mediaLoadError && !playbackStalled"
           class="absolute inset-0 z-30 flex items-center justify-center pointer-events-none"
           role="status"
         >
@@ -1926,6 +1949,18 @@ onUnmounted(() => {
           >
             <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin" />
             {{ t('tmcut.player.buffering') }}
+          </span>
+        </div>
+        <div
+          v-else-if="playbackStalled && !mediaLoadError"
+          class="absolute inset-0 z-30 flex items-center justify-center pointer-events-none"
+          role="alert"
+        >
+          <span
+            class="flex items-center gap-2 rounded-full bg-black/65 px-3 py-1.5 text-[11px] font-medium text-white backdrop-blur-sm"
+          >
+            <UIcon name="i-lucide-triangle-alert" class="size-4 text-warning" />
+            {{ t('tmcut.player.stalled') }}
           </span>
         </div>
 

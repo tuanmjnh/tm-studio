@@ -2,7 +2,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { EFFECT_REGISTRY, validateEffect, normalizeEffects, fxCapabilities, clampEffectParam, lutGrade } from '../src/effects.mjs'
-import { exportBakesEffect, planEncodeContent } from '../src/exportContent.mjs'
+import { EXPORT_BAKED_EFFECTS, exportBakesEffect, planEncodeContent } from '../src/exportContent.mjs'
 import { TICKS_PER_SECOND } from '../src/time.mjs'
 
 const FIRST_WAVE = [
@@ -166,7 +166,7 @@ describe('fx capabilities contract (roadmap v1 §5-6)', () => {
   // A complete definition is not an exportable one. `planEncodeContent` names
   // 'effects' for every clip that carries one, so a tile claiming "exportable"
   // sends the user to a button that then refuses their project.
-  it('the exporter answers export support itself, and today it bakes no effect', () => {
+  it('the exporter answers export support itself, and names its own baked set', () => {
     const project = {
       version: 3,
       canvas: { width: 1920, height: 1080, fps: { numerator: 30, denominator: 1 } },
@@ -181,18 +181,25 @@ describe('fx capabilities contract (roadmap v1 §5-6)', () => {
           timeline: { start: 0, duration: 4 * TICKS_PER_SECOND },
           speed: 1,
           transform: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0 },
-          effects: [{ type: 'blur', params: {} }],
+          effects: [{ type: 'chromakey', params: { color: '#00ff00' } }],
           keyframes: []
         }]
       }]
     }
-    assert.deepEqual(planEncodeContent(project).reasons, ['effects'], 'the painter still refuses a clip with effects')
+    assert.deepEqual(planEncodeContent(project).reasons, ['effects'], 'an effect with no painter leg still refuses the clip')
 
     for (const key of Object.keys(EFFECT_REGISTRY)) {
       assert.equal(fxCapabilities(key).previewReady, true, `${key} ships a preview face`)
-      assert.equal(exportBakesEffect(key), false, `${key} claims an export the painter refuses`)
+      // The registry's preview flag must never be read as an export answer: the
+      // exporter publishes its own list, and the painter is held to it.
+      assert.equal(exportBakesEffect(key), EXPORT_BAKED_EFFECTS.includes(key), `${key} export answer`)
     }
     assert.equal(exportBakesEffect('no-such-effect'), false)
+    // Slice E1: the painter learned a filter-string leg, so at least one effect
+    // exports. The rest must still be refused — a list that grew silently would
+    // ship files missing looks.
+    assert.ok(EXPORT_BAKED_EFFECTS.length > 0, 'the painter bakes at least one effect')
+    assert.ok(EXPORT_BAKED_EFFECTS.length < Object.keys(EFFECT_REGISTRY).length, 'not every effect is baked')
   })
 
   it('fidelity is a documented stance, not a default', () => {

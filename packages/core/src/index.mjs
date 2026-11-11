@@ -2,6 +2,7 @@
 export * from './time.mjs'
 export * from './clock.mjs'
 export * from './pace.mjs'
+export * from './playback.mjs'
 export * from './scheduler.mjs'
 export * from './renderAt.mjs'
 export * from './platform.mjs'

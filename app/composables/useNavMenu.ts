@@ -20,7 +20,12 @@ function mapHubRouteToRouteTreeNode(hubRoute: HubSystemRoute): RouteTreeNode {
 }
 
 export const useNavMenu = () => {
-  const { t } = useI18n()
+  // The global route middleware calls this composable, and middleware runs
+  // outside a component setup — `useI18n()` throws there ("Must be called at
+  // the top of a `setup` function"), which turned every non-root navigation
+  // into a 500. The app-level composer translates from the same store and
+  // still tracks locale changes inside a computed.
+  const { $i18n } = useNuxtApp()
   const auth = useAuth()
   const { routes } = useHub()
 
@@ -48,7 +53,7 @@ export const useNavMenu = () => {
     if (!raw) return ''
     const candidates = raw.startsWith('nav.') ? [raw] : [`nav.${raw}`, raw]
     for (const key of candidates) {
-      const translated = t(key)
+      const translated = $i18n.t(key)
       if (translated && translated !== key) return translated
     }
     return raw

@@ -56,13 +56,19 @@ describe('no shared secret may be baked into the build', () => {
   it('the relay resolves its service identity from the environment per request', () => {
     for (const route of ['server/api/v1/ai/relay/catalog.get.ts', 'server/api/v1/ai/relay/chat.post.ts']) {
       const src = stripComments(read(route))
-      assert.match(src, /resolveHubServiceIdentity\(\)/,
+      // The route may call the resolver directly or the guard that wraps it;
+      // either way the identity is chosen inside the request, never captured
+      // at build time.
+      assert.match(src, /(?:requireHubServiceIdentity|resolveHubServiceIdentity)\(/,
         `${route} must resolve the identity from the environment at request time`)
       assert.doesNotMatch(src, /config\.hubAppSecret/,
         `${route} still reads the build-time runtimeConfig value`)
       assert.doesNotMatch(src, /X-App-Secret/,
         `${route} must not hardcode the App Secret header; the resolver chooses the identity`)
     }
+    const guard = read('server/utils/aiRelay.ts')
+    assert.match(guard, /resolveHubServiceIdentityDetailed\(\)/,
+      'the relay guard must ask the resolver on every call')
     const helper = read('server/utils/hubIdentity.ts')
     assert.match(helper, /process\.env\.NUXT_HUB_APP_SECRET/, 'the resolver is the one place that reads the App Secret env')
     assert.match(helper, /process\.env\.HUB_DEVICE_SECRET/, 'the resolver is the one place that reads the device credential env')

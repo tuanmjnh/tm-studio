@@ -1,6 +1,5 @@
 import { ofetch } from 'ofetch'
-import { relayUpstreamError } from '../../../../utils/aiRelay'
-import { resolveHubServiceIdentity } from '../../../../utils/hubIdentity'
+import { relayUpstreamError, requireHubServiceIdentity } from '../../../../utils/aiRelay'
 
 /**
  * AI relay proxy — catalogue (R151). Forwards the hub's relay catalogue
@@ -20,14 +19,7 @@ export default defineEventHandler(async (event) => {
 
   const config = useRuntimeConfig(event)
   const hubUrl = String(config.public.hubUrl || '').replace(/\/+$/, '')
-  const identity = resolveHubServiceIdentity()
-  if (!hubUrl || !identity) {
-    throw createError({
-      statusCode: 503,
-      statusMessage: 'error.aiRelayNotConfigured',
-      message: 'AI relay is not configured on this server (no device credential or App Secret)'
-    })
-  }
+  const identity = requireHubServiceIdentity(hubUrl)
 
   try {
     return await ofetch(`${hubUrl}/api/v1/apps/${identity.appId}/ai/relay/catalog`, {

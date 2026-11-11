@@ -233,9 +233,36 @@ login tự đăng ký thiết bị, và `POST /api/v1/auth/jwks`. tm-studio đã
   `SECRET_SLOT_RE`), rồi **xoá** `deviceCredential` trước khi trả về renderer.
 - **AI Relay**: `server/utils/hubIdentity.ts` chọn device credential trước, App Secret sau
   (chỉ deployment server); nửa cặp device thiếu → `null` (fail closed, không hạ cấp).
-- **UI**: `/system/settings/devices` (danh sách, đổi tên, thu hồi).
+- **UI**: `/system/settings/devices` (danh sách, đổi tên, thu hồi) + thẻ credential cục bộ
+  (metadata + "Forget this device").
 
 Trạng thái dòng "P4 — device enrollment" ở §7 giờ là **IMPLEMENTED v2**: enrollment theo
 RFC 8628 đã bị gỡ khỏi UI (credential đến từ login bình thường), và `electron-builder --dir`
 đã chạy exit 0 trong lần này. `app.asar` chứa `device-identity.cjs` + `hub-login-broker.cjs`.
-Còn mở: pin `tm-hub-client` 1.2.0 (chưa publish trên registry) và packaged smoke với Hub thật.
+
+### 8.1 Sửa trong vòng P0–P3 (2026-11-10)
+
+`tm-hub-client@1.2.0` **đã publish** và đã pin ở cả hai satellite — câu "chưa publish"
+ở trên không còn đúng. Phần còn mở thực sự chỉ là **P0**: Hub Production chưa có
+`AUTH_JWT_PRIVATE_KEY`, nên `GET /api/v1/auth/jwks` trả `{"keys":[]}` và không client nào
+verify được token. Đó là việc cấu hình deployment, không phải lỗi code.
+
+Ba lỗi trong luồng xác thực đã sửa:
+
+1. **Credential không bị buộc vào Hub đã cấp.** `server/utils/hubIdentity.ts` trước chỉ so
+   `appId`. Giờ yêu cầu khớp cả `(hubOrigin, appId)` qua
+   `shared/utils/deviceCredentialScope.ts`, và báo rõ lý do từ chối
+   (`hub-mismatch` / `app-mismatch` / `legacy-no-origin` / `incomplete-pair`).
+2. **Broker không ghi lại Hub phát hành.** `HUB_DEVICE_HUB_ORIGIN` giờ được ghi cùng
+   credential; đăng ký lại ở Hub khác sẽ thay origin cũ, không giữ cả hai.
+3. **Lệch Hub bị báo thành "chưa cấu hình".** Hai route relay đi qua
+   `requireHubServiceIdentity(hubUrl)` (`server/utils/aiRelay.ts`), trả
+   `409 error.deviceCredentialWrongHub` thay vì `503 aiRelayNotConfigured`.
+
+Thêm **"Forget this device" cục bộ**: `credentialStatus` / `forgetCredential` trong broker,
+IPC `device:status` / `device:forget`. Thao tác này không cần root vì không rời khỏi máy;
+thu hồi trên Hub vẫn là thao tác riêng, chỉ root, do Hub thực thi.
+
+Bằng chứng đo lại: `vue-tsc` exit 0 / 0 `error TS`, lint exit 0 sau khi regenerate config,
+135/135 unit + 80/80 Electron test, `nuxt build` exit 0, và `.output` không chứa giá trị
+`AUTH_JWT_PRIVATE_KEY` hay `AUTH_JWT_SECRET`.

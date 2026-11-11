@@ -1006,6 +1006,29 @@ export function fxCapabilities(type: string): {
  * separate owner — never derived from `fxCapabilities().previewReady`.
  */
 export function exportBakesEffect(type: unknown): boolean
+/**
+ * The effect types the file exporter bakes. Published as data so a painter and
+ * a test can be held to the same list: a type here with no painter leg is a file
+ * silently missing a look; a type the painter draws but this omits is a project
+ * refused for nothing.
+ */
+export const EXPORT_BAKED_EFFECTS: readonly string[]
+/**
+ * Whether the file exporter bakes THIS effect instance.
+ *
+ * The bare type cannot answer for `lut3d`: its look is the preset's grade, and
+ * presets differ in kind (most are a colour/filter chain, `film` needs a grain
+ * plate, an unknown id is not identity). True when the type is in
+ * `EXPORT_BAKED_EFFECTS`, or when it is a `lut3d` whose registered preset's
+ * grade carries no plate. The painter in
+ * `app/utils/tmcut/exportEffectPaint.ts` calls this one function.
+ */
+export function exportBakesEffectInstance(effect: { type?: unknown, params?: Record<string, unknown> } | null | undefined): boolean
+/**
+ * The name a refused instance is reported under: `lut3d:film` for a preset,
+ * the bare type otherwise, so the user is told which preset to change.
+ */
+export function refusedEffectName(effect: { type?: unknown, params?: Record<string, unknown> } | null | undefined): string
 /** Coerce one raw param value into registry bounds; undefined when unknown. */
 export function clampEffectParam(type: string, name: string, raw: unknown): unknown
 
@@ -2065,6 +2088,41 @@ export interface CoreFramePace {
 
 export function createFramePace(clock: TmcutClock): CoreFramePace
 
+// --- Playback follow law (preview stall slice A1/A2) ---
+/** `HTMLMediaElement.HAVE_FUTURE_DATA`: enough data to present the next frame. */
+export const TMCUT_PLAYBACK_PRESENTING_READY_STATE: number
+/** How far the element may trail the target before a corrective seek is legal. */
+export const TMCUT_PLAYBACK_DRIFT_TOLERANCE_SEC: number
+/** How long the picture may sit frozen before the preview reports a stall. */
+export const TMCUT_PLAYBACK_STALL_LIMIT_MS: number
+
+export type CorePlaybackFollowAction = 'follow' | 'seek' | 'hold' | 'stalled'
+
+export interface CorePlaybackFollowPlan {
+  readonly action: CorePlaybackFollowAction
+  /** Where the playhead must stand after this tick. */
+  readonly playheadSec: number
+  readonly reason: 'in-sync' | 'drift' | 'seeking' | 'no-future-data' | 'frozen-past-budget'
+}
+
+/**
+ * What the preview loop may do this tick.
+ *
+ * A corrective seek is only legal while the element is presenting and is not
+ * already seeking — writing `currentTime` aborts the in-flight range load, so
+ * seeking a starved element keeps it starved. While it cannot present, the
+ * playhead follows the picture rather than the wall clock.
+ */
+export function planPlaybackFollow(input: {
+  targetSec?: number
+  elementSec?: number
+  readyState?: number
+  seeking?: boolean
+  frozenMs?: number
+  toleranceSec?: number
+  stallLimitMs?: number
+}): CorePlaybackFollowPlan
+
 // --- Frame-index scheduler (V4 Phase 2, item 3) ---
 /** One renderable frame: its ordinal, its tick position, its content. */
 export interface CoreFrame {
@@ -2449,9 +2507,12 @@ export interface CoreEncodeContentVerdict {
   /** Sorted and complete: every unpaintable feature in the project, named once. */
   reasons: readonly string[]
   /**
-   * The effect types standing between this project and a file, sorted and
+   * The effect instances standing between this project and a file, sorted and
    * de-duplicated. Empty whenever 'effects' is not among the reasons, so a
-   * caller can print its names instead of making the user hunt for the clip.
+   * caller can print their names instead of making the user hunt for the clip.
+   *
+   * A refused `lut3d` is named by instance (`lut3d:film`) because two presets of
+   * one effect are not the same refusal; every other entry is a bare type.
    */
   blockedEffects: readonly string[]
   /** Hand this to `planEncodePresets`. Null whenever anything is refused. */

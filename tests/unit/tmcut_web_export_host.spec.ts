@@ -30,7 +30,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { createWebExportHost } from '../../app/utils/tmcut/webExportHost'
+import { createExportCanvas, createWebExportHost } from '../../app/utils/tmcut/webExportHost'
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..')
 const read = (rel: string) => readFileSync(join(root, rel), 'utf8')
@@ -45,7 +45,7 @@ async function check(label: string, fn: () => void | Promise<void>) {
 const FPS = Object.freeze({ numerator: 30, denominator: 1 })
 const TICKS = 120_000
 
-function projectOf() {
+function projectOf(effects: Array<{ type: string, params?: Record<string, unknown> }> = []) {
   return {
     version: 3,
     canvas: {
@@ -66,7 +66,7 @@ function projectOf() {
         timeline: { start: 0, duration: 2 * TICKS },
         speed: 1,
         transform: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0 },
-        effects: [],
+        effects,
         keyframes: []
       }]
     }]
@@ -95,7 +95,7 @@ function storedProject() {
 /** Everything the host is allowed to touch, faked, with every touch recorded. */
 function fixture(options: { silent?: boolean, plates?: boolean } = {}) {
   const log: string[] = []
-  const draws: Array<{ fill?: string, sx?: number, dest?: unknown }> = []
+  const draws: Array<{ fill?: string, sx?: number, dest?: unknown, filter?: string | null }> = []
   const readAsks: Array<{ src: string, atSec: number, authoredSrc?: string | null }> = []
   const mixAsks: Array<Record<string, unknown>> = []
   const sessions: Array<Record<string, unknown>> = []
@@ -141,8 +141,8 @@ function fixture(options: { silent?: boolean, plates?: boolean } = {}) {
         begin: (fill: string) => {
           draws.push({ fill })
         },
-        draw: (_plate: unknown, rect: { source: { sx: number }, dest: unknown }) => {
-          draws.push({ sx: rect.source.sx, dest: rect.dest })
+        draw: (_plate: unknown, rect: { source: { sx: number }, dest: unknown }, filter?: string) => {
+          draws.push({ sx: rect.source.sx, dest: rect.dest, filter: filter ?? null })
         },
         dispose: () => {
           canvas.disposed = true
@@ -327,6 +327,78 @@ async function main() {
       'and so was the mixer')
     assert.deepEqual(f.readAsks.map(ask => ask.authoredSrc), ['C:/media/v.mp4', 'C:/media/v.mp4'],
       'the authored path is still named, so a caller that adds a cache later needs no change here')
+  })
+
+  await check('a baked effect reaches the canvas as the preview\'s own filter text', async () => {
+    const f = fixture()
+    const result = await f.host.run({
+      project: projectOf([{ type: 'negate', params: {} }, { type: 'sepia', params: { intensity: 100 } }]) as never,
+      resolveSrc: src => src
+    })
+    assert.equal(result.kind, 'exported', `a filter-only chain must not be refused: ${result.message ?? ''}`)
+    const filters = f.draws.filter(entry => entry.dest !== undefined).map(entry => entry.filter)
+    assert.deepEqual(filters, ['invert(1) sepia(1)', 'invert(1) sepia(1)'],
+      'the clip\'s authored order, as one CSS filter string on every plate')
+    assert.deepEqual(f.draws.filter(entry => entry.fill !== undefined).map(entry => entry.fill), ['#101820', '#101820'],
+      'and the frame background is still the fill, never filtered by the plate\'s chain')
+  })
+
+  await check('a clip with no effects carries no filter string', async () => {
+    const f = fixture()
+    await f.host.run({ project: projectOf() as never, resolveSrc: src => src })
+    const filters = f.draws.filter(entry => entry.dest !== undefined).map(entry => entry.filter)
+    assert.deepEqual(filters, ['', ''],
+      'an empty chain is the empty string, which every consumer treats as "no filter"')
+    assert.equal(filters.every(Boolean), false, 'and never reaches a canvas as a truthy filter')
+  })
+
+  await check('the real canvas sets the filter for one plate and clears it after', () => {
+    // The port is inert; the canvas is not. A filter left set would tint the
+    // next row's plate and the frame background of the following frame, so the
+    // clear is a correctness rule, not tidiness. `context.filter` is faked
+    // because Node has no 2D context — the assertion is that `draw` writes the
+    // property at all, which is the half a type cannot check.
+    const writes: Array<string | number> = []
+    const drawn: unknown[] = []
+    const context = {
+      globalAlpha: 1,
+      fillStyle: '',
+      get filter() { return '' },
+      set filter(value: string) { writes.push(`filter:${value}`) },
+      fillRect: () => {},
+      drawImage: (...args: unknown[]) => { drawn.push(args) }
+    }
+    const fake = {
+      width: 0,
+      height: 0,
+      getContext: () => context
+    }
+    const globalAny = globalThis as unknown as Record<string, unknown>
+    const hadOffscreen = 'OffscreenCanvas' in globalAny
+    const previous = globalAny.OffscreenCanvas
+    globalAny.OffscreenCanvas = function OffscreenCanvas() {
+      return fake
+    }
+    try {
+      const canvas = createExportCanvas(640, 360)
+      canvas.begin('#101820')
+      canvas.draw({ image: { marker: 'plate' } }, {
+        source: { sx: 0, sy: 0, sw: 1920, sh: 1080 },
+        dest: { dx: 0, dy: 0, dw: 640, dh: 360 },
+        alpha: 1
+      }, 'invert(1) sepia(1)')
+      canvas.draw({ image: { marker: 'plate' } }, {
+        source: { sx: 0, sy: 0, sw: 1920, sh: 1080 },
+        dest: { dx: 0, dy: 0, dw: 640, dh: 360 },
+        alpha: 1
+      })
+    } finally {
+      if (hadOffscreen) globalAny.OffscreenCanvas = previous
+      else delete globalAny.OffscreenCanvas
+    }
+    assert.deepEqual(writes, ['filter:invert(1) sepia(1)', 'filter:none'],
+      'set for the filtered plate, cleared immediately so the next plate starts unfiltered')
+    assert.equal(drawn.length, 2, 'and both plates were still drawn')
   })
 
   console.log(`\n=== All ${passed} web-export-host checks passed ===`)

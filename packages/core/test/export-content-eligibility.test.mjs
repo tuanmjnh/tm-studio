@@ -17,7 +17,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { TICKS_PER_SECOND } from '../src/time.mjs'
 import { createFrameScheduler } from '../src/scheduler.mjs'
-import { ENCODE_REFUSAL_REASONS, exportBakesEffect, planEncodeContent } from '../src/exportContent.mjs'
+import { ENCODE_REFUSAL_REASONS, exportBakesEffect, exportBakesEffectInstance, planEncodeContent } from '../src/exportContent.mjs'
 
 const T = TICKS_PER_SECOND
 
@@ -133,9 +133,20 @@ describe('planEncodeContent — what the exporter cannot paint yet', () => {
     assert.equal(planEncodeContent(project).kind, 'eligible')
   })
 
-  it('an effect is refused: the preview applies it as CSS filters, the file cannot', () => {
-    const project = projectOf([['row-a', [clip('a', 0, 6, { effects: [{ type: 'brightness', params: { value: 1.2 } }] })]]])
+  it('an effect with no painter leg is refused', () => {
+    const project = projectOf([['row-a', [clip('a', 0, 6, { effects: [{ type: 'chromakey', params: { color: '#00ff00' } }] })]]])
     assert.deepEqual(planEncodeContent(project).reasons, ['effects'])
+  })
+
+  // Slice E1 taught the painter a filter-string leg, so the effects whose whole
+  // look IS a CSS filter export now. The refusal must not outlive the leg.
+  it('an effect the painter bakes does not block the file', () => {
+    const project = projectOf([['row-a', [clip('a', 0, 6, { effects: [{ type: 'mono', params: { intensity: 100 } }] })]]])
+    const verdict = planEncodeContent(project)
+    assert.equal(verdict.kind, 'eligible')
+    assert.deepEqual(verdict.reasons, [])
+    assert.deepEqual(verdict.blockedEffects, [])
+    assert.equal(exportBakesEffect('mono'), true)
   })
 
   // A refusal that only says "effects" makes the user hunt through every clip
@@ -145,14 +156,32 @@ describe('planEncodeContent — what the exporter cannot paint yet', () => {
   it('a refused effect is named, once per type, and only when the painter cannot bake it', () => {
     const project = projectOf([
       ['row-a', [
-        clip('a', 0, 4, { effects: [{ type: 'blur', params: {} }, { type: 'vignette', params: {} }] }),
-        clip('b', 4, 4, { effects: [{ type: 'blur', params: { amount: 10 } }] })
+        clip('a', 0, 4, { effects: [{ type: 'vignette', params: {} }, { type: 'chromakey', params: { color: '#00ff00' } }] }),
+        clip('b', 4, 4, { effects: [{ type: 'vignette', params: { intensity: 20 } }] })
       ]]
     ])
     const verdict = planEncodeContent(project)
     assert.deepEqual(verdict.reasons, ['effects'])
-    assert.deepEqual(verdict.blockedEffects, ['blur', 'vignette'])
-    assert.equal(exportBakesEffect('blur'), false)
+    assert.deepEqual(verdict.blockedEffects, ['chromakey', 'vignette'])
+    assert.equal(exportBakesEffect('vignette'), false)
+  })
+
+  // Baked and unbaked effects on the same clip: the file may render, because the
+  // painter draws the one it knows — the verdict still names the one it does not.
+  // (A clip mixing the two is refused today, so the assertion below pins the
+  // stricter of the two answers rather than a silently dropped effect.)
+  it('one unbaked effect on a clip still refuses the whole file', () => {
+    const project = projectOf([
+      ['row-a', [clip('a', 0, 4, {
+        effects: [
+          { type: 'mono', params: { intensity: 100 } },
+          { type: 'vignette', params: {} }
+        ]
+      })]]
+    ])
+    const verdict = planEncodeContent(project)
+    assert.deepEqual(verdict.reasons, ['effects'])
+    assert.deepEqual(verdict.blockedEffects, ['vignette'], 'only the type the painter cannot draw is named')
   })
 
   it('an unhidden, effect-free project names no blocked effect', () => {
@@ -228,7 +257,7 @@ describe('planEncodeContent — what the exporter cannot paint yet', () => {
 
   it('every refusal in one project is named, not only the first', () => {
     const project = projectOf([
-      ['row-a', [clip('a', 0, 4, { effects: [{ type: 'blur', params: {} }], mask: { shape: 'rectangle', x: 0, y: 0, w: 1, h: 1, feather: 0, rotation: 0, invert: false, axis: 'x' } })]],
+      ['row-a', [clip('a', 0, 4, { effects: [{ type: 'chromakey', params: { color: '#00ff00' } }], mask: { shape: 'rectangle', x: 0, y: 0, w: 1, h: 1, feather: 0, rotation: 0, invert: false, axis: 'x' } })]],
       ['row-b', [clip('b', 0, 4)]],
       ['text-1', [clip('t', 0, 2, { type: 'text', text: 'x' })], { type: 'text' }]
     ])
@@ -321,5 +350,55 @@ describe('planEncodeContent — the input it will not guess about', () => {
 
   it('null input is refused, not thrown on', () => {
     assert.equal(planEncodeContent(null).kind, 'refused')
+  })
+})
+
+describe('planEncodeContent — a lut3d preset is decided per instance, not per type', () => {
+  const preset = (lut) => [{ type: 'lut3d', params: { lut } }]
+
+  it('a plate-free preset is bakeable, so its clip does not block the file', () => {
+    // The reported bug: a project whose only effect is the "Cool" preset was
+    // refused because the check asked "is `lut3d` a baked type?" — a question
+    // about the registry, when the answer depends on THIS preset's grade.
+    const project = projectOf([['row-a', [clip('a', 0, 6, { effects: preset('cool') })]]])
+    const verdict = planEncodeContent(project)
+    assert.equal(verdict.kind, 'eligible')
+    assert.deepEqual(verdict.reasons, [])
+    assert.deepEqual(verdict.blockedEffects, [])
+  })
+
+  it('every preset whose grade is a pure colour/filter chain is bakeable', () => {
+    for (const lut of ['warm', 'cool', 'cinematic', 'vintage', 'vivid', 'fade', 'mono', 'sepia', 'noir', 'bleach', 'teal-orange', 'sunset', 'moonlight', 'forest', 'rose', 'cyberpunk', 'honey', 'arctic']) {
+      const verdict = planEncodeContent(projectOf([['row-a', [clip('a', 0, 6, { effects: preset(lut) })]]]))
+      assert.equal(verdict.kind, 'eligible', lut)
+      assert.deepEqual(verdict.reasons, [], lut)
+    }
+  })
+
+  it('the `film` preset is still refused: its grade carries a grain plate', () => {
+    // `lutGrade('film')` ends in `{ op: 'grain' }`, and canvas 2D has no
+    // gradient shorthand to draw that noise. An honest refusal, not a file that
+    // silently drops the grain.
+    const verdict = planEncodeContent(projectOf([['row-a', [clip('a', 0, 6, { effects: preset('film') })]]]))
+    assert.equal(verdict.kind, 'refused')
+    assert.deepEqual(verdict.reasons, ['effects'])
+    assert.deepEqual(verdict.blockedEffects, ['lut3d:film'])
+  })
+
+  it('an unknown preset id is refused, never treated as identity', () => {
+    const verdict = planEncodeContent(projectOf([['row-a', [clip('a', 0, 6, { effects: preset('no-such-lut') })]]]))
+    assert.equal(verdict.kind, 'refused')
+    assert.deepEqual(verdict.blockedEffects, ['lut3d:no-such-lut'])
+  })
+
+  it('the baked answer is per instance, and the bare type stays unbaked', () => {
+    // A type-level boolean cannot express this, which is why the export answer is
+    // a function of the INSTANCE. The bare type keeps its old answer so a caller
+    // that has no params cannot accidentally claim the whole type is baked.
+    assert.equal(exportBakesEffectInstance({ type: 'lut3d', params: { lut: 'cool' } }), true)
+    assert.equal(exportBakesEffectInstance({ type: 'lut3d', params: { lut: 'film' } }), false)
+    assert.equal(exportBakesEffectInstance({ type: 'mono', params: {} }), true)
+    assert.equal(exportBakesEffectInstance({ type: 'chromakey', params: {} }), false)
+    assert.equal(exportBakesEffect('lut3d'), false, 'the bare type is not baked: the params decide')
   })
 })

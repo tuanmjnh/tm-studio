@@ -27,12 +27,15 @@ const REQUEST_TIMEOUT_MS = 20_000
  * Config slots written when the broker receives a device credential.
  * `HUB_DEVICE_USER_ID` / `HUB_DEVICE_APP_ID` come from the session, not the
  * credential: storage namespacing and the app binding both read them.
+ * `HUB_DEVICE_HUB_ORIGIN` records which Hub issued the secret, so a credential
+ * can never be replayed against a different Hub.
  */
 const DEVICE_CREDENTIAL_KEYS = [
   'HUB_DEVICE_ID',
   'HUB_DEVICE_SECRET',
   'HUB_DEVICE_USER_ID',
   'HUB_DEVICE_APP_ID',
+  'HUB_DEVICE_HUB_ORIGIN',
   'HUB_DEVICE_EXPIRES_AT',
   'HUB_DEVICE_SCOPES'
 ]
@@ -106,7 +109,7 @@ function createHubLoginBroker(options) {
     })
   }
 
-  function persistCredential(credential, session) {
+  function persistCredential(credential, session, hubUrl) {
     if (!canPersistSecret()) throw new Error('secure storage unavailable')
     const values = readValues()
     const next = {
@@ -115,6 +118,7 @@ function createHubLoginBroker(options) {
       HUB_DEVICE_SECRET: String(credential.secret || ''),
       HUB_DEVICE_USER_ID: String(session?.user?.id || values.HUB_DEVICE_USER_ID || ''),
       HUB_DEVICE_APP_ID: String(session?.user?.appId || values.HUB_DEVICE_APP_ID || ''),
+      HUB_DEVICE_HUB_ORIGIN: normalizeBaseUrl(hubUrl),
       HUB_DEVICE_EXPIRES_AT: String(credential.expiresAt || ''),
       HUB_DEVICE_SCOPES: Array.isArray(credential.scopes) ? credential.scopes.join(',') : ''
     }
@@ -146,14 +150,14 @@ function createHubLoginBroker(options) {
    * renderer will see. A credential that cannot be persisted is dropped rather
    * than leaked: the session still works, the caller re-enrolls later.
    */
-  function consume(payload) {
+  function consume(payload, hubUrl) {
     const data = { ...payload.data }
     if (!data.deviceCredential) return { data }
 
     const credential = data.deviceCredential
     delete data.deviceCredential
     try {
-      persistCredential(credential, data)
+      persistCredential(credential, data, hubUrl)
       return { data, credentialPersisted: true }
     } catch {
       return { data, credentialPersisted: false }
@@ -201,7 +205,7 @@ function createHubLoginBroker(options) {
 
     const { response, payload } = transport
     if (!isOk(response, payload)) return failure(response, payload)
-    return { success: true, ...consume(payload) }
+    return { success: true, ...consume(payload, hubUrl) }
   }
 
   /** Second factor. Re-sends the device identity so the credential is issued post-MFA. */
@@ -227,7 +231,7 @@ function createHubLoginBroker(options) {
 
     const { response, payload } = transport
     if (!isOk(response, payload)) return failure(response, payload)
-    return { success: true, ...consume(payload) }
+    return { success: true, ...consume(payload, hubUrl) }
   }
 
   /** WebAuthn login start: no session, so no credential and no device metadata. */
@@ -265,7 +269,7 @@ function createHubLoginBroker(options) {
     }
     const { response, payload } = transport
     if (!isOk(response, payload)) return failure(response, payload)
-    return { success: true, ...consume(payload) }
+    return { success: true, ...consume(payload, hubUrl) }
   }
 
   /** Account creation. Same session shape as login, so same vault handling. */
@@ -286,10 +290,57 @@ function createHubLoginBroker(options) {
     }
     const { response, payload } = transport
     if (!isOk(response, payload)) return failure(response, payload)
-    return { success: true, ...consume(payload) }
+    return { success: true, ...consume(payload, hubUrl) }
   }
 
-  return { login, verifyTotp, passkeyStart, passkeyFinish, register, deviceInfo }
+  /**
+   * Which Hub this device is enrolled on, from the local vault. No network: the
+   * (hubOrigin, appId) pair is what decides whether the credential may be sent.
+   */
+  function credentialStatus(appIdOverride) {
+    const { hubUrl, appId, values } = resolve(appIdOverride)
+    const deviceId = String(values.HUB_DEVICE_ID || '').trim()
+    const secret = String(values.HUB_DEVICE_SECRET || '').trim()
+    if (!deviceId || !secret) {
+      return { enrolled: false, deviceId: '', userId: '', hubUrl, appId, hubOrigin: '', expiresAt: '', scopes: [] }
+    }
+    return {
+      enrolled: true,
+      deviceId,
+      userId: String(values.HUB_DEVICE_USER_ID || ''),
+      hubUrl,
+      appId: String(values.HUB_DEVICE_APP_ID || appId || ''),
+      hubOrigin: normalizeBaseUrl(values.HUB_DEVICE_HUB_ORIGIN || ''),
+      expiresAt: String(values.HUB_DEVICE_EXPIRES_AT || ''),
+      scopes: String(values.HUB_DEVICE_SCOPES || '').split(',').map(s => s.trim()).filter(Boolean)
+    }
+  }
+
+  /**
+   * Forget the credential on THIS machine only. Anyone signed in on this device
+   * may do it: it removes a local copy and stops the app presenting it. The Hub
+   * record is untouched — revoking it is a root action on the Hub, which this
+   * process cannot and must not perform on the caller's behalf.
+   */
+  function forgetCredential() {
+    const values = readValues()
+    const next = { ...values }
+    for (const key of DEVICE_CREDENTIAL_KEYS) next[key] = ''
+    writeConfigValues(configFile(), next)
+    for (const key of DEVICE_CREDENTIAL_KEYS) process.env[key] = ''
+    return { success: true, enrolled: false }
+  }
+
+  return {
+    login,
+    verifyTotp,
+    passkeyStart,
+    passkeyFinish,
+    register,
+    deviceInfo,
+    credentialStatus,
+    forgetCredential
+  }
 }
 
 module.exports = { createHubLoginBroker, DEVICE_CREDENTIAL_KEYS }

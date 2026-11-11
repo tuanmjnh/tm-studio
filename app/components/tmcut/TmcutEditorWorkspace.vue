@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { computed, onMounted, onBeforeUnmount } from 'vue'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { useTmcutEditorLayout } from '~/composables/useTmcutEditorLayout'
@@ -26,11 +26,12 @@ const { layoutVars, timelineHeight, hydrateLayout } = useTmcutEditorLayout()
 const { showExportModal, voiceStudioOpen } = useTmcutEditorDialogs()
 const { statusCanvasLabel } = useTmcutEditorCanvas()
 
-// WebGPU availability is really detectable. The export backend is not a
-// host split any more: zero-FFmpeg slice I deleted the desktop binary, so
-// both hosts encode in-process with WebCodecs and the footer says so.
-const hasWebGPU = ref(false)
-const hardwareLabel = computed(() => `${hasWebGPU.value ? 'WebGPU' : 'WebGL'} · WebCodecs`)
+// What runs, not what the browser could theoretically run. The preview paints
+// with HTML5 <video> + DOM + CSS; the file is encoded in-process with WebCodecs
+// on both hosts. There is no WebGPU or WebGL2 renderer anywhere in `app/`, so
+// advertising one from `'gpu' in navigator` was a claim about the browser, not
+// about this editor (see docs/audit/playback-buffering-audit.md, "two engine labels").
+const hardwareLabel = computed(() => t('tmcut.workspace.engineLabel'))
 
 const clipCount = computed(() => (
   (currentProject.value?.timeline?.tracks || [])
@@ -60,7 +61,6 @@ function handleCompactEscape(event: KeyboardEvent) {
 }
 
 onMounted(() => {
-  hasWebGPU.value = typeof navigator !== 'undefined' && 'gpu' in navigator
   hydrateLayout()
   window.addEventListener('keydown', handleCompactEscape)
 })
