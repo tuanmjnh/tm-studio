@@ -8417,7 +8417,9 @@ lượt 0-control là đọc DOM trước khi hydrate xong, không phải trang 
   `Browser media integration` 2m1s. So với run `43180836637` đỏ ở đúng hai job đó trên cùng nhánh.
 - **Vẫn chưa** chạy 19 thành viên `createRealIpc` trên Electron thật (§68.6 chỉ chứng minh ở seam: 39/39
   thành viên, 7 namespace, `emitEvent` đúng khung một frame).
-- **Chưa** sửa `sessions.vue:28` (unhandled rejection khi endpoint lỗi) — lỗi thật, ngoài phạm vi lượt này.
+- ~~**Chưa** sửa `sessions.vue:28` (unhandled rejection khi endpoint lỗi)~~ → **ĐÃ SỬA**, xem §69.
+  Lỗi nằm ở composable chứ không ở trang: `useCursorPagination.load()` dùng `try/finally` mà
+  **không có `catch`**, nên mọi caller kiểu fire-and-forget đều rò promise bị reject.
 
 ### 68.6 Seam `createRealIpc`: 39/39 thành viên
 
@@ -8433,3 +8435,73 @@ Probe dùng transport giả (không Electron) và gọi lần lượt **mọi** 
 Đây là bằng chứng **ở seam** — mọi kênh `asset.*`/`template.*`/`factory.*` được nối đúng tên tool và
 đúng hình dạng tham số. Nó **không** nói gì về việc kênh IPC thật trên Electron trả lời đúng, vì không có
 `ipcMain.handle` nào chạy trong probe.
+
+## 69. Trang Sessions báo lỗi thay vì reject không ai bắt (đo ngày 2026-11-12)
+
+### 69.1 Lỗi ở đâu
+
+Triệu chứng thấy khi quét route có phiên (§68.3): `/system/settings/sessions` in
+`[Vue warn]: Unhandled error during execution of mounted hook at <Sessions …>`.
+
+Đọc `app/composables/useCursorPagination.ts` thì nguyên nhân không nằm ở trang:
+
+```ts
+async function load(reset = false) {
+  …
+  try { … }
+  finally { loading.value = false }   // không có catch
+}
+```
+
+Mọi call site đều **không await**: `onMounted(() => sessionPager.refresh())`, nút refresh, item
+"load more" trong mobile bar. Với `try/finally`, promise bị reject và không ai gắn handler → Vue coi
+như lỗi trong hook. Trang còn tệ hơn việc chỉ log: khi tải trang đầu thất bại, `items` rỗng nên
+nhánh `v-else-if="sessions.length === 0"` hiện **empty state** — tức là câu "tài khoản này không có
+phiên nào", trong khi sự thật là **request đã lỗi**. Đó là báo sai, không chỉ là thiếu sót UI.
+
+### 69.2 Sửa
+
+- `load()` bắt lỗi, ghi vào `error` (ref mới), trả `null`. `items` đã có và `hasMore` **giữ nguyên**,
+  nên một lần append lỗi không xoá dòng đang hiện và lần thử sau vẫn chạy được. `reset()` xoá luôn `error`.
+- Trang: lỗi khi chưa có dòng nào → `UEmpty` với thông điệp thật (`getErrorMessage`) + nút **Retry**;
+  lỗi khi đã có dòng → `UAlert` phía trên danh sách + Retry.
+- `hasMore` của trang = `sessionPager.hasMore && !error`. `hasMore` khởi tạo `true` và chỉ trang
+  thành công mới đổi, nên trước bản sửa trang vẫn mời "Load more" và ghi "2+ Record(s)" **ngay cạnh
+  thông báo lỗi** — hứa dữ liệu chưa từng thấy.
+
+### 69.3 Bằng chứng
+
+Spec mới `tests/unit/tmcut_cursor_pagination.spec.ts` (4 check) gắn listener `unhandledRejection`
+và kiểm đúng cái đã hỏng, không mô tả lại code:
+
+| Check | Trước khi sửa | Sau |
+|---|---|---|
+| fetch reject → không reject caller, có `error`, `items` rỗng, `loading=false` | **FAIL**: `an unhandled rejection escaped: Request failed with status 404` | pass |
+| lỗi không làm hỏng pager: lần thử sau vẫn nạp được | — | pass |
+| append lỗi giữ các dòng đã có, `hasMore` vẫn `true` | — | pass |
+| lần nạp thành công xoá `error` | — | pass |
+
+Đo live trên `:4004` với hub stub trả 404 cho `/api/v1/auth/sessions`:
+
+| Trạng thái | Đo được |
+|---|---|
+| Trước | `[Vue warn] Unhandled error during execution of mounted hook`, empty state "no sessions" |
+| Sau, endpoint 404 | `Error — Not found` + **1** nút Retry, `0` mention unhandled, `0` chữ "no sessions", footer chỉ còn `0 Record(s)` (không "+", không "Load more") |
+| Sau, endpoint 200 (chặn route) | **2** dòng, badge `Current`, `0` lỗi hiển thị, không "Load more" |
+
+### 69.4 Gate
+
+| Gate | Kết quả | Bằng chứng |
+|---|---|---|
+| 1 Types | PASS | `npx nuxt typecheck` exit 0, 0 × `error TS` |
+| 2 Lint | PASS | exit 0 trên 3 file đã sửa |
+| 3 Tests | PASS | unit **142/142** (141 → +1 spec mới), core 919/919, electron 80/80 |
+| 4 Live | PASS | bảng ở §69.3, cả nhánh lỗi và nhánh thành công |
+| 5 CI | chưa chạy | commit cục bộ, chưa push |
+
+### 69.5 Vẫn chưa chứng minh
+
+- **Chưa** chạy CI cho commit này; đây là lượt cục bộ.
+- Thông điệp lỗi hiển thị lấy từ `getErrorMessage`, nên với một số mã lạc (ví dụ 404 không map
+  i18n) câu hiện ra là chuỗi backend thô ("Not found"). Đúng nguyên nhân, nhưng chưa được viết lại
+  theo giọng UI — việc riêng, không gộp vào lượt này.
