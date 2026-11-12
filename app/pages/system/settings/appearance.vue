@@ -2,9 +2,9 @@
 const { t, locale, setLocale } = useI18n()
 const colorMode = useColorMode()
 const appConfig = useAppConfig()
-
-const primaryColors = ['blue', 'indigo', 'violet', 'purple', 'emerald', 'teal', 'cyan', 'rose', 'red', 'amber']
-const neutrals = ['slate', 'gray', 'zinc', 'neutral', 'stone']
+// Accent + neutral are a saved preference (utils/uiTheme), not app-config state:
+// assigning to appConfig alone recoloured the page and forgot on reload.
+const { primaryColors, neutralColors, setPrimary, setNeutral } = useUiTheme()
 
 const languageItems = computed(() => [
   { label: 'Tiếng Việt', value: 'vi', icon: 'i-lucide-languages' },
@@ -149,7 +149,7 @@ useHead({ title: computed(() => t('settings.appearance')) })
               :style="{ backgroundColor: `var(--color-${color}-500)` }"
               :aria-label="color"
               :aria-pressed="appConfig.ui.colors.primary === color"
-              @click="appConfig.ui.colors.primary = color"
+              @click="setPrimary(color)"
             >
               <UIcon
                 v-if="appConfig.ui.colors.primary === color"
@@ -171,7 +171,7 @@ useHead({ title: computed(() => t('settings.appearance')) })
           </div>
           <div class="flex flex-wrap gap-2.5">
             <button
-              v-for="color in neutrals"
+              v-for="color in neutralColors"
               :key="color"
               type="button"
               class="relative flex size-8 items-center justify-center rounded-full ring-1 ring-inset ring-default transition-transform hover:scale-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
@@ -181,7 +181,7 @@ useHead({ title: computed(() => t('settings.appearance')) })
               :style="{ backgroundColor: `var(--color-${color}-500)` }"
               :aria-label="color"
               :aria-pressed="appConfig.ui.colors.neutral === color"
-              @click="appConfig.ui.colors.neutral = color"
+              @click="setNeutral(color)"
             >
               <UIcon
                 v-if="appConfig.ui.colors.neutral === color"

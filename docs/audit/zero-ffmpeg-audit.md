@@ -8072,3 +8072,117 @@ Vite trả 404 và harness chết ở bước import. Sửa: truyền `root` (ch
   harness tự tìm module**, và nó dùng cùng một biểu thức trên cả hai nền tảng.
 - **Chưa** kiểm CI khi dev server không lên được, khi Edge vắng mặt, hay khi một check giữa chừng fail —
   ba nhánh đó chỉ chạy trên runner.
+
+## 66. Kiểm chức năng thật trên UI (:4003, tài khoản root trong seed) — đo ngày 2026-11-12
+
+Bốn lượt chạy Playwright (`playwright-core`, kênh `msedge`) trên dev server thật, đăng nhập bằng tài
+khoản `root` lấy từ seed của `tm-hub` (không in ra mật khẩu, không lưu token vào repo). Mục tiêu: **bấm
+vào từng điều khiển và đo kết quả**, không chỉ xem route có 200. Token hub sống ~17 phút, nên harness
+tự đăng nhập lại khi còn dưới 5 phút — nếu không, các route sau sẽ lặng lẽ rơi về `/login` và lượt chạy
+sẽ "qua" mà không đo gì.
+
+### 66.1 Discovery: điều khiển thật trên 26 route
+
+| Nhóm | Kết quả đo |
+|---|---|
+| Route được kiểm | 26 (4 route công khai + 22 route sau đăng nhập); `/system` và `/system/profile` chuyển hướng sang `/system/settings/profile` như thiết kế |
+| Điều khiển đếm được | `/tmcut/templates` 107 nút, `/tmcut/html-video` 48, `/tmcut` 33, `/system/settings/appearance` 29 |
+| Không có nút nào vô danh | mọi nút icon-only trong phạm vi kiểm đều có `aria-label` hoặc `title` đọc được |
+
+### 66.2 Editor TMCut — 14/14 phép đo đạt
+
+| Phép đo | Cách đo | Kết quả |
+|---|---|---|
+| Import file thật | `setInputFiles('tests/fixtures/containers/h264.mp4')` | asset hiện trong media library |
+| Đưa lên timeline | nút `Add to timeline` | 1 clip trên track `Video 1` |
+| Chọn clip | click `[data-tmcut-clip]` | inspector hiện `PROPERTIES` + `Clear selection` |
+| Seek | click ruler tại 55% bề rộng | timecode `00:00.09` |
+| Split | nút `Split (S)` khi playhead nằm trong clip | 1 → 2 clip |
+| Undo / redo | `Undo (Ctrl+Z)` rồi `Redo (Ctrl+Shift+Z)` | 2 → 1 → 2 |
+| Inspector opacity | gõ `64` vào `Opacity (%)` | `100` → `64` |
+| Filter "Cool" | tab `Filters` → chip `Cool` | đổi `--ui` layer: `sepia(0.35) hue-rotate(180deg) saturate(1.14)`; project ghi `lut3d:{"lut":"cool"}` |
+| Phát preview | nút `Play`, lấy mẫu `video.currentTime` 12 lần | `0.035 → 0.284 → 0.539 → 0.6`, **không** có "Buffering" |
+| Mở export | nút `Export Video` | dialog `Configure & Export Video` với preset, scale, fps, `Start Export` bật |
+| Hủy export | nút `Close` | dialog đóng, không tải file nào |
+
+### 66.3 Export có filter "Cool" — đo bằng pixel, không bằng lời
+
+Đây là đúng ca mà chủ repo từng báo hỏng (project chỉ có một preset "Cool" vẫn bị từ chối export).
+Đo lại ngày 2026-11-12: `Start Export` **bật**, file tải về 124 867 byte (`ftypisom`), và khung hình
+đã **đổi màu thật**:
+
+| Nguồn | Mean R / G / B | R − B |
+|---|---|---|
+| `h264.mp4` gốc | 128.1 / 124.1 / 124.5 | **+3.6** (ám ấm) |
+| File export (Cool) | 126.1 / 133.8 / 136.4 | **−10.3** (ám lạnh) |
+
+Nghĩa là `lut3d:cool` được **nướng vào pixel** chứ không chỉ ghi vào project.
+
+### 66.4 Sáu luồng còn lại — 22/22 phép đo đạt
+
+| Luồng | Bằng chứng đo |
+|---|---|
+| AutoCut | upload clip → tự sang bước 2; `Analyze & Generate EDL` chạy thật và ra bước 3 với `1 detected segments`, `EDL · podcast-summary · transcript-v2` |
+| Templates | 30 card; search `TikTok` → 1, `Hook` → 4, chuỗi không khớp → empty state; dialog `Customize Template` 2 input; Escape đóng |
+| Video Factory | chọn template đã publish → textarea mở; **Sample rows** ghi 4 cột CSV; `Validate & estimate` bật và ra plan + khoảng giá; nút queue **khóa** khi chưa bật switch "spend money" |
+| Voice Studio | `Check service` báo `Offline — Could not reach VieNeu-TTS at http://127.0.0.1:8000` (đúng: dịch vụ không chạy); `Generate voiceover` khóa khi script rỗng |
+| Production process | `Demo episode` tạo run `S01E001 … (demo)`, ghi 5/12 stage approved bằng file artifact thật |
+| HTML/CSS studio | code buffer 4 009 ký tự, iframe `sandbox="allow-scripts"`, 13 starter; sửa `background` → **pixel khung preview đổi** (48 527 → 54 741 byte screenshot); starter nạp code mới |
+
+### 66.5 System và Resources — 21/21 phép đo đạt (sau khi sửa 66.6)
+
+Đạt: đổi theme `dark ↔ light` ghi `nuxt-color-mode`; token `--ui-primary` đổi khi chọn accent **và còn
+nguyên sau reload** (xem 66.6, phép đo thứ 21 hỏng ở lượt đầu rồi được sửa); form đổi
+mật khẩu chặn "Current password cannot be left blank" **trước** khi gọi mạng; passkey offered; sessions
+1 record; devices 1 record (`TMCut Studio · Windows Active · win32 · x64 · 1.0.0`); 6 provider card;
+wizard `Add connection` 3 bước / 4 category; notifications + inbox nói rõ trạng thái rỗng / chưa nối
+provider; profile hiện `System Root` + email **khóa**; key vault 21 provider; `Test Hub Connection` trả
+health thật (393–685 ms, 21 configs, 0 routes); runtime panel "System health Healthy"; docs 17 nút điều
+hướng / 3 bài, search lọc theo title+description (`guide` → 2/3, `export` → 0/3 vì chỉ có trong body),
+mở bài ra 8 500 ký tự.
+
+### 66.6 Một lỗi thật — màu nhấn không sống qua reload (đã sửa cùng lượt)
+
+Chọn `emerald` đổi `--ui-primary` ngay (`oklch(54.1% 0.281 293.009)` → `oklch(59.6% 0.145 163.225)`),
+nhưng **reload trang là về `violet`**. Nguyên nhân đọc từ source: `app/pages/system/settings/appearance.vue`
+và `components/dashboard/UserMenu.vue` gán thẳng `appConfig.ui.colors.primary = color` — `appConfig` là
+state trong bộ nhớ, không có `useCookie`/`localStorage` nào ghi lại, trong khi `nuxt-color-mode` (sáng/tối)
+thì có. Người dùng thấy màn hình đổi ngay nên tưởng đã lưu.
+
+**Cách sửa** — ba file, một chủ sở hữu cho lựa chọn:
+
+| File | Vai trò |
+|---|---|
+| `app/utils/uiTheme.ts` | đọc/ghi `tmstudio.ui.colors` qua `readStored`/`writeStored`; lọc từng trường theo danh sách màu canonical, JSON hỏng hoặc storage ném lỗi đều trả về mặc định |
+| `app/composables/useUiTheme.ts` | áp `appConfig.ui.colors` rồi mới ghi; đọc lại lựa chọn khi composable được dùng lần đầu, nên cả trang settings lẫn menu tài khoản cùng một luật |
+| `app/pages/system/settings/appearance.vue`, `app/components/dashboard/UserMenu.vue` | bỏ phép gán trực tiếp, gọi `setPrimary`/`setNeutral`; danh sách màu hiển thị lấy từ composable |
+
+Hai danh sách accent là **cố ý khác nhau**: trang settings hiện 10 màu chọn lọc, menu tài khoản vẫn
+đủ **17** màu như trước khi sửa. Gộp hai nơi vào một composable mà không tách hai danh sách sẽ làm 7 màu
+(`orange`, `yellow`, `lime`, `green`, `sky`, `fuchsia`, `pink`) biến mất khỏi menu — một màu đã lưu ở đó
+sẽ không chọn lại được. Vì thế composable trả `primaryColors` (10) cho trang và `menuPrimaryColors` (17)
+cho menu; một spec đếm đúng 17 để không lặng lẽ thu hẹp lại.
+
+Guard: `tests/unit/tmcut_ui_theme.spec.ts` (7 spec) — round-trip; mặc định khi trống; fallback **từng
+trường** khi tên màu lạ; JSON hỏng; storage ném lỗi; mọi màu composable mời chào đều có trong danh sách
+canonical; và hai picker không còn `appConfig.ui.colors.<field> = color` trực tiếp.
+
+**Đo lại trên UI (:4003, sau khi sửa):** chọn `emerald` + neutral `stone` → reload → `--ui-primary` vẫn
+`oklch(76.5% 0.177 163.223)` (trước khi chọn: `oklch(70.2% 0.183 293.541)`), hai nút vẫn `aria-pressed`
+(`emerald,stone`), và neutral áp qua `--ui-bg`/`--ui-border`/`--ui-text` — **không có biến `--ui-neutral`**
+trong Nuxt UI v4, nên phép đo đầu tiên đọc rỗng và trông như mất lựa chọn; cả ba token trên giống hệt nhau
+trước và sau reload. `/tmcut` thấy cùng màu nhấn. Đặt lại `violet`/`zinc` sau phép đo
+(`localStorage` = `{"primary":"violet","neutral":"zinc"}`), `pageErrors: (none)`. Gate của lát cắt này:
+`npx nuxt typecheck` exit 0 / 0 × `error TS`, `eslint` 5 file đã chạm exit 0, unit suite **141/141**.
+
+### 66.7 Chưa chứng minh
+
+- **Chưa** bấm `Start Export` cho **mọi** tổ hợp preset/duration — chỉ đo một ca thật (Cool, 0,6 s).
+- **Chưa** lưu form profile/đổi mật khẩu: hai thao tác đó ghi vào tài khoản `root` **dùng chung trên hub
+  production**, nên lượt kiểm chỉ xác nhận form hợp lệ và chặn lỗi, không gửi PUT/POST.
+- **Chưa** chạy luồng voice thật: VieNeu-TTS không chạy trên máy này, nên chỉ đo được phần báo lỗi trung
+  thực, không đo được audio sinh ra.
+- **Chưa** kiểm ảnh hưởng ở Electron: toàn bộ lượt chạy này là trình duyệt thật trên :4003, kể cả phép đo
+  "màu nhấn sống qua reload" ở 66.6 — localStorage của cửa sổ Electron chưa được đo lại.
+- **Chưa** đo trường hợp localStorage bị chặn trên trình duyệt thật: nhánh đó chỉ có unit spec
+  (`tmcut_local_store`, `tmcut_ui_theme`) chứng minh, không phải một lần chạy UI.

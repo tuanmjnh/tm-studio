@@ -14,8 +14,9 @@ const appUpdater = useAppUpdater()
 const isFeedbackModalOpen = ref(false)
 const isHelpModalOpen = ref(false)
 
-const colors = ['red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose']
-const neutrals = ['slate', 'gray', 'zinc', 'neutral', 'stone', 'taupe', 'mauve', 'mist', 'olive']
+// Both pickers write through one saved preference; the lists come from there so
+// a colour the menu offers is always one the reader accepts after a reload.
+const { menuPrimaryColors: colors, neutralColors: neutrals, setPrimary, setNeutral } = useUiTheme()
 
 // Three steps, in order: the account's own picture, an image this install
 // ships, then initials. The middle step exists so a fresh install with no
@@ -118,7 +119,7 @@ const items = computed<DropdownMenuItem[][]>(() => [
           type: 'checkbox' as const,
           onSelect: (e: Event) => {
             e.preventDefault()
-            appConfig.ui.colors.primary = color
+            setPrimary(color as typeof colors[number])
           }
         }))
       },
@@ -135,7 +136,7 @@ const items = computed<DropdownMenuItem[][]>(() => [
           checked: appConfig.ui.colors.neutral === color,
           onSelect: (e: Event) => {
             e.preventDefault()
-            appConfig.ui.colors.neutral = color
+            setNeutral(color as typeof neutrals[number])
           }
         }))
       }]
