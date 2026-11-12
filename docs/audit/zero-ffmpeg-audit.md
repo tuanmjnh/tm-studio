@@ -8789,7 +8789,8 @@ giữ nguyên và resolve `http://localhost`. `https`, `mailto`, `data:image/png
 | 2 Lint | PASS | exit 0 trên 2 file đã sửa, chạy **sau** lần regenerate cuối |
 | 3 Tests | PASS | unit **144/144**, core 919/919, electron 80/80 |
 | 4 Live | PASS (có ghi chú) | 5 route có phiên root: `/resources/inbox`, `/resources/connections`, `/resources/notifications`, `/tmcut`, `/tmcut/editor` — 4/5 sạch, 0 `[error]`/`[issue]` |
-| 5 Docs | PASS | mục này |
+| 5 CI | **PASS** | run `43218317958`: `Quality gates` + `Browser media integration` xanh; `Unit specs` **144/144** và `tmcut_email_sanitizer.spec.ts` chạy thật trên runner Linux (`All 9 email-sanitizer checks passed`) |
+| 6 Docs | PASS | mục này |
 
 Ghi chú Gate 4: `/tmcut/editor` in 1 warning `The AudioContext was not allowed to start` — trỏ
 `TmcutPreviewPlayer.vue:571`, file **không** nằm trong lượt sửa này, và là quan sát đã ghi ở §70.4.
