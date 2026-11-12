@@ -8504,3 +8504,81 @@ và kiểm đúng cái đã hỏng, không mô tả lại code:
 - Thông điệp lỗi hiển thị lấy từ `getErrorMessage`, nên với một số mã lạc (ví dụ 404 không map
   i18n) câu hiện ra là chuỗi backend thô ("Not found"). Đúng nguyên nhân, nhưng chưa được viết lại
   theo giọng UI — việc riêng, không gộp vào lượt này.
+
+## 70. Mã lỗi của server hiện tới người dùng thành copy, không thành chuỗi thô (đo ngày 2026-11-12)
+
+Mục cuối còn mở của §69.5: câu lỗi hiển thị lấy từ `getErrorMessage`, nên khi mã lạc (không map
+i18n) thì người dùng đọc thấy chuỗi backend thô.
+
+### 70.1 Ba lỗi, không phải một
+
+Đọc `app/shared/utils/errors.ts` thì thấy một lỗi giả định; đo bằng cách gọi thẳng hàm thì thấy ba
+lỗi khác nhau. Bảng dưới là output thật của `getErrorMessage` trên cây **trước** khi sửa:
+
+| Đầu vào | Trả ra | Kết luận |
+|---|---|---|
+| `{ 502, statusMessage: 'error.tts.upstream', message: 'HTTP 500 from tts' }` | `HTTP 500 from tts` | không phải mã, mà là **chẩn đoán upstream** |
+| `{ 400, statusMessage: 'error.notYetInTheTable', message: 'connectionId is required' }` | `connectionId is required` | mã chưa dịch → rơi xuống `message` |
+| `{ 404, data: { message: 'not_found' } }` | `not_found` | chính mã lạc, đúng hình dạng §69 |
+
+1. **12 `statusMessage` không có mục trong cả hai locale** (đo trên index `HEAD`: 31 file server,
+   18 mã khác nhau, 12 mã thiếu ở cả `en.json` và `vi.json`). Mỗi chỗ throw đều kèm `message`, nên
+   bước 3 trả thẳng chuỗi chẩn đoán đó ra UI.
+2. **Ba mã viết sai quy ước** — `error.bad_request`, `error.tts.upstream`, `error.tts.unreachable`
+   (snake_case, có dấu chấm lồng) trong khi cả bảng dùng camelCase. Chỉ thêm key là chưa đủ: khoá
+   tra không bao giờ khớp.
+3. **Bước 3 trả về nguyên văn một token hình-mã** khi backend trả mã trong `data.message`.
+
+### 70.2 Sửa
+
+- Đổi ba mã lệch về `error.badRequest`, `error.ttsUpstream`, `error.ttsUnreachable` tại đúng chỗ
+  throw (`server/api/v1/ai/relay/chat.post.ts`, `server/api/v1/media/tts.post.ts`,
+  `server/api/v1/media/tts/status.get.ts`).
+- Thêm 11 key còn thiếu vào **cả** `en.json` và `vi.json`.
+- `errors.ts`: một hàm `isWireCode` (token chữ thường có dấu phân cách). Nếu `statusMessage` là mã
+  mà bảng không dịch được → trả copy theo status, **không** promote `message` chẩn đoán lên làm
+  copy. Cùng luật đó áp cho `data.message`. Từ đơn (`Unauthorized`, `Timeout`) vẫn hiện nguyên văn
+  vì đọc được và không phải mã.
+
+### 70.3 Bằng chứng
+
+`tests/unit/tmcut_error_copy.spec.ts`, 7 check. Ba check mới được chứng minh **đỏ** trên cây trước
+khi sửa (HEAD `errors.ts` + HEAD locales):
+
+| Check | Trên cây cũ | Sau khi sửa |
+|---|---|---|
+| mã đã dịch hiện thành copy (en + vi) | `HTTP 500 from tts` | câu copy của locale |
+| mã chưa dịch → copy theo status | `connectionId is required` | `Invalid request` |
+| token hình-mã trong `data.message` | `not_found` | `Not found` |
+| quét mọi `statusMessage` với cả 2 locale | thiếu 12 mã | 17/17 mã có bản dịch |
+| 404 thật vẫn ra `error.notFound` | pass | pass |
+| câu người viết vẫn hiện nguyên văn | pass | pass |
+
+Check 1–3 đều FAIL khi chạy trên `errors.ts` của HEAD với `en.json` của HEAD; đo lại sau khi sửa
+thì pass. Đo trực tiếp `errors.ts` chứ không chỉ đọc code, đúng lý do spec này tồn tại.
+
+### 70.4 Gate
+
+| Gate | Kết quả | Bằng chứng |
+|---|---|---|
+| 1 Types | PASS | `npx nuxt typecheck` exit 0, 0 × `error TS` (chạy lại sau khi sửa spec: vẫn 0) |
+| 2 Lint | PASS | exit 0 trên 5 file đã sửa, chạy **sau** lần regenerate `.nuxt/eslint.config.mjs` cuối |
+| 3 Tests | PASS | unit **143/143** (142 → +1 spec), core 919/919, electron 80/80 |
+| 4 Live | PASS (có ghi chú) | quét 5 route TMCut bằng phiên root thật: 0 `error`, 0 `issue`, 4/5 clean |
+| 5 CI | chưa chạy | chờ push |
+
+Ghi chú Gate 4: `/tmcut/editor` in 1 `[warning]` — `The AudioContext was not allowed to start`.
+Truy nguồn: trỏ đúng `TmcutPreviewPlayer.vue:547`, file **không** nằm trong lượt sửa này. Chạy lại
+cùng route với `--autoplay-policy=no-user-gesture-required` thì **0** message, tức đây là chính
+sách autoplay của trình duyệt trên một AudioContext tạo lúc mount, không phải hồi quy của
+error-copy. Đây là quan sát mới (các log quét cũ không thấy) nên ghi lại thay vì im lặng cho qua.
+
+### 70.5 Vẫn chưa chứng minh
+
+- Một mã **mới** thêm vào server mà quên dịch: spec hiện bắt được (quét `server/**/*.ts` với cả
+  hai locale), nhưng chỉ khi ai đó chạy suite — không có cổng nào chặn lúc build.
+- Nhánh TTS/stock không gọi được end-to-end (cần dịch vụ VieNeu-TTS và nhà cung cấp ảnh kho), nên
+  câu copy mới chỉ được chứng minh qua hàm + spec, chưa qua một lần lỗi thật trên UI.
+- `message` chẩn đoán vẫn bị bỏ **hẳn** khi mã chưa dịch; nếu một ngày nào đó server đặt copy thật
+  vào `message` **và** khai một mã lạ, người dùng sẽ thấy câu chung thay vì câu cụ thể. Đây là đánh
+  đổi có chủ ý (không lộ chẩn đoán), chưa có bằng chứng nào chứng minh nó gây hại.
