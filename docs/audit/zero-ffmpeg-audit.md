@@ -8248,3 +8248,60 @@ Nghĩa là app không giả vờ thành công và không treo UI khi engine thi�
   Electron mới được đo ở nhánh storage chạy bình thường (66.7).
 - **Chưa** đo storage bị chặn trên **Safari/Firefox**: cả ba profile ở 66.8 đều là Chromium (Edge
   channel); cách chặn của Safari (chế độ riêng tư) và Firefox (`dom.storage.enabled=false`) chưa đo.
+
+## 67. Dọn nợ lint toàn repo (đo ngày 2026-11-12)
+
+Trước lượt này, `npx eslint .` báo **1023 error / 68 warning trên 74 file**. Sau lượt này còn
+**3 error / 3 warning trên 4 file**, và cả 6 mục còn lại đều là thứ lượt này cố ý **không** chạm vào.
+
+### 67.1 Con số đo được
+
+| Bước | Lệnh | Kết quả |
+|---|---|---|
+| Baseline | `npx eslint .` trên cây trước khi sửa | 1023 error / 68 warning, 74 file |
+| Sau khi sửa | `npx eslint .` | 3 error / 3 warning, 4 file |
+| File đã sửa | `npx eslint <70 file>` | exit 0, 0 problem |
+
+### 67.2 Sáu mục còn lại, và vì sao giữ nguyên
+
+| File | Nội dung | Lý do giữ |
+|---|---|---|
+| `tests/scratch-debug.mjs` | 3 error (`no-trailing-spaces` ×2, `arrow-parens`) | Là file nháp của chủ repo; quy trình gate cấm sửa file này |
+| `app/components/dashboard/NetworkStatus.vue` | 1 warning `vue/no-lone-template` | Có từ trước, ngoài phạm vi file của lượt này |
+| `app/components/inbox/InboxMail.vue` | 1 warning `vue/no-v-html` | Có từ trước; sửa là đổi cách render thư, không phải việc của lint debt |
+| `app/components/media/MediaVisual.vue` | 1 warning `vue/no-v-html` | Như trên: component cố tình render SVG thô sau `sanitizeSvg` |
+
+Không có error nào bị hạ cấp thành warning, không có rule nào bị tắt, và `eslint.config.mjs` không đổi.
+
+### 67.3 Hai lỗi thật lộ ra trong lúc dọn
+
+- **`electron/tools/mcp/ipc.ts` — `createMockIpc` dùng biến `pid` không tồn tại** (3 chỗ). Mọi lời gọi
+  `createProposal`/`getProposal`/`discardProposal` trên mock đều ném `ReferenceError`; mock là đường chạy
+  của `server.mjs` khi `isTest`. Đã thay bằng tham số `projectId` của chính hàm.
+- **`createRealIpc` thiếu 19 thành viên** mà `McpIpc` khai báo (toàn bộ Phase 4 asset/template và Phase 7
+  factory). Lỗi này bị che vì `ipc.ts` import `McpIpc` từ `./schemas.js` — nơi không hề export type đó —
+  và không tsconfig nào include `electron/tools/mcp/*.ts`. Đã import đúng từ `./tool-registry.js` và nối
+  19 lời gọi qua cùng đường `invokeTool`.
+
+Sau khi sửa, typecheck độc lập hai file đó (không tsconfig nào phủ) còn **28 error**, đúng bằng 24
+`params: unknown` + 4 `z.record` của zod v4 đã có sẵn ở HEAD; trước khi sửa baseline là **31** vì thêm
+lỗi import. Đây là con số **giảm**, không phải thêm.
+
+### 67.4 Gate của lượt này
+
+| Gate | Lệnh | Kết quả | Bằng chứng |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | exit 0, 0 × `error TS`; `.nuxt/eslint.config.mjs` sinh lại 14:33 |
+| 2 Lint | `npx eslint <70 file đã sửa>` (sau gate 1) | PASS | exit 0, 0 problem |
+| 2b Lint repo | `npx eslint .` | 3 error / 3 warning | 3 error nằm trong `tests/scratch-debug.mjs` (cấm sửa); 3 warning là baseline |
+| 3 Tests | core / electron / unit | PASS | 919/919, 80/80, 141/141 spec, exit 0 |
+| 4 Live | 8 route trên :4003 | PASS | `/tmcut`, `/tmcut/editor`, `/tmcut/autocut`, `/tmcut/templates`, `/tmcut/factory`, `/login`, `/system/docs`, `/system/settings` — 0 `[error]`/`[warn]`/`[issue]`, chỉ còn `<Suspense>` info |
+| 5 Docs | mục này | PASS | — |
+
+### 67.5 Chưa chứng minh
+
+- **Chưa** chạy `pnpm typecheck` / `pnpm lint` của CI trên nhánh thật; con số ở đây là lượt chạy cục bộ.
+- **Chưa** chứng minh 19 thành viên vừa nối của `createRealIpc` chạy đúng trên Electron thật: không có
+  kênh IPC `asset.*`/`template.*`/`factory.*` nào được bấm trong lượt này. Mock đã được smoke test
+  (`createProposal` → `getProposal` → `discardProposal` trả `null`), đường real thì chỉ kiểm kiểu.
+- **Chưa** chạy lại toàn bộ 31 route: lượt này quét 8 route có liên quan tới file đã sửa.

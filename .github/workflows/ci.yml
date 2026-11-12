@@ -58,11 +58,12 @@ jobs:
 
       # ESLint on the files this change touches, not the whole tree.
       #
-      # The repository carries 1024 pre-existing lint errors across 75 files.
-      # A repo-wide `pnpm lint` in a required job would be red before any change
-      # lands, which teaches everyone to ignore it. This gate fails only when the
-      # change under review introduces a problem — the same rule as AGENTS.md
-      # ("ESLint check on modified files").
+      # The tree's lint backlog was cleared on 2026-11-12 (1023 errors / 68
+      # warnings across 74 files down to 3 warnings on 3 literal-passthrough
+      # components). tests/scratch-debug.mjs is the owner's scratch file and is
+      # left as-is, so a repo-wide `pnpm lint` is still red. This gate fails only
+      # when the change under review introduces a problem — the same rule as
+      # AGENTS.md ("ESLint check on modified files").
       - name: Lint changed files
         shell: bash
         run: |
