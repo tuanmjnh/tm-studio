@@ -11,23 +11,16 @@ import path from 'node:path'
 import runwayAdapter from './runway-adapter.mjs'
 import klingAdapter from './kling-adapter.mjs'
 
-const require = createRequire(import.meta.url)
-const { app, ipcMain } = require('electron')
-
 import {
   registerGenerationAdapter,
   getGenerationAdapter,
-  listGenerationAdapters,
-  validateCapabilityManifest,
-  createGenerationJobInput,
-  createJobStatusResponse,
-  createGenerationResult
+  listGenerationAdapters
 } from '../../../packages/core/src/generationAdapter.mjs'
 
-import {
-  registerProviderAdapter,
-  listProviderAdapters
-} from '../../../packages/core/src/providerAdapter.mjs'
+import { registerProviderAdapter } from '../../../packages/core/src/providerAdapter.mjs'
+
+const require = createRequire(import.meta.url)
+const { app, ipcMain } = require('electron')
 
 // Adapter registry lives in the core's generationAdapter + providerAdapter
 // modules, read from packages/core/src — the same artifact the `tmcut-core`
@@ -115,10 +108,6 @@ function updateJobRecord(jobId, patch) {
   return updated
 }
 
-function getJobRecord(jobId) {
-  return jobStore.get(jobId) || null
-}
-
 function listJobRecords() {
   return [...jobStore.values()].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
 }
@@ -187,7 +176,7 @@ function registerVideoGeneration() {
 
   // Submit a generation job
   ipcMain.handle('tools:video-generation:submit', async (_event, args) => {
-    const { providerId, input, idempotencyKey } = args || {}
+    const { providerId, input } = args || {}
     const adapter = getMainAdapter(providerId)
     if (!adapter) return { ok: false, error: { code: 'not-found', message: `Provider ${providerId} not registered` } }
     try {
@@ -326,7 +315,7 @@ function registerVideoGeneration() {
 
   // Create batch (after confirmed estimate)
   ipcMain.handle('tools:video-generation:factory:create', async (_event, args) => {
-    const { templateId, templateVersion, records, confirmed, inputSource, runMode, providerId } = args || {}
+    const { templateId, templateVersion, records } = args || {}
     if (!templateId || !templateVersion || !Array.isArray(records)) {
       return { ok: false, error: { code: 'invalid-params', message: 'templateId, templateVersion, records[] required' } }
     }

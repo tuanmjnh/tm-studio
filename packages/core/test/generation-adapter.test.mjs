@@ -1,13 +1,5 @@
 // Roadmap v3 §25 Phase 9 — generation adapter interface contract tests
 // Mock localStorage for Node.js test environment (used by usageTracker/telemetry)
-globalThis.localStorage = {
-  store: {},
-  getItem(key) { return this.store[key] || null },
-  setItem(key, value) { this.store[key] = String(value) },
-  removeItem(key) { delete this.store[key] },
-  clear() { this.store = {} }
-}
-
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
@@ -23,6 +15,14 @@ import {
   isProviderVerified,
   GENERATION_JOB_STATUS
 } from '../src/index.mjs'
+
+globalThis.localStorage = {
+  store: {},
+  getItem(key) { return this.store[key] || null },
+  setItem(key, value) { this.store[key] = String(value) },
+  removeItem(key) { delete this.store[key] },
+  clear() { this.store = {} }
+}
 
 test('createCapabilityManifest produces a valid manifest with defaults', () => {
   const m = createCapabilityManifest({

@@ -354,7 +354,7 @@ describe('planEncodeContent — the input it will not guess about', () => {
 })
 
 describe('planEncodeContent — a lut3d preset is decided per instance, not per type', () => {
-  const preset = (lut) => [{ type: 'lut3d', params: { lut } }]
+  const preset = lut => [{ type: 'lut3d', params: { lut } }]
 
   it('a plate-free preset is bakeable, so its clip does not block the file', () => {
     // The reported bug: a project whose only effect is the "Cool" preset was

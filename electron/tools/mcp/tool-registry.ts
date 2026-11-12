@@ -3,34 +3,31 @@
 // Each tool has: name, description, Zod param schema, risk, requiresApproval
 // =============================================================================
 
-import {
-  ToolRisk,
-  ToolResult,
-  // Param schemas
-  GetContextParams, GetTimelineParams, ListAssetsParams,
-  CreateProposalParams, GetProposalParams, ValidateProposalParams, DiscardProposalParams, ApplyProposalParams,
-  AddClipParams, MoveClipParams, TrimClipParams, RemoveClipParams, SplitClipParams,
-  SetVolumeParams, AddCaptionParams, SetTransitionParams, SetEffectParams,
-  SeekParams, PlayParams, PauseParams,
-  // Phase 4: Asset Center
-  AssetListParams, InstallAssetParams, UninstallAssetParams, AssetInstallStatusParams,
-  // Phase 4: Templates
-  ListTemplatesParams, ApplyTemplateParams, SaveAsTemplateParams, DeleteTemplateParams, ImportTemplateParams, ExportTemplateParams,
-  // Phase 7: Video Factory
-  BatchEstimateParams, CreateBatchParams, GetBatchParams, BatchControlParams, GetJobParams, RetryJobParams, AssembleProjectParams,
+import type {
   // Types
-  ProjectSummary, TimelineSnapshot, AssetSummary, ProposalSnapshot, ProposalOperation,
-  ServerCapabilities, SessionConfig, SessionInfo,
-  McpEvent, ToolResult as ToolResultType
+  ProjectSummary, TimelineSnapshot, AssetSummary, ProposalSnapshot, ServerCapabilities,
+  ToolResult as ToolResultType
 } from './schemas.js'
-import { z, ZodTypeAny } from 'zod'
+import {
+  // Param schemas
+  AddCaptionParams, ApplyTemplateParams, AssetInstallStatusParams, AssetListParams,
+  BatchControlParams, BatchEstimateParams, CreateBatchParams, CreateProposalParams,
+  DeleteTemplateParams, DiscardProposalParams, ExportTemplateParams, GetBatchParams,
+  GetContextParams, GetJobParams, GetProposalParams, GetTimelineParams, ImportTemplateParams,
+  InstallAssetParams, ListAssetsParams, ListTemplatesParams, MoveClipParams, PauseParams,
+  PlayParams, RemoveClipParams, RetryJobParams, SaveAsTemplateParams, SeekParams,
+  SetEffectParams, SetTransitionParams, SetVolumeParams, SplitClipParams, TrimClipParams,
+  UninstallAssetParams, ValidateProposalParams, ApplyProposalParams, AssembleProjectParams
+} from './schemas.js'
+import type { ZodTypeAny } from 'zod'
+import { z } from 'zod'
 
 // -----------------------------------------------------------------------------
 // Tool handler type
 // -----------------------------------------------------------------------------
 export type ToolHandler<TParams extends z.ZodTypeAny = z.ZodTypeAny> = (
   params: z.infer<TParams>,
-  context: { projectId: string; sessionId: string; ipc: McpIpc }
+  context: { projectId: string, sessionId: string, ipc: McpIpc }
 ) => Promise<ToolResultType>
 
 // -----------------------------------------------------------------------------
@@ -45,20 +42,20 @@ export interface McpIpc {
   // Proposal lifecycle
   createProposal(projectId: string, intent: string): Promise<ProposalSnapshot>
   getProposal(projectId: string): Promise<ProposalSnapshot | null>
-  validateProposal(projectId: string): Promise<{ ok: boolean; errors: string[] }>
+  validateProposal(projectId: string): Promise<{ ok: boolean, errors: string[] }>
   discardProposal(projectId: string): Promise<void>
   applyProposal(projectId: string): Promise<ToolResultType>
 
   // Queued edit operations (all route through proposal)
-  queueAddClip(projectId: string, op: any): Promise<void>
-  queueMoveClip(projectId: string, op: any): Promise<void>
-  queueTrimClip(projectId: string, op: any): Promise<void>
-  queueRemoveClip(projectId: string, op: any): Promise<void>
-  queueSplitClip(projectId: string, op: any): Promise<void>
-  queueSetVolume(projectId: string, op: any): Promise<void>
-  queueAddCaption(projectId: string, op: any): Promise<void>
-  queueSetTransition(projectId: string, op: any): Promise<void>
-  queueSetEffect(projectId: string, op: any): Promise<void>
+  queueAddClip(projectId: string, op: unknown): Promise<void>
+  queueMoveClip(projectId: string, op: unknown): Promise<void>
+  queueTrimClip(projectId: string, op: unknown): Promise<void>
+  queueRemoveClip(projectId: string, op: unknown): Promise<void>
+  queueSplitClip(projectId: string, op: unknown): Promise<void>
+  queueSetVolume(projectId: string, op: unknown): Promise<void>
+  queueAddCaption(projectId: string, op: unknown): Promise<void>
+  queueSetTransition(projectId: string, op: unknown): Promise<void>
+  queueSetEffect(projectId: string, op: unknown): Promise<void>
 
   // Playback
   seekPlayback(projectId: string, timeSec: number): Promise<void>
@@ -66,36 +63,31 @@ export interface McpIpc {
   pausePlayback(projectId: string): Promise<void>
 
   // Events (server pushes to host via stdio)
-  emitEvent(event: any): void
+  emitEvent(event: unknown): void
 
   // Phase 4: Asset Center
-  listAssetCatalog(projectId: string, params: any): Promise<any>
+  listAssetCatalog(projectId: string, params: unknown): Promise<unknown>
   installAsset(projectId: string, entryId: string, version?: string): Promise<void>
   uninstallAsset(projectId: string, entryId: string): Promise<void>
-  getAssetInstallStatus(projectId: string, entryId: string): Promise<any>
-
+  getAssetInstallStatus(projectId: string, entryId: string): Promise<unknown>
   // Phase 4: Templates
-  listTemplates(projectId: string, params: any): Promise<any>
-  applyTemplate(projectId: string, templateId: string, replacements?: any, projectName?: string): Promise<void>
-  saveAsTemplate(projectId: string, params: any): Promise<any>
+  listTemplates(projectId: string, params: unknown): Promise<unknown>
+  applyTemplate(projectId: string, templateId: string, replacements?: unknown, projectName?: string): Promise<void>
+  saveAsTemplate(projectId: string, params: unknown): Promise<unknown>
   deleteTemplate(projectId: string, templateId: string): Promise<void>
-  importTemplate(projectId: string, filePath: string, name?: string): Promise<any>
-  exportTemplate(projectId: string, templateId: string, filePath?: string): Promise<any>
-
+  importTemplate(projectId: string, filePath: string, name?: string): Promise<unknown>
+  exportTemplate(projectId: string, templateId: string, filePath?: string): Promise<unknown>
 
   // Phase 7: Video Factory (roadmap v1 §4 factory.* tools)
-  factoryEstimateBatch(projectId: string, params: any): Promise<any>
-  factoryCreateBatch(projectId: string, params: any): Promise<any>
-  factoryGetBatch(projectId: string, batchId: string): Promise<any>
-  factoryPauseBatch(projectId: string, batchId: string): Promise<any>
-  factoryResumeBatch(projectId: string, batchId: string): Promise<any>
-  factoryCancelBatch(projectId: string, batchId: string): Promise<any>
-  factoryGetJob(projectId: string, jobId: string): Promise<any>
-  factoryRetryJob(projectId: string, jobId: string): Promise<any>
-  factoryAssembleBatch(projectId: string, batchId: string): Promise<any>
-
-  // Events (server pushes to host via stdio)
-  emitEvent(event: any): void
+  factoryEstimateBatch(projectId: string, params: unknown): Promise<unknown>
+  factoryCreateBatch(projectId: string, params: unknown): Promise<unknown>
+  factoryGetBatch(projectId: string, batchId: string): Promise<unknown>
+  factoryPauseBatch(projectId: string, batchId: string): Promise<unknown>
+  factoryResumeBatch(projectId: string, batchId: string): Promise<unknown>
+  factoryCancelBatch(projectId: string, batchId: string): Promise<unknown>
+  factoryGetJob(projectId: string, jobId: string): Promise<unknown>
+  factoryRetryJob(projectId: string, jobId: string): Promise<unknown>
+  factoryAssembleBatch(projectId: string, batchId: string): Promise<unknown>
 }
 
 // -----------------------------------------------------------------------------
@@ -559,15 +551,15 @@ export const TOOL_REGISTRY: ToolDef[] = [
       ok: true,
       data: await ipc.factoryAssembleBatch(projectId, params.batchId)
     })
-  },
+  }
 ]
 
 // -----------------------------------------------------------------------------
-function zodToJsonSchema(schema: ZodTypeAny): any {
+function zodToJsonSchema(schema: ZodTypeAny): Record<string, unknown> {
   // Zod v4: use instanceof checks on the public constructors
   if (schema instanceof z.ZodObject) {
     const shape = schema.shape as Record<string, ZodTypeAny>
-    const props: Record<string, any> = {}
+    const props: Record<string, Record<string, unknown>> = {}
     const required: string[] = []
     for (const [key, value] of Object.entries(shape)) {
       props[key] = zodToJsonSchema(value as ZodTypeAny)
@@ -578,10 +570,12 @@ function zodToJsonSchema(schema: ZodTypeAny): any {
   if (schema instanceof z.ZodString) return { type: 'string' }
   if (schema instanceof z.ZodNumber) return { type: 'number' }
   if (schema instanceof z.ZodBoolean) return { type: 'boolean' }
-  if (schema instanceof z.ZodArray) return { type: 'array', items: zodToJsonSchema((schema as any).element as ZodTypeAny) }
-  if (schema instanceof z.ZodOptional) return zodToJsonSchema((schema as any).unwrap() as ZodTypeAny)
-  if (schema instanceof z.ZodEnum) return { type: 'string', enum: (schema as any).options }
-  if (schema instanceof z.ZodUnion) return { anyOf: ((schema as any).options as ZodTypeAny[]).map(zodToJsonSchema) }
+  if (schema instanceof z.ZodArray) return { type: 'array', items: zodToJsonSchema(schema.element as ZodTypeAny) }
+  if (schema instanceof z.ZodOptional) return zodToJsonSchema(schema.unwrap() as ZodTypeAny)
+  if (schema instanceof z.ZodEnum) return { type: 'string', enum: schema.options }
+  if (schema instanceof z.ZodUnion) {
+    return { anyOf: schema.options.map(option => zodToJsonSchema(option as ZodTypeAny)) }
+  }
   return { type: 'string' } // fallback
 }
 // -----------------------------------------------------------------------------

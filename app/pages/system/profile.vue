@@ -5,4 +5,3 @@ navigateTo('/system/settings/profile', { replace: true })
 <template>
   <div />
 </template>
-

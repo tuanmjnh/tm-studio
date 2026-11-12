@@ -6,36 +6,6 @@
 import { createCatalogEntry, normalizeLicense } from './assetCenter.mjs'
 
 // Pre-approved license templates for marketplace assets
-const CC_BY_40_LICENSE = normalizeLicense({
-  status: 'approved',
-  name: 'CC BY 4.0',
-  url: 'https://creativecommons.org/licenses/by/4.0/',
-  attribution: '© {creator} — licensed under CC BY 4.0',
-  commercialUse: true,
-  redistrbutable: true,
-  territories: ['worldwide'],
-  expiresAt: null,
-  proof: 'Creative Commons Attribution 4.0 International',
-  reviewer: 'tmcut-publisher',
-  reviewedAt: new Date().toISOString(),
-  review: { decision: 'approved', by: 'tmcut-publisher', at: new Date().toISOString(), note: 'Approved for commercial use with attribution' }
-})
-
-const CC0_LICENSE = normalizeLicense({
-  status: 'approved',
-  name: 'CC0 1.0 Universal',
-  url: 'https://creativecommons.org/publicdomain/zero/1.0/',
-  attribution: 'Public domain / CC0',
-  commercialUse: true,
-  redistrbutable: true,
-  territories: ['worldwide'],
-  expiresAt: null,
-  proof: 'Creative Commons CC0 1.0 Universal',
-  reviewer: 'tmcut-publisher',
-  reviewedAt: new Date().toISOString(),
-  review: { decision: 'approved', by: 'tmcut-publisher', at: new Date().toISOString(), note: 'Public domain, no attribution required' }
-})
-
 const ROYALTY_FREE_LICENSE = normalizeLicense({
   status: 'approved',
   name: 'Royalty-Free (TM Tools)',

@@ -320,7 +320,7 @@ export function useTmcutVoiceCommands() {
       const transcript = await transcribeAudio(filePath, language)
       lastTranscript.value = transcript
 
-      let intent = await parseIntent(transcript, language)
+      const intent = await parseIntent(transcript, language)
       if (!intent) return {
         ok: false, transcript, error: { code: 'no-intent', message: `Could not understand: "${transcript}"`, retryable: true }
       }

@@ -191,10 +191,9 @@ export function rampIntegral(clip, toTicks) {
   const pts = sortedPoints(clip)
   if (pts.length < 2) return validateSpeed(clip?.speed) * Math.max(0, Number(toTicks) || 0)
   const at = Math.max(0, Number.isFinite(toTicks) ? toTicks : 0)
-  let acc = 0
   // Area from t=0 to the first point uses the first speed (clamp rule).
   if (at <= pts[0].t) return pts[0].speed * at
-  acc = pts[0].speed * pts[0].t
+  let acc = pts[0].speed * pts[0].t
   for (let i = 0; i + 1 < pts.length; i++) {
     const a = pts[i]
     const b = pts[i + 1]

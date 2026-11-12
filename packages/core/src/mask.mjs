@@ -45,7 +45,7 @@ export function normalizeMask(mask) {
   }
 }
 
-const fmt = (n) => String(Number(n.toFixed(6)))
+const fmt = n => String(Number(n.toFixed(6)))
 
 /** Normalized center and half-extents of the mask box. */
 function geometry(m) {

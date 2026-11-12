@@ -22,14 +22,14 @@ export interface IGoogleSheet {
   properties: {
     title: string
     locale: string
-    [key: string]: any
+    [key: string]: unknown
   }
   sheets: {
     properties: {
       sheetId: number
       title: string
       index: number
-      [key: string]: any
+      [key: string]: unknown
     }
   }[]
 }
@@ -37,7 +37,7 @@ export interface IGoogleSheet {
 export interface IGoogleSheetValues {
   range: string
   majorDimension: string
-  values: any[][]
+  values: unknown[][]
 }
 
 export const MIME_TYPES = {

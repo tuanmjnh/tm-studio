@@ -30,7 +30,9 @@ function getStorage() {
     if (typeof globalThis !== 'undefined' && globalThis[key]) {
       return globalThis[key]
     }
-  } catch {}
+  } catch {
+    // A blocked store just means telemetry is off; nothing to report.
+  }
   return null
 }
 
@@ -73,7 +75,9 @@ export function setTelemetryEnabled(enabled) {
     if (storage) {
       storage.setItem('tmcut.telemetry.enabled', String(Boolean(enabled)))
     }
-  } catch {}
+  } catch {
+    // Best-effort preference: the in-memory value already reflects the call.
+  }
 }
 
 /** Record a telemetry event (only if enabled). */
@@ -145,16 +149,16 @@ export function generateTelemetryReport(appVersion = 'unknown') {
 
 /** Telemetry categories (for consistent naming). */
 export const TELEMETRY_CATEGORIES = {
-  editor: 'editor',           // timeline edits, playback, zoom
-  export: 'export',           // render, encode, upload
-  ai: 'ai',                   // plan generation, triage, transcription
-  autocut: 'autocut',         // scene detection, silence detection, draft
+  editor: 'editor', // timeline edits, playback, zoom
+  export: 'export', // render, encode, upload
+  ai: 'ai', // plan generation, triage, transcription
+  autocut: 'autocut', // scene detection, silence detection, draft
   assetCenter: 'assetCenter', // browse, download, install, verify
-  templates: 'templates',     // create, import, export, apply
-  audio: 'audio',             // music bed, SFX, orchestration
-  project: 'project',         // create, open, save, recover
-  settings: 'settings',       // preference changes
-  error: 'error'              // error boundaries (codes only)
+  templates: 'templates', // create, import, export, apply
+  audio: 'audio', // music bed, SFX, orchestration
+  project: 'project', // create, open, save, recover
+  settings: 'settings', // preference changes
+  error: 'error' // error boundaries (codes only)
 }
 
 /** Telemetry actions per category (not exhaustive, but for consistency). */

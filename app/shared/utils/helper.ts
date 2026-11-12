@@ -1,9 +1,12 @@
-export const removeById = <T extends { _id?: string | number } | any>(
+/** An image source is either the URL string itself or an object carrying one. */
+export type ImageLike = string | { url?: string, secure_url?: string, [key: string]: unknown }
+
+export const removeById = <T extends object>(
   items: T[],
   id: string | number,
   key: keyof T = '_id' as keyof T
 ): T[] => {
-  const index = items.findIndex(item => item[key] === id)
+  const index = items.findIndex(item => (item[key] as unknown) === id)
   if (index !== -1) {
     items.splice(index, 1)
   }
@@ -147,17 +150,17 @@ export const toSlug = (str: string) => {
  * @returns The generated slug string
  */
 export const generateSlug = (
-  title: Record<string, any>,
+  title: Record<string, string>,
   code: string,
   parentId?: string | null,
-  categories?: any[]
+  categories?: Record<string, unknown>[]
 ): string => {
   if (!title || !title[code]) return ''
 
   let slugValue = toSlug(title[code])
 
   if (parentId && categories) {
-    const parent = categories.find((c: any) => c._id === parentId)
+    const parent = categories.find(c => c._id === parentId) as { slug?: Record<string, string> } | undefined
     if (parent && parent.slug?.[code]) {
       slugValue = `${parent.slug[code]}-${slugValue}`
     }
@@ -182,11 +185,19 @@ export const minifySvg = (svg: string) => {
  * @param options - Unified quick sync options { images: { banner, gallery }, seo: { title, description, image }, force }
  * @param sourceImage - Optional: The specific image object to sync (usually the primary thumbnail/avatar)
  */
-export const syncQuickData = (formData: any, options: Record<string, any>, sourceImage?: any) => {
+export const syncQuickData = (
+  formData: Record<string, unknown>,
+  options: Record<string, unknown>,
+  sourceImage?: ImageLike
+) => {
   if (!formData || !options) return
 
-  const { images = {}, seo = {}, force = false } = options
-  const imageUrl = sourceImage ? getImage(sourceImage) : getImage(formData.thumbnail || formData.avatar || formData.image)
+  const images = (options.images ?? {}) as Record<string, boolean>
+  const seo = (options.seo ?? {}) as Record<string, boolean>
+  const force = Boolean(options.force ?? false)
+  const imageUrl = sourceImage
+    ? getImage(sourceImage)
+    : getImage((formData.thumbnail || formData.avatar || formData.image) as ImageLike | undefined)
 
   // 1. Sync Images (Banner, Gallery)
   if (sourceImage) {
@@ -195,17 +206,21 @@ export const syncQuickData = (formData: any, options: Record<string, any>, sourc
     }
 
     if (images.gallery) {
-      if (!Array.isArray(formData.gallery)) formData.gallery = formData.gallery ? [formData.gallery] : []
-      const isExist = formData.gallery.some((img: any) => getImage(img) === imageUrl)
-      if (!isExist) formData.gallery = [...formData.gallery, sourceImage]
+      const gallery = Array.isArray(formData.gallery)
+        ? formData.gallery as ImageLike[]
+        : formData.gallery ? [formData.gallery as ImageLike] : []
+      formData.gallery = gallery
+      const isExist = gallery.some(img => getImage(img) === imageUrl)
+      if (!isExist) formData.gallery = [...gallery, sourceImage]
     }
   }
 
   // 2. Sync SEO
   if (formData.seo === undefined || formData.seo === null) formData.seo = {}
+  const seoFields = formData.seo as Record<string, unknown>
 
   // Helper to check if a localized object is effectively empty
-  const isLocalyEmpty = (val: any) => {
+  const isLocalyEmpty = (val: unknown) => {
     if (!val) return true
     if (typeof val !== 'object') return !val
     return Object.values(val).every(v => !v)
@@ -213,11 +228,11 @@ export const syncQuickData = (formData: any, options: Record<string, any>, sourc
 
   // SEO Title
   if (seo.title && formData.title) {
-    if (force || isLocalyEmpty(formData.seo.title)) {
+    if (force || isLocalyEmpty(seoFields.title)) {
       const sourceStr = JSON.stringify(formData.title || {})
-      const targetStr = JSON.stringify(formData.seo.title || {})
+      const targetStr = JSON.stringify(seoFields.title || {})
       if (force || sourceStr !== targetStr) {
-        formData.seo.title = JSON.parse(sourceStr)
+        seoFields.title = JSON.parse(sourceStr)
       }
     }
   }
@@ -226,19 +241,19 @@ export const syncQuickData = (formData: any, options: Record<string, any>, sourc
   if (seo.description) {
     // Priority: shortDesc (Product) -> excerpt (Post/Page) -> content/description (Main body)
     const descSource = formData.shortDesc || formData.excerpt || formData.description || formData.content
-    if (descSource && (force || isLocalyEmpty(formData.seo.description))) {
+    if (descSource && (force || isLocalyEmpty(seoFields.description))) {
       const sourceStr = JSON.stringify(descSource || {})
-      const targetStr = JSON.stringify(formData.seo.description || {})
+      const targetStr = JSON.stringify(seoFields.description || {})
       if (force || sourceStr !== targetStr) {
-        formData.seo.description = JSON.parse(sourceStr)
+        seoFields.description = JSON.parse(sourceStr)
       }
     }
   }
 
   // SEO Image (Always sync from either specific sourceImage or fallback to main thumbnail)
   if (seo.image && imageUrl && imageUrl !== '/placeholder.png') {
-    if (force || formData.seo.image !== imageUrl) {
-      formData.seo.image = imageUrl
+    if (force || seoFields.image !== imageUrl) {
+      seoFields.image = imageUrl
     }
   }
 }
@@ -252,7 +267,7 @@ export const syncQuickData = (formData: any, options: Record<string, any>, sourc
  * @param options - Quick sync options { banner, gallery, seo, force }
  * @deprecated Use syncQuickData instead
  */
-export const syncQuickImages = (formData: any, sourceImage: any, options: Record<string, boolean>) => {
+export const syncQuickImages = (formData: Record<string, unknown>, sourceImage: ImageLike, options: Record<string, boolean>) => {
   // Map old options to new syncQuickData structure
   const mappedOptions = {
     images: { banner: options.banner, gallery: options.gallery },
@@ -270,7 +285,7 @@ export const syncQuickImages = (formData: any, sourceImage: any, options: Record
  * @param options - Quick sync options { title, description, image, force }
  * @deprecated Use syncQuickData instead
  */
-export const syncQuickSeo = (formData: any, options: Record<string, boolean>) => {
+export const syncQuickSeo = (formData: Record<string, unknown>, options: Record<string, boolean>) => {
   // Map old options to new syncQuickData structure
   const mappedOptions = {
     seo: { title: options.title, description: options.description, image: options.image },
@@ -332,7 +347,7 @@ export const getFaviconHref = (val?: string) => {
  * Handles: URLs, Localized objects, and Raw SVG strings.
  * If siteUrl is provided, it ensures relative paths become absolute.
  */
-export const formatImageUrl = (img: string | any, siteUrl?: string) => {
+export const formatImageUrl = (img: ImageLike | undefined, siteUrl?: string) => {
   if (!img) return undefined
   let url = ''
 
@@ -388,7 +403,7 @@ export const cleanImageUrl = (url: string) => {
       // Return cleaned URL
       return urlObj.origin + urlObj.pathname + (searchParams.toString() ? '?' + searchParams.toString() : '')
     }
-  } catch (e) {
+  } catch {
     // If not a valid absolute URL, return as is
   }
 
@@ -398,14 +413,16 @@ export const cleanImageUrl = (url: string) => {
 /**
  * Get image URL from string or object
  */
-export const getImage = (img: string | any, customKey?: string | string[]) => {
+export const getImage = (img: ImageLike | null | undefined, customKey?: string | string[]) => {
   if (!img) return '/placeholder.png'
   if (typeof img === 'string') return img
 
   const keys = Array.isArray(customKey) ? customKey : [customKey || 'url']
 
-  for (const key of keys)
-    if (img[key]) return img[key]
+  for (const key of keys) {
+    const value = img[key]
+    if (typeof value === 'string' && value) return value
+  }
 
   return '/placeholder.png'
 }
@@ -413,7 +430,7 @@ export const getImage = (img: string | any, customKey?: string | string[]) => {
 /**
  * Format image based on storage mode (URL string or Full Object)
  */
-export const formatImage = (img: any, mode: 'string' | 'object' = 'string') => {
+export const formatImage = (img: ImageLike | null | undefined, mode: 'string' | 'object' = 'string') => {
   if (!img) return null
   if (mode === 'string') {
     return typeof img === 'string' ? img : (img.url || img.secure_url || img)
@@ -433,9 +450,13 @@ export const getCanonicalUrl = (siteUrl: string, currentPath: string) => {
 /**
  * Generate alternate language links (hreflang)
  */
-export const getAlternateLinks = (siteUrl: string, currentPath: string, locales: any[]) => {
+export const getAlternateLinks = (
+  siteUrl: string,
+  currentPath: string,
+  locales: { code: string, iso?: string }[]
+) => {
   const baseUrl = (siteUrl || '').replace(/\/$/, '')
-  const links = locales.map((l: any) => {
+  const links = locales.map((l) => {
     // Basic logic for alternate links, Adjust based on i18n strategy (prefix_except_default)
     const localePath = currentPath.startsWith(`/${l.code}/`) || currentPath === `/${l.code}`
       ? currentPath
@@ -471,13 +492,13 @@ export const isIconify = (url?: string) => {
   return (u?.includes(':') || u?.startsWith('i-')) && !u?.startsWith('http') && !u?.startsWith('/')
 }
 
-export const isSpecialImage = (url?: any) => {
+export const isSpecialImage = (url?: unknown) => {
   if (typeof url !== 'string') return false
   const u = (url || '').toLowerCase()
   return u.match(/\.(ico|svg)$/) !== null
 }
 
-export const isImage = (url?: any) => {
+export const isImage = (url?: unknown) => {
   if (!url || typeof url !== 'string') return false
   const u = url.trim().toLowerCase()
   // Check for special images (.ico, .svg)
@@ -583,7 +604,7 @@ export const generateCode = () => {
  * @param rows - Array of arrays containing data
  */
 export const exportToCsv = (filename: string, headers: string[], rows: (string | number | null | undefined)[][]) => {
-  const escapeCsv = (val: any) => {
+  const escapeCsv = (val: unknown) => {
     const str = String(val ?? '')
     return str.includes(',') || str.includes('"') || str.includes('\n')
       ? `"${str.replace(/"/g, '""')}"`
@@ -612,7 +633,7 @@ export const exportToCsv = (filename: string, headers: string[], rows: (string |
  * @param filename - Name of the file (without extension)
  * @param data - The data object or array to export
  */
-export const exportToJson = (filename: string, data: any) => {
+export const exportToJson = (filename: string, data: unknown) => {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
@@ -686,13 +707,9 @@ const parseCsvLine = (line: string): string[] => {
  * Parse JSON text and ensure it's an array for import processing
  * @param jsonText - The raw JSON string
  */
-export const readJson = (jsonText: string): any[] => {
-  try {
-    const data = JSON.parse(jsonText)
-    return Array.isArray(data) ? data : [data]
-  } catch (error) {
-    throw error // Re-throw to be handled by caller
-  }
+export const readJson = (jsonText: string): unknown[] => {
+  const data = JSON.parse(jsonText)
+  return Array.isArray(data) ? data : [data]
 }
 
 /**
@@ -893,7 +910,11 @@ export const downloadFile = async (url: string, filename?: string) => {
  * @param mode - The storage mode ('string' | 'object')
  * @param customKeys - Optional list of keys to target (default: common image field names)
  */
-export const ObjectToImageString = (data: any, mode: 'string' | 'object' = 'string', customKeys?: string[]): any => {
+export const ObjectToImageString = (
+  data: unknown,
+  mode: 'string' | 'object' = 'string',
+  customKeys?: string[]
+): unknown => {
   if (!data || typeof data !== 'object' || mode === 'object') return data
 
   const targetKeys = customKeys || ['avatar', 'image', 'thumb', 'thumbnail', 'logo', 'favicon', 'icon', 'banner', 'url', 'qrCode']
@@ -902,15 +923,15 @@ export const ObjectToImageString = (data: any, mode: 'string' | 'object' = 'stri
     return data.map(item => ObjectToImageString(item, mode, targetKeys))
   }
 
-  const result: any = { ...data }
+  const result = { ...data } as Record<string, unknown>
 
   for (const key in result) {
     const value = result[key]
     if (value && typeof value === 'object') {
       // If the key is in our target list and the value looks like an image object (has url), flatten it
       // We check for 'url' existence as the primary indicator
-      if (targetKeys.includes(key.toLowerCase()) && typeof value.url === 'string') {
-        result[key] = value.url
+      if (targetKeys.includes(key.toLowerCase()) && typeof (value as { url?: unknown }).url === 'string') {
+        result[key] = (value as { url: string }).url
       } else {
         // Otherwise, recurse deeper
         result[key] = ObjectToImageString(value, mode, targetKeys)
@@ -925,7 +946,12 @@ export const ObjectToImageString = (data: any, mode: 'string' | 'object' = 'stri
  * Get display price and base price for a product (simple or variable)
  * Optimized version: single pass loop, no spread operator, better fallbacks.
  */
-export const getItemDisplayPrice = (item: any) => {
+export const getItemDisplayPrice = (item: {
+  type?: string
+  salePrice?: number
+  basePrice?: number
+  variants?: { salePrice?: number, basePrice?: number }[]
+} | null | undefined) => {
   if (!item) return { price: 0, basePrice: 0 }
 
   // Simple product or no variants
@@ -944,7 +970,8 @@ export const getItemDisplayPrice = (item: any) => {
     const v = item.variants[i]
     if (!v) continue
 
-    const currentPrice = v.salePrice || v.basePrice
+    const currentPrice = v.salePrice || v.basePrice || 0
+    const basePrice = v.basePrice || 0
 
     // Update minPrice if variant price is valid and smaller
     if (currentPrice > 0 && currentPrice < minPrice) {
@@ -952,8 +979,8 @@ export const getItemDisplayPrice = (item: any) => {
     }
 
     // Update minBasePrice if variant basePrice is valid and smaller
-    if (v.basePrice > 0 && v.basePrice < minBasePrice) {
-      minBasePrice = v.basePrice
+    if (basePrice > 0 && basePrice < minBasePrice) {
+      minBasePrice = basePrice
     }
   }
 

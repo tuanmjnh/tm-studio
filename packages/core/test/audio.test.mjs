@@ -49,7 +49,6 @@ describe('audio fades (C12)', () => {
     // Missing volume defaults to 100%.
     assert.ok(Math.abs(gainAt({ ...v1, volume: undefined, fade: undefined }, 0) - 1) < 1e-9)
   })
-
 })
 
 describe('track-level audio (R124 A1)', () => {

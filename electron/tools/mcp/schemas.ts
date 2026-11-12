@@ -225,6 +225,16 @@ export const SetEffectParams = z.object({
   }))
 })
 
+export type AddClipParams = z.infer<typeof AddClipParams>
+export type MoveClipParams = z.infer<typeof MoveClipParams>
+export type TrimClipParams = z.infer<typeof TrimClipParams>
+export type RemoveClipParams = z.infer<typeof RemoveClipParams>
+export type SplitClipParams = z.infer<typeof SplitClipParams>
+export type SetVolumeParams = z.infer<typeof SetVolumeParams>
+export type AddCaptionParams = z.infer<typeof AddCaptionParams>
+export type SetTransitionParams = z.infer<typeof SetTransitionParams>
+export type SetEffectParams = z.infer<typeof SetEffectParams>
+
 // Playback tools
 export const SeekParams = z.object({
   timeSec: z.number().nonnegative()
@@ -406,11 +416,11 @@ export const SaveAsTemplateParams = z.object({
   category: z.enum(['intro', 'outro', 'split-screen', 'promo', 'minimal', 'custom']),
   aspectRatio: z.enum(['9:16', '16:9', '1:1', '4:3', '21:9']),
   placeholderRules: z.array(z.object({
-      trackId: z.string(),
-      placeholderType: z.enum(['media', 'text']),
-      replaceWith: z.union([z.string(), z.number(), z.boolean()]).optional()
-    })).optional()
-  })
+    trackId: z.string(),
+    placeholderType: z.enum(['media', 'text']),
+    replaceWith: z.union([z.string(), z.number(), z.boolean()]).optional()
+  })).optional()
+})
 
 export const DeleteTemplateParams = z.object({
   templateId: z.string()

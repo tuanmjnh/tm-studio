@@ -5,19 +5,16 @@ export class GoogleBaseClient {
     this.accessToken = accessToken
   }
 
-  protected async fetch<T>(url: string, options: any = {}): Promise<T> {
+  protected async fetch<T>(url: string, options: RequestInit = {}): Promise<T> {
+    const headers = new Headers(options.headers)
+    headers.set('Authorization', `Bearer ${this.accessToken}`)
     try {
-      // @ts-ignore
-      return await $fetch<T>(url, {
-        ...options,
-        headers: {
-          ...options.headers,
-          Authorization: `Bearer ${this.accessToken}`
-        }
-      })
-    } catch (error: any) {
-      console.error('Google API Error:', error)
-      throw error
+      const response = await $fetch(url, { ...options, headers } as unknown as Parameters<typeof $fetch>[1])
+      return response as T
+    } catch (error) {
+      const e = error as Error & { status?: number, body?: unknown }
+      console.error('Google API Error:', e.message)
+      throw e
     }
   }
 }

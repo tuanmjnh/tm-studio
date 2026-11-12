@@ -311,7 +311,10 @@ export function applyEditPlan(timeline, plan, options = {}) {
               color: op.color,
               effects: op.effects ? normalizeEffects(op.effects) : undefined
             })
-            if (!clip) { step.ok = false; step.reason = 'track-locked' }
+            if (!clip) {
+              step.ok = false
+              step.reason = 'track-locked'
+            }
             break
           }
           const resolved = op.mediaRef ? resolution[op.mediaRef] : undefined
@@ -332,13 +335,24 @@ export function applyEditPlan(timeline, plan, options = {}) {
             fade: op.fade,
             effects: op.effects ? normalizeEffects(op.effects) : undefined
           })
-          if (!clip) { step.ok = false; step.reason = 'track-locked' }
+          if (!clip) {
+            step.ok = false
+            step.reason = 'track-locked'
+          }
           break
         }
         case 'set-clip': {
           const found = findClip(timeline, op.clipId)
-          if (!found) { step.ok = false; step.reason = 'clip-missing'; break }
-          if (found.track.locked) { step.ok = false; step.reason = 'track-locked'; break }
+          if (!found) {
+            step.ok = false
+            step.reason = 'clip-missing'
+            break
+          }
+          if (found.track.locked) {
+            step.ok = false
+            step.reason = 'track-locked'
+            break
+          }
           if (op.name !== undefined) found.clip.name = op.name
           if (op.text !== undefined) found.clip.text = op.text
           if (op.color !== undefined) found.clip.color = op.color
@@ -347,19 +361,38 @@ export function applyEditPlan(timeline, plan, options = {}) {
         }
         case 'move-clip': {
           const found = findClip(timeline, op.clipId)
-          if (!found) { step.ok = false; step.reason = 'clip-missing'; break }
-          if (found.track.locked) { step.ok = false; step.reason = 'track-locked'; break }
+          if (!found) {
+            step.ok = false
+            step.reason = 'clip-missing'
+            break
+          }
+          if (found.track.locked) {
+            step.ok = false
+            step.reason = 'track-locked'
+            break
+          }
           found.clip.timeline.start = Math.max(0, Math.round(op.startTicks))
           break
         }
         case 'remove-clip': {
-          if (!removeClip(timeline, op.clipId)) { step.ok = false; step.reason = 'clip-missing-or-locked' }
+          if (!removeClip(timeline, op.clipId)) {
+            step.ok = false
+            step.reason = 'clip-missing-or-locked'
+          }
           break
         }
         case 'set-effect': {
           const found = findClip(timeline, op.clipId)
-          if (!found) { step.ok = false; step.reason = 'clip-missing'; break }
-          if (found.track.locked) { step.ok = false; step.reason = 'track-locked'; break }
+          if (!found) {
+            step.ok = false
+            step.reason = 'clip-missing'
+            break
+          }
+          if (found.track.locked) {
+            step.ok = false
+            step.reason = 'track-locked'
+            break
+          }
           // Re-validate at apply time (defense in depth: a plan validated
           // against a different timeline must not smuggle bad effects).
           found.clip.effects = normalizeEffects(op.effects)
@@ -367,22 +400,45 @@ export function applyEditPlan(timeline, plan, options = {}) {
         }
         case 'set-transition': {
           const gate = canApplyTransition(timeline, op.clipId, op.transition, op.durationTicks)
-          if (!gate.ok) { step.ok = false; step.reason = gate.reason || 'cannot-apply'; break }
+          if (!gate.ok) {
+            step.ok = false
+            step.reason = gate.reason || 'cannot-apply'
+            break
+          }
           const ok = applyTransition(timeline, op.clipId, op.transition, op.durationTicks)
-          if (!ok) { step.ok = false; step.reason = 'apply-failed' }
+          if (!ok) {
+            step.ok = false
+            step.reason = 'apply-failed'
+          }
           break
         }
         case 'set-speed': {
           const found = findClip(timeline, op.clipId)
-          if (!found) { step.ok = false; step.reason = 'clip-missing'; break }
-          if (found.track.locked) { step.ok = false; step.reason = 'track-locked'; break }
+          if (!found) {
+            step.ok = false
+            step.reason = 'clip-missing'
+            break
+          }
+          if (found.track.locked) {
+            step.ok = false
+            step.reason = 'track-locked'
+            break
+          }
           found.clip.speed = op.speed
           break
         }
         case 'set-volume': {
           const found = findClip(timeline, op.clipId)
-          if (!found) { step.ok = false; step.reason = 'clip-missing'; break }
-          if (found.track.locked) { step.ok = false; step.reason = 'track-locked'; break }
+          if (!found) {
+            step.ok = false
+            step.reason = 'clip-missing'
+            break
+          }
+          if (found.track.locked) {
+            step.ok = false
+            step.reason = 'track-locked'
+            break
+          }
           found.clip.volume = op.volume
           break
         }
@@ -455,15 +511,45 @@ export function summarizeEditPlan(plan, labels = {}) {
   const lines = []
   for (const op of plan?.operations || []) {
     switch (op.type) {
-      case 'set-canvas': lines.push(`canvas ${op.width}x${op.height} @${op.fps}fps`); break
-      case 'add-clip': lines.push(`add ${op.trackType} "${op.name || op.mediaRef || ''}"`); break
-      case 'set-clip': lines.push(`edit clip ${labels[op.clipId] || op.clipId}`); break
-      case 'move-clip': lines.push(`move clip ${labels[op.clipId] || op.clipId} to ${(op.startTicks / TICKS_PER_SECOND).toFixed(2)}s`); break
-      case 'remove-clip': lines.push(`remove clip ${labels[op.clipId] || op.clipId}`); break
-      case 'set-effect': lines.push(`effects -> ${(op.effects || []).map(f => f.type).join(', ') || '(clear)'}`); break
-      case 'set-transition': lines.push(`transition ${op.transition} ${(op.durationTicks / TICKS_PER_SECOND).toFixed(2)}s`); break
-      case 'set-speed': lines.push(`speed x${op.speed}`); break
-      case 'set-volume': lines.push(`volume ${op.volume}%`); break
+      case 'set-canvas': {
+        lines.push(`canvas ${op.width}x${op.height} @${op.fps}fps`)
+        break
+      }
+      case 'add-clip': {
+        lines.push(`add ${op.trackType} "${op.name || op.mediaRef || ''}"`)
+        break
+      }
+      case 'set-clip': {
+        lines.push(`edit clip ${labels[op.clipId] || op.clipId}`)
+        break
+      }
+      case 'move-clip': {
+        const to = (op.startTicks / TICKS_PER_SECOND).toFixed(2)
+        lines.push(`move clip ${labels[op.clipId] || op.clipId} to ${to}s`)
+        break
+      }
+      case 'remove-clip': {
+        lines.push(`remove clip ${labels[op.clipId] || op.clipId}`)
+        break
+      }
+      case 'set-effect': {
+        const names = (op.effects || []).map(f => f.type).join(', ') || '(clear)'
+        lines.push(`effects -> ${names}`)
+        break
+      }
+      case 'set-transition': {
+        const sec = (op.durationTicks / TICKS_PER_SECOND).toFixed(2)
+        lines.push(`transition ${op.transition} ${sec}s`)
+        break
+      }
+      case 'set-speed': {
+        lines.push(`speed x${op.speed}`)
+        break
+      }
+      case 'set-volume': {
+        lines.push(`volume ${op.volume}%`)
+        break
+      }
       default: lines.push(op.type)
     }
   }

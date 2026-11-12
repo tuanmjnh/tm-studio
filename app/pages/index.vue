@@ -33,7 +33,12 @@ const cards = computed(() => [
 <template>
   <BasePage id="home" :title="t('nav.home')" :description="t('home.description')">
     <template #right>
-      <UButton to="/tmcut" color="primary" variant="soft" icon="i-lucide-clapperboard">
+      <UButton
+        to="/tmcut"
+        color="primary"
+        variant="soft"
+        icon="i-lucide-clapperboard"
+      >
         {{ t('nav.tmcut') }}
       </UButton>
     </template>
@@ -54,7 +59,8 @@ const cards = computed(() => [
                 {{ t('home.heroEyebrow') }}
               </p>
               <h2
-                class="mt-2 text-2xl font-semibold leading-tight tracking-[-0.03em] text-highlighted sm:text-[1.75rem]">
+                class="mt-2 text-2xl font-semibold leading-tight tracking-[-0.03em] text-highlighted sm:text-[1.75rem]"
+              >
                 {{ t('home.heroTitle') }}
               </h2>
               <p class="mt-2 text-sm leading-relaxed text-toned">
@@ -62,13 +68,31 @@ const cards = computed(() => [
               </p>
 
               <div class="mt-5 flex flex-wrap items-center gap-2">
-                <UButton to="/tmcut" color="primary" variant="solid" size="sm" icon="i-lucide-clapperboard">
+                <UButton
+                  to="/tmcut"
+                  color="primary"
+                  variant="solid"
+                  size="sm"
+                  icon="i-lucide-clapperboard"
+                >
                   {{ t('nav.tmcut') }}
                 </UButton>
-                <UButton to="/resources/connections" color="neutral" variant="soft" size="sm" icon="i-lucide-cable">
+                <UButton
+                  to="/resources/connections"
+                  color="neutral"
+                  variant="soft"
+                  size="sm"
+                  icon="i-lucide-cable"
+                >
                   {{ t('nav.connections') }}
                 </UButton>
-                <UButton to="/system/ai-keys" color="neutral" variant="ghost" size="sm" icon="i-lucide-brain">
+                <UButton
+                  to="/system/ai-keys"
+                  color="neutral"
+                  variant="ghost"
+                  size="sm"
+                  icon="i-lucide-brain"
+                >
                   {{ t('nav.ai_keys') }}
                 </UButton>
               </div>
@@ -77,11 +101,20 @@ const cards = computed(() => [
         </BaseBentoCard>
 
         <!-- Modules -->
-        <BaseBentoCard v-for="card in cards" :key="card.to" :span="4" :span-sm="6">
-          <NuxtLink :to="card.to" class="group flex h-full flex-col gap-3 p-4"
-            :style="{ '--tile-accent': card.accent }">
+        <BaseBentoCard
+          v-for="card in cards"
+          :key="card.to"
+          :span="4"
+          :span-sm="6"
+        >
+          <NuxtLink
+            :to="card.to"
+            class="group flex h-full flex-col gap-3 p-4"
+            :style="{ '--tile-accent': card.accent }"
+          >
             <span
-              class="grid size-9 shrink-0 place-items-center rounded-[4px] border border-default/70 bg-elevated/40 text-(--tile-accent)">
+              class="grid size-9 shrink-0 place-items-center rounded-[4px] border border-default/70 bg-elevated/40 text-(--tile-accent)"
+            >
               <UIcon :name="card.icon" class="size-4" />
             </span>
 

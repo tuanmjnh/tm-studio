@@ -2,7 +2,7 @@ export default defineEventHandler(async () => {
   const config = useRuntimeConfig()
   const port = process.env.PORT || 4003
 
-  const diagnostics: Record<string, any> = {
+  const diagnostics: Record<string, unknown> = {
     config: {
       authProvider: process.env.AUTH_PROVIDER || 'hub',
       appPort: Number(port),

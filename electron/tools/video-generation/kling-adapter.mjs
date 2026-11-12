@@ -6,14 +6,9 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { probeVideo } from './video-probe.mjs'
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-
 const KLING_BASE_URL = 'https://api.kling.ai/v1'
-const KLING_API_VERSION = '2024-11-01'
 
 // Kling model variants (from official docs)
 const KLING_MODELS = {
@@ -60,7 +55,11 @@ async function klingRequest(cfg, endpoint, options = {}) {
 
     const text = await res.text()
     let json = null
-    try { json = text ? JSON.parse(text) : null } catch { json = null }
+    try {
+      json = text ? JSON.parse(text) : null
+    } catch {
+      json = null
+    }
 
     if (res.status === 429) {
       throw new KlingAdapterError('rate-limited', 'Kling rate limit (429)')
@@ -155,8 +154,6 @@ async function submitJob(input) {
   const cfg = klingConfig()
   if (!cfg.apiKey) throw new KlingAdapterError('no-key', 'KLING_API_KEY not set')
 
-  const idempotencyKey = input.idempotencyKey || `kling-${Date.now()}-${Math.random().toString(36).slice(2)}`
-
   const body = {
     model_name: input.params?.model || 'kling-v3',
     prompt: input.prompt,
@@ -193,11 +190,11 @@ async function pollJob(providerTaskId) {
   if (!json) throw new KlingAdapterError('api-error', 'Empty response from Kling')
 
   const statusMap = {
-    'pending': 'pending',
-    'processing': 'processing',
-    'succeeded': 'completed',
-    'failed': 'failed',
-    'cancelled': 'cancelled'
+    pending: 'pending',
+    processing: 'processing',
+    succeeded: 'completed',
+    failed: 'failed',
+    cancelled: 'cancelled'
   }
 
   const status = statusMap[json.status] || 'failed'

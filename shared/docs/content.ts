@@ -16,7 +16,7 @@ export const HUB_DOCS_CONTENT: HubDocsContent = systemDocsData as unknown as Hub
 export function docsUsageCodeFor(usageCode: string, appId: string, hubEnvVar: string): string {
   return usageCode
     .replace(/\{HUB_URL_ENV\}/g, hubEnvVar)
-    .replace("{ appId: '{appId}' }", `appId: '${appId}'`)
+    .replace('{ appId: \'{appId}\' }', `appId: '${appId}'`)
 }
 
 /** Replace the `{app}` placeholder inside the SDK description sentence. */

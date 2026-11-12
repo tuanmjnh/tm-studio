@@ -206,7 +206,6 @@ export function useHubAi() {
       return request<{ count: number, total: number }>(`${aiBase(appId)}/models`, { method: 'POST', body })
     },
 
-
     /**
      * PATCH /api/v1/apps/:appId/ai/models/:modelId
      * Toggle model enabled/disabled.

@@ -42,7 +42,7 @@ async function handleSend() {
     Object.assign(sendForm, { title: '', body: '', icon: '', url: '', userId: '' })
     open.value = false
     await fetchNotify()
-  } catch (err: any) {
+  } catch (err) {
     notifyError(t('notifications.sendFailed'), getErrorMessage(err, key => t(key)))
   } finally {
     isSending.value = false

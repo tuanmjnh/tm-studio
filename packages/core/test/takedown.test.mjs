@@ -7,7 +7,6 @@ import {
   normalizeTakedownNotice,
   parseTakedownRegistry,
   mergeTakedownRegistry,
-  findActiveTakedown,
   canServeAfterTakedown,
   takedownAudit
 } from '../src/index.mjs'

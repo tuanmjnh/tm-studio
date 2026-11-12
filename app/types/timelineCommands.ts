@@ -4,64 +4,63 @@
 // all go through this layer. No direct state mutation allowed.
 // =============================================================================
 
-import type { TmcutTimelineItem, TmcutTrack, TmcutProject } from '~/composables/useTmcutProject'
-import type { TmcutMarker } from 'tmcut-core'
+import type { TmcutTimelineItem } from '~/composables/useTmcutProject'
 
 // -----------------------------------------------------------------------------
 // Core Types
 // -----------------------------------------------------------------------------
 
-export type TimelineCommandType = 
+export type TimelineCommandType
   // Project level
-  | 'project.create'
-  | 'project.load'
-  | 'project.save'
-  | 'project.delete'
-  | 'project.duplicate'
-  | 'project.switchCanvas'
-  | 'project.setBackground'
-  | 'project.setName'
+  = | 'project.create'
+    | 'project.load'
+    | 'project.save'
+    | 'project.delete'
+    | 'project.duplicate'
+    | 'project.switchCanvas'
+    | 'project.setBackground'
+    | 'project.setName'
   // Track level
-  | 'track.add'
-  | 'track.remove'
-  | 'track.move'
-  | 'track.rename'
-  | 'track.setVisibility'
-  | 'track.setLocked'
-  | 'track.setMuted'
-  | 'track.setVolume'
-  | 'track.setPan'
+    | 'track.add'
+    | 'track.remove'
+    | 'track.move'
+    | 'track.rename'
+    | 'track.setVisibility'
+    | 'track.setLocked'
+    | 'track.setMuted'
+    | 'track.setVolume'
+    | 'track.setPan'
   // Clip level
-  | 'clip.add'
-  | 'clip.remove'
-  | 'clip.move'
-  | 'clip.trim'
-  | 'clip.split'
-  | 'clip.duplicate'
-  | 'clip.setSpeed'
-  | 'clip.setTransition'
-  | 'clip.clearTransition'
-  | 'clip.setEffects'
-  | 'clip.addEffect'
-  | 'clip.removeEffect'
-  | 'clip.setKeyframes'
-  | 'clip.setStabilize'
-  | 'clip.setCrop'
-  | 'clip.setMask'
+    | 'clip.add'
+    | 'clip.remove'
+    | 'clip.move'
+    | 'clip.trim'
+    | 'clip.split'
+    | 'clip.duplicate'
+    | 'clip.setSpeed'
+    | 'clip.setTransition'
+    | 'clip.clearTransition'
+    | 'clip.setEffects'
+    | 'clip.addEffect'
+    | 'clip.removeEffect'
+    | 'clip.setKeyframes'
+    | 'clip.setStabilize'
+    | 'clip.setCrop'
+    | 'clip.setMask'
   // Marker level
-  | 'marker.add'
-  | 'marker.remove'
-  | 'marker.update'
+    | 'marker.add'
+    | 'marker.remove'
+    | 'marker.update'
   // Render zone
-  | 'render.setIn'
-  | 'render.setOut'
-  | 'render.clear'
+    | 'render.setIn'
+    | 'render.setOut'
+    | 'render.clear'
   // History
-  | 'history.undo'
-  | 'history.redo'
-  | 'history.push'
+    | 'history.undo'
+    | 'history.redo'
+    | 'history.push'
   // Batch (AI/Factory)
-  | 'batch.applyProposal'
+    | 'batch.applyProposal'
 
 export interface TimelineCommand<T = unknown> {
   type: TimelineCommandType
@@ -83,7 +82,7 @@ export interface TimelineCommand<T = unknown> {
 // Project Commands
 export interface ProjectCreatePayload {
   name: string
-  canvas?: { width: number; height: number; fps: { numerator: number; denominator: number } }
+  canvas?: { width: number, height: number, fps: { numerator: number, denominator: number } }
   source?: 'manual' | 'template' | 'ai' | 'import'
   templateId?: string
   templateVersion?: string
@@ -110,7 +109,7 @@ export interface ProjectDuplicatePayload {
 export interface ProjectSwitchCanvasPayload {
   width: number
   height: number
-  fps?: { numerator: number; denominator: number }
+  fps?: { numerator: number, denominator: number }
 }
 
 export interface ProjectSetBackgroundPayload {
@@ -224,12 +223,12 @@ export interface ClipClearTransitionPayload {
 
 export interface ClipSetEffectsPayload {
   clipId: string
-  effects: Array<{ type: string; params: Record<string, unknown> }>
+  effects: Array<{ type: string, params: Record<string, unknown> }>
 }
 
 export interface ClipAddEffectPayload {
   clipId: string
-  effect: { type: string; params: Record<string, unknown> }
+  effect: { type: string, params: Record<string, unknown> }
 }
 
 export interface ClipRemoveEffectPayload {
@@ -239,7 +238,7 @@ export interface ClipRemoveEffectPayload {
 
 export interface ClipSetKeyframesPayload {
   clipId: string
-  keyframes: Array<{ t: number; prop: string; value: number; easing?: string }>
+  keyframes: Array<{ t: number, prop: string, value: number, easing?: string }>
 }
 
 export interface ClipSetStabilizePayload {
@@ -250,14 +249,17 @@ export interface ClipSetStabilizePayload {
 
 export interface ClipSetCropPayload {
   clipId: string
-  crop: { x: number; y: number; width: number; height: number } // normalized 0-1
+  crop: { x: number, y: number, width: number, height: number } // normalized 0-1
 }
 
 export interface ClipSetMaskPayload {
   clipId: string
-  mask: { 
+  mask: {
     type: 'rectangle' | 'circle' | 'linear'
-    x: number; y: number; width: number; height: number
+    x: number
+    y: number
+    width: number
+    height: number
     rotation?: number
     feather?: number
     inverted?: boolean
@@ -290,18 +292,12 @@ export interface RenderSetOutPayload {
   timeSec: number
 }
 
-export interface RenderClearPayload {
-  // no payload
-}
+export type RenderClearPayload = Record<string, never>
 
 // History Commands
-export interface HistoryUndoPayload {
-  // no payload
-}
+export type HistoryUndoPayload = Record<string, never>
 
-export interface HistoryRedoPayload {
-  // no payload
-}
+export type HistoryRedoPayload = Record<string, never>
 
 export interface HistoryPushPayload {
   description: string
@@ -339,7 +335,7 @@ export const COMMAND_SPECS: Record<TimelineCommandType, {
   'project.switchCanvas': { description: 'Change canvas resolution/aspect ratio', requiresApproval: false },
   'project.setBackground': { description: 'Set canvas background', requiresApproval: false },
   'project.setName': { description: 'Rename project', requiresApproval: false },
-  
+
   // Track
   'track.add': { description: 'Add new track', requiresApproval: false },
   'track.remove': { description: 'Remove track and all its clips', requiresApproval: true, approvalReasonTemplate: 'This will delete track "{{trackId}}" and all {{clipCount}} clips on it.' },
@@ -350,7 +346,7 @@ export const COMMAND_SPECS: Record<TimelineCommandType, {
   'track.setMuted': { description: 'Mute/unmute track', requiresApproval: false },
   'track.setVolume': { description: 'Set track volume (0-100)', requiresApproval: false },
   'track.setPan': { description: 'Set track pan (-100 to 100)', requiresApproval: false },
-  
+
   // Clip
   'clip.add': { description: 'Add clip to track', requiresApproval: false },
   'clip.remove': { description: 'Remove clip from timeline', requiresApproval: false },
@@ -368,22 +364,22 @@ export const COMMAND_SPECS: Record<TimelineCommandType, {
   'clip.setStabilize': { description: 'Enable/disable stabilization', requiresApproval: false },
   'clip.setCrop': { description: 'Set clip crop region', requiresApproval: false },
   'clip.setMask': { description: 'Set clip mask', requiresApproval: false },
-  
+
   // Marker
   'marker.add': { description: 'Add timeline marker', requiresApproval: false },
   'marker.remove': { description: 'Remove timeline marker', requiresApproval: false },
   'marker.update': { description: 'Update marker label/color', requiresApproval: false },
-  
+
   // Render Zone
   'render.setIn': { description: 'Set render in point', requiresApproval: false },
   'render.setOut': { description: 'Set render out point', requiresApproval: false },
   'render.clear': { description: 'Clear render zone', requiresApproval: false },
-  
+
   // History
   'history.undo': { description: 'Undo last operation', requiresApproval: false },
   'history.redo': { description: 'Redo last undone operation', requiresApproval: false },
   'history.push': { description: 'Push history checkpoint', requiresApproval: false },
-  
+
   // Batch
   'batch.applyProposal': { description: 'Apply AI/Factory proposal as single undo group', requiresApproval: true, approvalReasonTemplate: 'Apply {{operationCount}} operations as a single undo group. Estimated cost: ${{estimatedCostUsd}}.' }
 }
@@ -410,7 +406,7 @@ export interface ProposalResult {
   ok: boolean
   applied: number
   skipped: number
-  errors: Array<{ index: number; error: string }>
+  errors: Array<{ index: number, error: string }>
   undoGroupId: string
 }
 
@@ -457,48 +453,48 @@ export function requiresApproval(type: TimelineCommandType): boolean {
 // Internal factory with proper type inference using const assertions
 export function createCommand<const T extends TimelineCommandType>(
   type: T,
-  payload: T extends 'render.clear' | 'history.undo' | 'history.redo' ? undefined : 
-    T extends 'project.create' ? ProjectCreatePayload :
-    T extends 'project.load' ? ProjectLoadPayload :
-    T extends 'project.save' ? ProjectSavePayload :
-    T extends 'project.delete' ? ProjectDeletePayload :
-    T extends 'project.duplicate' ? ProjectDuplicatePayload :
-    T extends 'project.switchCanvas' ? ProjectSwitchCanvasPayload :
-    T extends 'project.setBackground' ? ProjectSetBackgroundPayload :
-    T extends 'project.setName' ? ProjectSetNamePayload :
-    T extends 'track.add' ? TrackAddPayload :
-    T extends 'track.remove' ? TrackRemovePayload :
-    T extends 'track.move' ? TrackMovePayload :
-    T extends 'track.rename' ? TrackRenamePayload :
-    T extends 'track.setVisibility' ? TrackSetVisibilityPayload :
-    T extends 'track.setLocked' ? TrackSetLockedPayload :
-    T extends 'track.setMuted' ? TrackSetMutedPayload :
-    T extends 'track.setVolume' ? TrackSetVolumePayload :
-    T extends 'track.setPan' ? TrackSetPanPayload :
-    T extends 'clip.add' ? ClipAddPayload :
-    T extends 'clip.remove' ? ClipRemovePayload :
-    T extends 'clip.move' ? ClipMovePayload :
-    T extends 'clip.trim' ? ClipTrimPayload :
-    T extends 'clip.split' ? ClipSplitPayload :
-    T extends 'clip.duplicate' ? ClipDuplicatePayload :
-    T extends 'clip.setSpeed' ? ClipSetSpeedPayload :
-    T extends 'clip.setTransition' ? ClipSetTransitionPayload :
-    T extends 'clip.clearTransition' ? ClipClearTransitionPayload :
-    T extends 'clip.setEffects' ? ClipSetEffectsPayload :
-    T extends 'clip.addEffect' ? ClipAddEffectPayload :
-    T extends 'clip.removeEffect' ? ClipRemoveEffectPayload :
-    T extends 'clip.setKeyframes' ? ClipSetKeyframesPayload :
-    T extends 'clip.setStabilize' ? ClipSetStabilizePayload :
-    T extends 'clip.setCrop' ? ClipSetCropPayload :
-    T extends 'clip.setMask' ? ClipSetMaskPayload :
-    T extends 'marker.add' ? MarkerAddPayload :
-    T extends 'marker.remove' ? MarkerRemovePayload :
-    T extends 'marker.update' ? MarkerUpdatePayload :
-    T extends 'render.setIn' ? RenderSetInPayload :
-    T extends 'render.setOut' ? RenderSetOutPayload :
-    T extends 'history.push' ? HistoryPushPayload :
-    T extends 'batch.applyProposal' ? BatchApplyProposalPayload :
-    never,
+  payload: T extends 'render.clear' | 'history.undo' | 'history.redo' ? undefined
+    : T extends 'project.create' ? ProjectCreatePayload
+      : T extends 'project.load' ? ProjectLoadPayload
+        : T extends 'project.save' ? ProjectSavePayload
+          : T extends 'project.delete' ? ProjectDeletePayload
+            : T extends 'project.duplicate' ? ProjectDuplicatePayload
+              : T extends 'project.switchCanvas' ? ProjectSwitchCanvasPayload
+                : T extends 'project.setBackground' ? ProjectSetBackgroundPayload
+                  : T extends 'project.setName' ? ProjectSetNamePayload
+                    : T extends 'track.add' ? TrackAddPayload
+                      : T extends 'track.remove' ? TrackRemovePayload
+                        : T extends 'track.move' ? TrackMovePayload
+                          : T extends 'track.rename' ? TrackRenamePayload
+                            : T extends 'track.setVisibility' ? TrackSetVisibilityPayload
+                              : T extends 'track.setLocked' ? TrackSetLockedPayload
+                                : T extends 'track.setMuted' ? TrackSetMutedPayload
+                                  : T extends 'track.setVolume' ? TrackSetVolumePayload
+                                    : T extends 'track.setPan' ? TrackSetPanPayload
+                                      : T extends 'clip.add' ? ClipAddPayload
+                                        : T extends 'clip.remove' ? ClipRemovePayload
+                                          : T extends 'clip.move' ? ClipMovePayload
+                                            : T extends 'clip.trim' ? ClipTrimPayload
+                                              : T extends 'clip.split' ? ClipSplitPayload
+                                                : T extends 'clip.duplicate' ? ClipDuplicatePayload
+                                                  : T extends 'clip.setSpeed' ? ClipSetSpeedPayload
+                                                    : T extends 'clip.setTransition' ? ClipSetTransitionPayload
+                                                      : T extends 'clip.clearTransition' ? ClipClearTransitionPayload
+                                                        : T extends 'clip.setEffects' ? ClipSetEffectsPayload
+                                                          : T extends 'clip.addEffect' ? ClipAddEffectPayload
+                                                            : T extends 'clip.removeEffect' ? ClipRemoveEffectPayload
+                                                              : T extends 'clip.setKeyframes' ? ClipSetKeyframesPayload
+                                                                : T extends 'clip.setStabilize' ? ClipSetStabilizePayload
+                                                                  : T extends 'clip.setCrop' ? ClipSetCropPayload
+                                                                    : T extends 'clip.setMask' ? ClipSetMaskPayload
+                                                                      : T extends 'marker.add' ? MarkerAddPayload
+                                                                        : T extends 'marker.remove' ? MarkerRemovePayload
+                                                                          : T extends 'marker.update' ? MarkerUpdatePayload
+                                                                            : T extends 'render.setIn' ? RenderSetInPayload
+                                                                              : T extends 'render.setOut' ? RenderSetOutPayload
+                                                                                : T extends 'history.push' ? HistoryPushPayload
+                                                                                  : T extends 'batch.applyProposal' ? BatchApplyProposalPayload
+                                                                                    : never,
   options: {
     source?: 'ui' | 'ai' | 'voice' | 'mcp' | 'test'
     requestId?: string
@@ -506,7 +502,7 @@ export function createCommand<const T extends TimelineCommandType>(
 ): TimelineCommand<T> {
   return {
     type,
-    payload: payload as any,
+    payload: payload as unknown as T,
     requestId: options.requestId || crypto.randomUUID(),
     timestamp: Date.now(),
     source: options.source || 'ui'

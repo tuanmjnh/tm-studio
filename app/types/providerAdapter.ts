@@ -33,18 +33,18 @@ export interface ProviderModelInfo {
   modelId: string
   displayName: string
   capabilities: ProviderTaskType[]
-  maxResolution: { width: number; height: number }
+  maxResolution: { width: number, height: number }
   maxDurationSec: number
   costPerUnit: CostPerUnit
   isDefault: boolean
   isDeprecated: boolean
 }
 
-export type CostPerUnit = 
-  | { type: 'per-second'; amountUsd: number; currency: string }
-  | { type: 'per-frame'; amountUsd: number; currency: string }
-  | { type: 'per-request'; amountUsd: number; currency: string }
-  | { type: 'per-token'; amountUsd: number; currency: string; tokenType: 'prompt' | 'completion' }
+export type CostPerUnit
+  = | { type: 'per-second', amountUsd: number, currency: string }
+    | { type: 'per-frame', amountUsd: number, currency: string }
+    | { type: 'per-request', amountUsd: number, currency: string }
+    | { type: 'per-token', amountUsd: number, currency: string, tokenType: 'prompt' | 'completion' }
 
 export interface ResolutionInfo {
   width: number
@@ -77,31 +77,31 @@ export interface NormalizedVideoRequest {
   prompt: string
   negativePrompt?: string
   seed?: number
-  
+
   // Visual
   aspectRatio: AspectRatio
-  resolution: { width: number; height: number }
+  resolution: { width: number, height: number }
   durationSec: number
   fps?: number
-  
+
   // Input references
   inputImages?: MediaReference[]
   inputVideos?: MediaReference[]
   inputAudio?: MediaReference[]
-  
+
   // Camera/Motion
   cameraMovement?: CameraMovement
   motionStrength?: number // 0-1
-  
+
   // Audio generation
   audioMode?: 'none' | 'generate' | 'reference'
   voiceId?: string
   voiceSettings?: VoiceSettings
   musicSettings?: MusicSettings
-  
+
   // Provider-specific extensions (schema validated)
   providerOptions?: Record<string, unknown>
-  
+
   // Metadata
   idempotencyKey: string
   callbackUrl?: string
@@ -116,10 +116,10 @@ export interface MediaReference {
   endTimeSec?: number
 }
 
-export type CameraMovement = 
-  | 'static' | 'pan-left' | 'pan-right' | 'tilt-up' | 'tilt-down' 
-  | 'zoom-in' | 'zoom-out' | 'dolly-in' | 'dolly-out' 
-  | 'tracking-left' | 'tracking-right' | 'orbit-left' | 'orbit-right'
+export type CameraMovement
+  = | 'static' | 'pan-left' | 'pan-right' | 'tilt-up' | 'tilt-down'
+    | 'zoom-in' | 'zoom-out' | 'dolly-in' | 'dolly-out'
+    | 'tracking-left' | 'tracking-right' | 'orbit-left' | 'orbit-right'
 
 export interface VoiceSettings {
   voiceId: string
@@ -148,7 +148,7 @@ export interface NormalizedGenerationResult {
   fps?: number
   fileSizeBytes?: number
   costUsd?: number
-  tokensUsed?: { prompt: number; completion: number }
+  tokensUsed?: { prompt: number, completion: number }
   providerMetadata: Record<string, unknown>
   completedAt?: string
   error?: {
@@ -181,26 +181,26 @@ export interface VideoProviderAdapter {
   // Metadata
   readonly providerKey: string
   readonly capabilities: ProviderCapabilities
-  
+
   // Lifecycle
   initialize(config: ProviderConfig): Promise<void>
   shutdown(): Promise<void>
   healthCheck(): Promise<HealthCheckResult>
-  
+
   // Cost estimation
   estimateCost(request: NormalizedVideoRequest): Promise<CostEstimate | null>
-  
+
   // Job submission
   submitJob(request: NormalizedVideoRequest): Promise<SubmitResult>
-  
+
   // Job management
   getJobStatus(providerTaskId: string): Promise<ProviderTaskStatus>
   cancelJob?(providerTaskId: string): Promise<void>
-  
+
   // Result handling
   downloadResults(providerTaskId: string, outputDir: string): Promise<DownloadedAsset[]>
   normalizeResult(rawResponse: unknown): NormalizedGenerationResult
-  
+
   // Webhook (optional)
   handleWebhook?(payload: unknown, headers: Record<string, string>): Promise<WebhookResult>
 }
@@ -254,7 +254,7 @@ export interface WebhookResult {
   providerTaskId: string
   status: 'completed' | 'failed'
   outputUrls?: string[]
-  error?: { category: string; message: string }
+  error?: { category: string, message: string }
 }
 
 // -----------------------------------------------------------------------------
@@ -287,7 +287,7 @@ export interface ProviderConnection {
   rateLimitRemaining?: number
   rateLimitResetAt?: string
   billingStatus?: 'active' | 'past_due' | 'canceled' | 'trial'
-  usageThisMonth?: { costUsd: number; requests: number }
+  usageThisMonth?: { costUsd: number, requests: number }
   lastHealthCheck?: string
   createdAt: string
   updatedAt: string

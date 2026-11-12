@@ -12,7 +12,7 @@ import {
   InitializeRequestSchema,
   PingRequestSchema
 } from '@modelcontextprotocol/sdk/types.js'
-import { TOOL_REGISTRY, buildCapabilities, getToolDef } from './tool-registry.js'
+import { buildCapabilities, getToolDef } from './tool-registry.js'
 import { createMockIpc } from './ipc.js'
 
 // -----------------------------------------------------------------------------
@@ -40,14 +40,6 @@ function resetIdleTimer() {
     console.error('[MCP] Idle timeout, shutting down')
     shutdown(0)
   }, IDLE_TIMEOUT_MS)
-}
-
-// -----------------------------------------------------------------------------
-// Request ID generator (for IPC correlation)
-// -----------------------------------------------------------------------------
-let requestCounter = 0
-function nextRequestId() {
-  return `req-${Date.now()}-${++requestCounter}`
 }
 
 // -----------------------------------------------------------------------------
@@ -113,8 +105,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   session.requestCount++
   session.lastActivity = Date.now()
   resetIdleTimer()
-
-  const requestId = `req-${Date.now()}-${++requestCounter}`
 
   try {
     const result = await toolDef.handler(params, {

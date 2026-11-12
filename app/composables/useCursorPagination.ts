@@ -6,7 +6,7 @@ import { ref, shallowRef } from 'vue'
  * Auto-imported via Nuxt (composables/). Reuse for any list needing
  * "load more" infinite scroll with a backend cursor.
  */
-export type CursorToken = any
+export type CursorToken = string | number | null
 
 type CursorPage<T> = {
   items: T[]

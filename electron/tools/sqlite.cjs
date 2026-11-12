@@ -186,7 +186,11 @@ function init() {
   `)
 
   const tryAddHistoryCol = (table, colDef) => {
-    try { db.exec(`ALTER TABLE ${table} ADD COLUMN ${colDef};`) } catch { /* ignore */ }
+    try {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${colDef};`)
+    } catch {
+      /* ignore */
+    }
   }
   tryAddHistoryCol('youtube_history', 'flag INTEGER DEFAULT 1')
 
@@ -393,5 +397,5 @@ module.exports = {
       return db.prepare(`UPDATE youtube_history SET flag=0 WHERE id IN (${placeholders})`).run(...ids)
     }
     return db.prepare('UPDATE youtube_history SET flag=0 WHERE id=?').run(idOrIds)
-  },
+  }
 }

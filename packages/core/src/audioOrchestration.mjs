@@ -32,7 +32,7 @@ export function rankAudioCandidates(candidates = [], { allowGenerated = false } 
     'license-approved': 0,
     'license-review': 1
   }
-  const ORIGIN = { library: 0, 'asset-center': 1, generated: 2 }
+  const ORIGIN = { 'library': 0, 'asset-center': 1, 'generated': 2 }
   return candidates
     .filter(c => c && typeof c.mediaRef === 'string' && c.mediaRef !== '')
     .filter(c => USABLE_LICENSE_STATUSES.includes(c.licenseStatus || 'unknown'))

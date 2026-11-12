@@ -66,7 +66,6 @@ describe('assets', () => {
   })
 })
 
-
 describe('cache', () => {
   it('builds deterministic portable keys', () => {
     const revision = { mtimeMs: 1000, size: 2000 }

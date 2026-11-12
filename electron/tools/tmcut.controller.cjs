@@ -401,9 +401,9 @@ function registerTmcutController() {
   ipcMain.handle(`${moduleName}:getPaths`, () => {
     ensureDirs()
     const d = getDirs()
-  return {
-    base: toPosix(d.base),
-    projects: toPosix(d.projects),
+    return {
+      base: toPosix(d.base),
+      projects: toPosix(d.projects),
       snapshots: toPosix(d.snapshots),
       assetsFile: toPosix(d.assetsFile),
       cache: toPosix(d.cache),
@@ -553,7 +553,11 @@ function registerTmcutController() {
       const response = await fetchVieNeu(baseUrl, '/health')
       if (!response.ok) return { ok: false, error: getServiceError(response.status, await response.text()) }
       let health = null
-      try { health = await response.json() } catch { health = null }
+      try {
+        health = await response.json()
+      } catch {
+        health = null
+      }
       const voicesResponse = await fetchVieNeu(baseUrl, '/v1/voices')
       if (!voicesResponse.ok) return { ok: false, error: getServiceError(voicesResponse.status, await voicesResponse.text()) }
       return { ok: true, data: { baseUrl, health, voices: parseVieNeuVoices(await voicesResponse.json()) } }
@@ -621,7 +625,11 @@ function registerTmcutController() {
       try {
         writeJsonAtomic(path.join(getDirs().voices, 'registry.json'), voices)
       } catch (error) {
-        try { fs.unlinkSync(referencePath) } catch { /* preserve the original registry error */ }
+        try {
+          fs.unlinkSync(referencePath)
+        } catch {
+          /* preserve the original registry error */
+        }
         throw error
       }
       return { ok: true, data: voice }
@@ -640,7 +648,11 @@ function registerTmcutController() {
       const referencePath = path.join(getDirs().voices, voice.referenceFile)
       if (path.dirname(referencePath) !== getDirs().voices || path.basename(referencePath) !== voice.referenceFile) return { ok: false, error: 'Invalid reference path' }
       writeJsonAtomic(path.join(getDirs().voices, 'registry.json'), voices.filter(item => item.id !== voiceId))
-      try { fs.unlinkSync(referencePath) } catch (error) { if (error.code !== 'ENOENT') throw error }
+      try {
+        fs.unlinkSync(referencePath)
+      } catch (error) {
+        if (error.code !== 'ENOENT') throw error
+      }
       return { ok: true }
     } catch (error) {
       return { ok: false, error: String((error && error.message) || error) }
@@ -844,7 +856,11 @@ async function readResponseBounded(response, maxBytes) {
 }
 
 function parseJsonOrText(value) {
-  try { return JSON.parse(value) } catch { return String(value || '') }
+  try {
+    return JSON.parse(value)
+  } catch {
+    return String(value || '')
+  }
 }
 
 module.exports = {

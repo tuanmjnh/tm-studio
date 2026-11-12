@@ -33,12 +33,30 @@ const openConfirm = (type: 'local' | 'session' | 'cookies' | 'pwa' | 'all' | 'si
     confirmModal.loading = true
     try {
       switch (type) {
-        case 'local': clearLocalStorage(); break
-        case 'session': clearSessionStorage(); break
-        case 'cookies': clearCookies(); break
-        case 'pwa': await clearPwaData(); break
-        case 'all': await clearAllStorage(); break
-        case 'site': await clearSiteData(); break
+        case 'local': {
+          clearLocalStorage()
+          break
+        }
+        case 'session': {
+          clearSessionStorage()
+          break
+        }
+        case 'cookies': {
+          clearCookies()
+          break
+        }
+        case 'pwa': {
+          await clearPwaData()
+          break
+        }
+        case 'all': {
+          await clearAllStorage()
+          break
+        }
+        case 'site': {
+          await clearSiteData()
+          break
+        }
       }
       confirmModal.isOpen = false
     } finally {

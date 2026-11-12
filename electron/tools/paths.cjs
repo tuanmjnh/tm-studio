@@ -30,7 +30,9 @@ function readConfig() {
       }
       result[key] = value
     }
-  } catch (_) { }
+  } catch {
+    // Unreadable config file: the caller falls back to defaults.
+  }
   return result
 }
 

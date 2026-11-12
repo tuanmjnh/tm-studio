@@ -84,10 +84,16 @@ export function routeScene(options = {}) {
   const ordered = []
   const seen = new Set()
   for (const id of fallback) {
-    if (!seen.has(id)) { seen.add(id); ordered.push(id) }
+    if (!seen.has(id)) {
+      seen.add(id)
+      ordered.push(id)
+    }
   }
   for (const [id] of byId) {
-    if (!seen.has(id)) { seen.add(id); ordered.push(id) }
+    if (!seen.has(id)) {
+      seen.add(id)
+      ordered.push(id)
+    }
   }
 
   const skipped = []

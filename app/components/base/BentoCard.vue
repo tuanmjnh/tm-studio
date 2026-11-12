@@ -63,10 +63,13 @@ const classes = computed(() => [
   <section class="glass-panel flex min-w-0 flex-col overflow-hidden" :class="classes">
     <header
       v-if="title || $slots.header || $slots.action"
-      class="flex shrink-0 items-center justify-between gap-2 px-3.5 pt-3 pb-2">
+      class="flex shrink-0 items-center justify-between gap-2 px-3.5 pt-3 pb-2"
+    >
       <div class="flex min-w-0 items-center gap-2">
         <UIcon v-if="icon" :name="icon" class="size-3.5 shrink-0 text-primary" />
-        <h2 class="truncate text-[13px] font-semibold tracking-tight text-highlighted">{{ title }}</h2>
+        <h2 class="truncate text-[13px] font-semibold tracking-tight text-highlighted">
+          {{ title }}
+        </h2>
         <slot name="header" />
       </div>
       <div class="flex shrink-0 items-center gap-1.5">

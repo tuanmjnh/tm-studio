@@ -52,7 +52,11 @@ const server = http.createServer((req, res) => {
   res.setHeader('access-control-allow-origin', '*')
   res.setHeader('access-control-allow-headers', '*')
   res.setHeader('access-control-allow-methods', 'GET,OPTIONS')
-  if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return }
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204)
+    res.end()
+    return
+  }
 
   if (url.pathname === '/api/v1/auth/me') {
     return json(res, 200, {

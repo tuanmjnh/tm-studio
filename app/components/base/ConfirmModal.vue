@@ -20,7 +20,7 @@ const props = withDefaults(defineProps<{
 })
 
 const open = defineModel<boolean>('open', { default: false })
-const emit = defineEmits<{ confirm: []; cancel: [] }>()
+const emit = defineEmits<{ confirm: [], cancel: [] }>()
 const { t } = useI18n()
 
 /**
@@ -50,8 +50,11 @@ function onCancel() {
 
     <template #body>
       <div v-if="description" class="flex items-center gap-3">
-        <span v-if="icon" class="grid size-9 shrink-0 place-items-center rounded-[4px] ring-1 ring-inset"
-          :class="toneClass">
+        <span
+          v-if="icon"
+          class="grid size-9 shrink-0 place-items-center rounded-[4px] ring-1 ring-inset"
+          :class="toneClass"
+        >
           <UIcon :name="icon" class="size-4" />
         </span>
         <p class="pt-1.5 text-sm leading-relaxed text-muted">
@@ -62,10 +65,21 @@ function onCancel() {
     </template>
 
     <template #footer>
-      <UButton :label="cancelLabel || t('global.cancel')" color="neutral" variant="ghost" :disabled="loading"
-        @click="onCancel" />
-      <UButton :label="confirmLabel || t('global.confirm')" variant="soft" :icon="confirmIcon" :color="color"
-        :loading="loading" @click="emit('confirm')" />
+      <UButton
+        :label="cancelLabel || t('global.cancel')"
+        color="neutral"
+        variant="ghost"
+        :disabled="loading"
+        @click="onCancel"
+      />
+      <UButton
+        :label="confirmLabel || t('global.confirm')"
+        variant="soft"
+        :icon="confirmIcon"
+        :color="color"
+        :loading="loading"
+        @click="emit('confirm')"
+      />
     </template>
   </UModal>
 </template>

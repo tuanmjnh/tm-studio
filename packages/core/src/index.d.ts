@@ -15,7 +15,6 @@ import type {
   TmcutFitMode,
   TmcutOrientation,
   TmcutCropRect,
-  TmcutStabilizeLevel,
   MediaTime
 } from '../types/dsl.js'
 import type { TmcutAssetKind, TmcutMediaMetadata } from '../types/media.js'
@@ -297,7 +296,6 @@ export function waveformCacheKey(fingerprint: unknown): string | null
 export function fnv1aHex(text: string): string
 export function cacheKeyForPath(path: string, revision?: { mtimeMs?: number, size?: number }): string
 export function cachePathFor(cacheDir: string, kind: string, key: string, extension: string): string
-
 
 export function validateEdl(edl: unknown): string[]
 export function selectSegments(edl: TmcutEdl, minScore?: number): TmcutEdlSegment[]
@@ -1033,13 +1031,13 @@ export function refusedEffectName(effect: { type?: unknown, params?: Record<stri
 export function clampEffectParam(type: string, name: string, raw: unknown): unknown
 
 /** One semantic grade instruction (slice J): a typed op a renderer consumes directly, never FFmpeg text. */
-export type TmcutGradeOp =
-  | { op: 'balance', rs?: number, gs?: number, bs?: number, rm?: number, gm?: number, bm?: number, rh?: number, gh?: number, bh?: number }
-  | { op: 'eq', brightness?: number, contrast?: number, saturation?: number }
-  | { op: 'curves', preset: 'lighter' | 'medium_contrast' | 'strong_contrast' | 'cross_process' }
-  | { op: 'desaturate' }
-  | { op: 'sepia' }
-  | { op: 'grain', amount: number }
+export type TmcutGradeOp
+  = | { op: 'balance', rs?: number, gs?: number, bs?: number, rm?: number, gm?: number, bm?: number, rh?: number, gh?: number, bh?: number }
+    | { op: 'eq', brightness?: number, contrast?: number, saturation?: number }
+    | { op: 'curves', preset: 'lighter' | 'medium_contrast' | 'strong_contrast' | 'cross_process' }
+    | { op: 'desaturate' }
+    | { op: 'sepia' }
+    | { op: 'grain', amount: number }
 /** Ordered semantic grade of one lut3d preset; null for an unknown id or the `neutral` no-op. */
 export function lutGrade(preset: string): TmcutGradeOp[] | null
 

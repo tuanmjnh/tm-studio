@@ -84,4 +84,4 @@ export const DEMO_TEMPLATE_PLANS = {
       }
     ]
   }
-};
+}

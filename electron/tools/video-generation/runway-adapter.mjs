@@ -10,11 +10,7 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { probeVideo } from './video-probe.mjs'
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
 
 const RUNWAY_BASE_URL = 'https://api.dev.runwayml.com/v1'
 const RUNWAY_API_VERSION = '2024-11-06'
@@ -52,7 +48,7 @@ async function runwayRequest(cfg, endpoint, options = {}) {
   const { method = 'POST', body, timeoutMs = 300000 } = options // 5 min default for video gen
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
-  
+
   try {
     const res = await fetch(`${cfg.baseUrl}${endpoint}`, {
       method,
@@ -64,11 +60,15 @@ async function runwayRequest(cfg, endpoint, options = {}) {
       body: body ? JSON.stringify(body) : undefined,
       signal: controller.signal
     })
-    
+
     const text = await res.text()
     let json = null
-    try { json = text ? JSON.parse(text) : null } catch { json = null }
-    
+    try {
+      json = text ? JSON.parse(text) : null
+    } catch {
+      json = null
+    }
+
     if (res.status === 429) {
       throw new RunwayAdapterError('rate-limited', 'Runway rate limit (429)')
     }
@@ -178,9 +178,7 @@ async function submitJob(input) {
   validateJobInput(input)
   const cfg = runwayConfig()
   if (!cfg.apiKey) throw new RunwayAdapterError('no-key', 'RUNWAY_API_KEY not set')
-  
-  const idempotencyKey = input.idempotencyKey || `runway-${Date.now()}-${Math.random().toString(36).slice(2)}`
-  
+
   const body = {
     model: input.params?.model || 'gen4_turbo',
     prompt: input.prompt,
@@ -191,15 +189,15 @@ async function submitJob(input) {
     seed: input.seed !== undefined ? Number(input.seed) : null,
     callback_url: null // We'll poll instead of webhook for simplicity
   }
-  
+
   if (input.taskType === 'image-to-video') {
     body.image = input.inputMediaRef // Runway expects the image URL or base64
   }
-  
+
   const { json } = await runwayRequest(cfg, '/tasks', { method: 'POST', body })
-  
+
   if (!json?.id) throw new RunwayAdapterError('api-error', 'Runway did not return task ID')
-  
+
   return {
     providerTaskId: json.id,
     status: 'queued',
@@ -213,26 +211,26 @@ async function submitJob(input) {
 async function pollJob(providerTaskId) {
   const cfg = runwayConfig()
   if (!cfg.apiKey) throw new RunwayAdapterError('no-key', 'RUNWAY_API_KEY not set')
-  
+
   const { json } = await runwayRequest(cfg, `/tasks/${providerTaskId}`, { method: 'GET' })
-  
+
   if (!json) throw new RunwayAdapterError('api-error', 'Empty response from Runway')
-  
+
   const statusMap = {
-    'PENDING': 'pending',
-    'RUNNING': 'processing',
-    'SUCCEEDED': 'completed',
-    'FAILED': 'failed',
-    'CANCELLED': 'cancelled'
+    PENDING: 'pending',
+    RUNNING: 'processing',
+    SUCCEEDED: 'completed',
+    FAILED: 'failed',
+    CANCELLED: 'cancelled'
   }
-  
+
   const status = statusMap[json.status] || 'failed'
   const progress = json.progress !== undefined ? Number(json.progress) : (status === 'processing' ? 50 : status === 'completed' ? 100 : 0)
-  
+
   let results = []
   let error = null
   let costSoFar = 0
-  
+
   if (status === 'completed' && json.output) {
     const outputUrl = Array.isArray(json.output) ? json.output[0] : json.output
     results = [{
@@ -249,7 +247,7 @@ async function pollJob(providerTaskId) {
   } else if (status === 'failed') {
     error = { category: 'provider-error', message: json.error?.message || 'Generation failed', retryable: false }
   }
-  
+
   return {
     providerTaskId,
     status,
@@ -267,7 +265,7 @@ async function pollJob(providerTaskId) {
 async function cancelJob(providerTaskId) {
   const cfg = runwayConfig()
   if (!cfg.apiKey) throw new RunwayAdapterError('no-key', 'RUNWAY_API_KEY not set')
-  
+
   await runwayRequest(cfg, `/tasks/${providerTaskId}/cancel`, { method: 'POST' })
 }
 
@@ -277,25 +275,25 @@ async function cancelJob(providerTaskId) {
 async function downloadResult(providerTaskId, destDir) {
   const cfg = runwayConfig()
   if (!cfg.apiKey) throw new RunwayAdapterError('no-key', 'RUNWAY_API_KEY not set')
-  
+
   const status = await pollJob(providerTaskId)
   if (status.status !== 'completed' || !status.results.length) {
     throw new RunwayAdapterError('not-ready', 'Job not completed or no results')
   }
-  
+
   const result = status.results[0]
   const fileName = `runway-${providerTaskId}.mp4`
   const destPath = path.join(destDir, fileName)
-  
+
   await downloadFile(result.downloadUrl, destPath, cfg.apiKey)
-  
+
   // Verify download
   const stats = fs.statSync(destPath)
   if (stats.size === 0) throw new RunwayAdapterError('download-failed', 'Downloaded file is empty')
-  
+
   // Probe video metadata with the shared demuxer (no external binary).
   const probe = await probeVideo(destPath)
-  
+
   return {
     localPath: destPath,
     originalUrl: status.results[0].downloadUrl,
@@ -316,7 +314,7 @@ function estimateCost(input) {
   const model = input.params?.model || 'gen3a-turbo'
   const costPerSecond = RUNWAY_MODELS[model]?.costPerSecond || 0.03
   const estimatedCostUsd = durationSec * costPerSecond
-  
+
   return {
     estimatedCostUsd,
     costBreakdown: { durationSec, model, costPerSecond },

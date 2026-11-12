@@ -2,7 +2,7 @@ import type { Directive } from 'vue'
 
 export default defineNuxtPlugin((nuxtApp) => {
   const formatText: Directive = {
-    mounted(el: any, binding: any) {
+    mounted(el, binding) {
       const mode = binding.arg
 
       // --- Format function ---

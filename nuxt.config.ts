@@ -17,10 +17,6 @@ export default defineNuxtConfig({
     ]
   },
 
-  alias: {
-    'tmcut-core': fileURLToPath(new URL('./packages/core/src/index.mjs', import.meta.url))
-  },
-
   devtools: {
     enabled: false
   },
@@ -39,22 +35,13 @@ export default defineNuxtConfig({
   },
 
   css: ['~/assets/css/main.css'],
-  spaLoadingTemplate: 'spa-loading-template.html',
 
   // Creative tools open dark first; the toggle still lets users choose light.
   colorMode: {
     preference: 'dark',
     fallback: 'dark'
   },
-
-  // Include TypeScript icon maps so local controls do not depend on runtime API requests.
-  icon: {
-    clientBundle: {
-      scan: {
-        globInclude: ['app/**/*.{vue,ts,jsx,tsx,md,json}', 'shared/**/*.ts']
-      }
-    }
-  },
+  spaLoadingTemplate: 'spa-loading-template.html',
 
   runtimeConfig: {
     // Private server-only: app secret for the server-to-server TM Hub AI relay.
@@ -68,6 +55,10 @@ export default defineNuxtConfig({
       hubUrl: process.env.NUXT_PUBLIC_HUB_URL || 'http://localhost:4000',
       hubAppId: process.env.NUXT_PUBLIC_HUB_APP_ID || 'tm-studio_749app'
     }
+  },
+
+  alias: {
+    'tmcut-core': fileURLToPath(new URL('./packages/core/src/index.mjs', import.meta.url))
   },
 
   build: {
@@ -138,6 +129,15 @@ export default defineNuxtConfig({
       useCookie: true,
       cookieKey: 'i18n_locale',
       redirectOn: 'root'
+    }
+  },
+
+  // Include TypeScript icon maps so local controls do not depend on runtime API requests.
+  icon: {
+    clientBundle: {
+      scan: {
+        globInclude: ['app/**/*.{vue,ts,jsx,tsx,md,json}', 'shared/**/*.ts']
+      }
     }
   },
 

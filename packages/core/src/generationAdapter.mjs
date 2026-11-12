@@ -118,11 +118,11 @@ export function validateCapabilityManifest(manifest) {
  * Generation job status enum.
  */
 export const GENERATION_JOB_STATUS = {
-  pending: 'pending',       // submitted, not yet processing
+  pending: 'pending', // submitted, not yet processing
   processing: 'processing', // actively generating
-  completed: 'completed',   // result ready for download
-  failed: 'failed',         // generation failed
-  cancelled: 'cancelled'    // user cancelled
+  completed: 'completed', // result ready for download
+  failed: 'failed', // generation failed
+  cancelled: 'cancelled' // user cancelled
 }
 
 /**

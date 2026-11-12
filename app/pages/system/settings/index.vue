@@ -5,4 +5,3 @@ navigateTo('/system/settings/appearance', { replace: true })
 <template>
   <div />
 </template>
-

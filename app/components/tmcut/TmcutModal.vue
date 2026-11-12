@@ -26,9 +26,15 @@ const sizeClasses = {
 </script>
 
 <template>
-  <UModal :open="props.open" :title="props.title" :description="props.description"
-    :dismissible="props.closeOnOverlayClick" :close="props.showClose"
-    :ui="{ content: sizeClasses[props.size], footer: 'justify-end gap-2' }" @update:open="emit('update:open', $event)">
+  <UModal
+    :open="props.open"
+    :title="props.title"
+    :description="props.description"
+    :dismissible="props.closeOnOverlayClick"
+    :close="props.showClose"
+    :ui="{ content: sizeClasses[props.size], footer: 'justify-end gap-2' }"
+    @update:open="emit('update:open', $event)"
+  >
     <template #body="{ close }">
       <slot name="body" :close="close">
         <slot :close="close" />

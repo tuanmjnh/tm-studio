@@ -7,7 +7,6 @@
 import { getBuiltinVideoTemplates } from '../../app/utils/tmcut/videoTemplatePresets'
 import { sampleRecordFor } from '../../app/utils/tmcut/videoTemplates'
 import {
-  DEFAULT_BUDGET_GUARD,
   createAspectRatioVariants,
   createBatchFromPlan,
   createCampaign,
@@ -20,7 +19,6 @@ import {
   summarizeCampaign,
   transitionJob,
   unscheduleBatch,
-  type BatchPlan,
   type VideoBatch
 } from '../../app/utils/tmcut/videoFactory'
 import {
@@ -35,17 +33,10 @@ import {
   routeScene,
   routeStoryboard
 } from 'tmcut-core'
-import type { AssetCenterCatalogEntry } from 'tmcut-core'
 
 let passed = 0
 function check(name: string, fn: () => void) {
   fn()
-  passed++
-  console.log(`[ok] ${name}`)
-}
-
-async function checkAsync(name: string, fn: () => Promise<void>) {
-  await fn()
   passed++
   console.log(`[ok] ${name}`)
 }
@@ -323,7 +314,19 @@ check('summarizeCampaign — aggregates cost/status across batches', () => {
     { batchId: 'b2', status: 'failed' as const, actualCostUsd: 0.3, completedItems: 2, totalItems: 5 },
     { batchId: 'b3', status: 'queued' as const, actualCostUsd: 0, completedItems: 0, totalItems: 10 }
   ]
-  const summary = summarizeCampaign({ campaignId: 'c1' } as any, batches)
+  const summary = summarizeCampaign({
+    campaignId: 'c1',
+    userId: 'u1',
+    title: 't',
+    intent: 'i',
+    targetChannels: [],
+    targetAspectRatios: [],
+    targetLanguages: [],
+    templateId: 'tpl',
+    templateVersion: '1.0.0',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z'
+  }, batches)
   if (summary.totalBatches !== 3) throw new Error('totalBatches')
   if (summary.totalCostUsd !== 1.8) throw new Error('totalCostUsd')
   if (summary.completedItems !== 7) throw new Error('completedItems')
@@ -387,7 +390,7 @@ check('buildAssemblyPlan — adds music/SFX from assetCatalog to audio track', (
 
   const input: AssemblyInput = {
     batch: created.batch, items: created.items, jobs: approvedJobs, template: cleanTemplate,
-    assetCatalog: [], resolveSource: (job) => ({ src: 'dryrun:' + job.jobId, simulated: true })
+    assetCatalog: [], resolveSource: job => ({ src: 'dryrun:' + job.jobId, simulated: true })
   }
   const assembly = buildAssemblyPlan(input)
   if (!assembly.ok) throw new Error('assembly failed: ' + JSON.stringify(assembly.error))

@@ -65,10 +65,10 @@ export default defineEventHandler(async (event) => {
     const rawList: unknown[] = Array.isArray(parsed)
       ? parsed
       : (parsed && typeof parsed === 'object' && Array.isArray((parsed as { data?: unknown[] }).data))
-        ? (parsed as { data: unknown[] }).data
-        : (parsed && typeof parsed === 'object' && Array.isArray((parsed as { models?: unknown[] }).models))
-          ? (parsed as { models: unknown[] }).models
-          : []
+          ? (parsed as { data: unknown[] }).data
+          : (parsed && typeof parsed === 'object' && Array.isArray((parsed as { models?: unknown[] }).models))
+              ? (parsed as { models: unknown[] }).models
+              : []
 
     const models = rawList
       .map((m: unknown) => {

@@ -36,7 +36,9 @@ function getStorage() {
     if (typeof globalThis !== 'undefined' && globalThis[key]) {
       return globalThis[key]
     }
-  } catch {}
+  } catch {
+    // A blocked store leaves usage tracking in memory for the session.
+  }
   return null
 }
 
@@ -62,7 +64,7 @@ function writeStore(store) {
 }
 
 /** Record AI token usage (prompt + completion). */
-export function recordAiUsage(tokens, { provider = 'unknown', model = 'unknown', projectId = null } = {}) {
+export function recordAiUsage(tokens, { provider = 'unknown' } = {}) {
   const store = readStore()
   const mk = monthKey()
   if (!store[mk]) store[mk] = { aiTokens: 0, generationCostUsd: 0, assetDownloadBytes: 0, exports: 0, byProvider: {} }
@@ -75,7 +77,7 @@ export function recordAiUsage(tokens, { provider = 'unknown', model = 'unknown',
 }
 
 /** Record generation API cost. */
-export function recordGenerationCost(costUsd, { provider = 'unknown', projectId = null } = {}) {
+export function recordGenerationCost(costUsd, { provider = 'unknown' } = {}) {
   const store = readStore()
   const mk = monthKey()
   if (!store[mk]) store[mk] = { aiTokens: 0, generationCostUsd: 0, assetDownloadBytes: 0, exports: 0, byProvider: {} }
@@ -96,7 +98,7 @@ export function recordAssetDownload(bytes) {
 }
 
 /** Record an export/render. */
-export function recordExport({ durationSec = 0, projectId = null } = {}) {
+export function recordExport() {
   const store = readStore()
   const mk = monthKey()
   if (!store[mk]) store[mk] = { aiTokens: 0, generationCostUsd: 0, assetDownloadBytes: 0, exports: 0, byProvider: {} }

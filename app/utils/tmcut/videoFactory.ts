@@ -999,7 +999,7 @@ export function scheduleBatch(
   batch: VideoBatch,
   scheduledFor: string,
   now = new Date().toISOString()
-): { ok: boolean; batch?: VideoBatch; error?: { code: string; message: string } } {
+): { ok: boolean, batch?: VideoBatch, error?: { code: string, message: string } } {
   const when = Date.parse(scheduledFor)
   if (Number.isNaN(when)) {
     return { ok: false, error: { code: 'invalid-scheduled-for', message: 'scheduledFor must be a valid ISO 8601 timestamp' } }
@@ -1017,7 +1017,7 @@ export function scheduleBatch(
 export function unscheduleBatch(
   batch: VideoBatch,
   now = new Date().toISOString()
-): { ok: boolean; batch: VideoBatch } {
+): { ok: boolean, batch: VideoBatch } {
   return { ok: true, batch: { ...batch, scheduledFor: undefined, updatedAt: now } }
 }
 
@@ -1139,7 +1139,7 @@ export function getCampaignBatches(campaignId: string, store: CampaignStore): st
 /** Aggregate cost/statistics across a campaign's batches. */
 export function summarizeCampaign(
   campaign: VideoCampaign,
-  batches: Array<{ batchId: string; status: BatchStatus; actualCostUsd: number; completedItems: number; totalItems: number }>
+  batches: Array<{ batchId: string, status: BatchStatus, actualCostUsd: number, completedItems: number, totalItems: number }>
 ): {
   totalBatches: number
   totalCostUsd: number

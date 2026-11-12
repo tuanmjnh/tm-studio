@@ -50,14 +50,19 @@ test('anything but add-clip is rejected (no destructive verbs)', () => {
 })
 
 test('name/canvas/aspect-ratio/refs validated strictly', () => {
+  const withPlan = (mutate) => {
+    const p = goodPlan()
+    mutate(p)
+    return p
+  }
   const bad = [
     { ...goodPlan(), template: { aspectRatio: '9:16', width: 1080, height: 1920, fps: 30 } }, // no name
-    (() => { const p = goodPlan(); p.template.aspectRatio = '7:3'; return p })(),
-    (() => { const p = goodPlan(); p.template.category = 'sci-fi'; return p })(),
-    (() => { const p = goodPlan(); p.template.width = 1920; return p })(), // contradicts 9:16
-    (() => { const p = goodPlan(); p.operations[1].mediaRef = 'C:\\x\\y.mp4'; return p })(),
-    (() => { const p = goodPlan(); p.operations[1].mediaRef = 'ghost'; return p })(),
-    (() => { const p = goodPlan(); p.operations[1].offset = -5; return p })(),
+    withPlan((p) => { p.template.aspectRatio = '7:3' }),
+    withPlan((p) => { p.template.category = 'sci-fi' }),
+    withPlan((p) => { p.template.width = 1920 }), // contradicts 9:16
+    withPlan((p) => { p.operations[1].mediaRef = 'C:\\x\\y.mp4' }),
+    withPlan((p) => { p.operations[1].mediaRef = 'ghost' }),
+    withPlan((p) => { p.operations[1].offset = -5 }),
     { schemaVersion: 99, template: { name: 'x' }, operations: [{ type: 'add-clip', trackType: 'text', text: 'hi' }] }
   ]
   for (const plan of bad) {

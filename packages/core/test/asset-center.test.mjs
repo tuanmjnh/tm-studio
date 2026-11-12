@@ -127,7 +127,7 @@ describe('download queue (queue / progress / bounded backoff / cancel)', () => {
   it('enforces concurrency and reports progress', () => {
     const q = createDownloadQueue({ concurrency: 1 })
     const j1 = q.enqueue(entry())
-    const j2 = q.enqueue(entry({ id: 'b', sourceUrl: 'https://x/2.zip' }))
+    q.enqueue(entry({ id: 'b', sourceUrl: 'https://x/2.zip' }))
     const a = q.startNext()
     assert.equal(a.id, j1.id)
     assert.equal(q.startNext(), null, 'concurrency 1 blocks the second job')
@@ -138,7 +138,7 @@ describe('download queue (queue / progress / bounded backoff / cancel)', () => {
 
   it('retries with bounded exponential backoff, then fails', () => {
     const q = createDownloadQueue({ maxRetries: 2, baseDelayMs: 100, maxDelayMs: 400 })
-    const job = q.enqueue(entry())
+    q.enqueue(entry())
     const a = q.startNext()
     q.reportResult(a.id, { ok: false, error: 'net-timeout' })
     assert.equal(a.state, DOWNLOAD_STATES.retrying)
@@ -170,7 +170,7 @@ describe('download queue (queue / progress / bounded backoff / cancel)', () => {
 
   it('success requires verified checksum', () => {
     const q = createDownloadQueue()
-    const job = q.enqueue(entry())
+    q.enqueue(entry())
     const a = q.startNext()
     q.reportResult(a.id, { ok: true, verified: false })
     assert.equal(a.state, DOWNLOAD_STATES.retrying, 'unverified download is not a success')

@@ -3,8 +3,8 @@
 // Single source of truth for template structure. Versioned, validated, serialized.
 // =============================================================================
 
-import type { TmcutTrack, TmcutTimelineItem } from '~/composables/useTmcutProject'
-import type { CameraMovement, AspectRatio } from '~/types/providerAdapter'
+import type { TmcutTrack } from '~/composables/useTmcutProject'
+import type { CameraMovement } from '~/types/providerAdapter'
 
 // -----------------------------------------------------------------------------
 // Core identifiers & versioning
@@ -12,16 +12,16 @@ import type { CameraMovement, AspectRatio } from '~/types/providerAdapter'
 
 export type TemplateStatus = 'draft' | 'published' | 'archived'
 export type TemplateVisibility = 'private' | 'team' | 'public'
-export type TemplateTopic = 
-  | 'product-showcase'
-  | 'social-short'
-  | 'educational'
-  | 'travel-lifestyle'
-  | 'storytelling'
-  | 'news-recap'
-  | 'podcast-highlight'
-  | 'ugc-ad'
-  | string // extensible
+export type TemplateTopic
+  = | 'product-showcase'
+    | 'social-short'
+    | 'educational'
+    | 'travel-lifestyle'
+    | 'storytelling'
+    | 'news-recap'
+    | 'podcast-highlight'
+    | 'ugc-ad'
+    | string // extensible
 
 export interface TemplateIdentity {
   templateId: string // stable UUID, never changes across versions
@@ -57,9 +57,9 @@ export interface TemplateChangelogEntry {
 // Input Schema — what user must provide
 // -----------------------------------------------------------------------------
 
-export type InputFieldType = 
-  | 'text' | 'textarea' | 'number' | 'select' | 'multiselect'
-  | 'media' | 'color' | 'date' | 'boolean' | 'json'
+export type InputFieldType
+  = | 'text' | 'textarea' | 'number' | 'select' | 'multiselect'
+    | 'media' | 'color' | 'date' | 'boolean' | 'json'
 
 export interface TemplateInputField {
   id: string // stable, used in replacements
@@ -73,7 +73,7 @@ export interface TemplateInputField {
     pattern?: string // regex
     min?: number
     max?: number
-    options?: Array<{ value: string; label: string }> // for select
+    options?: Array<{ value: string, label: string }> // for select
   }
   placeholder?: string
   helpText?: string
@@ -130,11 +130,11 @@ export interface SceneBlueprint {
   providerCapabilities: string[] // e.g., ['video-gen', 'image-gen', 'tts']
 }
 
-export type SceneRole = 
-  | 'hook' | 'intro' | 'problem' | 'solution' | 'demo' | 'benefit' | 'social-proof' | 'cta' | 'outro'
+export type SceneRole
+  = | 'hook' | 'intro' | 'problem' | 'solution' | 'demo' | 'benefit' | 'social-proof' | 'cta' | 'outro'
 
-export type ShotType = 
-  | 'wide' | 'medium' | 'closeup' | 'extreme-closeup' | 'pov' | 'drone' | 'screen-record' | 'animation' | 'graphic'
+export type ShotType
+  = | 'wide' | 'medium' | 'closeup' | 'extreme-closeup' | 'pov' | 'drone' | 'screen-record' | 'animation' | 'graphic'
 
 export interface SceneAssetPolicy {
   source: 'marketplace' | 'user-upload' | 'generate' | 'mixed'
@@ -216,7 +216,7 @@ export interface MusicPolicy {
 export interface TransitionProfile {
   defaultType: string // transition key from catalog
   defaultDurationSec: number
-  perSceneOverrides?: Record<string, { type: string; durationSec: number }>
+  perSceneOverrides?: Record<string, { type: string, durationSec: number }>
 }
 
 export interface AudioDuckingConfig {
@@ -228,7 +228,7 @@ export interface AudioDuckingConfig {
 
 export interface OutputProfile {
   aspectRatio: '9:16' | '16:9' | '1:1' | '4:5'
-  resolution: { width: number; height: number }
+  resolution: { width: number, height: number }
   frameRate: number
   codec: 'h264' | 'hevc' | 'vp9'
   bitrateMbps: number
@@ -297,21 +297,21 @@ export interface TemplateTestFailure {
 // -----------------------------------------------------------------------------
 
 export interface InstantiatedTemplate {
-  canvas: { width: number; height: number; fps: { numerator: number; denominator: number } }
+  canvas: { width: number, height: number, fps: { numerator: number, denominator: number } }
   timeline: {
     version: number
     tracks: TmcutTrack[]
     durationMs: number
-    markers: Array<{ id: string; at: number; label?: string; color?: string }>
+    markers: Array<{ id: string, at: number, label?: string, color?: string }>
   }
   durationMs: number
-  replacements: Record<string, { src?: string; text?: string; name?: string }>
+  replacements: Record<string, { src?: string, text?: string, name?: string }>
   assetReadiness: AssetReadinessReport
 }
 
 export interface AssetReadinessReport {
-  missingAssets: Array<{ assetId: string; reason: string }>
-  localNeeds: Array<{ assetId: string; sourceHint: string }>
+  missingAssets: Array<{ assetId: string, reason: string }>
+  localNeeds: Array<{ assetId: string, sourceHint: string }>
   installedAssets: string[]
   totalAssets: number
   readyAssets: number

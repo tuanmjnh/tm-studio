@@ -25,13 +25,7 @@ import { computed, shallowRef } from 'vue'
 import { useTmcutProject, type TmcutTimelineItem, type TmcutTrack } from './useTmcutProject'
 import { useTmcutMedia } from './useTmcutMedia'
 import { useTmcutPlayback } from './useTmcutPlayback'
-import {
-  createCommand,
-  requiresApproval,
-  type CommandResult,
-  type TimelineCommand
-} from '~/types/timelineCommands'
-import {  secToTicks,
+import { secToTicks,
   TICKS_PER_SECOND
 } from 'tmcut-core'
 

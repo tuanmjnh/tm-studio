@@ -22,10 +22,10 @@ import {
 
 // Type for the IPC-invoked runner — avoids circular with useVideoFactory
 export interface VideoGenerationIpc {
-  submit(args: { providerId: string; input: Record<string, unknown>; idempotencyKey?: string }): Promise<{ ok: boolean; data?: { jobId: string; providerTaskId: string; status: string; estimatedCompletionSec: number } }>
-  poll(args: { jobId: string }): Promise<{ ok: boolean; data?: { jobId: string; status: string; progress: number; costSoFar: number; results: Array<Record<string, unknown>>; error: string | null; etaSec?: number } }>
+  submit(args: { providerId: string, input: Record<string, unknown>, idempotencyKey?: string }): Promise<{ ok: boolean, data?: { jobId: string, providerTaskId: string, status: string, estimatedCompletionSec: number } }>
+  poll(args: { jobId: string }): Promise<{ ok: boolean, data?: { jobId: string, status: string, progress: number, costSoFar: number, results: Array<Record<string, unknown>>, error: string | null, etaSec?: number } }>
   cancel(args: { jobId: string }): Promise<{ ok: boolean }>
-  download(args: { jobId: string; destDir?: string }): Promise<{ ok: boolean; data?: { localPath: string; checksum: string; fileSizeBytes: number; mimeType: string; width: number; height: number; durationSec: number } }>
+  download(args: { jobId: string, destDir?: string }): Promise<{ ok: boolean, data?: { localPath: string, checksum: string, fileSizeBytes: number, mimeType: string, width: number, height: number, durationSec: number } }>
 }
 
 export interface JobRunFailure {
@@ -332,7 +332,7 @@ export interface ProviderRunnerOptions {
 export function createProviderRunner(options: ProviderRunnerOptions): FactoryRunner {
   const { ipc, providerId, pollIntervalMs = 2000, abortSignal, downloadDir } = options
 
-  async function pollUntilSettled(localJobId: string): Promise<{ status: string; costSoFar: number; results: Array<Record<string, unknown>>; error: string | null }> {
+  async function pollUntilSettled(localJobId: string): Promise<{ status: string, costSoFar: number, results: Array<Record<string, unknown>>, error: string | null }> {
     while (!abortSignal?.aborted) {
       const result = await ipc.poll({ jobId: localJobId })
       if (!result.ok || !result.data) {
@@ -385,7 +385,7 @@ export function createProviderRunner(options: ProviderRunnerOptions): FactoryRun
 
       // 2. Poll using the local jobId returned by submit (main keeps the mapping).
       let finalStatus: string
-      let totalCostUsd = 0
+      let totalCostUsd: number
       let outputAssetId: string | undefined
       try {
         const settled = await pollUntilSettled(providerJobId)
@@ -405,7 +405,7 @@ export function createProviderRunner(options: ProviderRunnerOptions): FactoryRun
           }
         }
       } catch (pollError: unknown) {
-        const err = pollError as { category?: ErrorCategory; message?: string; retryable?: boolean }
+        const err = pollError as { category?: ErrorCategory, message?: string, retryable?: boolean }
         return {
           status: 'failed',
           error: {
@@ -454,7 +454,7 @@ export type AutoRunnerOptions = Omit<ProviderRunnerOptions, 'providerId'> & {
 export function createAutoRunner(options: AutoRunnerOptions): FactoryRunner {
   const { ipc, pollIntervalMs = 2000, abortSignal, downloadDir } = options
 
-  async function pollUntilSettled(localJobId: string): Promise<{ status: string; costSoFar: number; results: Array<Record<string, unknown>>; error: string | null }> {
+  async function pollUntilSettled(localJobId: string): Promise<{ status: string, costSoFar: number, results: Array<Record<string, unknown>>, error: string | null }> {
     while (!abortSignal?.aborted) {
       const result = await ipc.poll({ jobId: localJobId })
       if (!result.ok || !result.data) {
@@ -499,7 +499,7 @@ export function createAutoRunner(options: AutoRunnerOptions): FactoryRunner {
       const { jobId: providerJobId, providerTaskId, estimatedCompletionSec } = submitResult.data
 
       let finalStatus: string
-      let totalCostUsd = 0
+      let totalCostUsd: number
       let outputAssetId: string | undefined
       try {
         const settled = await pollUntilSettled(providerJobId)
@@ -515,7 +515,7 @@ export function createAutoRunner(options: AutoRunnerOptions): FactoryRunner {
           }
         }
       } catch (pollError: unknown) {
-        const err = pollError as { category?: ErrorCategory; message?: string; retryable?: boolean }
+        const err = pollError as { category?: ErrorCategory, message?: string, retryable?: boolean }
         return { status: 'failed', error: { category: (err.category || 'network') as ErrorCategory, message: err.message || 'Poll/Download failed', retryable: err.retryable ?? true } }
       }
 

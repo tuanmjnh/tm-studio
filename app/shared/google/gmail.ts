@@ -5,7 +5,13 @@ export interface IGmailMessage {
   threadId: string
   labelIds: string[]
   snippet: string
-  payload?: any
+  payload?: {
+    partId?: string
+    mimeType?: string
+    headers?: Array<{ name: string, value: string }>
+    body?: { data?: string, size?: number }
+    parts?: unknown[]
+  }
   sizeEstimate?: number
   historyId?: string
   internalDate?: string
@@ -105,7 +111,7 @@ export class GoogleGmailClient extends GoogleBaseClient {
   }
 
   async sendMessage(rawBase64: string, threadId?: string, userId: string = 'me'): Promise<IGmailMessage> {
-    const body: any = { raw: rawBase64 }
+    const body: Record<string, string> = { raw: rawBase64 }
     if (threadId) body.threadId = threadId
 
     return this.fetch<IGmailMessage>(

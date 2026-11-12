@@ -14,8 +14,8 @@ export class GoogleDocsClient extends GoogleBaseClient {
     return data.files || []
   }
 
-  async getDocument(documentId: string): Promise<any> {
-    return this.fetch<any>(
+  async getDocument(documentId: string): Promise<Record<string, unknown>> {
+    return this.fetch<Record<string, unknown>>(
       `https://docs.googleapis.com/v1/documents/${documentId}`
     )
   }

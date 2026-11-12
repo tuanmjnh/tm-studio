@@ -33,7 +33,7 @@ export const AI_TEMPLATE_PROMPTS: AiTemplatePrompt[] = [
     description: 'A simple, unobtrusive lower-third style text overlay for talking head videos.',
     prompt: 'Design a minimal text overlay template, 16:9, category "minimal". It needs a placeholder video slot for the main content, and a text slot in the lower third area for name and role. Duration: 20 seconds. Very simple and clean design.'
   }
-];
+]
 
 // Usage example in Vue/Nuxt component:
 /*

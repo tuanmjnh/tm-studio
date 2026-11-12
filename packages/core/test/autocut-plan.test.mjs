@@ -42,9 +42,9 @@ test('applies through applyEditPlan end to end', () => {
 
 test('captions map onto kept spans and dropped spans drop their lines', () => {
   const captions = [
-    { start: 1, end: 2, text: 'kept line' },        // inside seg1 -> offset 1s
-    { start: 11, end: 11.8, text: 'kept short' },   // inside seg2, trim applies
-    { start: 20.5, end: 21, text: 'cut content' }   // inside DROPPED seg3
+    { start: 1, end: 2, text: 'kept line' }, // inside seg1 -> offset 1s
+    { start: 11, end: 11.8, text: 'kept short' }, // inside seg2, trim applies
+    { start: 20.5, end: 21, text: 'cut content' } // inside DROPPED seg3
   ]
   const { plan, warnings } = editPlanFromEdl(edl, [edl.segments[0], edl.segments[1]], {
     mediaRef: 'm1',
