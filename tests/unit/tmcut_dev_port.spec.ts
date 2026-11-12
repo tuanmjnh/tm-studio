@@ -14,7 +14,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { join, dirname, isAbsolute } from 'node:path'
+import { join, dirname, isAbsolute, parse } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 
@@ -157,8 +157,13 @@ describe('dev Electron profile directory (dev-electron-launcher)', () => {
   })
 
   it('honours ELECTRON_USER_DATA_DIR, resolved to an absolute path', () => {
-    const dir = resolveUserDataDir({ ELECTRON_USER_DATA_DIR: 'D:/tmp/prof' }, 'D:/repo')
-    assert.equal(dir.replace(/\\/g, '/'), 'D:/tmp/prof')
+    // An override is honoured verbatim when it is already absolute. The fixture
+    // has to be absolute on the platform running the spec: `path.resolve` on
+    // POSIX prefixes the cwd to a `D:/…` string, so a hardcoded Windows drive
+    // tests the runner's drive letter rather than this resolver.
+    const override = join(parse(process.cwd()).root, 'tmp', 'prof')
+    const dir = resolveUserDataDir({ ELECTRON_USER_DATA_DIR: override }, 'D:/repo')
+    assert.equal(dir.replace(/\\/g, '/'), override.replace(/\\/g, '/'))
     assert.equal(isAbsolute(resolveUserDataDir({ ELECTRON_USER_DATA_DIR: 'prof' }, 'D:/repo')), true)
   })
 

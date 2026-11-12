@@ -31,7 +31,9 @@
  * (test 4): a new bare citation fails, and resolving one lowers the number.
  *
  * The sibling checkouts are machine-local, so section resolution skips itself
- * when a root is absent — the declaration tests never do.
+ * when a root is absent — the declaration tests never do, and neither does
+ * the ceiling count in test 4. Only the two *resolution* checks skip, because
+ * "not on this machine" is a different finding from "not a heading of it".
  */
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -198,16 +200,28 @@ describe('source citations name a document that exists', () => {
     if (missing.length) t.diagnostic(`families not resolved this run: ${missing.map(d => d.family).join(', ')}`)
   })
 
-  it('a bare roadmap citation stays inside the frozen ceiling', () => {
+  it('a bare roadmap citation stays inside the frozen ceiling', (t) => {
+    // The ceiling is a count, not a resolution: it holds on a machine with no
+    // registered document, so it is asserted before the skip below.
+    assert.ok(
+      bare.length <= BARE_CEILING,
+      `${bare.length} bare \`roadmap ${SECTION}N\` citations, ceiling ${BARE_CEILING}. A citation must name its document: pick the family the section really belongs to and say so. Resolving one lowers BARE_CEILING.`
+    )
+    // "No registered document is on this machine" is not the same finding as
+    // "that number is a heading of none of them" — resolving here without the
+    // files would report every bare citation as unattributable, exactly as the
+    // section-heading test above would. Skip with the same words, and say
+    // which families went unresolved.
+    if (available.length === 0) {
+      console.log(`[skip] no cited document is on this machine (${missing.map(d => d.family).join(', ')}); the bare-citation count ${bare.length} is still checked against its ceiling`)
+      return
+    }
     const all = DOCUMENTS.map(doc => headingsOf(doc.file)).filter((set): set is Set<string> => set !== null)
     const nowhere = bare
       .filter(c => !all.some(set => set.has(c.section)))
       .map(c => `${c.at} "${c.label.trim()} ${SECTION}${c.section}" — that number is a heading of none of the registered documents`)
     assert.deepEqual(nowhere, [], `unattributable bare citations:\n${nowhere.join('\n')}`)
-    assert.ok(
-      bare.length <= BARE_CEILING,
-      `${bare.length} bare \`roadmap ${SECTION}N\` citations, ceiling ${BARE_CEILING}. A citation must name its document: pick the family the section really belongs to and say so. Resolving one lowers BARE_CEILING.`
-    )
+    if (missing.length) t.diagnostic(`families not resolved this run: ${missing.map(d => d.family).join(', ')}`)
   })
 
   it('the registry carries no dead entry and reaches only the declared roots', () => {

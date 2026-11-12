@@ -32,27 +32,48 @@ async function check(name: string, fn: () => void | Promise<void>) {
   console.log(`[ok] ${name}`)
 }
 
+/**
+ * The guard under test is `path.isAbsolute`, so every fixture has to be
+ * absolute on the platform running this spec. `D:\…` is absolute on win32 and
+ * relative on POSIX, which made the original fixtures pass on the author's
+ * machine and fail on a Linux runner — same code, same law, different drive.
+ */
+const IS_WIN = process.platform === 'win32'
+/** An absolute directory on any platform, with spaces and a drive/root. */
+const ABS_DIR = path.join(path.parse(process.cwd()).root, 'Movies')
+const ABS_MP4 = path.join(ABS_DIR, 'clip 4k.mp4')
+
 async function main() {
-  await check('absolute Windows paths anywhere on disk pass (the import bug)', async () => {
-    const p = 'D:\\Movies\\clip 4k.mp4'
-    const got = isUserMediaPath(p)
-    if (got !== null && got !== undefined) {
-      if (got !== path.resolve(p)) throw new Error(`must canonicalize, got ${got}`)
-    } else {
-      throw new Error('a plain absolute import path must NOT be rejected')
+  await check('a plain absolute import path passes (the import bug)', async () => {
+    const got = isUserMediaPath(ABS_MP4)
+    if (got === null || got === undefined) {
+      throw new Error(`a plain absolute import path must NOT be rejected: ${ABS_MP4}`)
     }
+    if (got !== path.resolve(ABS_MP4)) throw new Error(`must canonicalize, got ${got}`)
   })
 
-  await check('forward-slash store paths (normalizeMediaPath) pass', async () => {
-    const got = isUserMediaPath('D:/Movies/clip 4k.mp4')
+  if (IS_WIN) {
+    await check('a Windows drive path passes and canonicalizes', async () => {
+      const p = 'D:\\Movies\\clip 4k.mp4'
+      const got = isUserMediaPath(p)
+      if (got === null || got === undefined) throw new Error('a plain absolute import path must NOT be rejected')
+      if (got !== path.resolve(p)) throw new Error(`must canonicalize, got ${got}`)
+    })
+  }
+
+  await check('forward-slash absolute paths (normalizeMediaPath) pass', async () => {
+    const forward = ABS_MP4.replace(/\\/g, '/')
+    const got = isUserMediaPath(forward)
     if (got === null) throw new Error('normalized (forward-slash) paths must pass')
-    if (got !== path.resolve('D:/Movies/clip 4k.mp4')) throw new Error('must canonicalize')
+    if (got !== path.resolve(forward)) throw new Error('must canonicalize')
   })
 
-  await check('UNC paths pass (network drives are valid media homes)', async () => {
-    const got = isUserMediaPath('\\\\nas01\\media\\drone.mov')
-    if (got === null) throw new Error('UNC absolute paths must pass')
-  })
+  if (IS_WIN) {
+    await check('UNC paths pass (network drives are valid media homes)', async () => {
+      const got = isUserMediaPath('\\\\nas01\\media\\drone.mov')
+      if (got === null) throw new Error('UNC absolute paths must pass')
+    })
+  }
 
   await check('empty, non-string and relative inputs refuse', async () => {
     if (isUserMediaPath('') !== null) throw new Error('empty must refuse')
@@ -65,8 +86,8 @@ async function main() {
   })
 
   await check('trimming: padded absolute paths resolve to the clean form', async () => {
-    const got = isUserMediaPath(`  ${path.resolve('D:\\Media\\a.mp4')}  `)
-    if (got !== path.resolve('D:\\Media\\a.mp4')) throw new Error(`expected trimmed resolve, got ${got}`)
+    const got = isUserMediaPath(`  ${ABS_MP4}  `)
+    if (got !== path.resolve(ABS_MP4)) throw new Error(`expected trimmed resolve, got ${got}`)
   })
 
   console.log(`\n=== All ${passed} user-media path guard checks passed ===`)
