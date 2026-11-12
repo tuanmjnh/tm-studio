@@ -8497,11 +8497,10 @@ và kiểm đúng cái đã hỏng, không mô tả lại code:
 | 2 Lint | PASS | exit 0 trên 3 file đã sửa |
 | 3 Tests | PASS | unit **142/142** (141 → +1 spec mới), core 919/919, electron 80/80 |
 | 4 Live | PASS | bảng ở §69.3, cả nhánh lỗi và nhánh thành công |
-| 5 CI | chưa chạy | commit cục bộ, chưa push |
+| 5 CI | **PASS** | run `43188901713`: `Quality gates` + `Browser media integration` xanh; `Unit specs` **142/142**, và `tmcut_cursor_pagination.spec.ts` chạy thật (`All 4 … checks passed`), không bị skip |
 
 ### 69.5 Vẫn chưa chứng minh
 
-- **Chưa** chạy CI cho commit này; đây là lượt cục bộ.
 - Thông điệp lỗi hiển thị lấy từ `getErrorMessage`, nên với một số mã lạc (ví dụ 404 không map
   i18n) câu hiện ra là chuỗi backend thô ("Not found"). Đúng nguyên nhân, nhưng chưa được viết lại
   theo giọng UI — việc riêng, không gộp vào lượt này.
