@@ -8,17 +8,119 @@ export function parseAddress(raw: string): { name: string, email: string } {
   return { name: value, email: value }
 }
 
+const DROPPED_ELEMENTS = 'script|style|iframe|object|embed|link|meta|form|base|svg|math'
+
+// Named entities that can appear inside a URL scheme. Every other named entity
+// decodes to a non-ASCII letter, which cannot complete `javascript:` anyway.
+const NAMED_ENTITIES: Record<string, string> = {
+  colon: ':',
+  tab: '\t',
+  newline: '\n',
+  sol: '/',
+  num: '#',
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: '\''
+}
+
+function codePointToString(code: number): string {
+  if (!Number.isFinite(code) || code < 0 || code > 0x10ffff) return ''
+  try {
+    return String.fromCodePoint(code)
+  } catch {
+    return ''
+  }
+}
+
+/** Resolve the entities a browser would resolve before it reads a URL. */
+function decodeEntities(value: string): string {
+  return value
+    .replace(/&#x([0-9a-f]+);?/gi, (_, hex: string) => codePointToString(parseInt(hex, 16)))
+    .replace(/&#(\d+);?/g, (_, dec: string) => codePointToString(parseInt(dec, 10)))
+    .replace(/&([a-z]+);/gi, (whole, name: string) => NAMED_ENTITIES[name.toLowerCase()] ?? whole)
+}
+
+/** Drop what a browser drops from a URL before reading it: C0 controls and space. */
+function stripUrlNoise(value: string): string {
+  let out = ''
+  for (const ch of value) {
+    const code = ch.codePointAt(0) ?? 0
+    if (code <= 0x20 || code === 0x7f) continue
+    out += ch
+  }
+  return out
+}
+
 /**
- * Sanitize dangerous elements in HTML mail (untrusted content):
- * script/style/iframe..., on* handlers, javascript: URLs.
+ * Whether a URL is safe to keep, decided on the value the browser will act on
+ * rather than the bytes in the mail body.
+ *
+ * The browser decodes entities and drops C0 controls and whitespace anywhere in
+ * the URL before it reads the scheme, so `jav&#x61;script:`, `jav\tascript:` and
+ * `java\nscript:` all resolve to `javascript:`. Matching the raw attribute text
+ * is why those three executed. Allowlist, not blocklist: an unknown scheme is
+ * unsafe by default.
+ */
+function isSafeUrl(raw: string, kind: 'href' | 'src'): boolean {
+  const value = stripUrlNoise(decodeEntities(raw))
+  if (!value) return true
+  if (value.startsWith('#') || value.startsWith('?')) return true
+  if (value.startsWith('./') || value.startsWith('../')) return true
+  if (value.startsWith('/') && !value.startsWith('//')) return true
+  const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(value)?.[1]?.toLowerCase()
+  if (!scheme) return true
+  if (scheme === 'http' || scheme === 'https' || scheme === 'mailto' || scheme === 'tel' || scheme === 'cid') {
+    return true
+  }
+  return scheme === 'data' && kind === 'src' && /^data:image\/(?:png|jpe?g|gif|webp|bmp|avif);base64,/i.test(value)
+}
+
+// Built per call: these carry the `g` flag, and a shared `lastIndex` across
+// invocations is exactly the kind of state a security filter must not keep.
+const TAG_SOURCE = '<([a-zA-Z][^\\s/>]*)((?:\\s+(?:[^>"\']|"[^"]*"|\'[^\']*\')*)?)\\s*\\/?>'
+const ATTRIBUTE_SOURCE = '([^\\s/>=]+)(?:\\s*=\\s*("[^"]*"|\'[^\']*\'|[^\\s>]*))?'
+
+function cleanTag(name: string, attrs: string): string {
+  let out = `<${name}`
+  const attribute = new RegExp(ATTRIBUTE_SOURCE, 'g')
+  let match: RegExpExecArray | null
+  while ((match = attribute.exec(attrs))) {
+    const attr = match[1] ?? ''
+    if (!attr) continue
+    const lower = attr.toLowerCase()
+    // Handler attributes are removed whatever precedes them, so an unquoted
+    // neighbour (`<img/src=x/onerror=…>`) cannot smuggle one through.
+    if (lower.startsWith('on') || lower === 'srcdoc') continue
+    const raw = match[2]
+    if (raw === undefined) {
+      out += ` ${attr}`
+      continue
+    }
+    const quote = raw[0] === '"' || raw[0] === '\'' ? raw[0] : ''
+    const value = quote ? raw.slice(1, -1) : raw
+    if (lower === 'href' || lower === 'src' || lower === 'xlink:href') {
+      if (!isSafeUrl(value, lower === 'src' ? 'src' : 'href')) continue
+    }
+    out += quote ? ` ${attr}=${quote}${value}${quote}` : ` ${attr}=${value}`
+  }
+  return `${out}>`
+}
+
+/**
+ * Sanitize untrusted HTML mail: drop active elements and handler attributes,
+ * and keep only URLs whose resolved scheme is known-safe.
+ *
+ * Inline `style` is deliberately kept — email formatting depends on it, and CSS
+ * cannot execute script in a modern browser.
  */
 export function sanitizeEmailHtml(html: string): string {
   if (!html) return ''
   let out = html
-  out = out.replace(/<(script|style|iframe|object|embed|link|meta|form|base|svg|math)\b[\s\S]*?<\/\1\s*>/gi, '')
-  out = out.replace(/<(script|style|iframe|object|embed|link|meta|form|base|svg|math)\b[^>]*\/?>/gi, '')
-  out = out.replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-  out = out.replace(/(href|src)\s*=\s*("|')?\s*(javascript|data:text\/html)[^"'>\s]*/gi, '$1="#"')
+  out = out.replace(new RegExp(`<(${DROPPED_ELEMENTS})\\b[\\s\\S]*?<\\/\\1\\s*>`, 'gi'), '')
+  out = out.replace(new RegExp(`</?(?:${DROPPED_ELEMENTS})\\b[^>]*>`, 'gi'), '')
+  out = out.replace(new RegExp(TAG_SOURCE, 'g'), (_, name: string, attrs: string) => cleanTag(name, attrs))
   return out
 }
 
