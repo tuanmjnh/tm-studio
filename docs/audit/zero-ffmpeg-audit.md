@@ -8717,7 +8717,7 @@ hơn §71: nội dung do admin hub soạn, và `//evil` chỉ là **điều hư�
 | 2 Lint | PASS | exit 0 trên 2 file đã sửa, sau lần regenerate config cuối |
 | 3 Tests | PASS | unit **144/144** (13 docs-markdown checks, +1), core 919/919, electron 80/80 |
 | 4 Live | PASS | `/system/docs` với phiên root: 0 console, text 11 898; cả 2 anchor đều đúng ý (`/` và `https://tm-hub-app.vercel.app/…`) |
-| 5 CI | chờ push | — |
+| 5 CI | **PASS** | run `43206218306`: `Quality gates` + `Browser media integration` xanh, unit 144/144 |
 
 ### 72.5 Vẫn chưa chứng minh
 
