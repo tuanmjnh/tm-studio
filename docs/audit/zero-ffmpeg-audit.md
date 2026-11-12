@@ -8300,8 +8300,134 @@ lỗi import. Đây là con số **giảm**, không phải thêm.
 
 ### 67.5 Chưa chứng minh
 
-- **Chưa** chạy `pnpm typecheck` / `pnpm lint` của CI trên nhánh thật; con số ở đây là lượt chạy cục bộ.
+Ba mục dưới đây là những gì lượt §67 để mở. Chúng được đóng lần lượt ở §68; mục nào đóng được đến đâu
+thì ghi đúng đến đó, không suy rộng.
+
+- ~~**Chưa** chạy `pnpm typecheck` / `pnpm lint` của CI trên nhánh thật~~ → **ĐÃ CHẠY, VÀ ĐỎ.** Xem §68.1:
+  hai job của CI đỏ ngay trên chính hai commit của §67, vì ba spec chỉ đúng trên Windows và một job
+  browser đua với Vite. Con số "PASS" ở §67.4 là cục bộ, và nó **không** thay được cho CI.
 - **Chưa** chứng minh 19 thành viên vừa nối của `createRealIpc` chạy đúng trên Electron thật: không có
   kênh IPC `asset.*`/`template.*`/`factory.*` nào được bấm trong lượt này. Mock đã được smoke test
   (`createProposal` → `getProposal` → `discardProposal` trả `null`), đường real thì chỉ kiểm kiểu.
+  → §68.6 chứng minh ở **ranh giới seam** (39/39 thành viên, 7 namespace, `emitEvent` đúng khung)
+  nhưng **vẫn chưa** trên Electron thật.
 - **Chưa** chạy lại toàn bộ 31 route: lượt này quét 8 route có liên quan tới file đã sửa.
+  → §68.3 đã quét **30/30 route khách** và **26 route có phiên**, và giải thích từng dòng nhiễu.
+
+## 68. Đóng ba mục "chưa chứng minh" của §67 (đo ngày 2026-11-12)
+
+### 68.1 CI đã chạy, và nó đỏ — §67.4 không phải bằng chứng CI
+
+Run `43180836637` (push `1b63b40`) và run trước đó `43155333448` (push `3e97c69`) đều **failure**, và cả
+hai đỏ ở **cùng ba spec**:
+
+| Spec | Lỗi CI | Nguyên nhân thật |
+|---|---|---|
+| `tmcut_dev_port.spec.ts` | `actual '/home/runner/work/tm-studio/tm-studio/D:/tmp/prof'` vs expected `'D:/tmp/prof'` | Fixture hardcode ổ `D:`. Trên POSIX `path.resolve('D:/tmp/prof')` ghép thêm cwd. Spec kiểm ổ đĩa của runner, không kiểm resolver. |
+| `tmcut_import_path.spec.ts` | `a plain absolute import path must NOT be rejected` | Cùng gốc: `D:\Movies\…` **không** absolute trên POSIX, nên guard `path.isAbsolute` từ chối — guard đúng, fixture sai nền tảng. |
+| `tmcut_doc_citations.spec.ts` | `TmcutAssetCenter.vue:11/174 "roadmap §14" — that number is a heading of none of the registered documents` | Test 4 resolve citation bare, nhưng các checkout tài liệu là máy-cục-bộ; trên runner chúng **vắng**, nên mọi citation bare đều thành "unattributable". Test 3 đã có skip cho đúng tình huống này, test 4 thì quên. |
+
+Cả ba đều **có trước** lượt §67: run `3e97c69` lúc 04:32 đỏ đúng ba spec đó (`137/140`). Vậy đây là nợ
+nền tảng của spec, không phải hồi quy do dọn lint. Nhưng §67.4 ghi "PASS" cho gate 3 dựa trên lượt cục bộ,
+và điều đó **không đủ** — sửa lại: gate 3 của §67 chỉ đúng trên Windows.
+
+Đã sửa, không nới luật nào:
+
+- `tmcut_dev_port.spec.ts` — fixture lấy từ `path.parse(process.cwd()).root`, nên absolute ở cả hai nền tảng.
+- `tmcut_import_path.spec.ts` — fixture dựng từ `path.parse(cwd).root`; nhánh Windows (`D:\…`, UNC) giữ
+  nguyên nhưng chỉ chạy khi `process.platform === 'win32'`. Luật được kiểm là *cùng một luật*, chỉ fixture đổi.
+- `tmcut_doc_citations.spec.ts` — **trần** `BARE_CEILING` vẫn khẳng định vô điều kiện (đếm được ở mọi máy);
+  chỉ phần *resolve* skip khi không có tài liệu, đúng như test 3, và in ra family nào chưa resolve.
+
+Bằng chứng hai chiều cho guard citation (không chỉ "chạy qua"):
+
+| Tình huống | Kết quả |
+|---|---|
+| Có tài liệu, citation thật `§14` | 5/5 pass |
+| Có tài liệu, cố tình đổi `§14` → `§99` | **FAIL** đúng chỗ: `TmcutAssetCenter.vue:174 "roadmap §99"` |
+| Không có tài liệu (điều kiện CI), file khôi phục md5 `6a4c67f3…` | 5/5 pass, skip in ra danh sách family, trần 2 vẫn kiểm |
+
+### 68.2 Job browser: Vite tự reload giữa lượt đo
+
+Job "Browser media integration" chết ở `browser_media_integration.mts:176` với
+`Execution context was destroyed, most likely because of a navigation`, giống hệt run trước.
+
+Nguyên nhân đo được, không phải phỏng đoán — xoá `node_modules/.cache/vite`, khởi động lại dev server,
+rồi đọc log của chính Vite:
+
+```
+ℹ Vite discovered new dependencies at runtime:
+  mediabunny ← ./app/utils/tmcut/mediaProbe.ts
+Pre-bundle them in your nuxt.config.ts to avoid page reloads
+```
+
+`mediabunny` là dependency thật nhưng chỉ tới được app qua `app/utils/tmcut/*.ts`, và các module đó nằm
+sau dynamic import. Trên cache lạnh Vite phát hiện nó giữa phiên rồi **force reload** — rơi đúng vào
+`page.evaluate` đang đo. Cache ấm che mất lỗi, nên máy dev luôn xanh.
+
+Sửa ở gốc, không ở triệu chứng: thêm `mediabunny` vào `vite.optimizeDeps.include` (đúng chỉ dẫn của Vite).
+Không thêm retry, không nới timeout, không sửa harness — `git diff tests/e2e/browser_media_integration.mts`
+rỗng sau khi sửa.
+
+| Điều kiện | Trước | Sau |
+|---|---|---|
+| Cache Vite lạnh, `TMCUT_BROWSER_REQUIRED=1`, msedge | exit 1, `Execution context was destroyed` / `page.goto` timeout | **exit 0, 17/17 check, 1 PARTIAL** |
+| Log Vite sau khi sửa | `discovered new dependencies… mediabunny` | **0 dòng** discovery; `mediabunny` pre-bundled lúc khởi động |
+
+### 68.3 Quét route: 30 khách + 26 có phiên, và từng dòng nhiễu được giải thích
+
+**Khách (30 route, :4003, hub thật):** 0 `[error]`/`[warn]`/`[issue]`, **28** route redirect về `/login`
+đúng thiết kế, 2 route công khai render (`/login`, `/register`). Chạy lại sau khi đổi `nuxt.config.ts`:
+vẫn 30/30, 0 nhiễu, 28 redirect.
+
+**Có phiên (26 route, hub stub 2 endpoint):** 22/26 "có nhiễu". Phân loại bằng URL thật thay vì đoán:
+
+| Dòng | Số lần | Nguồn |
+|---|---|---|
+| `404 /api/v1/apps/tm-studio_vhvrhn/notifications` | ×38 | stub không phục vụ endpoint này; hub thật có |
+| `[intlify] Not found 'nav.Tools'/'Dashboard'/…` | ×(10–20 mỗi key) | stub trả `label: 'Tools'`, hub thật seed `label: 'nav.tools'` — `useNavMenu` dịch `nav.` + label |
+| `404 /api/v1/auth/sessions`, `/ai/providers` | ×1 mỗi cái | stub thiếu endpoint |
+| `401 /api/v1/ai/relay/catalog`, `/process/runs`, `/media/tts/status` | ×1–4 | Nitro tự trả `error.invalidToken` cho cookie giả `stub-root-token` (curl xác nhận; không cookie → `error.tokenMissing`). Là 401 đã biết, không phải hồi quy |
+
+Một dòng **không** phải stub, và đã tách ra: `sessions.vue:28` gọi `onMounted(() => sessionPager.refresh())`
+mà không bắt rejection, nên khi endpoint lỗi thì Vue báo "Unhandled error during execution of mounted hook".
+Đây là lỗi thật, **có từ 2026-10-31** (blame `c999a261`), ngoài phạm vi lượt dọn lint và **chưa sửa** —
+ghi lại làm việc riêng, không trộn vào lượt này.
+
+`/tmcut/editor` có lúc đọc `controls=0`: đo lại 4 lượt cho thấy trang redirect ở ~2.2 s và render 9 control;
+lượt 0-control là đọc DOM trước khi hydrate xong, không phải trang trắng.
+
+### 68.4 Gate của lượt này
+
+| Gate | Lệnh | Kết quả | Bằng chứng |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | exit 0, 0 × `error TS`; `.nuxt/eslint.config.mjs` sinh lại 15:31 |
+| 2 Lint | `npx eslint nuxt.config.ts + 3 spec` (sau gate 1) | PASS | exit 0, 0 problem |
+| 3 Tests | core / electron / unit | PASS | 919/919, 80/80, **141/141** spec, exit 0 |
+| 3b CI steps | core typecheck, core lint, boundaries, hygiene | PASS | cả bốn exit 0 |
+| 4 Live | 30 route khách trên :4003 | PASS | 0 `[error]`/`[warn]`/`[issue]`, 28 redirect đúng |
+| 4b Browser | harness, cache Vite lạnh, `TMCUT_BROWSER_REQUIRED=1` | PASS | exit 0, 17/17 + 1 PARTIAL |
+| 5 Docs | mục này | PASS | — |
+
+### 68.5 Vẫn chưa chứng minh
+
+- **Chưa** thấy CI xanh trên GitHub cho commit sửa này; bằng chứng ở trên là chạy lại **từng bước CI**
+  cục bộ, gồm cả điều kiện cache lạnh. Chỉ run thật mới trả lời được.
+- **Vẫn chưa** chạy 19 thành viên `createRealIpc` trên Electron thật (§68.6 chỉ chứng minh ở seam: 39/39
+  thành viên, 7 namespace, `emitEvent` đúng khung một frame).
+- **Chưa** sửa `sessions.vue:28` (unhandled rejection khi endpoint lỗi) — lỗi thật, ngoài phạm vi lượt này.
+
+### 68.6 Seam `createRealIpc`: 39/39 thành viên
+
+Probe dùng transport giả (không Electron) và gọi lần lượt **mọi** thành viên mà `McpIpc` khai báo:
+
+| Chỉ số | Kết quả |
+|---|---|
+| Thành viên trên object | 40 (39 hàm + `emitEvent`) |
+| Lời gọi thành công | 39/39, **0** lỗi |
+| Tool id phân biệt | 39, trải trên 7 namespace: `project`, `timeline`, `edit`, `playback`, `asset`, `template`, `factory` |
+| `emitEvent` | đúng 1 khung `{type:'event', payload:{type:'event:job_status',…}}` |
+
+Đây là bằng chứng **ở seam** — mọi kênh `asset.*`/`template.*`/`factory.*` được nối đúng tên tool và
+đúng hình dạng tham số. Nó **không** nói gì về việc kênh IPC thật trên Electron trả lời đúng, vì không có
+`ipcMain.handle` nào chạy trong probe.
