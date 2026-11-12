@@ -82,11 +82,20 @@ export function getErrorMessage(err: unknown, t: (key: string) => string): strin
     }
   }
 
+  // A lowercase, separator-bearing token (`not_found`, `error.badRequest`) is a
+  // wire code, not copy. Single words stay readable ("Unauthorized") and are not.
+  const isWireCode = (value: string) => /^[a-z][a-zA-Z0-9]*([._][a-zA-Z0-9]+)+$/.test(value)
+
   // 2. Check if statusMessage is an i18n key (e.g. error.invalidCredentials)
   const code = e?.statusMessage || e?.data?.statusMessage
   if (code && /^[a-zA-Z0-9_.-]+$/.test(code)) {
     const translated = t(code)
     if (translated && translated !== code) return translated
+    // The server declared a code and the table has no entry for it. Its `message`
+    // is diagnostic ("connectionId is required", "HTTP 500 from tts"), so the
+    // status default is the only thing safe to show — a missing translation must
+    // not silently promote debug text to user copy.
+    if (isWireCode(code)) return t(getErrorKey(err))
   }
 
   // 3. Map backend / TM-Hub returned messages to i18n key
@@ -101,8 +110,10 @@ export function getErrorMessage(err: unknown, t: (key: string) => string): strin
     if (/invalid or inactive app/i.test(text)) return t('error.invalidAppId')
     if (/does not have access to this application/i.test(text)) return t('error.noAppAccess')
 
+    // Same rule for an untranslated code arriving as the message body: fall
+    // through to the status default rather than print the identifier.
     // Skip displaying raw HTTP debug URL if it is a fetch error string
-    if (!/\[(GET|POST|PUT|DELETE|PATCH)\]/i.test(text)) {
+    if (!isWireCode(text) && !/\[(GET|POST|PUT|DELETE|PATCH)\]/i.test(text)) {
       return text
     }
   }

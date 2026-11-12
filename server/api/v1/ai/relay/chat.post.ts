@@ -37,7 +37,7 @@ export default defineEventHandler(async (event) => {
   // Mirror the hub's own validation so bad payloads fail here, not there.
   const connectionId = typeof body.connectionId === 'string' ? body.connectionId.trim() : ''
   if (!connectionId) {
-    throw createError({ statusCode: 400, statusMessage: 'error.bad_request', message: 'connectionId is required' })
+    throw createError({ statusCode: 400, statusMessage: 'error.badRequest', message: 'connectionId is required' })
   }
   const rawMessages = Array.isArray(body.messages) ? body.messages : []
   const messages = rawMessages
@@ -48,7 +48,7 @@ export default defineEventHandler(async (event) => {
     .map(m => ({ role: ['system', 'user', 'assistant'].includes(m.role) ? m.role : 'user', content: m.content }))
     .filter(m => m.content.trim())
   if (!messages.length) {
-    throw createError({ statusCode: 400, statusMessage: 'error.bad_request', message: 'messages array with content is required' })
+    throw createError({ statusCode: 400, statusMessage: 'error.badRequest', message: 'messages array with content is required' })
   }
   const payload: Record<string, unknown> = { connectionId, messages }
   if (typeof body.model === 'string' && body.model.trim()) payload.model = body.model.trim()

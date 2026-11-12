@@ -106,7 +106,18 @@
     "userNotInApp": "Người dùng không thuộc ứng dụng này",
     "alreadyExists": "Tài nguyên đã tồn tại",
     "cannotDeleteSystem": "Không thể xóa tài nguyên hệ thống",
-    "inUse": "Tài nguyên đang được sử dụng"
+    "inUse": "Tài nguyên đang được sử dụng",
+    "aiRelayNotConfigured": "AI relay chưa được cấu hình trên máy chủ này. Cần TM Hub URL và device credential hoặc App Secret.",
+    "deviceCredentialWrongHub": "Device credential của máy chủ này thuộc một TM Hub khác. Cần cấp lại cho hub đang cấu hình.",
+    "badRequest": "Không xử lý được yêu cầu",
+    "payloadTooLarge": "Tệp vượt quá giới hạn tải lên",
+    "processArtifact": "Không đọc hoặc ghi được artifact của tiến trình",
+    "processRun": "Không đọc hoặc cập nhật được lượt chạy",
+    "stockUnreachable": "Không kết nối được tới nhà cung cấp ảnh kho",
+    "stockUpstream": "Nhà cung cấp ảnh kho trả về lỗi",
+    "stockUrl": "URL ảnh kho không hợp lệ",
+    "ttsUnreachable": "Không kết nối được tới dịch vụ giọng nói",
+    "ttsUpstream": "Dịch vụ giọng nói trả về lỗi"
   },
   "nav": {
     "home": "Trang chủ",

@@ -48,21 +48,21 @@ export default defineEventHandler(async (event) => {
     const message = (error as Error).name === 'TimeoutError'
       ? 'VieNeu-TTS did not answer within 120 seconds'
       : `Could not reach VieNeu-TTS at ${baseUrl}`
-    throw createError({ statusCode: 502, statusMessage: 'error.tts.unreachable', message })
+    throw createError({ statusCode: 502, statusMessage: 'error.ttsUnreachable', message })
   }
 
   if (!response.ok) {
-    throw createError({ statusCode: 502, statusMessage: 'error.tts.upstream', message: ttsServiceError(response.status, await response.text()) })
+    throw createError({ statusCode: 502, statusMessage: 'error.ttsUpstream', message: ttsServiceError(response.status, await response.text()) })
   }
 
   let bytes: Buffer
   try {
     bytes = await readBounded(response, MAX_TTS_AUDIO_BYTES)
   } catch (error) {
-    throw createError({ statusCode: 502, statusMessage: 'error.tts.upstream', message: (error as Error).message })
+    throw createError({ statusCode: 502, statusMessage: 'error.ttsUpstream', message: (error as Error).message })
   }
   if (!isWav(bytes)) {
-    throw createError({ statusCode: 502, statusMessage: 'error.tts.upstream', message: 'VieNeu-TTS did not return a valid WAV audio stream' })
+    throw createError({ statusCode: 502, statusMessage: 'error.ttsUpstream', message: 'VieNeu-TTS did not return a valid WAV audio stream' })
   }
 
   const stored = await saveGeneratedWav(bytes)

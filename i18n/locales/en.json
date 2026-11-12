@@ -106,7 +106,18 @@
     "userNotInApp": "User does not belong to this application",
     "alreadyExists": "Resource already exists",
     "cannotDeleteSystem": "Cannot delete system resources",
-    "inUse": "Resource is currently in use"
+    "inUse": "Resource is currently in use",
+    "aiRelayNotConfigured": "AI relay is not configured on this server. Set the TM Hub URL and a device credential or App Secret.",
+    "deviceCredentialWrongHub": "This server's device credential belongs to a different TM Hub. Re-issue it for the configured hub.",
+    "badRequest": "The request could not be processed",
+    "payloadTooLarge": "The file is larger than the upload limit",
+    "processArtifact": "The process artifact could not be read or written",
+    "processRun": "The process run could not be read or updated",
+    "stockUnreachable": "The stock media provider could not be reached",
+    "stockUpstream": "The stock media provider returned an error",
+    "stockUrl": "That stock media URL is not valid",
+    "ttsUnreachable": "The voice service could not be reached",
+    "ttsUpstream": "The voice service returned an error"
   },
   "nav": {
     "home": "Home",

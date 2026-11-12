@@ -28,11 +28,11 @@ export default defineEventHandler(async (event) => {
   try {
     const health = await fetchTts(baseUrl, '/health')
     if (!health.ok) {
-      throw createError({ statusCode: 502, statusMessage: 'error.tts.upstream', message: ttsServiceError(health.status, await health.text()) })
+      throw createError({ statusCode: 502, statusMessage: 'error.ttsUpstream', message: ttsServiceError(health.status, await health.text()) })
     }
     const voices = await fetchTts(baseUrl, '/v1/voices')
     if (!voices.ok) {
-      throw createError({ statusCode: 502, statusMessage: 'error.tts.upstream', message: ttsServiceError(voices.status, await voices.text()) })
+      throw createError({ statusCode: 502, statusMessage: 'error.ttsUpstream', message: ttsServiceError(voices.status, await voices.text()) })
     }
     return { ok: true, data: { baseUrl, voices: parseTtsVoices(await voices.json()) } }
   } catch (error) {
@@ -40,6 +40,6 @@ export default defineEventHandler(async (event) => {
     const message = (error as Error).name === 'TimeoutError'
       ? 'VieNeu-TTS did not answer within 120 seconds'
       : `Could not reach VieNeu-TTS at ${baseUrl}`
-    throw createError({ statusCode: 502, statusMessage: 'error.tts.unreachable', message })
+    throw createError({ statusCode: 502, statusMessage: 'error.ttsUnreachable', message })
   }
 })
