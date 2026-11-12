@@ -8565,7 +8565,7 @@ thì pass. Đo trực tiếp `errors.ts` chứ không chỉ đọc code, đúng 
 | 2 Lint | PASS | exit 0 trên 5 file đã sửa, chạy **sau** lần regenerate `.nuxt/eslint.config.mjs` cuối |
 | 3 Tests | PASS | unit **143/143** (142 → +1 spec), core 919/919, electron 80/80 |
 | 4 Live | PASS (có ghi chú) | quét 5 route TMCut bằng phiên root thật: 0 `error`, 0 `issue`, 4/5 clean |
-| 5 CI | chưa chạy | chờ push |
+| 5 CI | **PASS** | run `43195184874`: `Quality gates` + `Browser media integration` xanh; `Unit specs` **143/143**, `tmcut_error_copy.spec.ts` chạy thật (`All 7 server error-copy checks passed`) |
 
 Ghi chú Gate 4: `/tmcut/editor` in 1 `[warning]` — `The AudioContext was not allowed to start`.
 Truy nguồn: trỏ đúng `TmcutPreviewPlayer.vue:547`, file **không** nằm trong lượt sửa này. Chạy lại
