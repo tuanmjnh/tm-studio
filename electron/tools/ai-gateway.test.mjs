@@ -147,6 +147,21 @@ describe('complete', () => {
       err => err.code === 'ai.timeout'
     )
   }, { timeout: 10000 })
+
+  it('an unreachable endpoint reports ai.network, never a raw fetch error', async () => {
+    const refused = async () => {
+      const err = new Error('connect ECONNREFUSED 127.0.0.1:1')
+      err.code = 'ECONNREFUSED'
+      throw err
+    }
+    await assert.rejects(
+      gw.complete(
+        { provider: 'custom', apiKey: 'k', baseUrl: 'http://127.0.0.1:1/v1', model: 'm', messages: [{ role: 'user', content: 'hi' }] },
+        { fetchImpl: refused, logDir: null }
+      ),
+      err => err.code === 'ai.network'
+    )
+  })
 })
 
 describe('transcribe', () => {
