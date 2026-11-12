@@ -171,9 +171,11 @@ try {
   })
   await page.goto(`${DEV_URL}/login`, { waitUntil: 'domcontentloaded' })
 
-  const measured = await page.evaluate(async ({ b64, aacB64, seconds, packets }) => {
+  // `root` is this checkout, passed in rather than spelled out: the same harness
+  // runs on a Windows machine under D:\ and on a CI runner under /home/runner/work.
+  const measured = await page.evaluate(async ({ b64, aacB64, seconds, packets, root }) => {
     const seamed = (file: string) => `/_nuxt/@fs/${file.replace(/\\/g, '/')}`
-    const at = (p: string) => seamed(`D:/Applications/tm-studio/${p}`)
+    const at = (p: string) => seamed(`${root}/${p}`)
 
     const probe = await import(/* @vite-ignore */ at('app/utils/tmcut/mediaProbe.ts'))
     const pixels = await import(/* @vite-ignore */ at('app/utils/tmcut/frameDecode.ts'))
@@ -410,7 +412,7 @@ try {
       ranges,
       packets: packets
     }
-  }, { b64: fixtureBase64, aacB64: aacBase64, seconds: FIXTURE_SECONDS, packets: FIXTURE_PACKETS })
+  }, { b64: fixtureBase64, aacB64: aacBase64, seconds: FIXTURE_SECONDS, packets: FIXTURE_PACKETS, root: ROOT.split(path.sep).join('/') })
 
   // 1. probe
   check('probe reads the container and one video track',

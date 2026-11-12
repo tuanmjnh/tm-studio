@@ -8014,3 +8014,61 @@ này không nằm trong danh sách lint của slice vì lỗi không ở dòng �
 Chưa chứng minh: **không** chạy một file xuất thật có effect rồi so pixel preview/export — bảy type này có
 spec so chuỗi filter, và `ctx.filter` được đo trên canvas, nhưng **chưa** có phép đo end-to-end trên một
 project thật. Đó là điều kiện để mở nhóm kế tiếp (overlay plate), và phải đo trước khi mở.
+
+## 65. Hai gate CI đỏ vì đường dẫn của một máy (đo ngày 2026-11-12)
+
+Lần chạy CI đầu tiên của `.github/workflows/ci.yml` (run `43040437705`, commit `c7c5c93`) đỏ ở **cả hai**
+job, và cả hai vì **cùng một lý do**: một chỗ trong repo đóng cứng đường dẫn tuyệt đối của máy đã viết
+chúng. Không phải lỗi của test đang đo điều gì, mà là lỗi làm test **không đo được** ở nơi khác.
+
+### 65.1 Job A — unit spec, 1339 link trỏ vào ổ `D:`
+
+`tmcut_docs_link_integrity.spec.ts` coi một link là "local" khi nó bắt đầu bằng `ROOT` của **chính máy
+đang chạy**. Docs lại viết toàn bộ link theo `D:/Applications/tm-studio/…` — 1339 trong 1341 link — nên
+trên runner Linux không link nào khớp `ROOT`, tất cả rơi vào nhánh "link trỏ tới root chưa khai báo", và
+job đỏ **trước khi** nó kịp kiểm xem file có tồn tại hay không. Trên máy Windows tình trạng này không bao
+giờ lộ ra, vì ở đó `ROOT` đúng bằng tiền tố trong file.
+
+Sửa: khai báo `SELF_ROOTS = ['D:/Applications/tm-studio/']` và **map** tiền tố đó về checkout đang chạy.
+Đây không phải miễn trừ: file vẫn phải tồn tại và neo `#L` vẫn phải là dòng thật — chỉ khác là phép kiểm
+giờ chạy được ở cả hai nền tảng thay vì chỉ ở một. Thêm `SELF_ROOT_CEILING = 1339`: trần **một chiều**,
+sửa được một link thì hạ trần, thêm link mới thì đỏ.
+
+Đã kiểm hai chiều:
+
+| Kiểm | Kết quả |
+|---|---|
+| Guard trên checkout này | 5/5 test, exit 0 |
+| RED thật: thêm 1 link tới file không tồn tại + 1 neo quá số dòng | đỏ đúng 2 dòng, nêu tên `docs/.tmp-link-probe.md:2` và `#L99999 (file has 133 lines)`; file thăm dò đã xoá |
+| 1339 link tự-trỏ khớp **đúng chữ** với đường dẫn thật (Linux phân biệt hoa/thường) | 0 lệch, 0 target là thư mục |
+
+Phép đối chiếu hoa/thường là cần thiết vì Windows không phân biệt: một link viết `App/Utils/…` sẽ xanh
+trên máy này và đỏ trên runner.
+
+### 65.2 Job B — harness gọi module qua `@fs` bằng ổ `D:`
+
+`browser_media_integration.mts` import ba module app qua `/_nuxt/@fs/D:/Applications/tm-studio/…`. Trên
+runner, `ROOT` là `/home/runner/work/tm-studio/tm-studio`, nên URL đó trỏ vào một thư mục không tồn tại;
+Vite trả 404 và harness chết ở bước import. Sửa: truyền `root` (chính `ROOT` của checkout) vào
+`page.evaluate` thay vì viết cứng. Phần còn lại của harness — fixture, base64, mọi phép đo — không đổi.
+
+### 65.3 Gate sau khi sửa (chạy trên máy này)
+
+| Gate | Lệnh | Kết quả |
+|---|---|---|
+| Types | `npx nuxt typecheck` | exit 0, **0** `error TS`; `.nuxt/eslint.config.mjs` regenerate (08:18, 27407 byte) |
+| Lint | `npx eslint` trên 2 file đã sửa, chạy **sau** typecheck | exit 0, 0 problem |
+| Unit | `npx tsx tests/unit/run-all.mts` | **140/140** spec, exit 0, 0 FAIL |
+| Browser | `TMCUT_BROWSER_REQUIRED=1 TMCUT_BROWSER_CHANNEL=msedge pnpm test:browser` | exit 0 — **17 check PASS, 1 PARTIAL** trên Edge: probe, WebCodecs, 6-key capability, cả hai seam, ba frame khác byte, WAV đúng biên độ, **AAC demux/import/decoder-config/decode thật** (`mp4a.40.2`, tone 0.513 / silence 0.0012), 5 range (head khớp, overrun tệ nhất 13 ms), corrupt → `null`, hai abort, không lỗi trang. PARTIAL là fixture video không có tiếng — đã khai từ trước |
+| AAC encode | trong cùng run | `mp4a.40.2=true`, `aac=false` trên Edge — vẫn là **giới hạn năng lực**, không phải tính năng |
+
+### 65.4 Chưa chứng minh
+
+- **Chưa** thấy lại job xanh trên GitHub: log của run `43040437705` đã bị xoá khỏi API (run trả 404,
+  `/actions/runs` trả `total_count: 0`, trang Actions ghi "There are no workflow runs yet"). Vì vậy hai
+  sửa trên được chứng minh **cục bộ** — bằng cách tái hiện đúng cơ chế hỏng (map `ROOT` + truyền `root`),
+  không bằng một lần chạy CI xanh. Cần một push mới để có bằng chứng đó.
+- **Chưa** chạy harness trên Linux. Phép đo browser chỉ có trên Windows/Edge; điều được sửa là **cách
+  harness tự tìm module**, và nó dùng cùng một biểu thức trên cả hai nền tảng.
+- **Chưa** kiểm CI khi dev server không lên được, khi Edge vắng mặt, hay khi một check giữa chừng fail —
+  ba nhánh đó chỉ chạy trên runner.

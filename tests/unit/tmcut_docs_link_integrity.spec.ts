@@ -26,6 +26,19 @@ const ROOT_URL = `${ROOT.split(sep).join('/')}/`
 const LINK = /\]\(file:\/\/\/([^)#\s]+)(#L(\d+))?\)/g
 
 /**
+ * The docs were written on a Windows checkout and cite this repo by its absolute
+ * path, so the prefix inside the file is not the prefix of the machine reading
+ * it. Declared here so both roots map onto one checkout: a CI runner then checks
+ * the same links a laptop checks instead of reporting every one of them dead.
+ * This is a mapping, not an exemption — the file still has to exist and the
+ * anchor still has to be a real line.
+ */
+const SELF_ROOTS = ['D:/Applications/tm-studio/']
+
+/** Measured on 2026-11-12: 1339 of the 1341 doc links spell that root. Only lower it. */
+const SELF_ROOT_CEILING = 1339
+
+/**
  * Docs cite two sibling projects by absolute path — the hub that signs the
  * studio in, and the read-only repo this code was lifted from. Those links are
  * deliberate, so they are declared here instead of required to resolve: a guard
@@ -47,6 +60,8 @@ interface DocLink {
   /** repo-relative when in this repo, absolute URL-path when not */
   target: string
   local: boolean
+  /** true when the file spelled the repo's absolute path instead of using a relative link */
+  viaSelfRoot: boolean
   line: number | null
 }
 
@@ -54,11 +69,17 @@ function collect(file: string, src: string): DocLink[] {
   const found: DocLink[] = []
   for (const match of src.matchAll(LINK)) {
     const absolute = decodeURIComponent(match[1]!).replace(/\/+$/, '')
-    const local = absolute.startsWith(ROOT_URL)
+    const selfRoot = SELF_ROOTS.find(prefix => absolute.startsWith(prefix))
+    const relative = absolute.startsWith(ROOT_URL)
+      ? absolute.slice(ROOT_URL.length)
+      : selfRoot
+        ? absolute.slice(selfRoot.length)
+        : null
     found.push({
       at: `${file}:${src.slice(0, match.index).split('\n').length}`,
-      target: local ? absolute.slice(ROOT_URL.length) : absolute,
-      local,
+      target: relative ?? absolute,
+      local: relative !== null,
+      viaSelfRoot: relative !== null && !absolute.startsWith(ROOT_URL),
       line: match[3] ? Number(match[3]) : null
     })
   }
@@ -110,5 +131,18 @@ describe('docs links point at files that exist', () => {
       })
       .map(link => `${link.at} -> ${link.target}#L${link.line} (file has ${lineCounts.get(link.target)} lines)`)
     assert.deepEqual(off, [], `doc links pointing past the end of their file:\n${off.join('\n')}`)
+  })
+
+  /**
+   * The 1339 links that spell `D:/Applications/tm-studio/` are grandfathered: they
+   * were written before this guard could read them on any other machine, and
+   * rewriting them is a separate change. The ceiling makes the allowance one-way
+   * — resolving a link lowers it, adding one fails. A relative link costs nothing
+   * and works for every reader, so new prose should use one.
+   */
+  it('does not grow the collection of machine-anchored links', () => {
+    const anchored = localLinks.filter(link => link.viaSelfRoot)
+    assert.ok(anchored.length <= SELF_ROOT_CEILING,
+      `${anchored.length} links spell a machine-local root, ceiling ${SELF_ROOT_CEILING}. Use a relative link; resolving one lowers the ceiling.`)
   })
 })
