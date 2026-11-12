@@ -10,13 +10,15 @@ export function parseAddress(raw: string): { name: string, email: string } {
 
 const DROPPED_ELEMENTS = 'script|style|iframe|object|embed|link|meta|form|base|svg|math'
 
-// Named entities that can appear inside a URL scheme. Every other named entity
-// decodes to a non-ASCII letter, which cannot complete `javascript:` anyway.
+// Named entities that can change how a URL is read. Every other named entity
+// either decodes to text that cannot complete a scheme or is caught by the
+// residual-reference rule below.
 const NAMED_ENTITIES: Record<string, string> = {
   colon: ':',
   tab: '\t',
   newline: '\n',
   sol: '/',
+  bsol: '\\',
   num: '#',
   amp: '&',
   lt: '<',
@@ -42,6 +44,16 @@ function decodeEntities(value: string): string {
     .replace(/&([a-z]+);/gi, (whole, name: string) => NAMED_ENTITIES[name.toLowerCase()] ?? whole)
 }
 
+/**
+ * A complete named reference the decoder did not recognise. The browser knows
+ * about two thousand of them, so any leftover one is a character we cannot see
+ * and therefore cannot judge; `&bsol;` is exactly how a backslash slipped past
+ * the first version of this fix.
+ */
+function hasUnknownReference(value: string): boolean {
+  return /&[a-z][a-z0-9]*;/i.test(value)
+}
+
 /** Drop what a browser drops from a URL before reading it: C0 controls and space. */
 function stripUrlNoise(value: string): string {
   let out = ''
@@ -62,13 +74,24 @@ function stripUrlNoise(value: string): string {
  * `java\nscript:` all resolve to `javascript:`. Matching the raw attribute text
  * is why those three executed. Allowlist, not blocklist: an unknown scheme is
  * unsafe by default.
+ *
+ * A value with no scheme is read against the page's own URL, so `/\host`,
+ * `\/host` and `\\host` are absolute to the browser even though each starts
+ * with a single slash (or none): in the authority position a backslash counts
+ * as a slash. A same-origin path therefore has one leading slash and no second
+ * slash or backslash right after it. `./` and `../` were measured to stay on
+ * the page's origin however many slashes follow, so they need no extra rule.
  */
 function isSafeUrl(raw: string, kind: 'href' | 'src'): boolean {
-  const value = stripUrlNoise(decodeEntities(raw))
+  const decoded = decodeEntities(raw)
+  if (hasUnknownReference(decoded)) return false
+  const value = stripUrlNoise(decoded)
   if (!value) return true
   if (value.startsWith('#') || value.startsWith('?')) return true
   if (value.startsWith('./') || value.startsWith('../')) return true
-  if (value.startsWith('/') && !value.startsWith('//')) return true
+  if (value.startsWith('/') || value.startsWith('\\')) {
+    return /^\/(?![/\\])/.test(value)
+  }
   const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(value)?.[1]?.toLowerCase()
   if (!scheme) return true
   if (scheme === 'http' || scheme === 'https' || scheme === 'mailto' || scheme === 'tel' || scheme === 'cid') {

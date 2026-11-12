@@ -55,13 +55,34 @@ function stripNoise(value: string): string {
 }
 
 /** Mirror of the browser's URL pre-processing: decode entities, drop C0 and space. */
+function browserUrl(url: string): string {
+  return stripNoise(
+    url
+      .replace(/&#x([0-9a-f]+);?/gi, (_, h: string) => String.fromCodePoint(parseInt(h, 16)))
+      .replace(/&#(\d+);?/g, (_, d: string) => String.fromCodePoint(parseInt(d, 10)))
+      .replace(/&colon;?/gi, ':')
+      .replace(/&tab;?/gi, '\t')
+      .replace(/&sol;?/gi, '/')
+      .replace(/&bsol;?/gi, '\\')
+      .replace(/&amp;?/gi, '&')
+  )
+}
+
 function browserScheme(url: string): string | null {
-  const decoded = url
-    .replace(/&#x([0-9a-f]+);?/gi, (_, h: string) => String.fromCodePoint(parseInt(h, 16)))
-    .replace(/&#(\d+);?/g, (_, d: string) => String.fromCodePoint(parseInt(d, 10)))
-    .replace(/&colon;?/gi, ':')
-    .replace(/&tab;?/gi, '\t')
-  return /^([a-z][a-z0-9+.-]*):/i.exec(stripNoise(decoded))?.[1]?.toLowerCase() ?? null
+  return /^([a-z][a-z0-9+.-]*):/i.exec(browserUrl(url))?.[1]?.toLowerCase() ?? null
+}
+
+const BASE = 'https://studio.example/app/inbox'
+
+/** Where the browser will actually send a kept attribute value. */
+function resolvesOffOrigin(url: string): boolean {
+  const decoded = browserUrl(url)
+  if (!decoded) return false
+  try {
+    return new URL(decoded, BASE).origin !== new URL(BASE).origin
+  } catch {
+    return false
+  }
 }
 
 async function main() {
@@ -94,6 +115,59 @@ async function main() {
     }
   })
 
+  await check('a relative path is held to the same host as the page', async () => {
+    // §72 fixed this shape in the markdown reader but not here. Measured with
+    // `new URL()`: `/\host`, `\/host` and `\\host` are all absolute to the
+    // browser, which treats a backslash as a slash in the authority position.
+    // The old branch accepted them because it only excluded a leading `//`.
+    const payloads = [
+      '<a href="/\\evil.example/x">x</a>',
+      '<a href="\\/evil.example/x">x</a>',
+      '<a href="\\\\evil.example/x">x</a>',
+      '<a href="/&#92;evil.example/x">x</a>',
+      '<a href="/&bsol;evil.example/x">x</a>',
+      '<img src="/\\evil.example/x.png">',
+      '<img src="\\\\evil.example/x.png">'
+    ]
+    for (const payload of payloads) {
+      const out = sanitizeEmailHtml(payload)
+      const attr = payload.includes('src=') ? 'src' : 'href'
+      const url = keptUrl(out, attr)
+      assert(url === null, `kept a URL from ${JSON.stringify(payload)} -> ${JSON.stringify(out)}`)
+    }
+    // Ordinary site-relative paths must survive, including the legitimate forms.
+    for (const input of [
+      '<a href="/ok/one">ok</a>',
+      '<a href="./ok">ok</a>',
+      '<a href="../ok">ok</a>',
+      '<a href="/foo//bar">ok</a>',
+      '<img src="/image/a.png">'
+    ]) {
+      const out = sanitizeEmailHtml(input)
+      const attr = input.includes('src=') ? 'src' : 'href'
+      assert(keptUrl(out, attr) !== null, `dropped a legitimate path: ${JSON.stringify(input)} -> ${JSON.stringify(out)}`)
+    }
+  })
+
+  await check('a named reference the decoder does not know is refused, not kept', async () => {
+    // The browser knows ~2,000 named references. Anything left undecoded is a
+    // character this filter cannot see, so it cannot judge the URL either.
+    // `&bsol;` is how a backslash got past the first version of this fix.
+    for (const payload of [
+      '<a href="/&bsol;evil.example/x">x</a>',
+      '<a href="&NewLine;javascript:alert(1)">x</a>',
+      '<a href="/&sol;&sol;evil.example">x</a>',
+      '<img src="/&bsol;evil.example/x.png">'
+    ]) {
+      const out = sanitizeEmailHtml(payload)
+      const attr = payload.includes('src=') ? 'src' : 'href'
+      assert(keptUrl(out, attr) === null, `kept a URL from ${JSON.stringify(payload)} -> ${JSON.stringify(out)}`)
+    }
+    // Text that legitimately carries an escaped ampersand must still work.
+    const out = sanitizeEmailHtml('<a href="https://example.com/a?b=1&amp;c=2">ok</a>')
+    assert(keptUrl(out) === 'https://example.com/a?b=1&amp;c=2', `dropped a normal link: ${JSON.stringify(out)}`)
+  })
+
   await check('every URL the sanitizer keeps resolves to a safe scheme', async () => {
     // The property, not an example: whatever survives must be http(s)/mailto/
     // tel/cid, a relative path, a fragment, or an image data: URL.
@@ -106,6 +180,7 @@ async function main() {
       '<a href="mailto:a@b.c">mail</a>',
       '<a href="#section">jump</a>',
       '<a href="/relative">rel</a>',
+      '<a href="/\\evil.example/x">rel</a>',
       '<img src="data:image/png;base64,iVBORw0KGgo=">'
     ]
     const allowed = new Set(['http', 'https', 'mailto', 'tel', 'cid'])
@@ -116,10 +191,17 @@ async function main() {
         if (url === null) continue
         const scheme = browserScheme(url)
         const relative = !scheme
-        const imageData = scheme === 'data' && attr === 'src' && /^data:image\//i.test(stripNoise(url))
+        const imageData = scheme === 'data' && attr === 'src' && /^data:image\//i.test(browserUrl(url))
         assert(
           relative || allowed.has(scheme) || imageData,
           `${JSON.stringify(input)} kept an unsafe URL ${JSON.stringify(url)} (scheme ${scheme})`
+        )
+        // A value with no scheme is read as a same-origin reference, so it must
+        // actually stay on this origin. §72 found exactly this hole in the
+        // markdown reader; an absolute web URL is allowed off-origin by design.
+        assert(
+          !relative || !resolvesOffOrigin(url),
+          `${JSON.stringify(input)} kept ${JSON.stringify(url)}, which resolves to another origin`
         )
       }
     }
