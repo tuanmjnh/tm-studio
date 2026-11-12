@@ -8656,7 +8656,7 @@ payload nào chạy; control `https://example.com/ok` và `mailto:a@b.c` vẫn g
 | 2 Lint | PASS | exit 0 trên 2 file đã sửa, chạy sau lần regenerate `.nuxt/eslint.config.mjs` cuối |
 | 3 Tests | PASS | unit **144/144** (143 → +1 spec), core 919/919, electron 80/80 |
 | 4 Live | PASS | 5 route có phiên root: `/resources/inbox`, `/resources/connections`, `/resources/notifications`, `/tmcut`, `/tmcut/editor` — 0 noise, 0 bounce |
-| 5 CI | chưa chạy | chờ push |
+| 5 CI | **PASS** | run `43202786590`: `Quality gates` + `Browser media integration` xanh; `Unit specs` **144/144**, `tmcut_email_sanitizer.spec.ts` chạy thật (`All 7 email-sanitizer checks passed`) |
 
 ### 71.5 Vẫn chưa chứng minh
 
