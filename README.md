@@ -19,7 +19,7 @@ and the AI provider catalogue.
 |---|---|
 | Product | TM Studio — video creation suite; TMCut is its studio module |
 | Runtimes | Browser (Nuxt 4 SPA, port 4003) and Electron desktop shell |
-| Control plane | TM Hub at `http://localhost:4000`, app id `tm-studio_749app` |
+| Control plane | TM Hub, reachable at `NUXT_PUBLIC_HUB_URL` (the local `.env` points at `https://tm-hub-app.vercel.app`; the code default is `http://localhost:4000`); own app id from `NUXT_PUBLIC_HUB_APP_ID` (`tm-studio_vhvrhn` on this machine, generated per environment by the hub seed) |
 | Media engine | Mediabunny + WebCodecs + Web Audio API + Canvas 2D, shared by both runtimes |
 | Domain engine | `packages/core` (`tmcut-core`) — pure, zero-dependency |
 | Persistence | Local first: project JSON, browser byte cache (OPFS → IndexedDB), local media |
@@ -266,7 +266,7 @@ tm-studio/
 │   ├── tools/                 check-boundaries.mjs
 │   └── dist/                  npm publish output only (gitignored)
 ├── tests/
-│   ├── unit/                  140 specs incl. 6 documentation guards
+│   ├── unit/                  141 specs incl. 6 documentation guards
 │   └── e2e/                   live browser / Electron probe scripts
 ├── docs/                      ADRs, audits, architecture, guides
 ├── i18n/locales/              en.json, vi.json
@@ -354,7 +354,7 @@ Every command below exists in `package.json`.
 | Core typecheck | `pnpm typecheck:core` | the core's `.d.ts` against its `types/` |
 | Core boundaries | `pnpm check:core` | forbidden-import scan on the core |
 | Core tests | `pnpm test:core` | 919 tests across 136 suites |
-| Unit specs | `pnpm test:unit` | 140 specs: behaviour, source contracts, documentation guards |
+| Unit specs | `pnpm test:unit` | 141 specs: behaviour, source contracts, documentation guards |
 | Browser integration | `pnpm test:browser` | 17 checks over the real media modules in Chromium; needs `pnpm dev` and a browser |
 | Electron tests | `pnpm test:electron` | 6 node:test files over Electron tool modules |
 | Everything | `pnpm test` | unit suite then Electron suite (not the browser check) |
@@ -381,11 +381,11 @@ Two working notes:
 - Run `pnpm typecheck` **before** linting a file you touched. `nuxt typecheck` regenerates
   `.nuxt/eslint.config.mjs`, which the root config re-exports; a lint result obtained before that
   regeneration can be stale.
-- `pnpm lint` is `eslint .`, and the repository currently carries 1024 pre-existing errors across
-  75 files. CI therefore lints **only the files a change touches**: a required repo-wide step would
-  be red before any change lands, which trains everyone to ignore it. Paying that debt down is a
-  separate piece of work; until then, lint the files you change by name so old debt is never
-  attributed to a new change.
+- `pnpm lint` is `eslint .`, and the repository currently carries 1023 pre-existing errors and 68
+  warnings across 74 files (measured 2026-11-12). CI therefore lints **only the files a change
+  touches**: a required repo-wide step would be red before any change lands, which trains everyone
+  to ignore it. Paying that debt down is a separate piece of work; until then, lint the files you
+  change by name so old debt is never attributed to a new change.
 
 The documentation guards are part of the unit suite: link integrity, table shape, prose line
 length, character set, source citation resolution, and the markdown reader itself.
@@ -437,7 +437,7 @@ Read these in this order unless you have a reason not to.
 |---|---|
 | [AGENTS.md](file:///D:/Applications/tm-studio/AGENTS.md) | how to work here: commands, boundaries, UI conventions, i18n rules |
 | [ADR-028 to ADR-033](file:///D:/Applications/tm-studio/docs/adr/zero-ffmpeg-decisions.md) | binding decisions on the zero-FFmpeg, browser-first architecture |
-| [Zero-FFmpeg audit](file:///D:/Applications/tm-studio/docs/audit/zero-ffmpeg-audit.md) | the measurement record; sections 58 to 64 describe the current tree |
+| [Zero-FFmpeg audit](file:///D:/Applications/tm-studio/docs/audit/zero-ffmpeg-audit.md) | the measurement record; sections 58 to 64 describe the current tree, and section 66 is the live UI sweep of 2026-11-12 |
 | [Repository and package audit](file:///D:/Applications/tm-studio/docs/audit/repository-package-architecture-audit.md) | what packages exist, what lives in the app, what is missing |
 | [Package boundaries](file:///D:/Applications/tm-studio/docs/architecture/package-boundaries.md) | dependency rules and extraction order, with exit criteria |
 | [Core package contract](file:///D:/Applications/tm-studio/docs/architecture/core-package-contract.md) | what a second workspace package could rely on: resolution per consumer, public exports, restart conditions |

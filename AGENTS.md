@@ -6,10 +6,10 @@ Guidance for AI coding agents working in this repository.
 
 **TM Studio** is an Electron + Nuxt 4 standalone video creation suite (TMCut) powered by Nuxt UI v4 (Tailwind CSS v4).
 
-- **Technology Stack**: Electron + Nuxt 4 running on Port 4003 (`STUDIO_PORT` / `APP_PORT` config).
+- **Technology Stack**: Electron + Nuxt 4. Dev server port is `4003` (`nuxt dev --port 4003`); the packaged desktop app serves from `APP_PORT` (default `3456`).
 - **UI Framework**: Nuxt UI v4 (Tailwind CSS v4).
 - **Control Plane Integration**:
-  - Connects to **TM Hub** (`http://localhost:4000`) as a satellite app via `useHub()` with `X-App-Id: tm-studio_749app`.
+  - Connects to **TM Hub** at `NUXT_PUBLIC_HUB_URL` (production: `https://tm-hub-app.vercel.app`; local dev: `http://localhost:4000`) as a satellite app via `useHub()`, sending `X-App-Id` from `NUXT_PUBLIC_HUB_APP_ID` (`tm-studio_vhvrhn` today — the hub seed generates the suffix per environment, and code falls back to `tm-studio_749app` only when the variable is unset).
   - Identity, authentication, user sessions, role-based access control, routes, and configs are centrally managed by TM Hub.
 - **Dynamic Menu System**:
   - Sidebar navigation is built dynamically from `system_routes` fetched from TM Hub via `GET /api/v1/auth/routes?appId=...`.
