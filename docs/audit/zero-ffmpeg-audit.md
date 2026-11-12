@@ -8669,3 +8669,59 @@ payload nào chạy; control `https://example.com/ok` và `mailto:a@b.c` vẫn g
 - Chưa đo trên Firefox/Safari: máy chỉ có Edge.
 - CSP vẫn **không có**. Thêm `script-src 'self'` sẽ là lớp phòng thủ thứ hai, nhưng nó ảnh hưởng
   toàn app nên không gộp vào lượt này.
+
+## 72. Cùng lớp lỗi §71 ở chỗ khác: `isSafeHref` nhận URL protocol-relative (đo ngày 2026-11-12)
+
+Sau §71, câu hỏi đúng là **cùng lớp lỗi đó còn ở đâu**, chứ không phải "còn việc gì trong danh sách".
+
+### 72.1 Rà cả lớp lỗi
+
+`v-html` trong `app/` chỉ có **2** chỗ: `InboxMail.vue:192` (đã sửa ở §71) và
+`MediaVisual.vue:55`. Chỗ thứ hai nhận `src` từ **3** call site, cả ba đều là hằng `"/logo.svg"`,
+không có dữ liệu bên ngoài → không phải lỗ hổng. Renderer markdown (`DocsMarkdown.vue`) dùng `h()`
+của Vue, không `v-html`, nên text luôn là text node.
+
+Nhưng `app/utils/docs/markdown.ts` **khẳng định** điều gì đó về an toàn ở ngay dòng đầu, và nội dung
+docs đến từ hub (`/api/v1/content`). Khẳng định thì phải đo, không phải tin.
+
+### 72.2 Đo được gì
+
+`isSafeHref` coi mọi chuỗi bắt đầu bằng `/` là "same-origin path". Nhưng trình duyệt đọc
+`//host/x` là **URL tuyệt đối**. Đo trong Edge:
+
+| Chuỗi | `isSafeHref` | Trình duyệt resolve | Kết luận |
+|---|---|---|---|
+| `//evil.example/x` | `true` | host `evil.example` | **sai** |
+| `///evil.example` | `true` | host `evil.example` | **sai** |
+| `/\evil.example` | `true` | host `localhost:4003` | đúng |
+| `/system/docs` | `true` | host `localhost:4003` | đúng |
+
+Nghĩa là docblock "same-origin paths" **không đúng** với chính code của nó. Mức nghiêm trọng thấp
+hơn §71: nội dung do admin hub soạn, và `//evil` chỉ là **điều hướng**, không chạy script.
+
+Đáng chú ý ở cách nó lọt: spec tên `isSafeHref only allows web, mail, hash and same-origin paths`
+**có sẵn** nhưng chỉ kiểm `'/system/docs'` — tức khẳng định trong tên rộng hơn thứ được kiểm.
+
+### 72.3 Sửa
+
+- `isSafeHref` chỉ nhận đường dẫn **một** dấu `/` ở đầu, và không cho `/\`.
+- Docblock ghi đúng điều kiện: "one leading slash, no host".
+- Spec thêm check `a protocol-relative href is not a same-origin path`, assert cả `isSafeHref` lẫn
+  `parseInline` (để chắc link không được tạo ở tầng renderer).
+
+### 72.4 Gate
+
+| Gate | Kết quả | Bằng chứng |
+|---|---|---|
+| 1 Types | PASS | `npx nuxt typecheck` exit 0, 0 × `error TS` |
+| 2 Lint | PASS | exit 0 trên 2 file đã sửa, sau lần regenerate config cuối |
+| 3 Tests | PASS | unit **144/144** (13 docs-markdown checks, +1), core 919/919, electron 80/80 |
+| 4 Live | PASS | `/system/docs` với phiên root: 0 console, text 11 898; cả 2 anchor đều đúng ý (`/` và `https://tm-hub-app.vercel.app/…`) |
+| 5 CI | chờ push | — |
+
+### 72.5 Vẫn chưa chứng minh
+
+- Không đo `//evil` trên Safari/Firefox; cả hai đều theo chuẩn URL nên dự kiến giống, nhưng đó là suy
+  luận.
+- Grammar markdown vẫn tự viết: nó không phải một parser, nên các dạng lồng nhau lạ (link trong
+  strong trong link) chưa được thử vét cạn.
