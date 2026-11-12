@@ -8725,3 +8725,82 @@ hơn §71: nội dung do admin hub soạn, và `//evil` chỉ là **điều hư�
   luận.
 - Grammar markdown vẫn tự viết: nó không phải một parser, nên các dạng lồng nhau lạ (link trong
   strong trong link) chưa được thử vét cạn.
+
+## 73. §72 sửa đúng luật nhưng chỉ ở một chỗ: dấu `\` trong bộ lọc mail (đo ngày 2026-11-12)
+
+§72 kết luận bằng một câu đúng nhưng hẹp: `isSafeHref` nhận `//host` là "same-origin path". Nó sửa
+hàm đó. Câu cần hỏi là **cùng một luật "một dấu `/` ở đầu, không có host" còn sai ở đâu**, và câu
+trả lời là: ở `sanitizeEmailHtml` — nơi §71 vừa mới viết lại chính nhánh đó.
+
+### 73.1 Đo được gì
+
+`isSafeUrl` có nhánh `value.startsWith('/') && !value.startsWith('//')`. Nhánh này đúng với `//` và
+sai với dấu `\`, vì **ở vị trí authority trình duyệt đọc `\` như `/`**. Đo bằng `new URL(h, base)`
+trong Node và xác nhận lại trong Chromium:
+
+| Chuỗi | Bộ lọc cũ giữ | Trình duyệt resolve | Kết luận |
+|---|---|---|---|
+| `/ok/one` | giữ | `https://studio.example/ok/one` | đúng |
+| `//evil.example/x` | bỏ | — | đúng (đã bị `!startsWith('//')`) |
+| `/\evil.example/x` | **giữ** | `http://evil.example/x` | **sai** |
+| `\\evil.example/x` | **giữ** | `http://evil.example/x` | **sai** |
+| `\/evil.example/x` | **giữ** | `http://evil.example/x` | **sai** |
+| `/&bsol;evil.example/x` | **giữ** | `http://evil.example/x` | **sai** (entity chưa giải) |
+
+Đo trong Edge trên chính dev server (`.setAttribute('href', …)` rồi đọc `a.hostname`): cả ba dạng cho
+`parsedHost: 'evil.example'`. Bản cũ **giữ** `/\evil.example/x`; luật `//` cũ không bắt được nó.
+
+### 73.2 Sửa
+
+- Nhánh đường dẫn: một dấu `/` ở đầu và **ký tự ngay sau không phải `/` hay `\`**
+  (`/^\/(?![/\\])/`); chuỗi bắt đầu bằng `\` đi cùng luật đó. `./` và `../` giữ nguyên — đo trên 4
+  base URL khác nhau, mọi dạng `.//…`, `..\…` đều ở lại origin của trang.
+- **Entity lạ thì từ chối, không đoán.** Bản sửa đầu tiên thêm `bsol` vào bảng tên, và spec bắt được
+  `&bsol;` vẫn lọt vì lý do khác: bộ giải mã chỉ biết 11 tên trong khi trình duyệt biết khoảng 2.000.
+  Nên thêm luật thứ hai: một tham chiếu tên **hoàn chỉnh** mà bộ giải mã không nhận ra là ký tự bộ lọc
+  không nhìn thấy, tức không phán được URL — bỏ (`hasUnknownReference`). `&amp;` vẫn chạy vì nó có
+  trong bảng.
+
+### 73.3 Bằng chứng
+
+`tests/unit/tmcut_email_sanitizer.spec.ts`, 9 check (7 → 9). Hai check mới đỏ trên cây trước khi sửa
+(exit 1, dừng ở payload đầu tiên `/\evil.example/x`), xanh sau khi sửa:
+
+| Check | Trên cây cũ | Sau khi sửa |
+|---|---|---|
+| đường dẫn tương đối phải cùng host với trang | **FAIL** (`/\evil.example/x` được giữ) | pass |
+| tham chiếu tên lạ thì bỏ, không giữ | **FAIL** (`&bsol;` được giữ) | pass |
+| (7 check cũ của §71) | pass | pass |
+
+Check "mọi URL giữ lại đều an toàn" được siết thêm một vế: giá trị **không có scheme** phải thật sự ở
+lại origin (`resolvesOffOrigin`), đây đúng là lỗ hổng §72 tìm ra ở chỗ khác. Vế này chỉ áp cho giá trị
+relative — `https://`/`mailto:`/`data:image` ra ngoài origin là đúng thiết kế.
+
+Đo trong trình duyệt thật (Edge, dev server :4003, import module qua `/_nuxt/@fs/…`): 9 payload độc
+(`//`, `///`, `/\`, `\\`, `\/`, `/&bsol;`, `/&sol;&sol;`, `&NewLine;javascript:`, `<img src="/\…">`)
+→ **9/9 bị bỏ** (`href`/`src` không còn); 4 dạng hợp lệ (`/ok/one`, `./ok`, `../ok`, `#top`) → cả 4
+giữ nguyên và resolve `http://localhost`. `https`, `mailto`, `data:image/png` giữ đúng scheme.
+
+### 73.4 Gate
+
+| Gate | Kết quả | Bằng chứng |
+|---|---|---|
+| 1 Types | PASS | `npx nuxt typecheck` exit 0, 0 × `error TS`; `.nuxt/eslint.config.mjs` sinh lại 19:18 |
+| 2 Lint | PASS | exit 0 trên 2 file đã sửa, chạy **sau** lần regenerate cuối |
+| 3 Tests | PASS | unit **144/144**, core 919/919, electron 80/80 |
+| 4 Live | PASS (có ghi chú) | 5 route có phiên root: `/resources/inbox`, `/resources/connections`, `/resources/notifications`, `/tmcut`, `/tmcut/editor` — 4/5 sạch, 0 `[error]`/`[issue]` |
+| 5 Docs | PASS | mục này |
+
+Ghi chú Gate 4: `/tmcut/editor` in 1 warning `The AudioContext was not allowed to start` — trỏ
+`TmcutPreviewPlayer.vue:571`, file **không** nằm trong lượt sửa này, và là quan sát đã ghi ở §70.4.
+Không phải hồi quy của sanitizer.
+
+### 73.5 Vẫn chưa chứng minh
+
+- Kiểm chứng bằng Chromium/Edge. Safari và Firefox dự kiến đọc `\` như `/` ở authority position theo
+  cùng chuẩn URL, nhưng máy chỉ có Edge — đó là suy luận, không phải phép đo.
+- Cùng loại câu hỏi vẫn còn treo cho **mọi** named reference trình duyệt biết mà bảng không có: luật
+  mới bỏ URL đó, nên nó an toàn, nhưng nghĩa là một mail hợp lệ dùng entity lạ trong `href` sẽ mất
+  liên kết (không mất chữ). Không có dữ liệu nào cho biết điều đó xảy ra trong mail thật.
+- Đây vẫn là filter regex, không phải HTML parser (giới hạn đã khai ở §71.5). Lượt này không đổi
+  điều đó; nó chỉ đóng đúng lớp URL mà §72 đã đóng ở chỗ khác.
