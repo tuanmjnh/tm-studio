@@ -1,7 +1,7 @@
 // Minimal markdown reader for hub-managed documentation. It produces a small
 // block/inline tree that the Vue renderer turns into elements, so article text
 // never reaches innerHTML: raw HTML stays literal text and links are filtered
-// to http(s), mailto, hash and same-origin paths.
+// to http(s), mailto, hash and same-origin paths (one leading slash, no host).
 
 export type MarkdownInline
   = | { type: 'text', text: string }
@@ -29,7 +29,12 @@ const TABLE_RULE = /^\|?[\s:-]*-[\s:|-]*\|?$/
 export function isSafeHref(href: string): boolean {
   const value = href.trim()
   if (!value) return false
-  if (value.startsWith('#') || value.startsWith('/')) return true
+  if (value.startsWith('#') || value.startsWith('/')) {
+    // `//host/x` and `/\host` are paths to a reader but absolute URLs to the
+    // browser, which resolves both to another host. A real same-origin path has
+    // exactly one leading slash and no backslash after it.
+    return !value.startsWith('//') && !value.startsWith('/\\')
+  }
   return /^(https?:\/\/|mailto:)/i.test(value)
 }
 

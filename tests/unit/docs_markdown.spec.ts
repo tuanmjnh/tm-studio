@@ -107,6 +107,21 @@ check('isSafeHref only allows web, mail, hash and same-origin paths', () => {
   assert(!isSafeHref(''), 'empty blocked')
 })
 
+check('a protocol-relative href is not a same-origin path', () => {
+  // `//evil.example/x` and `///evil.example` look like paths but the browser
+  // resolves both to host `evil.example` — measured, not assumed. Allowing them
+  // as "same-origin paths" made the function's own contract false, and turned an
+  // authored doc link into an off-site navigation.
+  for (const href of ['//evil.example/x', '///evil.example', '/\\evil.example']) {
+    assert(!isSafeHref(href), `${JSON.stringify(href)} must not count as same-origin`)
+    assert(
+      !parseInline(`[click](${href})`).some(token => token.type === 'link'),
+      `${JSON.stringify(href)} must not produce a link`
+    )
+  }
+  assert(isSafeHref('/ok/one'), 'a single-slash path still passes')
+})
+
 check('raw html inside text stays literal text', () => {
   const [token, ...rest] = parseInline('<img src=x onerror=alert(1)>')
   assert(rest.length === 0 && token?.type === 'text', 'no element tokens produced')
