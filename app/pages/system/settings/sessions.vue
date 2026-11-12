@@ -24,6 +24,11 @@ const sessionPager = useCursorPagination<UserSession>({
 })
 const sessions = computed(() => sessionPager.items.value)
 const sessionsLoading = computed(() => sessionPager.loading.value)
+const loadError = computed(() => sessionPager.error.value)
+// `hasMore` starts true and only a successful page changes it, so after a
+// failed load the pager cannot say there is more. Offering "Load more" (and the
+// "+" in the record count) next to an error claims data we never saw.
+const hasMore = computed(() => sessionPager.hasMore.value && loadError.value === null)
 
 onMounted(() => sessionPager.refresh())
 
@@ -79,7 +84,7 @@ const sessionActions = (session: UserSession): DropdownMenuItem[] => [
 
 const mobileBar = useMobileBar()
 mobileBar.registerActions(computed(() => [
-  ...(sessionPager.hasMore.value
+  ...(hasMore.value
     ? [{
         icon: 'i-lucide-chevron-down',
         label: t('common.loadMore'),
@@ -101,7 +106,7 @@ mobileBar.registerActions(computed(() => [
 ]))
 mobileBar.registerInfo(computed(() => ({
   count: sessions.value.length,
-  hasMore: sessionPager.hasMore.value,
+  hasMore: hasMore.value,
   loading: sessionsLoading.value
 })))
 
@@ -131,10 +136,10 @@ useHead({ title: computed(() => t('profile.sessions')) })
       />
     </div>
 
-    <SharedListFooter :count="sessions.length" :has-more="sessionPager.hasMore.value" :loading="sessionsLoading">
+    <SharedListFooter :count="sessions.length" :has-more="hasMore" :loading="sessionsLoading">
       <template #right>
         <UButton
-          v-if="sessionPager.hasMore.value"
+          v-if="hasMore"
           size="xs"
           variant="soft"
           color="neutral"
@@ -147,9 +152,51 @@ useHead({ title: computed(() => t('profile.sessions')) })
     </SharedListFooter>
 
     <UCard class="mb-24 lg:mb-0">
+      <UAlert
+        v-if="loadError && sessions.length > 0"
+        color="error"
+        variant="subtle"
+        icon="i-lucide-triangle-alert"
+        :title="t('global.error')"
+        :description="getErrorMessage(loadError, key => t(key))"
+        class="mb-4"
+      >
+        <template #actions>
+          <UButton
+            size="xs"
+            variant="ghost"
+            color="error"
+            icon="i-lucide-refresh-cw"
+            :label="t('global.retry')"
+            :loading="sessionsLoading"
+            @click="sessionPager.refresh()"
+          />
+        </template>
+      </UAlert>
+
       <div v-if="sessionsLoading && sessions.length === 0" class="space-y-3">
         <USkeleton v-for="i in 3" :key="i" class="h-14 w-full rounded-lg" />
       </div>
+
+      <UEmpty
+        v-else-if="loadError && sessions.length === 0"
+        icon="i-lucide-triangle-alert"
+        size="sm"
+        :title="t('global.error')"
+        :description="getErrorMessage(loadError, key => t(key))"
+      >
+        <template #actions>
+          <UButton
+            size="sm"
+            variant="soft"
+            color="neutral"
+            icon="i-lucide-refresh-cw"
+            :label="t('global.retry')"
+            :loading="sessionsLoading"
+            @click="sessionPager.refresh()"
+          />
+        </template>
+      </UEmpty>
 
       <UEmpty
         v-else-if="sessions.length === 0"
