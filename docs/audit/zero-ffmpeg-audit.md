@@ -8163,7 +8163,7 @@ Hai danh sách accent là **cố ý khác nhau**: trang settings hiện 10 màu 
 sẽ không chọn lại được. Vì thế composable trả `primaryColors` (10) cho trang và `menuPrimaryColors` (17)
 cho menu; một spec đếm đúng 17 để không lặng lẽ thu hẹp lại.
 
-Guard: `tests/unit/tmcut_ui_theme.spec.ts` (7 spec) — round-trip; mặc định khi trống; fallback **từng
+Guard: `tests/unit/tmcut_ui_theme.spec.ts` (8 spec) — round-trip; mặc định khi trống; fallback **từng
 trường** khi tên màu lạ; JSON hỏng; storage ném lỗi; mọi màu composable mời chào đều có trong danh sách
 canonical; và hai picker không còn `appConfig.ui.colors.<field> = color` trực tiếp.
 
@@ -8175,14 +8175,76 @@ trước và sau reload. `/tmcut` thấy cùng màu nhấn. Đặt lại `violet
 (`localStorage` = `{"primary":"violet","neutral":"zinc"}`), `pageErrors: (none)`. Gate của lát cắt này:
 `npx nuxt typecheck` exit 0 / 0 × `error TS`, `eslint` 5 file đã chạm exit 0, unit suite **141/141**.
 
-### 66.7 Chưa chứng minh
+### 66.7 Electron giữ được lựa chọn màu (đo 2026-11-12)
+
+Lượt 66.6 chỉ đo trên trình duyệt, nên câu "localStorage của cửa sổ Electron chưa được đo lại" vẫn
+treo. Đo lại trên cửa sổ thật: app chạy bằng `electron/tools/dev-electron-launcher.cjs`, kết nối qua
+`chromium.connectOverCDP('http://127.0.0.1:9231')` — tức là cửa sổ Electron thật, không phải trang
+web mở bằng Chromium của máy.
+
+| Phép đo | Kết quả |
+|---|---|
+| Số swatch accent trong menu tài khoản | **19 nút** (17 accent + 2 hàng neutral) — khớp danh sách 17, không bị thu hẹp |
+| Chọn `emerald` + `stone`, rồi reload | `--ui-primary` = `oklch(76.5% 0.177 163.223)` trước và sau reload |
+| `aria-pressed` sau reload | `emerald,stone` |
+| `localStorage` dùng được trong cửa sổ Electron | `usable: true`; đọc lại `{"primary":"emerald","neutral":"stone"}` |
+| `pageErrors` trong suốt lượt | **0** |
+| Dọn dẹp | đặt lại `violet`/`zinc`, xác nhận cửa sổ vẫn mở |
+
+Không có khác biệt giữa hai host: cùng một `useUiTheme()`, cùng key `tmstudio.ui.colors`, cùng token
+`--ui-primary`/`--ui-bg`. Điều này đóng mục "chưa kiểm ảnh hưởng ở Electron" của lượt trước.
+
+### 66.8 localStorage bị chặn — một lỗi thật nữa ở `/login` (đã sửa)
+
+Lượt trước chỉ có unit spec cho nhánh storage ném lỗi, chưa có lần chạy UI nào. Đo trên **bản dựng
+production** (`nuxt build` → `node .output/server/index.mjs`, cổng riêng 4099) bằng ba profile
+Playwright `addInitScript`:
+
+| Profile | Trước khi sửa | Sau khi sửa |
+|---|---|---|
+| bình thường | form đăng nhập | form đăng nhập — 2 input, 6 button, `pageErrors: 0` |
+| getter `localStorage` ném `SecurityError` | **`500 Access is denied for this document. Back to home`** | form đăng nhập — 2 input, 6 button, `pageErrors: 0` |
+| `setItem` ném `QuotaExceededError` (chế độ riêng tư) | — | form đăng nhập — 2 input, 6 button, `pageErrors: 0` |
+
+Nguyên nhân: `app/pages/login.vue` gọi thẳng `localStorage.getItem` trong `loadSaved()`, mà
+`loadSaved` chạy từ `onMounted`; khi trình duyệt chặn storage, exception thoát ra khỏi hook và Nuxt
+SSR lỗi cả trang — người dùng mất luôn form đăng nhập chỉ vì một tuỳ chọn "nhớ tài khoản". Ba nơi
+khác cũng còn gọi thẳng `localStorage` (`app/pages/system/ai-keys.vue:101`,
+`app/pages/tmcut/autocut.vue:78`, và 14 composable), nhưng chúng chạy trong handler hoặc `ref` khởi
+tạo chứ không phải hook mount của một trang công khai, nên không cùng đường thoát lỗi; chỉ hai hàm
+đăng nhập được đổi sang shim trong lát cắt này.
+
+**Cách sửa**: `loadSaved`/`saveCredentials` dùng `readStored`/`writeStored`/`removeStored` — shim
+never-throw đã có sẵn — nên storage hỏng chỉ làm mất tiện ích nhớ mật khẩu, không làm mất trang.
+
+Guard: `tests/unit/tmcut_login_remember.spec.ts` (8 spec). Bảy spec cũ giữ nguyên lực lượng (ghi cả
+`username` lẫn `password`, xoá khi bỏ tick, khôi phục cả hai trường, không nhánh scrub, JSON hỏng bị
+bỏ, đúng một chỗ ghi mật khẩu, mật khẩu vẫn tới `auth.login`), chỉ đổi đích sang shim. Spec thứ tám
+là spec hồi quy cho đúng lỗi này: `login.vue` không được còn `localStorage.` trực tiếp, và hai hàm
+phải đi qua shim. Gate của lát cắt: `npx nuxt typecheck` exit 0 / 0 × `error TS`, `eslint` trên bốn
+file tự viết exit 0, unit suite **141/141**; 55 problem còn lại của `login.vue` chứng minh là
+**có trước** bằng cách lint bản `git show HEAD:app/pages/login.vue` — cùng đúng 55.
+
+### 66.9 Voice/TTS: BLOCKED, đường báo lỗi thì đã đo
+
+VieNeu-TTS không chạy trên máy này. Đo được phần app tự chịu trách nhiệm:
+
+- `GET /api/v1/media/tts/status` → **502** trong **211 ms**, `message: Could not reach VieNeu-TTS at
+  http://127.0.0.1:8000`.
+- `/tmcut/voice` hiện trạng thái **Offline** và giữ nút "Generate voiceover" ở trạng thái disabled
+  (`app/components/tmcut/TmcutVoiceStudioBody.vue:494`), `pageErrors: 0`.
+
+Nghĩa là app không giả vờ thành công và không treo UI khi engine thiếu; nhưng **chưa có audio nào
+được sinh ra**, nên luồng voice vẫn BLOCKED cho tới khi engine chạy.
+
+### 66.10 Chưa chứng minh
 
 - **Chưa** bấm `Start Export` cho **mọi** tổ hợp preset/duration — chỉ đo một ca thật (Cool, 0,6 s).
 - **Chưa** lưu form profile/đổi mật khẩu: hai thao tác đó ghi vào tài khoản `root` **dùng chung trên hub
   production**, nên lượt kiểm chỉ xác nhận form hợp lệ và chặn lỗi, không gửi PUT/POST.
-- **Chưa** chạy luồng voice thật: VieNeu-TTS không chạy trên máy này, nên chỉ đo được phần báo lỗi trung
-  thực, không đo được audio sinh ra.
-- **Chưa** kiểm ảnh hưởng ở Electron: toàn bộ lượt chạy này là trình duyệt thật trên :4003, kể cả phép đo
-  "màu nhấn sống qua reload" ở 66.6 — localStorage của cửa sổ Electron chưa được đo lại.
-- **Chưa** đo trường hợp localStorage bị chặn trên trình duyệt thật: nhánh đó chỉ có unit spec
-  (`tmcut_local_store`, `tmcut_ui_theme`) chứng minh, không phải một lần chạy UI.
+- **Chưa** sinh ra audio thật: VieNeu-TTS không chạy trên máy này, nên 66.9 chỉ đo được đường báo lỗi
+  502/211 ms và trạng thái Offline, không đo được file voiceover.
+- **Chưa** đo storage bị chặn trên **Electron**: 66.8 là bản dựng production trong Chromium; cửa sổ
+  Electron mới được đo ở nhánh storage chạy bình thường (66.7).
+- **Chưa** đo storage bị chặn trên **Safari/Firefox**: cả ba profile ở 66.8 đều là Chromium (Edge
+  channel); cách chặn của Safari (chế độ riêng tư) và Firefox (`dom.storage.enabled=false`) chưa đo.

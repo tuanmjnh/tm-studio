@@ -2,6 +2,7 @@
 import { z } from 'zod'
 import type { LoginRequest, TotpChallenge } from '#shared/types/auth'
 import { getErrorMessage } from '~/shared/utils/errors'
+import { readStored, writeStored, removeStored } from '~/utils/tmcut/localStore'
 
 definePageMeta({ layout: false })
 
@@ -41,7 +42,7 @@ const state = reactive({
 
 function loadSaved() {
   if (import.meta.client) {
-    const saved = localStorage.getItem('remembered_login')
+    const saved = readStored('remembered_login')
     if (saved) {
       try {
         const data = JSON.parse(saved)
@@ -49,7 +50,7 @@ function loadSaved() {
         state.password = data.password || ''
         remember.value = Boolean(data.username)
       } catch {
-        localStorage.removeItem('remembered_login')
+        removeStored('remembered_login')
       }
     }
   }
@@ -57,9 +58,9 @@ function loadSaved() {
 
 function saveCredentials() {
   if (remember.value && state.email) {
-    localStorage.setItem('remembered_login', JSON.stringify({ username: state.email, password: state.password }))
+    writeStored('remembered_login', JSON.stringify({ username: state.email, password: state.password }))
   } else {
-    localStorage.removeItem('remembered_login')
+    removeStored('remembered_login')
   }
 }
 

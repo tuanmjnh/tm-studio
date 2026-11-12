@@ -23,7 +23,7 @@ describe('remembered login stores the account and the password', () => {
 
   it('saving with remember ticked keeps both fields', () => {
     const save = bodyOf('saveCredentials')
-    assert.match(save, /localStorage\.setItem\('remembered_login'/, 'the choice pre-fills the form')
+    assert.match(save, /writeStored\('remembered_login'/, 'the choice pre-fills the form')
     assert.match(
       save,
       /JSON\.stringify\(\{\s*username: state\.email,\s*password: state\.password\s*\}\)/,
@@ -34,7 +34,7 @@ describe('remembered login stores the account and the password', () => {
 
   it('saving with remember unticked clears the entry', () => {
     const save = bodyOf('saveCredentials')
-    assert.match(save, /localStorage\.removeItem\('remembered_login'\)/, 'unticking forgets the entry')
+    assert.match(save, /removeStored\('remembered_login'\)/, 'unticking forgets the entry')
   })
 
   it('loading restores both fields and re-ticks the box', () => {
@@ -49,16 +49,16 @@ describe('remembered login stores the account and the password', () => {
     // would erase the password the user just chose to remember.
     const load = bodyOf('loadSaved')
     assert.doesNotMatch(load, /'password' in data/, 'the scrubbing branch must be gone')
-    assert.doesNotMatch(load, /localStorage\.setItem\(/, 'loading must never write a different payload')
+    assert.doesNotMatch(load, /writeStored\(/, 'loading must never write a different payload')
   })
 
   it('a corrupt entry is still discarded', () => {
     const load = bodyOf('loadSaved')
-    assert.match(load, /catch\s*\{[\s\S]*localStorage\.removeItem\('remembered_login'\)/, 'unparsable JSON is dropped')
+    assert.match(load, /catch\s*\{[\s\S]*removeStored\('remembered_login'\)/, 'unparsable JSON is dropped')
   })
 
-  it('the password reaches localStorage from exactly one place', () => {
-    const writers = [...src.matchAll(/localStorage\.setItem\([^)]*\)/g)].map(m => m[0])
+  it('the password reaches storage from exactly one place', () => {
+    const writers = [...src.matchAll(/(?:localStorage\.setItem|writeStored)\([^)]*\)/g)].map(m => m[0])
     const withPassword = writers.filter(w => /password/.test(w))
     assert.equal(withPassword.length, 1, `expected one password-carrying write, found ${withPassword.length}`)
     assert.match(withPassword[0]!, /remembered_login/)
@@ -67,5 +67,18 @@ describe('remembered login stores the account and the password', () => {
   it('the login form still submits the typed password', () => {
     // The password must reach the auth call; only persistence is at stake here.
     assert.match(src, /password: state\.password/)
+  })
+
+  it('a blocked store cannot take the sign-in page down', () => {
+    // Measured on the production build 2026-11-12: with localStorage denied
+    // (Safari private mode, blocked cookies, an opaque origin), the bare
+    // `localStorage.getItem` threw out of onMounted and Nuxt rendered
+    // "500 Access is denied for this document." on the one page every user
+    // must be able to open. Both helpers must go through the never-throw shim.
+    assert.doesNotMatch(src, /(?<!readStored\()\blocalStorage\./, 'login.vue must not touch localStorage directly')
+    for (const name of ['loadSaved', 'saveCredentials']) {
+      const body = bodyOf(name)
+      assert.match(body, /readStored|writeStored|removeStored/, `${name} must use the storage shim`)
+    }
   })
 })
