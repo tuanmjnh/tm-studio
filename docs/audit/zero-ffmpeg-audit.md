@@ -8407,12 +8407,14 @@ lượt 0-control là đọc DOM trước khi hydrate xong, không phải trang 
 | 3b CI steps | core typecheck, core lint, boundaries, hygiene | PASS | cả bốn exit 0 |
 | 4 Live | 30 route khách trên :4003 | PASS | 0 `[error]`/`[warn]`/`[issue]`, 28 redirect đúng |
 | 4b Browser | harness, cache Vite lạnh, `TMCUT_BROWSER_REQUIRED=1` | PASS | exit 0, 17/17 + 1 PARTIAL |
-| 5 Docs | mục này | PASS | — |
+| 5 CI | run thật `43185237878` trên GitHub | **PASS** | `Quality gates` + `Browser media integration` xanh; `Unit specs` 141/141 |
+| 6 Docs | mục này | PASS | — |
 
 ### 68.5 Vẫn chưa chứng minh
 
-- **Chưa** thấy CI xanh trên GitHub cho commit sửa này; bằng chứng ở trên là chạy lại **từng bước CI**
-  cục bộ, gồm cả điều kiện cache lạnh. Chỉ run thật mới trả lời được.
+- ~~**Chưa** thấy CI xanh trên GitHub cho commit sửa này~~ → **ĐÃ XANH.** Run `43185237878` (push `635179c`)
+  kết luận **success**: `Quality gates` 2m46s (gồm Unit specs **141/141**, Electron tests, hygiene) và
+  `Browser media integration` 2m1s. So với run `43180836637` đỏ ở đúng hai job đó trên cùng nhánh.
 - **Vẫn chưa** chạy 19 thành viên `createRealIpc` trên Electron thật (§68.6 chỉ chứng minh ở seam: 39/39
   thành viên, 7 namespace, `emitEvent` đúng khung một frame).
 - **Chưa** sửa `sessions.vue:28` (unhandled rejection khi endpoint lỗi) — lỗi thật, ngoài phạm vi lượt này.
