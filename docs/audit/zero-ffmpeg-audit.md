@@ -8582,3 +8582,90 @@ error-copy. Đây là quan sát mới (các log quét cũ không thấy) nên gh
 - `message` chẩn đoán vẫn bị bỏ **hẳn** khi mã chưa dịch; nếu một ngày nào đó server đặt copy thật
   vào `message` **và** khai một mã lạ, người dùng sẽ thấy câu chung thay vì câu cụ thể. Đây là đánh
   đổi có chủ ý (không lộ chẩn đoán), chưa có bằng chứng nào chứng minh nó gây hại.
+
+## 71. XSS trong khung đọc mail: bộ lọc URL bị vượt qua (đo ngày 2026-11-12)
+
+Phát hiện ngoài danh sách §66–§70, khi kiểm ba warning lint còn lại sau §67. `npx eslint .` báo
+`vue/no-v-html` tại `app/components/inbox/InboxMail.vue:192`. Warning đó đúng.
+
+### 71.1 Lỗi ở đâu
+
+`v-html="sanitizeEmailHtml(msg.bodyHtml)"` — `bodyHtml` đến từ
+`GET /api/v1/apps/:appId/mail/inbox/threads/:id`, tức nội dung do **người gửi mail** soạn. Filter cũ
+so khớp `javascript:` như một chuỗi ký tự trong attribute:
+
+```ts
+out = out.replace(/(href|src)\s*=\s*("|')?\s*(javascript|data:text\/html)[^"'>\s]*/gi, '$1="#"')
+```
+
+Trình duyệt thì **giải mã entity** và **bỏ ký tự điều khiển** trong URL trước khi đọc scheme. Vì vậy
+cả ba payload dưới đây đi qua filter nguyên vẹn — đo trong Edge, không suy luận:
+
+| Payload | Filter cũ giữ | `a.protocol` | Bấm vào |
+|---|---|---|---|
+| `href="jav&#x61;script:…"` | nguyên vẹn | `javascript:` | **chạy** |
+| `href="jav\tascript:…"` | nguyên vẹn | `javascript:` | **chạy** |
+| `href="java\nscript:…"` | nguyên vẹn | `javascript:` | **chạy** |
+
+Không cần click thì an toàn: 10 vector `onerror`/`onload`/`srcdoc`/mXSS đều bị chặn ở cả hai bản.
+
+**Mức nghiêm trọng đo được:** app không đặt CSP, và cookie `accessToken` **không** `httpOnly`
+(`app/composables/useAuth.ts:153`; chỉ `fcm-token` ở `server/api/push/fcm-token.ts:27` là httpOnly).
+Nên một cú click trong mail là đọc được token phiên trên bản web. Trên Electron nhẹ hơn: mọi
+`BrowserWindow` đều `nodeIntegration: false`, `contextIsolation: true`, `sandbox: true`.
+
+### 71.2 Sửa
+
+- `isSafeUrl` quyết định trên **giá trị trình duyệt sẽ dùng**: giải mã entity (số thập phân, hex,
+  và các tên có thể nằm trong scheme), bỏ mọi ký tự ≤ U+0020 và U+007F, rồi **allowlist**:
+  `http`, `https`, `mailto`, `tel`, `cid`, đường dẫn tương đối, fragment, và `data:image/*;base64`
+  chỉ cho `src`. Scheme lạ là **không an toàn** — đây là allowlist, không phải blocklist.
+- Thay `String.replace` bằng bộ parse attribute thật, vì `<img/src=x/onerror=…>` (dấu `/` thay
+  khoảng trắng) lọt qua regex cũ. Handler bị bỏ bất kể ký tự đứng trước.
+- Regex `g` được tạo **trong mỗi lần gọi**: `lastIndex` dùng chung giữa các lần gọi là trạng thái
+  mà một filter bảo mật không được giữ.
+- `style` inline vẫn giữ: mail cần nó để định dạng, và CSS không chạy được script trên trình duyệt
+  hiện đại.
+
+### 71.3 Bằng chứng
+
+`tests/unit/tmcut_email_sanitizer.spec.ts`, 7 check. Đo từng check trên code cũ (`HEAD`
+`app/utils/inboxHtml.ts`):
+
+| Check | Trên code cũ | Sau khi sửa |
+|---|---|---|
+| 1 entity/tab/newline `javascript:` | **FAIL** | pass |
+| 2 `src` cùng luật | **FAIL** | pass |
+| 3 mọi URL giữ lại đều scheme an toàn | **FAIL** | pass |
+| 4 handler kể cả không quote / dấu `/` | pass | pass |
+| 5 bỏ trọn phần tử active | pass | pass |
+| 6 định dạng mail thường vẫn render | pass | pass |
+| 7 đầu vào rỗng | pass | pass |
+
+Check 4–7 xanh trên code cũ là **có chủ ý**: chúng là guard chống hồi quy cho hành vi đúng sẵn có,
+nên nếu chúng đỏ thì bản sửa đã làm hỏng thứ khác.
+
+Kiểm trong trình duyệt thật (Edge, click thật) với bản mới: 7/7 payload độc → `href` bị bỏ, không
+payload nào chạy; control `https://example.com/ok` và `mailto:a@b.c` vẫn giữ đúng scheme.
+
+### 71.4 Gate
+
+| Gate | Kết quả | Bằng chứng |
+|---|---|---|
+| 1 Types | PASS | `npx nuxt typecheck` exit 0, 0 × `error TS` |
+| 2 Lint | PASS | exit 0 trên 2 file đã sửa, chạy sau lần regenerate `.nuxt/eslint.config.mjs` cuối |
+| 3 Tests | PASS | unit **144/144** (143 → +1 spec), core 919/919, electron 80/80 |
+| 4 Live | PASS | 5 route có phiên root: `/resources/inbox`, `/resources/connections`, `/resources/notifications`, `/tmcut`, `/tmcut/editor` — 0 noise, 0 bounce |
+| 5 CI | chưa chạy | chờ push |
+
+### 71.5 Vẫn chưa chứng minh
+
+- Đây là filter tự viết bằng regex, không phải một HTML parser. Nó **không** hiểu cây DOM, nên
+  mutation XSS sinh ra từ cách trình duyệt *sửa* markup lỗi (ví dụ một thẻ chưa đóng đổi nghĩa thẻ
+  sau) nằm ngoài tầm với của nó. Bản đo 10 vector mXSS hiện tại đều bị chặn, nhưng đó là mẫu, không
+  phải chứng minh.
+- Chưa thử với một thư viện như DOMPurify (không có trong dependency, và thêm gói là quyết định của
+  owner).
+- Chưa đo trên Firefox/Safari: máy chỉ có Edge.
+- CSP vẫn **không có**. Thêm `script-src 'self'` sẽ là lớp phòng thủ thứ hai, nhưng nó ảnh hưởng
+  toàn app nên không gộp vào lượt này.
