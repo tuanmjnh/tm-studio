@@ -212,6 +212,26 @@ async function main() {
       'the reader saw a location, not the authored path')
   })
 
+  // The desktop host's authored `clip.src` is `C:/Users/…/clip.mp4`, which a
+  // browser cannot fetch: the drive letter reads as a scheme and the load lands
+  // on `file:///C:/…`, refused by `webSecurity`, so the demuxer rejects with
+  // `Failed to fetch`. The plate leg has gone through `resolveSrc` since §53.8;
+  // the sound leg was handed the authored path and opened it directly, which is
+  // the 2026-11-13 report: export fails on the desktop while the preview plays.
+  await check('both legs read the resolved location, and the mixer is handed the same rule', async () => {
+    const f = fixture()
+    const result = await f.host.run({
+      project: projectOf() as never,
+      resolveSrc: (src: string) => `media://local?file=${encodeURIComponent(src)}`
+    })
+    assert.equal(result.kind, 'exported', `the export ran: ${result.message ?? ''}`)
+    assert.deepEqual([...new Set(f.readAsks.map(ask => ask.src))],
+      ['media://local?file=C%3A%2Fmedia%2Fv.mp4'],
+      'the plate leg opened the resolved location')
+    assert.deepEqual(f.mixerPorts.map(ports => typeof ports.resolveSrc), ['function'],
+      'and the mixer was created with the host resolver, so the picture and the sound cannot read different things')
+  })
+
   await check('every frame is cleared before it is drawn, and the drawn rect is core\'s', async () => {
     const f = fixture()
     await f.host.run({ project: projectOf() as never, resolveSrc: src => src })

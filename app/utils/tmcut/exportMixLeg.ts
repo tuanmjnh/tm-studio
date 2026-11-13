@@ -42,6 +42,17 @@ export interface ExportMixLegDeps {
   decode?: (ask: ExportMixDecodeAsk & { bytes?: Blob | null }) => Promise<ExportMixRun | null>
   hasDecoder?: () => boolean
   /**
+   * The host's own authored-path -> location rule (`resolveMediaSrc` in the
+   * app). The authored `clip.src` is an identity, not a location: on the desktop
+   * host `C:/Users/…/clip.mp4` is not a URL a browser may fetch, so Chromium
+   * reads the drive letter as a scheme, lands on `file:///C:/…`, and the
+   * demuxer rejects with `Failed to fetch` — measured 2026-11-13, one export
+   * reading the same clip twice (206 through `media://`, then the failure). The
+   * plate leg has gone through the resolver since §53.8; this is the sound leg
+   * finally doing the same, so one export cannot paint a file it cannot hear.
+   */
+  resolveSrc?: (src: string) => string
+  /**
    * The client cache's answer for one file, asked once per run. A miss or a
    * refused storage layer falls back to the location: a thin cache must not
    * turn a file the timeline plays into silence in the exported file.
@@ -81,6 +92,7 @@ export function createExportMixLeg(deps: ExportMixLegDeps = {}) {
   const decode = deps.decode ?? decodePcm
   const canDecode = deps.hasDecoder ?? hasAudioDecoder
   const bytesFor = deps.bytesFor
+  const resolveSrc = deps.resolveSrc ?? (src => src)
   const runs = new Map<string, Promise<ExportMixRun | null>>()
   const refusals: ExportMixRefusal[] = []
   let done = false
@@ -116,7 +128,11 @@ export function createExportMixLeg(deps: ExportMixLegDeps = {}) {
           bytes = null
         }
       }
-      return decode({ src, inSec: 0, outSec: mediaEndOf(tracks, src), signal, bytes })
+      // The cache is keyed by the authored path; the decoder is handed a
+      // location. A `media://` URL carries the authored path inside it, so the
+      // two answers still name one file without either being derived from the
+      // other.
+      return decode({ src: resolveSrc(src), inSec: 0, outSec: mediaEndOf(tracks, src), signal, bytes })
     })()
     runs.set(src, work)
     return work

@@ -49,11 +49,22 @@ export interface WebExportMixer {
   refused: () => Array<{ clipId: string | null, reason: string }>
 }
 
+export interface WebExportMixerDeps {
+  bytesFor?: (src: string) => Promise<Blob | null>
+  /**
+   * The same path -> location rule the plate reader gets. Both legs read one
+   * file, so both must open it the way this host allows: on the desktop the
+   * authored `C:/…` path is not fetchable (measured 2026-11-13 — the plate leg
+   * read `media://…` and the sound leg failed the export with `Failed to fetch`).
+   */
+  resolveSrc?: (src: string) => string
+}
+
 export interface WebExportHostDeps {
   createReader?: (ports: { bytesFor?: (src: string) => Promise<Blob | null> }) => WebExportReader
   createMixer?: (
     project: { tracks?: unknown[] },
-    ports: { bytesFor?: (src: string) => Promise<Blob | null> }
+    ports: WebExportMixerDeps
   ) => WebExportMixer
   createCanvas?: (width: number, height: number) => WebExportCanvas
   capability?: Parameters<typeof createWebCodecsExport>[0]['capability']
@@ -171,7 +182,11 @@ export function createWebExportHost(deps: WebExportHostDeps = {}): WebExportHost
     // cached picture cannot be paired with a streamed sound from a different copy.
     const ports = ask.bytesFor ? { bytesFor: ask.bytesFor } : {}
     const reader = makeReader(ports)
-    const mixer = makeMixer(ask.project as { tracks?: unknown[] }, ports)
+    // The sound leg gets the same resolver the plate leg is handed a line later:
+    // one function decides what a location is, and both readers of one file obey
+    // it. A mixer that resolved on its own would be a second answer to the same
+    // question — the drift class this assembly exists to prevent.
+    const mixer = makeMixer(ask.project as { tracks?: unknown[] }, { ...ports, resolveSrc: ask.resolveSrc })
     try {
       const audio = content.kind === 'eligible' && content.request?.audio
         ? content.request.audio

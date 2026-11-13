@@ -397,6 +397,66 @@ async function main() {
     leg.close()
   })
 
+  // 12b. The authored `clip.src` is not a location a decoder can open. On the
+  //      desktop host `C:/Users/…/clip.mp4` is not a URL: Chromium reads the
+  //      drive letter as a scheme and lands on a `file:///C:/…` load, which
+  //      `webSecurity` refuses, so `fetch` rejects with `Failed to fetch` and the
+  //      whole export fails — even though the plate leg had already read the
+  //      same file through `media://`. Measured in the live app (2026-11-13):
+  //      one export, two reads of one clip, `media://…` 206 then `C:/Users/…`
+  //      `Failed to fetch`. The leg therefore resolves through the host's own
+  //      rule, exactly as the plate leg does, while the AUTHORED path stays the
+  //      cache key and the question "how far does any clip use this file".
+  await check('the decoder is handed a resolved location, not the authored path', async () => {
+    const decodes: Array<{ src: string, bytes?: Blob | null }> = []
+    const asked: string[] = []
+    const blob = new Blob([new Uint8Array(8)])
+    const leg = createExportMixLeg({
+      hasDecoder: () => true,
+      resolveSrc: (src: string) => `media://local?file=${encodeURIComponent(src)}`,
+      bytesFor: async (src: string) => {
+        asked.push(src)
+        return blob
+      },
+      decode: async (ask: { src: string, bytes?: Blob | null }) => {
+        decodes.push({ src: ask.src, bytes: ask.bytes })
+        return SILENCE()
+      }
+    })
+    await leg.mix({
+      project: projectOf({ video: [clip('v1', 'video', 'C:/media/v.mp4')] }),
+      request: packet(0),
+      target: TARGET
+    })
+    assert.deepEqual(decodes.map(entry => entry.src), ['media://local?file=C%3A%2Fmedia%2Fv.mp4'],
+      'the decoder opened a location the browser can actually fetch')
+    assert.deepEqual(asked, ['C:/media/v.mp4'],
+      'while the cache still names the authored file, so a revision cannot be looked up by a URL')
+    assert.equal(decodes[0]!.bytes, blob, 'and a cache hit is still the copy that is decoded')
+    leg.close()
+  })
+
+  // 12c. A host that hands no resolver keeps the legacy behaviour: the authored
+  //      path is what the decoder opens. The web host's `/uploads/…` reads as a
+  //      same-origin path, which is why this gap never showed in a browser.
+  await check('a leg with no resolver decodes the authored path, as the web host did', async () => {
+    const seen: string[] = []
+    const leg = createExportMixLeg({
+      hasDecoder: () => true,
+      decode: async (ask: { src: string }) => {
+        seen.push(ask.src)
+        return SILENCE()
+      }
+    })
+    await leg.mix({
+      project: projectOf({ video: [clip('v1', 'video', '/uploads/w.mp4')] }),
+      request: packet(0),
+      target: TARGET
+    })
+    assert.deepEqual(seen, ['/uploads/w.mp4'], 'no location was invented where the host gave no rule')
+    leg.close()
+  })
+
   // 12. No byte port at all is the leg §53.9 shipped, so the desktop path keeps
   //     working without being handed a browser storage API.
   await check('a leg with no byte port decodes each file from its location', async () => {
