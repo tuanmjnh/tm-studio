@@ -2,6 +2,9 @@
 @import "@fontsource-variable/jetbrains-mono";
 @import "tailwindcss" theme(static);
 @import "@nuxt/ui";
+/* tm-ui ships precompiled components whose class strings live in dist/;
+   Tailwind does not scan node_modules on its own, so name it explicitly. */
+@source "../../../node_modules/@tuanmjnh/tm-ui/dist";
 @import "./self.css";
 @import "./scroll-bar.css";
 @import "./glass.css";

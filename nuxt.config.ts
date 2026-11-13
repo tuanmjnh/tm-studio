@@ -83,8 +83,12 @@ export default defineNuxtConfig({
     server: {
       fs: {
         // packages/core is a workspace package consumed via source alias;
-        // allow Vite dev to serve it directly.
-        allow: [fileURLToPath(new URL('./packages/core', import.meta.url))]
+        // allow Vite dev to serve it directly. tm-ui is linked from a sibling
+        // repo, so its dist must be served from outside this project root too.
+        allow: [
+          fileURLToPath(new URL('./packages/core', import.meta.url)),
+          fileURLToPath(new URL('../tm-platform/packages/tm-ui', import.meta.url))
+        ]
       }
     },
     optimizeDeps: {

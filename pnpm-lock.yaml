@@ -193,6 +193,9 @@ importers:
       '@tuanmjnh/tm-ai-client':
         specifier: ^0.2.1
         version: 0.2.1
+      '@tuanmjnh/tm-ui':
+        specifier: link:../tm-platform/packages/tm-ui
+        version: link:../tm-platform/packages/tm-ui
       '@vueuse/core':
         specifier: ^15.0.0
         version: 15.0.0(vue@3.5.44(typescript@6.0.3))

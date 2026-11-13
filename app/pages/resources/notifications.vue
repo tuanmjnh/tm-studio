@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { StatusBadge as AdminStatusBadge } from '@tuanmjnh/tm-ui'
 import { useModuleExport, buildExportChildren } from '~/composables/admin/useModuleExport'
 import { formatTimeAgo } from '@vueuse/core'
 import type { GridColumn } from '~/types/gridList'

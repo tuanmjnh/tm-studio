@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const { t } = useI18n()
+import { ListFooter as TmListFooter } from '@tuanmjnh/tm-ui'
 
 const props = withDefaults(defineProps<{
   count?: number
@@ -12,34 +12,25 @@ const props = withDefaults(defineProps<{
   loading: false,
   showNoMore: false
 })
+
+const { t } = useI18n()
 </script>
 
 <template>
-  <!-- min-h-8: matches the sidebar UserMenu footer row height (49px with wrapper py-2 + border) -->
-  <div class="flex min-h-8 items-center justify-between gap-3 w-full">
-    <div class="flex items-center gap-2 min-w-0">
+  <TmListFooter
+    :count="props.count"
+    :has-more="props.hasMore"
+    :loading="props.loading"
+    :show-no-more="props.showNoMore"
+    :records-label="t('common.records')"
+    :loading-label="t('common.loading_text')"
+    :no-more-label="t('common.no_more_data')"
+  >
+    <template #left>
       <slot name="left" />
-    </div>
-
-    <div class="flex items-center gap-3 shrink-0">
+    </template>
+    <template #right>
       <slot name="right" />
-
-      <div class="flex items-center gap-2 text-[11px] sm:text-xs text-muted font-medium">
-        <SharedRecordCount :count="props.count" :has-more="props.hasMore" />
-
-        <div v-if="props.loading" class="flex items-center gap-1.5 text-primary">
-          <UIcon name="i-lucide-loader-2" class="size-3.5 animate-spin" />
-          <span class="hidden sm:inline text-xs">{{ t('common.loading_text') }}</span>
-        </div>
-
-        <div
-          v-else-if="props.showNoMore && !props.hasMore && props.count > 0"
-          class="hidden sm:flex items-center gap-1.5 text-dimmed italic"
-        >
-          <UIcon name="i-lucide-check-circle-2" class="size-3.5" />
-          {{ t('common.no_more_data') }}
-        </div>
-      </div>
-    </div>
-  </div>
+    </template>
+  </TmListFooter>
 </template>
