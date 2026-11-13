@@ -15,3 +15,4 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - tm-hub-client@1.0.9 || 1.1.0 || 1.2.0
   - mediabunny@1.65.1
+  - '@tuanmjnh/tm-ai-client@0.2.0'
