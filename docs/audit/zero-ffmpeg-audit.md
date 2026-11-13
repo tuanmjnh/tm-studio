@@ -9046,3 +9046,92 @@ làm bằng TDD riêng: (a) chỉ `seek` khi drift vượt tolerance **và** ph�
 thực (`buffered` không phủ điểm đích), thay vì `readyState`; (b) đo `waiting` sau mỗi seek để biết
 Chromium trên `media://` có thật sự tái nạp vì seek hay vì lý do khác. Cần một fixture thứ hai
 (`http://localhost:4003/uploads/…`) để so cùng một luật trên hai transport trước khi đổi core.
+
+## 76. Kết quả export trên desktop: không mở được thư mục, không play được, không tải về được (đo ngày 2026-11-13)
+
+Sau khi §75 sửa xong lỗi `Failed to fetch`, export chạy đến "Export Completed!" nhưng cả ba thao tác
+trên kết quả đều hỏng: không có thư mục render để mở, nút Play báo "định dạng không hỗ trợ", nút
+Download không tạo ra file. Ba hiện tượng, nhưng chỉ **một** nguyên nhân gốc.
+
+### 76.1 Đo trên cửa sổ thật (Electron 44.10 / Chromium 152, CDP :9222)
+
+| Phép đo | Kết quả |
+|---|---|
+| Bản chất kết quả export | một `Blob` trong renderer — không có đường dẫn nào để lộ ra |
+| Nút Play → `ToolsVideoPreviewModal` nhận gì | `file-path` là URL `blob:` |
+| Phân loại của modal với URL đó | `isVideo: false`, `isAudio: false` (so khớp **phần mở rộng**, `blob:` không có đuôi) |
+| Nút Download → làn tải của shell | `<a download>` trên `blob:` phát `downloadWillBegin` rồi `downloadProgress … state: "canceled"`, **0 byte**, không file nào |
+| Cùng làn tải đó với nguồn `http:` | cũng `canceled` — lỗi thuộc **làn tải của shell**, không riêng `blob:` |
+| Có tính năng "mở thư mục render" không | **không có**; `webDestination` còn ghi rõ "kết xuất trong trình duyệt — bấm Tải về" |
+| Bản ghi `will-download` trong `electron/*.cjs` | **0** — shell không cấu hình làn tải nên Chromium dùng mặc định và huỷ |
+
+Phép đo đầu tiên qua Playwright báo "canceled" cho cả `http:` lẫn `blob:`; đó là **dụng cụ đo**, không
+phải sản phẩm: Playwright gắn CDP vào cửa sổ và tự chặn download. Đo lại bằng CDP thô
+(`Browser.setDownloadBehavior = allow` + sự kiện `Browser.downloadWillBegin/Progress`, có cả click
+tổng hợp lẫn `Input.dispatchMouseEvent` tin cậy) cho cùng kết quả `canceled` 0 byte, nên kết luận là
+thật, không phải artefact.
+
+### 76.2 Nguyên nhân
+
+Encoder WebCodecs + muxer chạy **trong renderer** và trả về `Blob`. Trên host desktop, `Blob` không
+phải file: không có path để lộ, modal preview không nhận ra nó (phân loại theo đuôi), và làn tải của
+shell không ghi nó ra đĩa. Ba lỗi hiển thị là ba hệ quả của **một** khoảng trống: desktop chưa có
+đường nào biến byte trong renderer thành file trên đĩa.
+
+### 76.3 Bản sửa: một cơ chế, không phải ba
+
+Main process sở hữu việc ghi (`electron/tools/render-save.cjs` + IPC `tmcut:saveRender`):
+
+- `acceptRenderBytes` nhận `Uint8Array` / `ArrayBuffer` / typed-array view, **từ chối body rỗng** thay vì
+  ghi một file trông như export thành công; trần 4 GiB.
+- `resolveRenderTarget` đặt tên qua `sanitizeFilename` (một thành phần đường dẫn, không phải một
+  đường dẫn) và thêm hậu tố ` (n)` khi tên đã tồn tại — render thứ hai không đè render thứ nhất.
+- Không `saveAs`: ghi vào `<userData>/tmcut/renders/<tên>.mp4` và trả `{ ok, path, name, bytes }`.
+- Có `saveAs`: mở `dialog.showSaveDialog` của hệ điều hành rồi ghi bản sao tới đó.
+
+Renderer (`TmcutExportModal.vue`):
+
+- `runWebExport` vẫn tạo `blob:` trước (host không có bridge, tức web, giữ làn tải của trình duyệt),
+  rồi gọi `saveRenderToDisk` để lấy đường dẫn thật. Ghi hỏng **không** làm export thất bại — blob vẫn
+  phát được — nên nó được báo, không bị ném.
+- Hàng đích danh giờ hiện **đường dẫn thật** trên desktop (`desktopDestination` trước khi render,
+  path tuyệt đối sau khi render), kèm nút "mở thư mục" (`showItemInFolder`).
+- Nút Play → `:file-path="webResultPath || webResultUrl"` và `kind="video"`; modal preview nhận `kind`
+  do người gọi khai, chỉ dùng phần mở rộng làm dự phòng. `toURL` biến đường dẫn Windows thành
+  `media://` — đúng transport mà phần còn lại của editor đã phát được.
+- Một nút "Save a copy" (`saveRenderAs`) đi qua `saveAs`; web host giữ nguyên "Download" với làn
+  `<a download>`.
+
+### 76.4 Bằng chứng trên cửa sổ thật (sau khi relaunch shell để nạp main process mới)
+
+| Kiểm tra | Kết quả |
+|---|---|
+| `saveRender` (2048 byte, không dialog) | `ok: true`, file có thật trên đĩa, **đúng 2048 byte** |
+| `saveRender` với body rỗng | `{ ok: false, error: "Empty render" }` — không file nào được ghi |
+| Export thật qua UI (`Untitled Project`) | hoàn tất ~173 s, `Untitled Project (1).mp4` **13,550,534 byte** |
+| Hàng đích sau export | `…/tmcut/renders/Untitled Project (1).mp4` |
+| Nút Play (phần tử `<video>` của modal) | nguồn `media://…/renders/Untitled Project (1).mp4`, `readyState 4`, `paused: false`, `currentTime 6.44`, `1920×1080`, `duration 24.45` |
+| `showItemInFolder(path có thật)` | `true`; `showItemInFolder(path không tồn tại)` | `false` |
+| Console trong 5 route TMCut | 0 `error` / 0 `warning` / 0 `issue` (ngoài thông báo CSP riêng của Electron dev) |
+
+### 76.5 Gate
+
+| Gate | Lệnh | Kết quả |
+|---|---|---|
+| Kiểu | `npx nuxt typecheck` | exit 0, 0 × `error TS` |
+| Lint | `npx eslint` trên 3 file đã sửa (sau khi regenerate config) | 0 problems |
+| Test app | `npx tsx tests/unit/run-all.mts` | **145/145** |
+| Test electron | `node --test "electron/tools/*.test.mjs"` | **89/89** (6 test mới cho `render-save`) |
+| Test core | `node --test "packages/core/test/*.test.mjs"` | **927/927** |
+| Live | 5 route TMCut qua CDP | 0 issue |
+
+### 76.6 Chưa chứng minh
+
+- **Save as** chưa đo live: hộp thoại native chặn luồng CDP, và click tổng hợp không mở được dialog.
+  Đường đi đã có test đơn vị cho phần quyết định (`resolveRenderTarget`, cờ `saveAs`) nhưng lần chọn
+  file thật của người dùng chưa được chạy.
+- **Web host** chưa đo lại sau thay đổi: modal giờ nhận `kind="video"`, nhánh web vẫn dùng
+  `<a download>` trên blob. Làn tải của trình duyệt thật chưa được chạy trong lượt này.
+- **Bản đóng gói**: mọi phép đo dùng `pnpm dev` + `dev-electron`. Main process của bản NSIS đọc cùng
+  file nên cùng logic, nhưng chưa smoke-test trên installer.
+- Hiện tượng stall khi Play (§74.8) **không đổi** — nó là lỗi khác, vẫn mở.
