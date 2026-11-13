@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import { ResponsiveModal as TmResponsiveModal } from '@tuanmjnh/tm-ui'
+
 defineOptions({ inheritAttrs: false })
-const { t } = useI18n()
-const { isMobile } = useDeviceBreakpoints()
-const props = withDefaults(defineProps<{
+
+defineProps<{
   modelValue?: boolean
   open?: boolean
   title?: string
@@ -14,122 +15,25 @@ const props = withDefaults(defineProps<{
   dismissible?: boolean
   close?: boolean
   icon?: string
-  ui?: {
-    title?: string
-    description?: string
-    [key: string]: unknown
-  }
-}>(), {
-  modelValue: undefined,
-  open: undefined,
-  title: '',
-  description: undefined,
-  modal: true,
-  fullscreen: false,
-  loading: false,
-  disabled: false,
-  dismissible: true,
-  close: true,
-  icon: undefined,
-  ui: () => ({})
-})
+  ui?: { title?: string, description?: string, [key: string]: unknown }
+}>()
 
 const emit = defineEmits<{
   (e: 'update:modelValue' | 'update:open', value: boolean): void
   (e: 'close'): void
 }>()
 
-const isOpen = computed({
-  get: () => props.modelValue ?? props.open ?? false,
-  set: (val) => {
-    emit('update:modelValue', val)
-    emit('update:open', val)
-    if (!val) emit('close')
-  }
-})
-
-const isLoading = computed(() => props.loading)
-const isDisabled = computed(() => props.disabled)
-
-// Default UI configuration for responsive fullscreen modal
-const defaultUi: Record<string, unknown> = {
-  header: 'flex items-center justify-between px-4 py-3 border-b border-default',
-  body: 'flex-1 overflow-y-auto p-4',
-  footer: 'flex items-center justify-end gap-2 px-4 py-3 border-t border-default bg-muted/40'
-}
-
-const uiConfig = computed(() => {
-  const ui: Record<string, unknown> = { ...defaultUi }
-  if (props.ui) {
-    for (const key in props.ui) {
-      const propVal = props.ui[key]
-      const currentVal = ui[key]
-      if (typeof propVal === 'object' && propVal !== null && typeof currentVal === 'object' && currentVal !== null) {
-        ui[key] = { ...(currentVal as Record<string, unknown>), ...(propVal as Record<string, unknown>) }
-      } else {
-        ui[key] = propVal
-      }
-    }
-  }
-  return ui
-})
+const { t } = useI18n()
 </script>
 
 <template>
-  <UModal
-    v-model:open="isOpen"
-    :fullscreen="fullscreen || isMobile"
-    :modal="modal"
-    :title="title"
-    :description="description"
-    :ui="uiConfig"
-    :dismissible="isDisabled || isLoading ? false : dismissible"
-    :close="close"
-    v-bind="$attrs"
-  >
-    <template v-if="$slots.header" #header="slotProps">
-      <slot name="header" v-bind="slotProps" />
+  <TmResponsiveModal :model-value="modelValue" :open="open" :title="title" :description="description" :modal="modal"
+    :fullscreen="fullscreen" :loading="loading" :disabled="disabled" :dismissible="dismissible" :close="close"
+    :icon="icon" :ui="ui" :back-label="t('common.back')" v-bind="$attrs"
+    @update:model-value="emit('update:modelValue', $event)" @update:open="emit('update:open', $event)"
+    @close="emit('close')">
+    <template v-for="(_, name) in $slots" #[name]="data">
+      <slot :name="name" v-bind="data ?? {}" />
     </template>
-
-    <template v-if="$slots['header-left'] || $slots.icon || icon" #title>
-      <div class="flex items-center gap-2 min-w-0">
-        <!-- Mobile Back Button -->
-        <UButton
-          color="neutral"
-          variant="ghost"
-          icon="i-lucide-arrow-left"
-          :aria-label="t('common.back')"
-          class="inline-flex sm:hidden"
-          :disabled="isDisabled"
-          :loading="isLoading"
-          @click="isOpen = false"
-        />
-
-        <slot name="icon">
-          <UIcon v-if="icon" :name="icon" class="size-5 text-primary shrink-0" />
-        </slot>
-
-        <span class="truncate">{{ title }}</span>
-        <slot name="header-left" />
-      </div>
-    </template>
-
-    <template v-if="$slots['header-right']" #actions>
-      <slot name="header-right" />
-    </template>
-
-    <template v-if="$slots.content" #content>
-      <slot name="content" />
-    </template>
-    <template v-else-if="$slots.body" #body>
-      <slot name="body" />
-    </template>
-    <template v-else #body>
-      <slot />
-    </template>
-
-    <template v-if="$slots.footer" #footer>
-      <slot name="footer" />
-    </template>
-  </UModal>
+  </TmResponsiveModal>
 </template>

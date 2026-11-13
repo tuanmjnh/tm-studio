@@ -1002,7 +1002,7 @@
       "completed": "Đã hoàn tất!",
       "success": "Xuất video thành công!",
       "failed": "Xuất video thất bại",
-      "openFolder": "Mở thư mục chứa",
+      "openFolder": "Mở thư mục",
       "previewNow": "Xem video trực tiếp",
       "openWithApp": "Mở ứng dụng ngoài",
       "specifyPath": "Vui lòng chọn đường dẫn lưu file",
@@ -1029,7 +1029,6 @@
       "webDestination": "Kết xuất ngay trong trình duyệt — bấm Tải về khi xong",
       "desktopDestination": "Xong sẽ ghi vào thư mục renders của ứng dụng",
       "showInFolder": "Mở thư mục chứa file đã kết xuất",
-      "openFolder": "Mở thư mục",
       "saveAs": "Lưu bản sao",
       "saveFailed": "Không ghi được bản kết xuất ra đĩa",
       "webRendering": "Đang kết xuất trong trình duyệt…",
@@ -2742,7 +2741,8 @@
     "no_more_data": "Đã tải hết",
     "viewLogs": "Xem nhật ký",
     "more": "Thêm",
-    "deleted": "Đã xóa"
+    "deleted": "Đã xóa",
+    "filter": "Bộ lọc"
   },
   "media": {
     "uploading_text": "Đang tải lên...",

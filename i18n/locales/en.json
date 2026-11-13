@@ -1002,7 +1002,7 @@
       "completed": "Export Completed!",
       "success": "Video exported successfully!",
       "failed": "Video export failed",
-      "openFolder": "Show in Folder",
+      "openFolder": "Open folder",
       "previewNow": "Preview Video Directly",
       "openWithApp": "Open with External App",
       "specifyPath": "Please specify output file path",
@@ -1029,7 +1029,6 @@
       "webDestination": "Rendered in this browser — use Download when it finishes",
       "desktopDestination": "Written to the app's renders folder when it finishes",
       "showInFolder": "Show the rendered file in its folder",
-      "openFolder": "Open folder",
       "saveAs": "Save a copy",
       "saveFailed": "The render could not be written to disk",
       "webRendering": "Rendering in this browser…",
@@ -2742,7 +2741,8 @@
     "no_more_data": "No more data",
     "viewLogs": "View logs",
     "more": "More",
-    "deleted": "Deleted"
+    "deleted": "Deleted",
+    "filter": "Filter"
   },
   "media": {
     "uploading_text": "Uploading...",

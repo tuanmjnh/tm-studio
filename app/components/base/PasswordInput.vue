@@ -1,38 +1,27 @@
 <script setup lang="ts">
+import { PasswordInput as TmPasswordInput } from '@tuanmjnh/tm-ui'
+
+defineOptions({ inheritAttrs: false })
+
 const model = defineModel<string>({ default: '' })
 
-const show = ref(false)
 withDefaults(defineProps<{
   placeholder?: string
   size?: 'sm' | 'md' | 'lg'
   ariaLabel?: string
+  autocomplete?: string
 }>(), {
   placeholder: '',
   size: 'md',
-  ariaLabel: ''
+  ariaLabel: '',
+  autocomplete: undefined
 })
 
 const { t } = useI18n()
 </script>
 
 <template>
-  <UInput
-    v-model="model"
-    :placeholder="placeholder"
-    :size="size"
-    :type="show ? 'text' : 'password'"
-    :ui="{ trailing: 'pe-1' }"
-  >
-    <template #trailing>
-      <UButton
-        color="neutral"
-        variant="link"
-        size="sm"
-        :icon="show ? 'i-lucide-eye-off' : 'i-lucide-eye'"
-        :aria-label="ariaLabel || (show ? t('auth.hidePassword') : t('auth.showPassword'))"
-        :aria-pressed="show"
-        @click="show = !show"
-      />
-    </template>
-  </UInput>
+  <TmPasswordInput v-model="model" :placeholder="placeholder" :size="size" :aria-label="ariaLabel"
+    :autocomplete="autocomplete" :show-label="t('auth.showPassword')" :hide-label="t('auth.hidePassword')"
+    v-bind="$attrs" />
 </template>

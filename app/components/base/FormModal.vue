@@ -1,5 +1,8 @@
 <script setup lang="ts">
+import { FormModal as TmFormModal } from '@tuanmjnh/tm-ui'
 import type { FormSubmitEvent } from '@nuxt/ui'
+
+defineOptions({ inheritAttrs: false })
 
 defineProps<{
   title: string
@@ -20,48 +23,15 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-
-function onCancel() {
-  open.value = false
-  emit('cancel')
-}
 </script>
 
 <template>
-  <BaseResponsiveModal
-    v-model:open="open"
-    :title="title"
-    :description="description"
-    :ui="ui"
-    :close="!loading"
-    :dismissible="!loading"
-  >
-    <template #body>
-      <UForm
-        :schema="schema"
-        :state="state"
-        class="space-y-4"
-        @submit="emit('submit', $event)"
-      >
-        <slot />
-
-        <slot name="actions">
-          <div class="flex justify-end gap-2 pt-2">
-            <UButton
-              :label="cancelLabel || t('global.cancel')"
-              color="neutral"
-              variant="ghost"
-              :disabled="loading"
-              @click="onCancel"
-            />
-            <UButton
-              type="submit"
-              :label="submitLabel || t('global.save')"
-              :loading="loading"
-            />
-          </div>
-        </slot>
-      </UForm>
+  <TmFormModal v-model:open="open" :title="title" :description="description" :schema="schema" :state="state"
+    :loading="loading" :ui="ui" :cancel-label="cancelLabel || t('global.cancel')"
+    :submit-label="submitLabel || t('global.save')" v-bind="$attrs" @submit="emit('submit', $event)"
+    @cancel="emit('cancel')">
+    <template v-for="(_, name) in $slots" #[name]="data">
+      <slot :name="name" v-bind="data ?? {}" />
     </template>
-  </BaseResponsiveModal>
+  </TmFormModal>
 </template>

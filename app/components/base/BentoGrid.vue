@@ -1,15 +1,13 @@
 <script setup lang="ts">
-withDefaults(defineProps<{
-  /** Gap between bento cells. */
-  gap?: string
-}>(), {
-  gap: 'gap-3'
-})
+import { BentoGrid as TmBentoGrid } from '@tuanmjnh/tm-ui'
+
+defineOptions({ inheritAttrs: false })
 </script>
 
 <template>
-  <!-- 1 col → 6 cols → 12 cols. BentoCard spans use the 12-col grid at xl. -->
-  <div class="grid grid-cols-1 sm:grid-cols-6 xl:grid-cols-12" :class="gap">
-    <slot />
-  </div>
+  <TmBentoGrid v-bind="$attrs">
+    <template v-for="(_, name) in $slots" #[name]="data">
+      <slot :name="name" v-bind="data ?? {}" />
+    </template>
+  </TmBentoGrid>
 </template>

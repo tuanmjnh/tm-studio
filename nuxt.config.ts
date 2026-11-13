@@ -117,7 +117,20 @@ export default defineNuxtConfig({
 
   typescript: {
     typeCheck: true,
-    strict: true
+    strict: true,
+    // tm-ui is linked from a sibling repo and brings its own `vue` install.
+    // Its published types re-import `vue`, and TypeScript then loads the
+    // package's copy next to this app's — two module identities, so Nuxt's own
+    // augmentations ($t, useI18n, every auto-import global) stop applying.
+    // Pinning the specifier to this app's install keeps one identity.
+    tsConfig: {
+      compilerOptions: {
+        paths: {
+          vue: ['../node_modules/vue'],
+          'vue/*': ['../node_modules/vue/*']
+        }
+      }
+    }
   },
 
   eslint: {

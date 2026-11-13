@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, dirname, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -33,10 +33,24 @@ interface ClickSite {
   keydownSelf: boolean
 }
 
+// GridList/SwipeCard now ship from @tuanmjnh/tm-ui, so the rows this spec guards
+// are no longer under app/. Scan the linked package source as well, and give its
+// sites a package-prefixed path so an exemption names exactly one copy.
+const PACKAGE_ROOT = join(ROOT, '..', 'tm-platform', 'packages', 'tm-ui', 'src')
+
+function scannedRoots(): Array<{ dir: string, prefix: string, relativeTo: string }> {
+  const roots = [{ dir: join(ROOT, 'app'), prefix: '', relativeTo: ROOT }]
+  if (existsSync(PACKAGE_ROOT)) {
+    roots.push({ dir: PACKAGE_ROOT, prefix: 'packages/tm-ui/src/', relativeTo: PACKAGE_ROOT })
+  }
+  return roots
+}
+
 function scanClicks() {
   const sites: ClickSite[] = []
-  for (const path of vueFiles(join(ROOT, 'app'))) {
-    const rel = relative(ROOT, path).replace(/\\/g, '/')
+  for (const { dir, prefix, relativeTo } of scannedRoots())
+  for (const path of vueFiles(dir)) {
+    const rel = prefix + relative(relativeTo, path).replace(/\\/g, '/')
     const src = readFileSync(path, 'utf8')
     for (const match of src.matchAll(CLICKABLE)) {
       const attrs = match[2] ?? ''
@@ -100,7 +114,7 @@ const ROLE_REQUIRED = new Set([
 // Rows with nested controls must scope the keydown to the row itself, or an
 // Enter on an inner button would also fire the row action.
 const SELF_REQUIRED = new Set([
-  'app/components/gridList/SwipeCard.vue::handleContentClick',
+  'packages/tm-ui/src/gridlist/SwipeCard.vue::handleContentClick',
   'app/components/inbox/InboxList.vue::selectedId = mail.id',
   'app/components/tmcut/TmcutMediaPanel.vue::selectedFolderId = folder.id',
   'app/components/tmcut/TmcutMediaPanel.vue::asset.status !== \'missing\' && handleAddToTimeline(asset)',
