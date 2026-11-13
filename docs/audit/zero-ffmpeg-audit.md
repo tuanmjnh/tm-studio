@@ -8805,3 +8805,244 @@ Không phải hồi quy của sanitizer.
   liên kết (không mất chữ). Không có dữ liệu nào cho biết điều đó xảy ra trong mail thật.
 - Đây vẫn là filter regex, không phải HTML parser (giới hạn đã khai ở §71.5). Lượt này không đổi
   điều đó; nó chỉ đóng đúng lớp URL mà §72 đã đóng ở chỗ khác.
+
+## 74. "Buffering khi Play" sau khi import: swap `src` đúng lúc phần tử đang chạy (đo ngày 2026-11-13)
+
+### 74.1 Triệu chứng và phép đo đầu tiên
+
+Báo cáo: sau khi import vào timeline rồi bấm Play, preview hiện pill "Buffering…" và/hoặc giật.
+§8 của `docs/audit/playback-buffering-audit.md` đã đóng A1–A4 (seek storm, wall-clock playhead,
+buffering boolean) và các spec vẫn xanh, nên đây là một đường khác.
+
+Dựng lại bằng một project thật trỏ vào `probe-playback-1080p30.mp4` (24 s, 1080p30, 17.87 MB) đã có
+trong `.data/uploads`, rồi bấm đúng nút Play và lấy mẫu `<video>` mỗi 250 ms. Kết quả **đường stream
+sạch**: 0 lần `seeking`, 0 lần `waiting`, `readyState` = 4 suốt 24 mẫu, buffer trước 22.66 s, không có
+console error.
+
+Lượt đo đầu tiên báo "pill hiện 24/24 mẫu" — đó là **lỗi của dụng cụ**, không phải của app: nó đọc
+`document.body.innerText.includes('Buffering')` trên toàn trang. Đo lại bằng cách chỉ đọc nút
+`[role=status]` trong `.tmcut-monitor` và mọi leaf node chứa chuỗi: không có gì hiện.
+
+Vậy đường stream một mình không tái hiện được. Khác biệt còn lại là **leg byte cache** (slice G4b):
+`playableSrc()` trả URL stream trước, rồi trả `blob:` khi OPFS đọc xong.
+
+### 74.2 Cơ chế, đo trên phần tử trần
+
+Đo trực tiếp trên một `<video>` trong cùng trang: cho phát URL stream, rồi gán `src` = blob URL của
+cùng file. Kết quả: **40/40 mẫu `paused = true`, `currentTime` về 0**. Gán `src` lên một phần tử đang
+chạy làm nó **dừng và tua về đầu**. Với file đủ lớn, nó nạp lại từ `readyState` 0 → bắn `waiting` →
+đúng cái pill.
+
+Trong app thật, cửa sổ này mở ra khi người dùng bấm Play **trước khi** OPFS đọc xong. Đo bằng cách trì
+hoãn `FileSystemFileHandle.getFile()` 2500 ms (một init script; không sửa source), rồi bấm Play sớm:
+
+| Trường hợp | `src` đổi lúc | `waiting` | pill | `currentTime` reset | playhead cuối |
+|---|---|---|---|---|---|
+| A — đọc xong trước Play | trước Play (62 ms) | 0 | 0 | không | 8.10 s |
+| B — đọc xong sau Play (2753 ms) | **đang chạy** | 2 | 3 mẫu | **có** | 5.28 s |
+
+Đó là nguyên nhân: không phải decode chậm, không phải seek storm — mà là **`src` bị thay trong lúc
+đang phát**.
+
+### 74.3 Sửa
+
+Luật ở core, `planPlaybackSourceCommit` (`packages/core/src/byteCache.mjs`): nó trả `src` (URL được
+mount bây giờ) và `pending` (URL giữ lại). Cùng một file (`sameMedia`), đang phát (`playing === true`),
+URL khác → giữ URL đang mount và báo URL mới là `pending`. Dừng phát → nhận ngay. **Clip khác** thì
+không bao giờ trì hoãn (một cut mà giữ ảnh cũ là hiện sai footage). Không còn URL → trả `''` để xoá
+ảnh cũ thay vì giữ nó.
+
+Áp trong `TmcutPreviewPlayer.vue`: thêm `committedMediaSrc` (URL `<video>` thực sự đang mount) và watcher
+key trên `(sourcePathOf(clip), currentMediaSrc, isPlaying)`; template bind `:src` vào `committedMediaSrc`
+thay vì computed. Hai watcher nội bộ (xoá `mediaLoadError`, `syncPreviewToPlayhead`) cũng key trên URL
+đã mount — nếu không, một swap bị giữ lại vẫn ép seek phần tử đang ở file cũ.
+
+Ghi chú: `sameMedia` so **đường dẫn media**, không so URL — stream và blob là hai tên của cùng một file
+mà import sinh ra.
+
+### 74.4 Bằng chứng
+
+- `packages/core/test/byte-cache-source-commit.test.mjs`: 8 check, **đỏ trước khi có luật**
+  (`does not provide an export named 'planPlaybackSourceCommit'`), xanh sau.
+- Đo lại sau sửa, cùng probe trì hoãn 2500 ms: case B **không còn swap giữa chừng** — chỉ 1 `srcChange`,
+  `ctReset` false, playhead chạy tới 8.09 s.
+- Còn đúng **một** mẫu pill, và nó không phải swap: đo riêng bằng cách ghi lại mọi `<video>` trong
+  `.tmcut-monitor` mỗi 100 ms, mẫu pill duy nhất nằm ở **~130 ms sau lúc bấm Play**, `readyState` đã là 4
+  ngay mẫu đó, `currentTime` ~0.03. Đó là `waiting` khởi động của phần tử khi bắt đầu phát (mẫu ngay
+  trước nó: `rs1 ct0 paused`), không liên quan tới byte cache — nó xuất hiện ở cả hai case A và B, trên
+  cả `src` stream lẫn `blob`.
+- Case A (đọc xong trước Play): 0 mẫu pill.
+- Nhận URL bị giữ lại khi pause: `stream` lúc đang phát → `blob` sau khi pause. Không có nghĩa là mất
+  cache vĩnh viễn.
+
+### 74.5 Cổng
+
+| Cổng | Lệnh | Kết quả | Bằng chứng |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | exit 0, 0 × `error TS`; `.nuxt/eslint.config.mjs` regenerated |
+| 2 Lint | `npx eslint app/components/tmcut/TmcutPreviewPlayer.vue packages/core/src/byteCache.mjs packages/core/test/byte-cache-source-commit.test.mjs` (sau cổng 1) | PASS | exit 0, 0 problems |
+| 3 Tests | `node --test "packages/core/test/*.test.mjs"` | PASS | 927/927 (trước 919), exit 0 |
+| 3b Tests | `npx tsx tests/unit/run-all.mts` | PASS | 144/144, exit 0, 0 FAIL |
+| 3c Tests | `node --test "electron/tools/*.test.mjs"` | PASS | 83/83, exit 0 |
+| 4 Live | 5 route TMCut + A/B playback qua Playwright/Edge | PASS | 0 `error`/`warning` trên cả 5 route; A/B: `ctReset` false, không swap giữa chừng |
+| 5 Docs | mục này | PASS | — |
+
+### 74.6 Chưa chứng minh
+
+- Chỉ đo trên Edge (Chromium) trên Windows; Firefox/Safari cùng hành vi gán `src` là suy luận.
+- Một mẫu pill ~127 ms ở lúc bắt đầu phát vẫn còn (xem 74.4): đó là `waiting` khởi động của phần tử,
+  đã có `readyState` 4 ngay mẫu kế tiếp. Không đo được liệu trên máy chậm hơn nó có dài hơn ngưỡng
+  người dùng thấy khó chịu hay không.
+- Đo bằng cách **trì hoãn** OPFS đọc, không phải bằng một lần import thật 17.87 MB qua UI. Thứ tự
+  "mount trước, blob sau" là thật (nó xảy ra ở case A: `stream` 67 ms → `blob` 111 ms), nhưng thời
+  lượng đọc trên máy người dùng chưa đo.
+- Không chứng minh được trên Electron desktop host (đường `media://` khác đường `/uploads/`).
+
+### 74.7 Electron: lỗi swap **không thể xảy ra**, nhưng một hiện tượng khác chưa đóng (đo 2026-11-13)
+
+Kiểm tra lại trên Electron thật (`electron/tools/dev-electron-launcher.cjs`, CDP :9222, Electron 44.10 /
+Chromium 152) bằng cách nối Playwright vào cửa sổ thật.
+
+**Lỗi của §74 không tái hiện và không thể tái hiện trên desktop.** Trong mọi lượt đo, `srcKinds` chỉ là
+`["media"]`: đường import desktop không gọi `cacheAssetBytes` (`useTmcutMedia.ts` chỉ gọi ở
+`importWebFiles`, `useTmcutRelink.ts` ở `relinkWebAsset`), nên `planPlaybackByteSource` luôn trả
+`stream` và **không có `blob:` nào được mount**. `planPlaybackSourceCommit` vì thế là no-op ở host
+này — nó không làm chậm, không đổi `src`, và `ctReset` luôn `false`.
+
+**Hiện tượng khác, có từ trước bản sửa này** (đo trên player chưa sửa, `electron-head.txt`: 11 `waiting`,
+tốc độ 0.51x — trùng với player đã sửa 0.56-0.58x, nên không phải hồi quy):
+
+Phần tử `<video>` chạy ~0.5x, `readyState` dao động 4→1, `waiting` 10-13 lần trong 6 s, dù buffer đã
+14-19 s. Playhead của app **cũng** chạy 0.578x và phần tử 0.583x: hai số khớp nhau vì `followElement`
+(core `planPlaybackFollow`, action `hold`) **ghim playhead vào hình** khi hình không trình chiếu được —
+phần tử là gốc, pace là hệ quả. Phần tử chỉ nhích đúng bằng mỗi lần seek sửa drift (+0.333 s/lần).
+
+Đã **loại trừ bằng A/B đo đạc**, mỗi phép trên cùng cửa sổ và cùng file:
+
+| Nghi vấn | Phép đo | Kết quả |
+|---|---|---|
+| Cửa sổ bị che → Chromium throttle | 4 lượt xen kẽ, có/không `bringToFront` | Cả 4 đều `visible`/`hasFocus: true`; đều 0.51x → loại |
+| Transport `media://` | seek trên `media://` vs `http://localhost/uploads` | 29-138 ms cả hai; cùng seek-law cho cùng 0.51-0.52x → loại |
+| Seek-law | phần tử trần + law `0.30 s / 600 ms` | Chỉ nhích 0.50x — **nhưng đây là do fixture tự đặt mục tiêu 0.5x**, không phải lỗi app (xem dưới) |
+| Audio route (Web Audio) | chặn `createMediaElementSource` | 0 lần gọi; kết quả không đổi → loại |
+| Ghi `playbackRate` mỗi khung | setter no-op đúng cách | 187 lần ghi bị bỏ, 0 lần ghi thật; không đổi → loại |
+| Cỡ hộp phần tử | phần tử trần 3×2 px, 40×22 px | 0.98x → loại |
+| Ancestor `transform: scale()` | `scale(0.01)` quanh phần tử 320×180 | 0.99x → loại |
+| `opacity: 0.01` + `scale(0.01)` cùng lúc | đúng hình dạng fixture cũ | 0.98x → loại |
+| "Phần tử đầu tiên phát trên trang" | phát phần tử trần trước rồi mới Play | Trần 0.99x, app 0.49x → loại |
+
+Một lần đo tưởng như tái hiện được ("seek-law làm kẹt 0.50x") đã **bị loại bỏ như lỗi dụng cụ**: phép
+đó tự gán `currentTime += 0.30` mỗi 600 ms, tức tự đặt tốc độ mục tiêu 0.5x, rồi đo thấy 0.5x. Nó chỉ
+chứng minh phần tử đi đúng tới nơi được yêu cầu.
+
+Một lỗi fixture nghiêm trọng của chính các probe này, phải ghi lại: mọi project seed dùng `scale: 1`,
+trong khi core đọc `scale` kiểu cũ là **phần trăm** (`evaluate.mjs:109`, `flat / 100`), nên clip render ở
+1% và `<video>` đo được 3×2 px. Đó là lý do cỡ hộp được kiểm tra riêng ở trên; kết quả cho thấy cỡ hộp
+không phải nguyên nhân, nhưng các số 0.5x **không phải là số của sản phẩm** — clip thật của người dùng
+mang `scale: 100` (`useTmcutProject.ts:867`).
+
+**Chưa đóng được:** lượt đo lại bằng project `scale: 100` trong editor thật bị chặn vì phiên đăng nhập
+hết hạn và `/tmcut/editor` chuyển hướng về `/login`; đăng nhập lại qua form không hoàn tất trong phiên
+đó. Vì vậy **không có kết luận** nào về việc người dùng Electron có thấy hiện tượng này hay không.
+Việc cần làm ở lượt sau: đăng nhập, seed `scale: 100`, và so tốc độ playhead/phần tử trước khi kết luận.
+
+## 75. Export "Failed to fetch" trên desktop: chân hình đọc `media://`, chân tiếng đọc đường dẫn gốc (đo ngày 2026-11-13)
+
+Báo cáo: project `Untitled Project` (1 clip, effect `lut3d:cool`, nguồn
+`C:/Users/tuanmjnh/Downloads/… ｜ … #shorts.mp4`) bấm Export thì dialog báo **"Failed to fetch"**.
+Preview vẫn phát bình thường — nên không phải file hỏng, không phải thiếu quyền đọc.
+
+### 75.1 Đo: một file, hai lần đọc, lần thứ hai là lần hỏng
+
+Chạy thật trong cửa sổ Electron (CDP :9222, `http://localhost:4003/tmcut/editor?project=default`),
+mở dialog bằng nút "Export Video", bấm "Start Export", và vá `window.fetch` để ghi mọi lượt gọi:
+
+| Lượt | URL | Header | Kết quả |
+|---|---|---|---|
+| 1 | `media://local?file=C%3A%2FUsers%2F…mp4` | `Range: bytes=0-` | **206** |
+| 2 | `C:/Users/tuanmjnh/Downloads/….mp4` | `Range: bytes=0-` | **TypeError: Failed to fetch** |
+
+Console kèm theo hai dòng chỉ đúng cơ chế: `Not allowed to load local resource:
+file:///C:/Users/tuanmjnh/Downloads/…` và `Request will not be retried because a CORS error was
+suspected due to different origins` (thông điệp của mediabunny `DEFAULT_RETRY_DELAY`,
+`node_modules/mediabunny/dist/modules/src/source.js:474`).
+
+Tức là: chữ cái ổ đĩa `C:` bị Chromium đọc như một **scheme**, lượt đọc rơi xuống `file:///C:/…`, và
+`webSecurity` chặn nó — `fetch` ném `Failed to fetch`.
+
+### 75.2 Gốc: chỉ chân hình đi qua resolver
+
+`createWebExportHost` (`app/utils/tmcut/webExportHost.ts`) truyền `resolveSrc` cho **chân hình**
+(`createPlateReader` → `openMedia({ src: ask.resolveSrc(...) })`, `webExportHost.ts:180-190`) nhưng
+không truyền cho **chân tiếng**. `createExportMixLeg` (`app/utils/tmcut/exportMixLeg.ts`) nhận
+`clip.src` thô rồi đưa thẳng vào `decodePcm` → `openMedia` → `UrlSource('C:/…')`.
+
+Vì sao lỗi này chưa từng lộ: trên **web**, `clip.src` là `/uploads/<name>` — một đường dẫn tương đối
+cùng origin, `UrlSource` mở được. Trên **desktop**, `clip.src` là đường dẫn tuyệt đối của ổ đĩa, thứ
+mà một trang `http://` không được phép `fetch`.
+
+Hai spec cũ không bắt được vì cả hai đều dùng `resolveSrc: src => src` (đồng nhất) và fixture
+`'C:/media/v.mp4'` giả — ở đó resolver không đổi gì, nên "có đi qua resolver hay không" là vô hình.
+
+### 75.3 Sửa
+
+Một luật, hai chân: `resolveSrc` trở thành port của chân tiếng (`ExportMixLegDeps.resolveSrc`), và
+`webExportHost` truyền **cùng một hàm** cho cả reader lẫn mixer. `bytesFor` vẫn nhận **đường dẫn
+gốc** làm khoá cache (revision gắn với file người dùng import, không với URL), còn decoder nhận
+**location** — `media://` mang đường dẫn gốc bên trong nó nên hai câu trả lời vẫn chỉ một file mà
+không cái nào suy ra từ cái kia.
+
+### 75.4 Bằng chứng
+
+- **RED trước khi sửa** (hai spec, đúng lý do): `tmcut_export_mix_leg.spec.ts` — decoder nhận
+  `C:/media/v.mp4`, kỳ vọng `media://local?file=C%3A%2Fmedia%2Fv.mp4`;
+  `tmcut_web_export_host.spec.ts` — `mixerPorts.resolveSrc` là `undefined`, kỳ vọng `function`.
+- **GREEN sau khi sửa:** 14/14 mix-leg checks, 17/17 web-export-host checks.
+- **Live trên Electron, cùng project, cùng nút:** 0 lượt gọi `C:/…`, mọi lượt đọc đều
+  `media://local?file=…` **206**, và dialog kết thúc ở **"Export Completed!"** với nút Download
+  (không còn "Failed to fetch").
+
+### 75.5 Cổng
+
+| Cổng | Lệnh | Kết quả |
+|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS — exit 0, 0 × `error TS`; `.nuxt/eslint.config.mjs` tái sinh |
+| 2 Lint | `npx eslint` trên 4 file đã sửa (sau cổng 1) | PASS — exit 0, 0 problems |
+| 3 Tests | core / app / electron | PASS — 927/927, 144/144, 83/83 |
+| 4 Live | 5 route TMCut trên :4003 | PASS — 0 `[error]`/`[warn]`/`[issue]` |
+
+### 75.6 Chưa chứng minh
+
+- Không đo lại thời lượng encode end-to-end trên file 24.4 s (khoảng 122 s ở lượt đo này, không đặt
+  làm mục tiêu).
+- Không thử export một project có **bed audio riêng** (track audio thứ hai): fixture hiện tại chỉ có
+  audio nằm trong clip video. Cùng một luật `resolveSrc` phủ cả hai, nhưng chỉ clip video được đo.
+- Không chạy lại bộ e2e Playwright của export (`.data/uploads` + OPFS); phần đó vẫn là
+  `resolveSrc: s => s` và không đổi hành vi.
+
+### 74.8 Đo lại hiện tượng stall trên Electron sau khi đăng nhập được (2026-11-13)
+
+Lượt §74.7 không kết luận được vì `/tmcut/editor` chuyển về `/login`. Lần này phiên đăng nhập hợp lệ, nên
+đo được trên đúng project `Untitled Project` (clip 1440×2560, 24.4 s, `media://`).
+
+| Phép đo | Kết quả |
+|---|---|
+| Bấm Play của transport, 6 s | **0.69x**, `waiting` **14** lần, `readyState` 4→1, **14 `seeking`** |
+| Buffer tại cùng lúc | **một khoảng 0–24.45 s** — toàn bộ file, không hề thiếu dữ liệu |
+| Phần tử trần, cùng `media://` đó | **0.99x**, `waiting` **0**, `readyState` luôn 4 |
+| Phần tử trần + Web Audio graph | **1.00x**, `waiting` 0 → **loại Web Audio** |
+| Phần tử trần + `filter: saturate/hue-rotate/contrast` (effect `lut3d:cool`) | **0.99x**, `waiting` 0 → **loại CSS filter** |
+| Nguồn của các lượt ghi `currentTime` | `followElement` → `step()` (`useTmcutPlayback.ts:361`, `:485`), mỗi lần **+0.300 s** |
+| Phần tử trần + seek định kỳ 300 ms (+0.3 s) | 20 `waiting`, `readyState` kẹt ở 1 |
+
+**Kết luận:** hiện tượng này **không phải** swap `src` của §74 (đã sửa), **không phải** thiếu buffer,
+**không phải** Web Audio, **không phải** CSS filter. Nó là **seek-thrash**: trên host này, gán
+`currentTime` vào một phần tử đang phát làm nó rơi về `readyState` 1 và phát `waiting`, kể cả khi
+`buffered` đã phủ toàn bộ file; `planPlaybackFollow` thấy `readyState < 3` nên trả `hold`, playhead bị
+ghim, phần tử chỉ nhích đúng bằng mỗi lần sửa drift. Chuỗi 0.69x là **hệ quả**, không phải nguyên nhân.
+
+**Chưa sửa, chưa đóng.** Hai hướng cần đo tiếp ở lượt sau, cả hai đều là thay đổi luật core nên phải
+làm bằng TDD riêng: (a) chỉ `seek` khi drift vượt tolerance **và** phần tử không đang đói dữ liệu trung
+thực (`buffered` không phủ điểm đích), thay vì `readyState`; (b) đo `waiting` sau mỗi seek để biết
+Chromium trên `media://` có thật sự tái nạp vì seek hay vì lý do khác. Cần một fixture thứ hai
+(`http://localhost:4003/uploads/…`) để so cùng một luật trên hai transport trước khi đổi core.
