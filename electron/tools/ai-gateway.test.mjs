@@ -162,6 +162,24 @@ describe('complete', () => {
       err => err.code === 'ai.network'
     )
   })
+
+  it('a keyless gateway on a public base URL still completes', async () => {
+    const out = await gw.complete(
+      { provider: 'freellmapi', apiKey: '', baseUrl: 'https://gw.example.test/v1', model: 'auto', messages: [{ role: 'user', content: 'hi' }] },
+      { fetchImpl: stubFetch({ choices: [{ message: { content: 'yo' } }] }), logDir: null }
+    )
+    assert.equal(out.content, 'yo')
+  })
+
+  it('a 200 with no message content is ai.bad-shape, not ai.network', async () => {
+    await assert.rejects(
+      gw.complete(
+        { provider: 'openai', apiKey: 'k', baseUrl: 'https://x/v1', model: 'm', messages: [{ role: 'user', content: 'hi' }] },
+        { fetchImpl: stubFetch({ choices: [{ message: { content: '' } }] }), logDir: null }
+      ),
+      err => err.code === 'ai.bad-shape'
+    )
+  })
 })
 
 describe('transcribe', () => {

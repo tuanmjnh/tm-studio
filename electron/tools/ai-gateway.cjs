@@ -39,6 +39,7 @@
 
 const fs = require('node:fs')
 const path = require('node:path')
+const { AIClientError, createAIClient } = require('@tuanmjnh/tm-ai-client')
 
 /** Gateway error with a stable machine-readable `code`. */
 class AIGatewayError extends Error {
@@ -48,6 +49,45 @@ class AIGatewayError extends Error {
     this.code = code
     Object.assign(this, extra || {})
   }
+}
+
+/**
+ * The shared client reports what went wrong at the wire level and the app
+ * keeps its own vocabulary for the renderer. Codes match one-for-one except
+ * aborts, which this gateway has always surfaced as `ai.timeout`.
+ */
+const CLIENT_TO_GATEWAY_CODE = {
+  'ai.aborted': 'ai.timeout',
+  'ai.local-mode-blocked': 'ai.api-error'
+}
+
+function toGatewayError(err, fallbackMessage) {
+  if (err instanceof AIClientError) {
+    const code = CLIENT_TO_GATEWAY_CODE[err.code] || err.code
+    return new AIGatewayError(code, err.message, err.status !== undefined ? { status: err.status } : undefined)
+  }
+  return new AIGatewayError('ai.network', fallbackMessage || String((err && err.message) || err))
+}
+
+/**
+ * Provider presets that hold the credential themselves. Passing `allowKeyless`
+ * keeps today's behaviour: these may run without a client-side key.
+ */
+function allowKeylessFor(provider) {
+  const preset = presetFor(provider)
+  return !!(preset && preset.keyless)
+}
+
+function sharedClient(cfg, options) {
+  return createAIClient({
+    endpoint: {
+      provider: cfg.provider,
+      baseUrl: cfg.baseUrl,
+      apiKey: cfg.apiKey || undefined
+    },
+    allowKeyless: allowKeylessFor(cfg.provider),
+    fetchImpl: options.fetchImpl
+  })
 }
 
 /**
@@ -317,6 +357,16 @@ function excerpt(value, length) {
   return text.length > max ? `${text.slice(0, max)}…[+${text.length - max} chars]` : text
 }
 
+/** The shared client reports tokens by role; the audit log keeps provider keys. */
+function toLegacyUsage(usage) {
+  if (!usage) return null
+  const out = {}
+  if (usage.inputTokens !== undefined) out.prompt_tokens = usage.inputTokens
+  if (usage.outputTokens !== undefined) out.completion_tokens = usage.outputTokens
+  if (usage.totalTokens !== undefined) out.total_tokens = usage.totalTokens
+  return Object.keys(out).length ? out : null
+}
+
 function appendAudit(logDir, entry) {
   if (!logDir) return
   try {
@@ -324,35 +374,6 @@ function appendAudit(logDir, entry) {
     fs.appendFileSync(path.join(logDir, 'ai.ndjson'), `${JSON.stringify(entry)}\n`, 'utf8')
   } catch {
     // audit must never break the call
-  }
-}
-
-async function postJson(url, headers, body, timeoutMs, fetchImpl) {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    const fetchFn = fetchImpl || fetch
-    const res = await fetchFn(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-      signal: controller.signal
-    })
-    const text = await res.text()
-    let json = null
-    try {
-      json = text ? JSON.parse(text) : null
-    } catch {
-      json = null
-    }
-    return { status: res.status, json, text }
-  } catch (err) {
-    if (err && err.name === 'AbortError') {
-      throw new AIGatewayError('ai.timeout', `Request timed out after ${timeoutMs}ms`)
-    }
-    throw new AIGatewayError('ai.network', String((err && err.message) || err))
-  } finally {
-    clearTimeout(timer)
   }
 }
 
@@ -396,27 +417,31 @@ async function complete(args, opts) {
     throw new AIGatewayError('ai.rate-limited', `Rate limited, retry after ${gate.retryAfterMs}ms`, { retryAfterMs: gate.retryAfterMs })
   }
   const startedAt = Date.now()
-  const request = buildChatRequest(cfg, {
-    messages: input.messages,
-    model: cfg.model,
-    maxTokens: input.maxTokens,
-    temperature: input.temperature,
-    jsonMode: input.jsonMode
-  })
   const timeoutMs = Number(input.timeoutMs) > 0 ? Number(input.timeoutMs) : envCfg.timeoutMs
-  const { status, json, text } = await postJson(request.url, request.headers, request.body, timeoutMs, options.fetchImpl)
-  if (status === 429) {
-    throw new AIGatewayError('ai.rate-limited', 'Provider rate limit (429)')
-  }
-  if (status < 200 || status >= 300) {
-    const message = (json && (json.error?.message || json.message)) || text || `HTTP ${status}`
-    throw new AIGatewayError('ai.http-error', String(message).slice(0, 500), { status })
-  }
+  const client = sharedClient(cfg, options)
   let parsed
   try {
-    parsed = parseChatResponse(cfg.provider, json)
+    const result = await client.chat({
+      model: cfg.model,
+      messages: input.messages.map(message => ({ role: message.role, content: String(message.content ?? '') })),
+      maxTokens: input.maxTokens || cfg.maxTokens,
+      temperature: input.temperature !== undefined ? input.temperature : cfg.temperature,
+      jsonMode: input.jsonMode === true,
+      timeoutMs
+    })
+    parsed = { content: result.content, usage: toLegacyUsage(result.usage) }
   } catch (err) {
-    throw new AIGatewayError('ai.api-error', err.message)
+    appendAudit(options.logDir !== undefined ? options.logDir : envCfg.logDir || null, {
+      at: new Date(startedAt).toISOString(),
+      task: input.task || null,
+      provider: cfg.provider,
+      model: cfg.model,
+      prompt: excerpt(input.messages.map(m => m.content).join('\n')),
+      error: String((err && err.message) || err),
+      latencyMs: Date.now() - startedAt,
+      ok: false
+    })
+    throw toGatewayError(err)
   }
   appendAudit(options.logDir !== undefined ? options.logDir : envCfg.logDir || null, {
     at: new Date(startedAt).toISOString(),
@@ -535,76 +560,63 @@ async function listModels(args, opts) {
   assertEndpoint(cfg)
   assertCredentials(cfg)
 
+  const client = sharedClient(cfg, options)
+  let result
+  try {
+    result = await client.listModels()
+  } catch (err) {
+    // Only a missing endpoint qualifies for the alternates: a 401 or a 500
+    // from the right URL must surface as-is, not be retried elsewhere.
+    const retryable = err instanceof AIClientError && err.status === undefined || (err instanceof AIClientError && err.status === 404)
+    if (retryable) {
+      const fallback = await listModelsFallback(cfg, options)
+      if (fallback) return fallback
+    }
+    throw toGatewayError(err, `Model list failed for provider "${cfg.provider}"`)
+  }
+  return {
+    models: result.models,
+    provider: cfg.provider,
+    baseUrl: cfg.baseUrl,
+    count: result.count
+  }
+}
+
+/** Endpoints the shared client does not know: /v1-suffixed and Ollama /api/tags. */
+async function listModelsFallback(cfg, options) {
+  const fetchFn = options.fetchImpl || fetch
   const headers = {}
   if (cfg.apiKey) headers.authorization = `Bearer ${cfg.apiKey}`
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), envCfg.timeoutMs)
-  try {
-    const fetchFn = options.fetchImpl || fetch
-    let res = await fetchFn(`${cfg.baseUrl}/models`, {
-      method: 'GET',
-      headers,
-      signal: controller.signal
-    })
-    if (res.status === 404) {
-      const altBase = cfg.baseUrl.endsWith('/v1') ? cfg.baseUrl.replace(/\/v1$/, '') : `${cfg.baseUrl}/v1`
-      try {
-        const altRes = await fetchFn(`${altBase}/models`, { method: 'GET', headers, signal: controller.signal })
-        if (altRes.status >= 200 && altRes.status < 300) res = altRes
-      } catch {
-        // keep original res
-      }
-      if (res.status === 404) {
-        try {
-          const tagsUrl = `${cfg.baseUrl.replace(/\/v1$/, '')}/api/tags`
-          const tagsRes = await fetchFn(tagsUrl, { method: 'GET', headers, signal: controller.signal })
-          if (tagsRes.status >= 200 && tagsRes.status < 300) res = tagsRes
-        } catch {
-          // keep original res
-        }
-      }
-    }
-    const text = await res.text()
-    let json = null
+  const altBase = cfg.baseUrl.endsWith('/v1') ? cfg.baseUrl.replace(/\/v1$/, '') : `${cfg.baseUrl}/v1`
+  const candidates = [`${altBase}/models`, `${cfg.baseUrl.replace(/\/v1$/, '')}/api/tags`]
+  for (const url of candidates) {
     try {
-      json = text ? JSON.parse(text) : null
+      const res = await fetchFn(url, { method: 'GET', headers })
+      if (res.status < 200 || res.status >= 300) continue
+      const json = JSON.parse(await res.text())
+      const rows = Array.isArray(json)
+        ? json
+        : Array.isArray(json && json.data)
+          ? json.data
+          : Array.isArray(json && json.models)
+            ? json.models
+            : []
+      const seen = new Map()
+      for (const row of rows) {
+        const raw = typeof row === 'string' ? row : (row && (row.id || row.name || row.model))
+        const id = String(raw || '').trim()
+        if (!id || seen.has(id)) continue
+        const label = row && typeof row === 'object' && typeof row.name === 'string' && row.name ? row.name : id
+        seen.set(id, { id, label })
+      }
+      if (seen.size === 0) continue
+      const models = [...seen.values()].sort((a, b) => a.id.localeCompare(b.id))
+      return { models, provider: cfg.provider, baseUrl: cfg.baseUrl, count: models.length }
     } catch {
-      json = null
+      // try the next candidate
     }
-    if (res.status === 429) throw new AIGatewayError('ai.rate-limited', 'Provider rate limit (429)')
-    if (res.status < 200 || res.status >= 300) {
-      const message = (json && (json.error?.message || json.message)) || text || `HTTP ${res.status}`
-      throw new AIGatewayError('ai.http-error', String(message).slice(0, 500), { status: res.status })
-    }
-    const rows = Array.isArray(json)
-      ? json
-      : Array.isArray(json && json.data)
-        ? json.data
-        : Array.isArray(json && json.models)
-          ? json.models
-          : []
-    const seen = new Map()
-    for (const row of rows) {
-      const raw = typeof row === 'string' ? row : (row && (row.id || row.name || row.model))
-      const id = String(raw || '').trim()
-      if (!id || seen.has(id)) continue
-      const label = row && typeof row === 'object' && typeof row.name === 'string' && row.name ? row.name : id
-      seen.set(id, { id, label })
-    }
-    if (seen.size === 0) {
-      throw new AIGatewayError('ai.bad-shape', 'Model list response has no model ids')
-    }
-    const models = [...seen.values()].sort((a, b) => a.id.localeCompare(b.id))
-    return { models, provider: cfg.provider, baseUrl: cfg.baseUrl, count: models.length }
-  } catch (err) {
-    if (err instanceof AIGatewayError) throw err
-    if (err && err.name === 'AbortError') {
-      throw new AIGatewayError('ai.timeout', `Model list timed out after ${envCfg.timeoutMs}ms`)
-    }
-    throw new AIGatewayError('ai.network', String((err && err.message) || err))
-  } finally {
-    clearTimeout(timer)
   }
+  return null
 }
 
 let auditDir = null
