@@ -87,7 +87,8 @@ export default defineNuxtConfig({
         // repo, so its dist must be served from outside this project root too.
         allow: [
           fileURLToPath(new URL('./packages/core', import.meta.url)),
-          fileURLToPath(new URL('../tm-platform/packages/tm-ui', import.meta.url))
+          fileURLToPath(new URL('../tm-platform/packages/tm-ui', import.meta.url)),
+          fileURLToPath(new URL('../tm-platform/packages/tm-core', import.meta.url))
         ]
       }
     },

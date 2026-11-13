@@ -17,3 +17,4 @@ minimumReleaseAgeExclude:
   - mediabunny@1.65.1
   - '@tuanmjnh/tm-ai-client@0.2.1'
   - '@tuanmjnh/tm-ui@0.1.0'
+  - '@tuanmjnh/tm-core@0.1.0'

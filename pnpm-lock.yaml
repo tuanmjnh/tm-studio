@@ -193,9 +193,12 @@ importers:
       '@tuanmjnh/tm-ai-client':
         specifier: ^0.2.1
         version: 0.2.1
+      '@tuanmjnh/tm-core':
+        specifier: link:../tm-platform/packages/tm-core
+        version: link:../tm-platform/packages/tm-core
       '@tuanmjnh/tm-ui':
-        specifier: link:../tm-platform/packages/tm-ui
-        version: link:../tm-platform/packages/tm-ui
+        specifier: 0.1.0
+        version: 0.1.0(@nuxt/ui@4.12.0(937f688dfa400d4827d19989b5b55edd))(vue@3.5.44(typescript@6.0.3))
       '@vueuse/core':
         specifier: ^15.0.0
         version: 15.0.0(vue@3.5.44(typescript@6.0.3))
@@ -3034,6 +3037,15 @@ packages:
 
   '@tuanmjnh/tm-ai-client@0.2.1':
     resolution: {integrity: sha512-vSZgqu3VhQb/bXYadICw9C5FQRUqVhXmtylSS7puNIEdSQPPr8nfvoy8ledXMgMkXLo7fyoCj7dMGVre+SBsyQ==}
+
+  '@tuanmjnh/tm-ui@0.1.0':
+    resolution: {integrity: sha512-YFML/J//3QRkioGqJaq421HYV9gh5/iianb+KDo5pPn7IWPl0obsbHbG8XzjTNu2APtUCUHWJkiwMXKWGUtoLQ==}
+    peerDependencies:
+      '@nuxt/ui': ^4.0.0
+      vue: ^3.5.0
+    peerDependenciesMeta:
+      '@nuxt/ui':
+        optional: true
 
   '@tybys/wasm-util@0.10.4':
     resolution: {integrity: sha512-W3c4gRigFS0T/Ma4qIYF3GDAc5AQdHb1yL5znJT1Zv1YaD9Kitx656wBjvr19qbiosmZT8lWDM5BEMynUqX65A==}
@@ -10541,6 +10553,12 @@ snapshots:
       yjs: 13.6.33
 
   '@tuanmjnh/tm-ai-client@0.2.1': {}
+
+  '@tuanmjnh/tm-ui@0.1.0(@nuxt/ui@4.12.0(937f688dfa400d4827d19989b5b55edd))(vue@3.5.44(typescript@6.0.3))':
+    dependencies:
+      vue: 3.5.44(typescript@6.0.3)
+    optionalDependencies:
+      '@nuxt/ui': 4.12.0(937f688dfa400d4827d19989b5b55edd)
 
   '@tybys/wasm-util@0.10.4':
     dependencies:

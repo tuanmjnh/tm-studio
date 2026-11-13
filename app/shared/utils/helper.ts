@@ -1,3 +1,46 @@
+import {
+  toSlug,
+  toCode,
+  toNormalize,
+  generateEan13,
+  minifySvg,
+  escapeRegExp,
+  sanitizeSvg,
+  getImage,
+  cleanImageUrl,
+  isRawSvg,
+  isIconify,
+  isSpecialImage,
+  isImage,
+  detectDisplayType,
+  ensureForwardSlash,
+  readCsv,
+  readJson,
+  downloadFile,
+  formatTimeAgo as coreFormatTimeAgo
+} from '@tuanmjnh/tm-core'
+
+export {
+  toSlug,
+  toCode,
+  toNormalize,
+  generateEan13,
+  minifySvg,
+  escapeRegExp,
+  sanitizeSvg,
+  getImage,
+  cleanImageUrl,
+  isRawSvg,
+  isIconify,
+  isSpecialImage,
+  isImage,
+  detectDisplayType,
+  ensureForwardSlash,
+  readCsv,
+  readJson,
+  downloadFile
+} from '@tuanmjnh/tm-core'
+
 /** An image source is either the URL string itself or an object carrying one. */
 export type ImageLike = string | { url?: string, secure_url?: string, [key: string]: unknown }
 
@@ -61,19 +104,8 @@ export const formatDateStyle = (date: string | Date | number | undefined | null,
 * this is the lightest Native JS version.
 */
 export const formatTimeAgo = (date: string | Date | number | undefined | null) => {
-  if (!date) return ''
-  const d = new Date(date)
-  const now = new Date()
-  const diff = (now.getTime() - d.getTime()) / 1000 // seconds
-
   const { locale } = useI18n()
-  const currentLocale = locale.value === 'vi' ? 'en-VN' : 'en-US'
-  const rtf = new Intl.RelativeTimeFormat(currentLocale, { numeric: 'auto' })
-
-  if (diff < 60) return rtf.format(-Math.floor(diff), 'second')
-  if (diff < 3600) return rtf.format(-Math.floor(diff / 60), 'minute')
-  if (diff < 86400) return rtf.format(-Math.floor(diff / 3600), 'hour')
-  return rtf.format(-Math.floor(diff / 86400), 'day')
+  return coreFormatTimeAgo(date, locale.value)
 }
 
 export const formatNumber = (value: number | string | undefined | null, intlOptions?: Intl.NumberFormatOptions): string => {
@@ -128,18 +160,7 @@ export const formatCompactNumber = (value: number | string | undefined | null) =
   }).format(num)
 }
 
-export const toSlug = (str: string) => {
-  return str
-    .trim()
-    .toLowerCase()
-    .normalize('NFD') // Separate accents from characters
-    .replace(/[\u0300-\u036f]/g, '') // Remove accents
-    .replace(/[đĐ]/g, 'd') // Convert đ -> d
-    .replace(/([^0-9a-z-\s])/g, '') // Remove special characters
-    .replace(/(\s+)/g, '-') // Convert spaces to dashes
-    .replace(/-+/g, '-') // Remove excess dashes
-    .replace(/^-+|-+$/g, '') // Remove terminal dashes
-}
+
 
 /**
  * Generate a slug from a localized title, with optional parent prefix.
@@ -169,14 +190,7 @@ export const generateSlug = (
   return slugValue
 }
 
-export const minifySvg = (svg: string) => {
-  return svg
-    .trim()
-    .replace(/<!--.*?-->/gs, '') // Remove comments
-    .replace(/>\s+</g, '><') // Remove spaces between tags
-    .replace(/\s{2,}/g, ' ') // Collapse multiple spaces
-    .replace(/\r?\n|\r/g, '') // Remove newlines
-}
+
 
 /**
  * Unified Quick Sync function to synchronize both Images and SEO data.
@@ -298,23 +312,7 @@ export const syncQuickSeo = (formData: Record<string, unknown>, options: Record<
  * Remove width/height attributes from the root <svg> tag
  * to prevent browser errors and allow CSS control.
  */
-export const sanitizeSvg = (svg: string) => {
-  if (!svg || typeof svg !== 'string') return ''
-  const content = svg.trim()
 
-  // Find the opening <svg tag (handles case with xml declaration before it)
-  const svgMatch = content.match(/<svg[^>]*>/i)
-  if (!svgMatch) return content
-
-  const openingTag = svgMatch[0]
-  // Remove width/height from the openingTag to allow CSS control
-  // Handles: width="24", width='24', width=24 (no quotes), with arbitrary spaces
-  const sanitizedTag = openingTag
-    .replace(/\s+(width|height)=["'][^"']*["']/gi, '')
-    .replace(/\s+(width|height)=[^ >"']+/gi, '')
-
-  return content.replace(openingTag, sanitizedTag)
-}
 
 // Helper: 'vi' → '🇻🇳', 'en' → '🇺🇸'
 export const getFlagEmoji = (code: string) => {
@@ -385,47 +383,12 @@ export const formatImageUrl = (img: ImageLike | undefined, siteUrl?: string) => 
  * Clean image URL from restrictive query parameters (w, h, fit, crop)
  * especially for Unsplash, Cloudinary, etc. to allow IPX to resize from high-res source.
  */
-export const cleanImageUrl = (url: string) => {
-  if (!url || typeof url !== 'string' || url.startsWith('data:') || url.startsWith('<svg')) return url
 
-  try {
-    const urlObj = new URL(url)
-    if (urlObj.hostname.includes('unsplash.com') || urlObj.hostname.includes('cloudinary.com')) {
-      // Remove restrictive params but keep basic ones if needed
-      const searchParams = urlObj.searchParams
-      searchParams.delete('w')
-      searchParams.delete('h')
-      searchParams.delete('width')
-      searchParams.delete('height')
-      searchParams.delete('fit')
-      searchParams.delete('crop')
-
-      // Return cleaned URL
-      return urlObj.origin + urlObj.pathname + (searchParams.toString() ? '?' + searchParams.toString() : '')
-    }
-  } catch {
-    // If not a valid absolute URL, return as is
-  }
-
-  return url
-}
 
 /**
  * Get image URL from string or object
  */
-export const getImage = (img: ImageLike | null | undefined, customKey?: string | string[]) => {
-  if (!img) return '/placeholder.png'
-  if (typeof img === 'string') return img
 
-  const keys = Array.isArray(customKey) ? customKey : [customKey || 'url']
-
-  for (const key of keys) {
-    const value = img[key]
-    if (typeof value === 'string' && value) return value
-  }
-
-  return '/placeholder.png'
-}
 
 /**
  * Format image based on storage mode (URL string or Full Object)
@@ -479,71 +442,26 @@ export const getAlternateLinks = (
   return links
 }
 
-export const isRawSvg = (val?: string) => {
-  if (!val || typeof val !== 'string') return false
-  const trimmed = val.trim()
-  return (trimmed.startsWith('<svg') || trimmed.startsWith('<?xml')) && trimmed.includes('<svg')
-}
 
-export const isIconify = (url?: string) => {
-  if (!url) return false
-  const u = typeof url === 'string' ? url?.trim() : url
-  if (u?.startsWith('<svg')) return false
-  return (u?.includes(':') || u?.startsWith('i-')) && !u?.startsWith('http') && !u?.startsWith('/')
-}
 
-export const isSpecialImage = (url?: unknown) => {
-  if (typeof url !== 'string') return false
-  const u = (url || '').toLowerCase()
-  return u.match(/\.(ico|svg)$/) !== null
-}
 
-export const isImage = (url?: unknown) => {
-  if (!url || typeof url !== 'string') return false
-  const u = url.trim().toLowerCase()
-  // Check for special images (.ico, .svg)
-  if (isSpecialImage(u)) return true
-  // Check for common image formats
-  if (u.match(/\.(jpeg|jpg|gif|png|webp)$/) !== null) return true
-  // Check for URL or relative path
-  if (u.startsWith('http') || u.startsWith('/')) return true
-  return false
-}
+
+
+
+
 
 /**
  * Detect asset type for display
  * @param val The source string (URL, Icon mapping, or Raw SVG)
  * @returns 'svg' | 'image' | 'icon'
  */
-export const detectDisplayType = (val?: string) => {
-  if (!val) return 'icon'
-  if (isRawSvg(val)) return 'svg'
-  if (isImage(val)) return 'image'
-  return 'icon'
-}
 
-export const toCode = (str: string) => {
-  return toSlug(str).replace(/-/g, '_').toUpperCase()
-}
 
-export const ensureForwardSlash = (url: string) => {
-  if (!url || typeof url !== 'string') return url
-  const u = url.trim()
-  if (u.startsWith('http') || u.startsWith('data:') || u.startsWith('/') || u.startsWith('<svg')) {
-    return u
-  }
-  return '/' + u
-}
 
-export const toNormalize = (string: string) => {
-  if (!string) return ''
-  return string
-    .trim()
-    .toLowerCase()
-    .normalize('NFD') // Separate accents from characters
-    .replace(/[\u0300-\u036f]/g, '') // Remove accents
-    .replace(/[đĐ]/g, 'd') // Convert đ -> d
-}
+
+
+
+
 
 /**
  * Calculate fullPath for a specific language based on urlMode strategy
@@ -567,9 +485,7 @@ export const calculateLocalizedPath = (pathOptions: {
 /**
  * Escapes a string for use in a regular expression.
  */
-export const escapeRegExp = (string: string) => {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') // $& means the whole matched string
-}
+
 
 /**
  * Escapes a string for use in a regular expression.
@@ -578,19 +494,7 @@ export const escapeNormalize = (string: string) => {
   return escapeRegExp(toNormalize(string))
 }
 
-export const generateEan13 = () => {
-  const result: number[] = []
-  for (let i = 0; i < 12; i++) {
-    result.push(Math.floor(Math.random() * 10))
-  }
-  let sum = 0
-  for (let i = 0; i < 12; i++) {
-    sum += result[i]! * (i % 2 === 0 ? 1 : 3)
-  }
-  const checksum = (10 - (sum % 10)) % 10
-  result.push(checksum)
-  return result.join('')
-}
+
 
 export const generateCode = () => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
@@ -650,67 +554,15 @@ export const exportToJson = (filename: string, data: unknown) => {
  * @param csvText - The CSV string content
  * @returns Array of objects with keys from header row
  */
-export const readCsv = (csvText: string): Record<string, string>[] => {
-  // Strip BOM if present
-  const cleanCsv = csvText.startsWith('\ufeff') ? csvText.slice(1) : csvText
-  const lines = cleanCsv.trim().split(/\r?\n/)
-  if (lines.length < 2) return []
 
-  const headers = parseCsvLine(lines[0] || '')
-  const result: Record<string, string>[] = []
 
-  for (let i = 1; i < lines.length; i++) {
-    const currentLine = parseCsvLine(lines[i] || '')
-    if (currentLine.length === headers.length) {
-      const obj: Record<string, string> = {}
-      headers.forEach((header, index) => {
-        obj[header.trim()] = currentLine[index]?.trim() || ''
-      })
-      result.push(obj)
-    }
-  }
 
-  return result
-}
-
-const parseCsvLine = (line: string): string[] => {
-  const result: string[] = []
-  let startValueIndex = 0
-  let inQuotes = false
-
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i]
-
-    if (char === '"') {
-      inQuotes = !inQuotes
-    } else if (char === ',' && !inQuotes) {
-      let value = line.substring(startValueIndex, i)
-      // Remove surrounding quotes and unescape double quotes
-      if (value.startsWith('"') && value.endsWith('"')) {
-        value = value.slice(1, -1).replace(/""/g, '"')
-      }
-      result.push(value)
-      startValueIndex = i + 1
-    }
-  }
-  // Push the last value
-  let lastValue = line.substring(startValueIndex)
-  if (lastValue.startsWith('"') && lastValue.endsWith('"')) {
-    lastValue = lastValue.slice(1, -1).replace(/""/g, '"')
-  }
-  result.push(lastValue)
-
-  return result
-}
 
 /**
  * Parse JSON text and ensure it's an array for import processing
  * @param jsonText - The raw JSON string
  */
-export const readJson = (jsonText: string): unknown[] => {
-  const data = JSON.parse(jsonText)
-  return Array.isArray(data) ? data : [data]
-}
+
 
 /**
  * Format phone number (eg: 0987654321 -> 0987 654 321)
@@ -815,93 +667,7 @@ export const getDailyMotionEmbedUrl = (url: string) => {
 /**
  * Download a file from a URL or raw string content (e.g. SVG)
  */
-export const downloadFile = async (url: string, filename?: string) => {
-  if (!url) return
-  // Detect extension from URL or content
-  let ext = 'bin'
-  const urlExtMatch = url.match(/\.([a-z0-9]+)(?:[?#]|$)/i)
-  if (urlExtMatch) ext = urlExtMatch[1]!
 
-  const getCleanFilename = (baseName: string, fallbackExt: string) => {
-    // If the baseName already has an extension that matches common formats,
-    // we might want to preserve it, but toSlug will remove the dot.
-    // Better to strip the existing extension if it exists, toSlug the name, and then append the correct ext.
-    const lastDotIndex = baseName.lastIndexOf('.')
-    let namePart = baseName
-    let extPart = fallbackExt
-
-    if (lastDotIndex !== -1 && lastDotIndex > 0) {
-      const possibleExt = baseName.substring(lastDotIndex + 1).toLowerCase()
-      if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'pdf', 'mp3', 'mp4', 'zip', 'json', 'csv'].includes(possibleExt)) {
-        namePart = baseName.substring(0, lastDotIndex)
-        extPart = possibleExt
-      }
-    }
-
-    return `${toSlug(namePart)}.${extPart}`
-  }
-
-  // If it's a raw SVG
-  if (isRawSvg(url)) {
-    const finalFilename = getCleanFilename(filename || 'image', 'svg')
-    const blob = new Blob([url], { type: 'image/svg+xml' })
-    const blobUrl = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = blobUrl
-    link.download = finalFilename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(blobUrl)
-    return
-  }
-
-  // Handle Iconify icons (optional - usually icons are not downloaded as files,
-  // but if needed we could skip or handle differently. For now, check if it's a URL/Path)
-  if (isIconify(url)) {
-    console.warn('Downloading Iconify icons directly is not supported yet.')
-    return
-  }
-
-  // If it's a URL (image or other)
-  try {
-    const response = await fetch(url)
-    const blob = await response.blob()
-    const contentType = response.headers.get('content-type')
-
-    if (contentType) {
-      if (contentType.includes('image/png')) ext = 'png'
-      else if (contentType.includes('image/jpeg')) ext = 'jpg'
-      else if (contentType.includes('image/gif')) ext = 'gif'
-      else if (contentType.includes('image/webp')) ext = 'webp'
-      else if (contentType.includes('image/svg+xml')) ext = 'svg'
-      else if (contentType.includes('application/pdf')) ext = 'pdf'
-      else if (contentType.includes('audio/')) ext = contentType.split('/')[1] || 'mp3'
-      else if (contentType.includes('video/')) ext = contentType.split('/')[1] || 'mp4'
-    }
-
-    const finalFilename = getCleanFilename(filename || 'download', ext)
-    const blobUrl = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = blobUrl
-    link.download = finalFilename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(blobUrl)
-  } catch (error) {
-    console.error('Download error:', error)
-    // Fallback: try to open in new tab with download attribute
-    const link = document.createElement('a')
-    link.href = url
-    link.target = '_blank'
-    const finalFallbackName = getCleanFilename(filename || 'download', ext)
-    link.download = finalFallbackName
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-  }
-}
 /**
  * Convert image objects { url, public_id, ... } to plain image URL strings for specific keys.
  * Useful for normalizing data before sending to server or saving to database when in string mode.
