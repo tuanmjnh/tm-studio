@@ -11,6 +11,7 @@ import { createWebExportHost } from '~/utils/tmcut/webExportHost'
 import { planWebExport } from '~/utils/tmcut/webExportChoice'
 import type { WebExportRefusalCode } from '~/utils/tmcut/webExportChoice'
 import { humanizeKey } from '~/utils/tmcut/fxLibrary'
+import { tmcutHostBridge } from '~/utils/tmcut/hostBridge'
 import { useTmcutUsageTracker } from '~/composables/useTmcutUsageTracker'
 
 const open = defineModel<boolean>('open', { default: false })
@@ -75,8 +76,10 @@ const exportDone = ref(false)
 const exportError = ref('')
 const previewModalOpen = ref(false)
 const webResultUrl = ref('')
+const webResultPath = ref('')
 const isWebRendering = ref(false)
 const webProgress = ref(0)
+const isSavingAs = ref(false)
 
 const progressPercent = computed(() => (isWebRendering.value ? webProgress.value : 0))
 
@@ -202,6 +205,26 @@ const webAbort = ref<AbortController | null>(null)
 function releaseWebResult() {
   if (webResultUrl.value.startsWith('blob:')) URL.revokeObjectURL(webResultUrl.value)
   webResultUrl.value = ''
+  webResultPath.value = ''
+}
+
+/**
+ * Hand the rendered bytes to the desktop host, which is the only process that
+ * can make a file out of them. A Blob in this renderer has no path to reveal
+ * and the shell's browser download lane cancels on it, so the dialog's Play /
+ * Show in folder / Save as all hang off this one answer.
+ *
+ * A host without the bridge keeps the blob URL: that is the web build, whose
+ * download lane works.
+ */
+async function saveRenderToDisk(blob: Blob, saveAs = false): Promise<void> {
+  const bridge = tmcutHostBridge()?.tmcut
+  if (!bridge?.saveRender) return
+  const bytes = new Uint8Array(await blob.arrayBuffer())
+  const result = await bridge.saveRender({ data: bytes, filename: downloadName.value, saveAs })
+  if (result.canceled) return
+  if (!result.ok || !result.path) throw new Error(result.error || t('tmcut.export.saveFailed'))
+  webResultPath.value = result.path
 }
 
 /** One sentence per dialog choice this writer cannot honour. */
@@ -315,6 +338,12 @@ async function runWebExport(): Promise<void> {
       if (!(output instanceof Blob)) throw new Error(t('tmcut.export.webNoFile'))
       webProgress.value = 100
       webResultUrl.value = URL.createObjectURL(output)
+      // The desktop host turns the same bytes into a file, so the dialog can
+      // play it, reveal it, and copy it. A failed write is not a failed export
+      // — the blob is still playable — so it is reported, not thrown.
+      await saveRenderToDisk(output).catch((err) => {
+        exportError.value = err instanceof Error ? err.message : String(err)
+      })
       exportDone.value = true
       recordExportCompleted()
       toast.add({ title: t('tmcut.export.success'), color: 'success' })
@@ -342,9 +371,15 @@ async function runWebExport(): Promise<void> {
   }
 }
 
-// The render had no path to begin with: the encoder hands back a Blob, and the
-// browser's download lane is how it reaches disk on either host (Electron shows
-// its save dialog for an `<a download>`).
+// The desktop host has already written the file by the time the dialog says
+// "Export Completed!", so its lane copies the file the user is looking at; the
+// browser lane is the web host's only writer. One button, two honest answers.
+async function saveResult(): Promise<void> {
+  if (isDesktop.value) return await saveRenderAs()
+  downloadWebResult()
+}
+
+/** The web host's writer: an anchor on the blob URL. */
 function downloadWebResult(): void {
   if (!webResultUrl.value) return
   const link = document.createElement('a')
@@ -353,6 +388,26 @@ function downloadWebResult(): void {
   document.body.appendChild(link)
   link.click()
   link.remove()
+}
+
+/** Copy the rendered file to wherever the user wants it. */
+async function saveRenderAs(): Promise<void> {
+  if (!webResultUrl.value || isSavingAs.value) return
+  isSavingAs.value = true
+  try {
+    const response = await fetch(webResultUrl.value)
+    await saveRenderToDisk(await response.blob(), true)
+  } catch (err) {
+    exportError.value = err instanceof Error ? err.message : String(err)
+    toast.add({ title: t('tmcut.export.failed'), description: exportError.value, color: 'error' })
+  } finally {
+    isSavingAs.value = false
+  }
+}
+
+function showRenderInFolder(): void {
+  if (!webResultPath.value) return
+  tmcutHostBridge()?.showItemInFolder?.(webResultPath.value)
 }
 
 async function startExport() {
@@ -364,7 +419,7 @@ async function startExport() {
   isExporting.value = true
   exportDone.value = false
   exportError.value = ''
-  webResultUrl.value = ''
+  releaseWebResult()
   await runWebExport()
 }
 
@@ -431,13 +486,26 @@ onUnmounted(() => {
               />
               <span class="font-mono text-[11px] text-muted">.mp4</span>
             </div>
-            <!-- Both hosts write through the browser download lane: the encoder
-                 hands back a file, not a path, so there is no folder to pick. -->
+            <!-- The desktop host writes a real file, so this row names it. The
+                 web host has no main process and keeps the browser lane. -->
             <div class="col-span-12 sm:col-span-5 flex items-center gap-2 bg-muted border border-default rounded-lg px-3 py-1.5">
-              <UIcon :name="isDesktop ? 'i-lucide-download' : 'i-lucide-server'" class="size-4 text-primary shrink-0" />
-              <span class="text-xs text-muted truncate flex-1 min-w-0">
-                {{ t('tmcut.export.webDestination') }}
+              <UIcon :name="isDesktop ? 'i-lucide-folder-check' : 'i-lucide-server'" class="size-4 text-primary shrink-0" />
+              <span
+                class="text-xs text-muted truncate flex-1 min-w-0"
+                :title="webResultPath || t(isDesktop ? 'tmcut.export.desktopDestination' : 'tmcut.export.webDestination')"
+              >
+                {{ webResultPath || t(isDesktop ? 'tmcut.export.desktopDestination' : 'tmcut.export.webDestination') }}
               </span>
+              <UButton
+                v-if="isDesktop && webResultPath"
+                icon="i-lucide-folder"
+                size="xs"
+                color="neutral"
+                variant="ghost"
+                :title="t('tmcut.export.showInFolder')"
+                :aria-label="t('tmcut.export.showInFolder')"
+                @click="showRenderInFolder"
+              />
             </div>
           </div>
 
@@ -665,15 +733,29 @@ onUnmounted(() => {
                   :title="t('tmcut.export.previewNow')"
                   @click="previewResultDirectly"
                 />
+                <!-- Desktop: the file is already on disk, so the primary action
+                     is "show me where" and "save a copy" is the second one. -->
                 <UButton
-                  icon="i-lucide-download"
+                  v-if="isDesktop && webResultPath"
+                  icon="i-lucide-folder-open"
                   size="xs"
                   color="primary"
                   variant="soft"
-                  :title="t('tmcut.export.download')"
-                  @click="downloadWebResult"
+                  :title="t('tmcut.export.openFolder')"
+                  @click="showRenderInFolder"
                 >
-                  {{ t('tmcut.export.download') }}
+                  {{ t('tmcut.export.openFolder') }}
+                </UButton>
+                <UButton
+                  icon="i-lucide-save"
+                  size="xs"
+                  color="primary"
+                  variant="soft"
+                  :loading="isSavingAs"
+                  :title="t('tmcut.export.saveAs')"
+                  @click="saveResult"
+                >
+                  {{ isDesktop ? t('tmcut.export.saveAs') : t('tmcut.export.download') }}
                 </UButton>
               </div>
             </template>
@@ -740,7 +822,8 @@ onUnmounted(() => {
   <!-- In-App Direct Video Preview Modal -->
   <ToolsVideoPreviewModal
     v-model:open="previewModalOpen"
-    :file-path="webResultUrl"
+    :file-path="webResultPath || webResultUrl"
+    kind="video"
     :title="currentProject?.name"
   />
 </template>

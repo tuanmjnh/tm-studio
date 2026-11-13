@@ -7,6 +7,13 @@ import { toURL } from '~/utils/tmcut/media'
 const props = defineProps<{
   filePath?: string
   title?: string
+  /**
+   * What the caller knows it produced. Extension matching is the fallback, but
+   * a `blob:` URL has no extension: the export's own result is one, and without
+   * this the modal answered "unsupported preview format" for a file it had just
+   * written.
+   */
+  kind?: 'video' | 'audio'
 }>()
 
 const open = defineModel<boolean>('open', { default: false })
@@ -19,11 +26,14 @@ const isDesktop = computed(() => platform.info.name === 'electron')
 
 const isAudio = computed(() => {
   if (!props.filePath) return false
+  // The extension is the fallback; a caller that knows better is believed.
+  if (props.kind) return props.kind === 'audio'
   return /\.(mp3|wav|aac|m4a|ogg|flac)$/i.test(props.filePath)
 })
 
 const isVideo = computed(() => {
   if (!props.filePath) return false
+  if (props.kind) return props.kind === 'video'
   return /\.(mp4|mkv|webm|mov|avi|flv|ts)$/i.test(props.filePath)
 })
 

@@ -98,7 +98,7 @@ const tmcut = exposeNamespace('tmcut', {
     'readProject', 'writeProject', 'listProjectFiles', 'readProjectMeta',
     'writeRecovery', 'readRecovery', 'deleteRecovery', 'deleteProject',
     'listSnapshots', 'saveSnapshot', 'readSnapshot', 'deleteSnapshot',
-    'statFiles', 'saveRecording', 'downloadMedia', 'cancelDownload', 'stockSearch',
+    'statFiles', 'saveRecording', 'saveRender', 'downloadMedia', 'cancelDownload', 'stockSearch',
     'voiceStatus', 'enrollVoice', 'listManagedVoices', 'addManagedVoice', 'deleteManagedVoice', 'syncManagedVoice', 'synthesizeVoice', 'synthesizeGeminiVoice',
     'listFonts'
   ],

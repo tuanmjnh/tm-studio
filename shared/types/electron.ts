@@ -123,6 +123,8 @@ export interface TmcutDirs {
   cache: string
   thumbs: string
   waveforms: string
+  /** Where a rendered export lands; the export dialog names this folder. */
+  renders?: string
 }
 
 export interface TmcutProjectFileInfo {
@@ -430,6 +432,14 @@ export interface TmcutNamespace {
    * captured for speech-to-text); it defaults to `voiceover`.
    */
   saveRecording(args: { data: Uint8Array, ext?: string, prefix?: string }): Promise<{ ok: boolean, path?: string, error?: string }>
+  /**
+   * Write the bytes a render produced (WebCodecs + the muxer run in this
+   * renderer, so they answer with a Blob, not a path). Without `saveAs` the
+   * file lands in `<tmcut>/renders/`; with it, the OS asks where to put the
+   * copy. Refuses an empty body rather than writing a file that looks like a
+   * successful export.
+   */
+  saveRender(args: { data: Uint8Array, filename?: string, saveAs?: boolean }): Promise<{ ok: boolean, path?: string, name?: string, bytes?: number, canceled?: boolean, error?: string }>
   /**
    * Generated media download (P4 groundwork): pulls an http(s) URL into
    * <base>/downloads/ so the renderer can import a real local file. Refuses

@@ -1,11 +1,12 @@
-const { ipcMain, app } = require('electron')
+const { ipcMain, app, BrowserWindow } = require('electron')
 const fs = require('fs')
 const path = require('path')
 const http = require('http')
 const https = require('https')
 const { getResourcesDir } = require('./paths.cjs')
 const { pruneCommandRecordings } = require('./recordings.cjs')
-const { assertDownloadUrl, resolveDownloadTarget } = require('./media-download.cjs')
+const { assertDownloadUrl, resolveDownloadTarget, sanitizeFilename } = require('./media-download.cjs')
+const { acceptRenderBytes, resolveRenderTarget, MAX_RENDER_BYTES } = require('./render-save.cjs')
 const { fetchStockJson } = require('./stock-proxy.cjs')
 const { randomUUID } = require('node:crypto')
 const {
@@ -37,6 +38,7 @@ function getDirs() {
     stabilizedTrf: path.join(base, 'cache', 'stabilized_trf'),
     recordings: path.join(base, 'recordings'),
     downloads: path.join(base, 'downloads'),
+    renders: path.join(base, 'renders'),
     voices: path.join(base, 'voices')
   }
 }
@@ -69,7 +71,7 @@ function isUserMediaPath(filePath) {
 
 function ensureDirs() {
   const d = getDirs()
-  for (const p of [d.base, d.projects, d.snapshots, d.cache, d.thumbs, d.waveforms, d.frames, d.proxies, d.stabilized, d.stabilizedTrf, d.recordings, d.downloads, d.voices]) {
+  for (const p of [d.base, d.projects, d.snapshots, d.cache, d.thumbs, d.waveforms, d.frames, d.proxies, d.stabilized, d.stabilizedTrf, d.recordings, d.downloads, d.renders, d.voices]) {
     try {
       fs.mkdirSync(p, { recursive: true })
     } catch {
@@ -409,7 +411,10 @@ function registerTmcutController() {
       cache: toPosix(d.cache),
       thumbs: toPosix(d.thumbs),
       waveforms: toPosix(d.waveforms),
-      proxies: toPosix(d.proxies)
+      proxies: toPosix(d.proxies),
+      // Where a rendered export lands. The dialog names this folder so the
+      // result has a home the user can open, not just a Blob in memory.
+      renders: toPosix(d.renders)
     }
   })
 
@@ -776,6 +781,48 @@ function registerTmcutController() {
       const filePath = path.join(getDirs().recordings, `${safePrefix}-${Date.now()}.${safeExt}`)
       fs.writeFileSync(filePath, Buffer.from(bytes))
       return { ok: true, path: filePath }
+    } catch (error) {
+      return { ok: false, error: String((error && error.message) || error) }
+    }
+  })
+
+  // The export runs in this renderer (WebCodecs + the muxer) and answers with a
+  // Blob. On this host a Blob is not a file: there is no path to reveal, the
+  // preview modal cannot play a blob: it classifies by extension, and the
+  // browser download lane begins and then cancels (measured 2026-11-13). So the
+  // renderer hands the bytes here and gets back a real path — which is what the
+  // dialog can play, reveal, and copy somewhere else.
+  //
+  // `saveAs` asks the OS where to put the copy; without it the file lands in
+  // <base>/renders/ so the dialog has something to reveal immediately.
+  ipcMain.handle(`${moduleName}:saveRender`, async (event, args = {}) => {
+    try {
+      const bytes = acceptRenderBytes(args?.data)
+      if (!bytes) return { ok: false, error: 'Empty render' }
+      if (bytes.byteLength > MAX_RENDER_BYTES) return { ok: false, error: 'Render exceeds the 4 GiB limit' }
+      ensureDirs()
+      const requested = sanitizeFilename(args?.filename || 'render', 'mp4')
+      let target
+      if (args?.saveAs) {
+        const { dialog } = require('electron')
+        const owner = BrowserWindow.fromWebContents(event.sender)
+        const options = {
+          title: 'Save rendered video',
+          defaultPath: path.join(app.getPath('videos'), requested),
+          filters: [{ name: 'MP4 video', extensions: ['mp4'] }]
+        }
+        const picked = owner ? await dialog.showSaveDialog(owner, options) : await dialog.showSaveDialog(options)
+        if (picked.canceled || !picked.filePath) return { ok: false, canceled: true }
+        target = { name: path.basename(picked.filePath), path: picked.filePath }
+      } else {
+        target = resolveRenderTarget({
+          dir: getDirs().renders,
+          filename: requested,
+          exists: fullPath => fs.existsSync(fullPath)
+        })
+      }
+      await fs.promises.writeFile(target.path, Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength))
+      return { ok: true, path: toPosix(target.path), name: target.name, bytes: bytes.byteLength }
     } catch (error) {
       return { ok: false, error: String((error && error.message) || error) }
     }
