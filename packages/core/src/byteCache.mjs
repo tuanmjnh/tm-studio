@@ -196,6 +196,42 @@ export function planPlaybackByteSource(revision) {
   return { kind: 'stream', url: streamUrl, reason }
 }
 
+/**
+ * Which url a media element should be mounting right now.
+ *
+ * `planPlaybackByteSource` answers WHICH source a clip plays from. This answers
+ * WHEN that answer may reach the element. Measured in Chromium: assigning `src`
+ * on an element that is playing pauses it and resets `currentTime` to 0, and a
+ * file large enough to still be loading reloads from readyState 0 — which fires
+ * `waiting` and is the preview's "Buffering…" pill. Slice G4b creates exactly
+ * that window on purpose: the stream is mounted first and the client cache's
+ * `blob:` arrives when the OPFS read finishes, which after a fresh import is
+ * often several seconds later, i.e. after the user pressed Play.
+ *
+ * So the cache landing mid-play is HELD BACK and reported as `pending`; the
+ * caller adopts it the moment playback pauses. `sameMedia` is the caller's fact
+ * that the old and new url name the same file — a different clip is a real
+ * content change and must never be deferred, or a cut would freeze on the
+ * previous picture.
+ *
+ * An empty answer clears the element instead of keeping the stale url: a clip
+ * that went away has no picture, and leaving the old source mounted would show
+ * footage the timeline no longer contains.
+ *
+ * @param {{current?: string|null, desired?: string|null, playing?: boolean, sameMedia?: boolean}} input
+ * @returns {{src: string, pending: string|null}}
+ */
+export function planPlaybackSourceCommit(input) {
+  const { current, desired, playing, sameMedia } = input || {}
+  const mounted = hasUrl(current) ? current : ''
+  const wanted = hasUrl(desired) ? desired : ''
+
+  if (!wanted) return { src: '', pending: null }
+  if (wanted === mounted) return { src: mounted, pending: null }
+  if (playing === true && sameMedia === true && mounted) return { src: mounted, pending: wanted }
+  return { src: wanted, pending: null }
+}
+
 function byKey(a, b) {
   return a.key < b.key ? -1 : a.key > b.key ? 1 : 0
 }

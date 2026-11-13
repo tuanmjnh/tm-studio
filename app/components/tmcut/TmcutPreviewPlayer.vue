@@ -8,7 +8,7 @@ import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import type { PaintSurface, TextSurface } from '~/utils/tmcut/paintSurfaces'
 import { computeFitObjectStyle, CROP_RATIO_PRESETS, clampCropRect, applyCropRatio, canvasFpsValue } from '~/utils/tmcut/canvas'
 import { effectCssParts, layerOverlayPlates } from '~/utils/tmcut/fxPreview'
-import { previewScale, safeAreaRects, SAFE_AREA_PRESETS, maskCssMaskImage, previewTransitionRamp, classifyAssetKind, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_FONT_SIZE, textBoxPadding, textShadowOffset, textStrokeWidth, ticksToSec } from 'tmcut-core'
+import { previewScale, safeAreaRects, SAFE_AREA_PRESETS, maskCssMaskImage, previewTransitionRamp, classifyAssetKind, DEFAULT_TEXT_COLOR, DEFAULT_TEXT_FONT_SIZE, textBoxPadding, textShadowOffset, textStrokeWidth, ticksToSec, planPlaybackSourceCommit } from 'tmcut-core'
 import type { CoreEvaluatedLayer, CoreEvaluatedLayout } from 'tmcut-core'
 import { createAudioMixer } from '~/utils/tmcut/audioMixer'
 import type { TmcutMixGraph } from '~/utils/tmcut/audioMixer'
@@ -362,6 +362,39 @@ function playableSrc(clip: TmcutTimelineItem | null | undefined): string {
 
 const currentMediaSrc = computed(() => playableSrc(activeVideoClip.value?.clip))
 
+// The url the main <video> is actually mounting, which is not always what
+// `currentMediaSrc` answers. Slice G4b binds the stream first and the byte
+// cache's `blob:` when the OPFS read lands; on a fresh import that read can
+// finish after the user pressed Play, and assigning `src` on a playing element
+// pauses it, resets currentTime and reloads from readyState 0 — the measured
+// cause of the "Buffering…" pill on first play. Core decides when the swap may
+// land (`planPlaybackSourceCommit`); this state holds the held-back url until
+// playback stops.
+//
+// Identity is the clip's media PATH, not the url: the stream and the blob are
+// two names for the file the import produced, so a url change under one path is
+// the swap that must wait, while a different path is a real cut and must not.
+const committedMediaSrc = ref('')
+let committedMediaPath = ''
+
+watch(
+  () => [sourcePathOf(activeVideoClip.value?.clip), currentMediaSrc.value, isPlaying.value] as const,
+  ([path, desired, playing]) => {
+    // A held-back swap needs no memory of its own: `currentMediaSrc` keeps
+    // answering the cache url from the ledger, so the next run (the pause)
+    // re-derives it.
+    const plan = planPlaybackSourceCommit({
+      current: committedMediaSrc.value,
+      desired,
+      playing,
+      sameMedia: path !== '' && path === committedMediaPath
+    })
+    committedMediaSrc.value = plan.src
+    if (plan.src !== '') committedMediaPath = path
+  },
+  { immediate: true }
+)
+
 // Media URL for the OUTGOING crossfade layer (roadmap B3).
 const outgoingMediaSrc = computed(() => playableSrc(crossfadeSurface.value?.clip))
 
@@ -462,7 +495,9 @@ function onVideoProgress() {
   }
 }
 
-watch(currentMediaSrc, () => {
+// Keyed on the mounted src: a held-back cache swap did not touch the element, so
+// it must not clear an error the element is still reporting.
+watch(committedMediaSrc, () => {
   mediaLoadError.value = false
   isBuffering.value = false
 })
@@ -478,8 +513,10 @@ function onMediaError(source: 'video' | 'image' = 'video') {
   if (source === 'image' && !isCurrentClipImage.value) return
   const el = internalVideoRef.value
   // Ignore stale failures: async error events from a previous src can arrive
-  // after the playhead already moved on to another clip.
-  if (source === 'video' && el && el.currentSrc && el.currentSrc !== currentMediaSrc.value) return
+  // after the playhead already moved on to another clip. Compared against the
+  // src actually mounted — a held-back swap leaves the element on the old one,
+  // so the desired url is not what any failure here can be about.
+  if (source === 'video' && el && el.currentSrc && el.currentSrc !== committedMediaSrc.value) return
   mediaLoadError.value = true
 }
 
@@ -543,8 +580,11 @@ watch(() => currentProject.value?.timeline, () => {
   syncPreviewToPlayhead()
 }, { deep: true })
 
-// Synchronize video element playback and seeking
-watch(currentMediaSrc, (newSrc) => {
+// Synchronize video element playback and seeking. Keyed on the MOUNTED src, not
+// the desired one: a held-back cache swap leaves the element on its current file,
+// and force-seeking it there would spend the playhead on a change the element
+// never took.
+watch(committedMediaSrc, (newSrc) => {
   if (internalVideoRef.value && newSrc) {
     syncPreviewToPlayhead()
   }
@@ -1818,7 +1858,7 @@ onUnmounted(() => {
         >
           <video
             ref="internalVideoRef"
-            :src="isCurrentClipImage ? undefined : currentMediaSrc"
+            :src="isCurrentClipImage ? undefined : committedMediaSrc"
             class="w-full h-full"
             :style="fitForSurface(mainSurface)"
             preload="auto"
