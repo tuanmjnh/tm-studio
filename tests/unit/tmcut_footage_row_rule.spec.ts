@@ -24,7 +24,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { selectFileRows } from 'tmcut-core'
+import { selectFileRows } from 'tm-cut-core'
 import { TICKS, freshStore } from './helpers/tmcut_store_env'
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..')

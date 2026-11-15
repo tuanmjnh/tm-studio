@@ -72,10 +72,12 @@ function escaping(): string[] {
   return found
 }
 
-// `packages/core/dist` is what `npm publish` ships and nothing else: it is
+// A package's own `dist` is what `npm publish` ships and nothing else: it is
 // gitignored, so a source file that reads it depends on whether someone
 // happened to rebuild. Two hosts loading two copies of one engine is G13.
-const CORE_DIST_DIR = join(ROOT, 'packages', 'core', 'dist')
+// tm-cut-core is a `link:` dependency now, so both the source tree and its
+// build artifact reachable from this repo live under node_modules.
+const CORE_DIST_DIR = join(ROOT, 'node_modules', 'tm-cut-core', 'dist')
 
 function readsBuildArtifact(): string[] {
   const found: string[] = []
@@ -99,7 +101,7 @@ function coreClosure(): string[] {
   for (const file of sources('electron')) {
     for (const specifier of relativeSpecifiers(file)) {
       const target = resolve(ROOT, dirname(file), specifier)
-      if (target.startsWith(join(ROOT, 'packages', 'core', 'src') + sep)) {
+      if (target.startsWith(join(ROOT, 'node_modules', 'tm-cut-core', 'src') + sep)) {
         queue.push(relative(ROOT, target).split(sep).join('/'))
       }
     }
@@ -128,7 +130,7 @@ function notShipped(files: string[]): string[] {
     : file === pattern))
 }
 
-const CORE_ENTRY = './packages/core/src/index.mjs'
+const CORE_ENTRY = './node_modules/tm-cut-core/src/index.mjs'
 
 // Built at runtime: the old alias must not appear as a literal in the file that
 // proves nothing imports it.
@@ -148,7 +150,7 @@ function coreNamedSpecifiers(): CoreImport[] {
     for (const file of sources(dir)) {
       for (const match of readFileSync(join(ROOT, file), 'utf8').matchAll(ANY_IMPORT)) {
         const specifier = match[1]
-        const namesTheCore = [OLD_ALIAS, PKG_ALIAS, 'tmcut-core'].some(
+        const namesTheCore = [OLD_ALIAS, PKG_ALIAS, 'tm-cut-core'].some(
           name => specifier === name || specifier.startsWith(name + '/'))
         if (namesTheCore) found.push({ file, specifier })
       }
@@ -199,10 +201,10 @@ describe('core source boundary', () => {
     // ADR-017. Three spellings of one module meant an import name said nothing
     // about which file was loaded; the alias now matches the package.json name
     // exactly, so the two configs cannot drift from the package or each other.
-    const name = JSON.parse(readFileSync(join(ROOT, 'packages', 'core', 'package.json'), 'utf8')).name
+    const name = JSON.parse(readFileSync(join(ROOT, 'node_modules', 'tm-cut-core', 'package.json'), 'utf8')).name
     assert.equal(typeof name, 'string')
     assert.deepEqual(aliasKeys(), [name], 'nuxt.config and tsconfig.test both name the package')
-    assert.equal(existsSync(join(ROOT, 'packages', 'core', 'src', 'index.mjs')), true, 'the alias target exists')
+    assert.equal(existsSync(join(ROOT, 'node_modules', 'tm-cut-core', 'src', 'index.mjs')), true, 'the alias target exists')
   })
 
   it('nothing imports the core through the pre-ADR-017 alias', () => {
@@ -259,18 +261,19 @@ describe('core source boundary', () => {
   })
 
   it('the alias is imported bare, never as a subpath', () => {
-    // A Vite object alias is a *prefix*: `tmcut-core/generationAdapter` would be
+    // A Vite object alias is a *prefix*: `tm-cut-core/generationAdapter` would be
     // rewritten against the alias target and resolve to
-    // packages/core/src/index.mjs/generationAdapter, a path that cannot exist.
+    // node_modules/tm-cut-core/src/index.mjs/generationAdapter, a path that
+    // cannot exist.
     const aliased = coreNamedSpecifiers()
-      .filter(entry => entry.specifier === 'tmcut-core' || entry.specifier.startsWith('tmcut-core/'))
+      .filter(entry => entry.specifier === 'tm-cut-core' || entry.specifier.startsWith('tm-cut-core/'))
       .map(entry => `${entry.file} -> ${entry.specifier}`)
-      .filter(entry => !entry.endsWith('-> tmcut-core'))
+      .filter(entry => !entry.endsWith('-> tm-cut-core'))
     assert.deepEqual(aliased, [], 'no subpath import through the source alias')
   })
 
   it('the main process names the core only by a path, never by a package name', () => {
-    // Neither name can work in this host: the `tmcut-core` mapping belongs to
+    // Neither name can work in this host: the `tm-cut-core` mapping belongs to
     // Vite, so main would get ERR_MODULE_NOT_FOUND at startup, and the scoped
     // name only "works" if the dependency comes back — which is exactly the
     // silent load of dist that G13 measured.
@@ -280,18 +283,18 @@ describe('core source boundary', () => {
     assert.deepEqual(named, [], 'main process reaches the core by relative path')
   })
 
-  it('every spec that reads the engine loads the engine from packages/core', async () => {
+  it('every spec that reads the engine loads the engine from the linked package', async () => {
     // Resolved and imported, not matched as text: the question is which module
     // the spec actually gets. `htmlVideoSeekContract` is the newest core export
     // (ADR-021), so a loaded module without it is an older copy whatever the
     // specifier looks like.
-    const liveCore = join(ROOT, 'packages', 'core', 'src', 'index.mjs')
+    const liveCore = join(ROOT, 'node_modules', 'tm-cut-core', 'src', 'index.mjs')
     for (const spec of ['tests/unit/tmcut_caption_cues.spec.ts', 'tests/unit/tmcut_html_video_starters.spec.ts']) {
       const specifiers = relativeSpecifiers(spec).filter(specifier => specifier.endsWith('core/src/index.mjs'))
       assert.ok(specifiers.length > 0, `${spec} imports the core engine`)
       for (const specifier of specifiers) {
         const target = resolve(ROOT, dirname(spec), specifier)
-        assert.equal(target, liveCore, `${spec} resolves its core import to packages/core`)
+        assert.equal(target, liveCore, `${spec} resolves its core import to the linked package`)
         const loaded = await import(pathToFileURL(target).href)
         assert.equal(typeof loaded.htmlVideoSeekContract, 'function', `${spec} loads the current core`)
       }
@@ -304,7 +307,7 @@ describe('core source boundary', () => {
     // (libx264 + yuv420p cannot encode it). If the two copies had agreed, a
     // spec pinned to the old one would have been harmless — this is the
     // evidence that it was not.
-    const core = await import('../../packages/core/src/index.mjs')
+    const core = await import('../../node_modules/tm-cut-core/src/index.mjs')
     const composition = '<div data-composition-id="t"><script>window.__hf={duration:1,seek(){}}</script></div>'
     const odd = core.validateHtmlVideoSpec({ html: composition, width: 1001, height: 1000, fps: 30, durationSec: 1 })
     assert.equal(odd.valid, false, 'an odd canvas is refused')

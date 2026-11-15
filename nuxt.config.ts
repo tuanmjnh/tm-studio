@@ -58,7 +58,7 @@ export default defineNuxtConfig({
   },
 
   alias: {
-    'tmcut-core': fileURLToPath(new URL('./packages/core/src/index.mjs', import.meta.url))
+    'tm-cut-core': fileURLToPath(new URL('./node_modules/tm-cut-core/src/index.mjs', import.meta.url))
   },
 
   build: {
@@ -82,11 +82,10 @@ export default defineNuxtConfig({
   vite: {
     server: {
       fs: {
-        // packages/core is a workspace package consumed via source alias;
-        // allow Vite dev to serve it directly. tm-ui is linked from a sibling
-        // repo, so its dist must be served from outside this project root too.
+        // tm-cut-core, tm-ui and tm-core are linked from a sibling repo, so
+        // their source must be served from outside this project root too.
         allow: [
-          fileURLToPath(new URL('./packages/core', import.meta.url)),
+          fileURLToPath(new URL('../tm-platform/packages/tm-cut-core', import.meta.url)),
           fileURLToPath(new URL('../tm-platform/packages/tm-ui', import.meta.url)),
           fileURLToPath(new URL('../tm-platform/packages/tm-core', import.meta.url))
         ]
@@ -106,7 +105,7 @@ export default defineNuxtConfig({
     },
     resolve: {
       alias: {
-        'tmcut-core': fileURLToPath(new URL('./packages/core/src/index.mjs', import.meta.url)),
+        'tm-cut-core': fileURLToPath(new URL('./node_modules/tm-cut-core/src/index.mjs', import.meta.url)),
         'striptags': 'striptags/src/striptags.js'
       },
       dedupe: [

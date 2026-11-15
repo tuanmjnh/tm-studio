@@ -23,7 +23,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { createClock, createFramePace, fpsToRational } from 'tmcut-core'
+import { createClock, createFramePace, fpsToRational } from 'tm-cut-core'
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..')
 const read = (rel: string) => readFileSync(join(root, rel), 'utf8')

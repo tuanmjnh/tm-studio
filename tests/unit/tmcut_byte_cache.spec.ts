@@ -70,7 +70,7 @@ async function main() {
   if (!g.window) g.window = {}
   if (!g.useToast) g.useToast = () => ({ add: () => {} })
 
-  const core = await import('tmcut-core')
+  const core = await import('tm-cut-core')
 
   await check('core owns the byte-cache law, not the app', () => {
     assert.equal(typeof core.byteCacheBudgetBytes, 'function', 'the budget answers from core')
@@ -369,7 +369,7 @@ async function main() {
 
   await check('the storage layer asks core for every decision', () => {
     const source = read('app/utils/tmcut/byteStore.ts')
-    assert.match(source, /from 'tmcut-core'/, 'budget, keys and eviction come from core')
+    assert.match(source, /from 'tm-cut-core'/, 'budget, keys and eviction come from core')
     // `isStoredByteCacheKey` is core's union of a revision fingerprint and an
     // artifact of one (slice G1/G2): the store keeps both, so it asks that, and
     // the revision-only predicate stays a question for the library.
@@ -383,7 +383,7 @@ async function main() {
   await check('core declares the byte-cache law to the app', () => {
     // The app types tmcut-core from hand-written declarations, so a runtime
     // export nobody declared is invisible to the app that must call it.
-    const dts = read('packages/core/src/index.d.ts')
+    const dts = read('node_modules/tm-cut-core/src/index.d.ts')
     for (const name of [
       'TMCUT_BYTE_CACHE_MAX_BYTES', 'byteCacheBudgetBytes', 'isByteCacheKey',
       'byteCacheFits', 'planByteCacheEviction'

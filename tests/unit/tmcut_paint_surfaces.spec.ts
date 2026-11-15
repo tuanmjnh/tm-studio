@@ -30,7 +30,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { TICKS, freshStore } from './helpers/tmcut_store_env'
-import { createFrameScheduler, compositePlan, evaluateTimeline, ticksToSec } from 'tmcut-core'
+import { createFrameScheduler, compositePlan, evaluateTimeline, ticksToSec } from 'tm-cut-core'
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..')
 const read = (rel: string) => readFileSync(join(root, rel), 'utf8')
@@ -120,7 +120,7 @@ async function main() {
     assert.doesNotMatch(source, /\bcomputed\(/, 'no computed: the caller owns the cache')
     assert.doesNotMatch(source, /\bref\(/, 'no ref: same reason')
     assert.doesNotMatch(source, /\b(document|window|localStorage)\b/, 'no DOM global')
-    assert.match(source, /import \{[^}]*compositePlan[^}]*\} from 'tmcut-core'/,
+    assert.match(source, /import \{[^}]*compositePlan[^}]*\} from 'tm-cut-core'/,
       'the plan comes from core, not a local helper')
   })
 

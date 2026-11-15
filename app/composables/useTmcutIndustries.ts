@@ -1,4 +1,4 @@
-import { INDUSTRY_CATALOG } from 'tmcut-core'
+import { INDUSTRY_CATALOG } from 'tm-cut-core'
 
 /**
  * Industry labels for the template library. The catalog (ids, English

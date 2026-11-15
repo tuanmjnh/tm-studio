@@ -12,7 +12,7 @@
 // stays importable by plain Node precisely because it holds no decoder.
 
 import { AudioBufferSink } from 'mediabunny'
-import { pcmHeadTrim } from 'tmcut-core'
+import { pcmHeadTrim } from 'tm-cut-core'
 import { openMedia, type TmcutMediaRead } from './frameDecode'
 
 /**

@@ -1,5 +1,5 @@
 import type { TmcutTimelineItem } from '~/composables/useTmcutProject'
-import { ticksToSec } from 'tmcut-core'
+import { ticksToSec } from 'tm-cut-core'
 
 /**
  * C16-R2/R3: single accessors for clip TIME GEOMETRY.

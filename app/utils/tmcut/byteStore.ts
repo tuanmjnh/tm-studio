@@ -17,7 +17,7 @@
 // gone is forgotten, and bytes the index does not name are deleted. That is why
 // reads self-heal instead of trusting a row that may be stale.
 
-import { byteCacheBudgetBytes, byteCacheFits, isStoredByteCacheKey, planByteCacheEviction } from 'tmcut-core'
+import { byteCacheBudgetBytes, byteCacheFits, isStoredByteCacheKey, planByteCacheEviction } from 'tm-cut-core'
 import { readStored, writeStored } from './localStore'
 
 const INDEX_STORAGE_KEY = 'tmcut_byte_index_v1'

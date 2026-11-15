@@ -11,4 +11,4 @@ export {
   int16ToPeaks,
   readWaveformPayload,
   waveformCacheKey
-} from 'tmcut-core'
+} from 'tm-cut-core'

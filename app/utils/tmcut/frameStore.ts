@@ -28,7 +28,7 @@ import {
   frameRequestWidth,
   frameTimeWithinMedia,
   planFrameCacheEviction
-} from 'tmcut-core'
+} from 'tm-cut-core'
 import { readCachedBytes } from './byteStore'
 import { decodeFrame, hasFrameDecoder } from './frameDecode'
 import type { TmcutFrameDecodeAsk } from './frameDecode'

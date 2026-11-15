@@ -1,4 +1,4 @@
-import type { TmcutImportStatus } from 'tmcut-core'
+import type { TmcutImportStatus } from 'tm-cut-core'
 
 export type TmcutAssetKind = 'video' | 'audio' | 'image'
 
@@ -137,4 +137,4 @@ export type {
   TmcutTemplatePlaceholder,
   TmcutTemplateCategory,
   TmcutTemplateIndustry
-} from 'tmcut-core'
+} from 'tm-cut-core'

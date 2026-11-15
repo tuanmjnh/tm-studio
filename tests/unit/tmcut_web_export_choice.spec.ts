@@ -20,7 +20,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { createFrameScheduler, planEncodeContent, fpsToRational, ENCODE_REFUSAL_REASONS } from 'tmcut-core'
+import { createFrameScheduler, planEncodeContent, fpsToRational, ENCODE_REFUSAL_REASONS } from 'tm-cut-core'
 import { planWebExport } from '../../app/utils/tmcut/webExportChoice'
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..')

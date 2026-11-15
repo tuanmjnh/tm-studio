@@ -71,7 +71,7 @@ async function main() {
   if (!g.useToast) g.useToast = () => ({ add: () => {} })
 
   const { useTmcutPlatform } = await import('../../app/composables/useTmcutPlatform')
-  const { HTML_VIDEO_LIMITS } = await import('tmcut-core')
+  const { HTML_VIDEO_LIMITS } = await import('tm-cut-core')
 
   await check('the web host declares what a browser can and cannot do', async () => {
     await freshStore()
@@ -110,7 +110,7 @@ async function main() {
     // booleans. Two failures are therefore pinned here: a key that stops being
     // declared (silently false everywhere) and a host and core disagreeing on
     // the key set. The matrix is the contract; the values are each host's answer.
-    const { PLATFORM_CAPABILITIES } = await import('tmcut-core')
+    const { PLATFORM_CAPABILITIES } = await import('tm-cut-core')
     await freshStore()
     const web = useTmcutPlatform({ isDesktop: { value: false }, resolveSrc: () => '' })
     const desktop = useTmcutPlatform({ isDesktop: { value: true }, resolveSrc: () => '' })
@@ -213,7 +213,7 @@ async function main() {
   await check('the adapter carries one probe, and it writes nothing', async () => {
     await freshStore()
     const source = read('app/composables/useTmcutPlatform.ts')
-    const contract = read('packages/core/types/platform.ts')
+    const contract = read('node_modules/tm-cut-core/types/platform.ts')
     // Slice I deleted the ffprobe leg, so the raw-JSON `probe` that only a host
     // binary could answer went with it. One demuxing service answers both hosts
     // now, and a second shape would be a second truth.
@@ -256,7 +256,7 @@ async function main() {
     // engine, so the guard is structural: no main-process file may hold a
     // capture pipeline, and the bounds must come from core.
     assert.deepEqual(desktopCaptureEngines(), [], 'the desktop holds no HTML-video engine')
-    const spec = read('packages/core/src/htmlVideo.mjs')
+    const spec = read('node_modules/tm-cut-core/src/htmlVideo.mjs')
     assert.match(spec, /minFps: 1/, 'composition spec floor')
     assert.match(spec, /maxFps: 60/, 'composition spec ceiling')
   })

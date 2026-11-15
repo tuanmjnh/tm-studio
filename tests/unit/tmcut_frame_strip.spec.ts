@@ -48,7 +48,7 @@ async function main() {
   console.log('=== [TMCut frame strip] Starting ===\n')
   const g = globalThis as Record<string, unknown>
   if (!g.window) g.window = {}
-  const core = await import('tmcut-core')
+  const core = await import('tm-cut-core')
 
   await check('the strip reader exists as its own module', () => {
     // D2's service answers one frame per ask. Eight frames across a range is a

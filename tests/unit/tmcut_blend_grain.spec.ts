@@ -32,12 +32,12 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { BLEND_MODES, EFFECT_REGISTRY, TICKS_PER_SECOND, blendModeOf, evaluateTimeline, fxCapabilities } from 'tmcut-core'
+import { BLEND_MODES, EFFECT_REGISTRY, TICKS_PER_SECOND, blendModeOf, evaluateTimeline, fxCapabilities } from 'tm-cut-core'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8')
 const PLAYER = 'app/components/tmcut/TmcutPreviewPlayer.vue'
-const EXPORT_CONTENT = 'packages/core/src/exportContent.mjs'
+const EXPORT_CONTENT = 'node_modules/tm-cut-core/src/exportContent.mjs'
 const WEB_EXPORT_CHOICE = 'app/utils/tmcut/webExportChoice.ts'
 const PROJECT_TYPES = 'app/composables/useTmcutProject.ts'
 const INSPECTOR = 'app/components/tmcut/TmcutInspector.vue'

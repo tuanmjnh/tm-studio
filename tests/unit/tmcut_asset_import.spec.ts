@@ -146,7 +146,7 @@ async function main() {
 
   const { TMCUT_IMPORT_STATES, assetStatusForImport, assetFingerprint, buildAssetRecord }
     = await import('../../app/utils/tmcut/assetImport')
-  const core = await import('tmcut-core')
+  const core = await import('tm-cut-core')
   const store = await freshStore()
   const media = (await import('../../app/composables/useTmcutMedia')).useTmcutMedia()
   const projectId = () => store.currentProject.value!.id
@@ -156,7 +156,7 @@ async function main() {
   await check('the six states are core\'s, in the order the pipeline walks them', () => {
     assert.deepEqual(TMCUT_IMPORT_STATES, ['queued', 'probing', 'ready', 'partial', 'unsupported', 'error'])
     // The union lives in core; a renamed or extra verdict there must fail here.
-    const union = /export type TmcutImportStatus =([^\n]*)/.exec(read('packages/core/types/mediaInfo.ts'))?.[1]
+    const union = /export type TmcutImportStatus =([^\n]*)/.exec(read('node_modules/tm-cut-core/types/mediaInfo.ts'))?.[1]
     assert.ok(union, 'core declares the union')
     for (const state of TMCUT_IMPORT_STATES) {
       assert.ok(union.includes(`'${state}'`), `core is missing '${state}'`)

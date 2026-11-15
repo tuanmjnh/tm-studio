@@ -16,8 +16,8 @@
  * `mediabunny` is deliberately absent: a muxer belongs to the encode session, and
  * three specs freeze which files may import it.
  */
-import { rationalToFloat, planEncodeConfig, planEncodePresets } from 'tmcut-core'
-import type { CoreEncodePreset, CoreEncodeRequest, CoreEncodeSupportAnswer, CoreEncodeVerdict } from 'tmcut-core'
+import { rationalToFloat, planEncodeConfig, planEncodePresets } from 'tm-cut-core'
+import type { CoreEncodePreset, CoreEncodeRequest, CoreEncodeSupportAnswer, CoreEncodeVerdict } from 'tm-cut-core'
 
 type SupportAnswer = { supported?: boolean, config?: { codec?: string } }
 

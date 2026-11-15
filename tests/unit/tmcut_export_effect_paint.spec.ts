@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { EXPORT_BAKED_EFFECTS, exportBakesEffect, exportBakesEffectInstance, lutGrade } from 'tmcut-core'
+import { EXPORT_BAKED_EFFECTS, exportBakesEffect, exportBakesEffectInstance, lutGrade } from 'tm-cut-core'
 import { EXPORT_EFFECT_TYPES, exportEffectFilter } from '~/utils/tmcut/exportEffectPaint'
 import { effectCss, lutCss } from '~/utils/tmcut/fxPreview'
 

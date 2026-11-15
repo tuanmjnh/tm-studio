@@ -21,7 +21,7 @@
 // and core is told so (`offsetSec`) — the glue never adds the two numbers itself,
 // so a scan of the same file cannot report different seconds on a different host.
 
-import { loudestPeakSeries, silenceSpans } from 'tmcut-core'
+import { loudestPeakSeries, silenceSpans } from 'tm-cut-core'
 
 export interface TmcutSilenceScanAsk {
   /** Source range to listen to, seconds — the clip's own in/out, not the timeline. */

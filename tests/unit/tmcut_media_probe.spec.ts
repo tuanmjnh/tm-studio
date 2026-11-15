@@ -192,7 +192,7 @@ async function main() {
     // `error`, not `unsupported`: a file that yielded no length and no track at
     // all was never read, so the honest status is the one the import list shows
     // as a failure. `unsupported` is for a file the probe *did* read and can
-    // then refuse, which packages/core/test/media-info.test.mjs pins separately.
+    // then refuse, which tm-cut-core/test/media-info.test.mjs pins separately.
     assert.equal(info.importStatus, 'error')
     assert.equal(info.duration, undefined, 'no length is invented for an unreadable file')
     assert.equal(info.videoTracks.length, 0)
@@ -358,7 +358,7 @@ async function main() {
     ], 'the services own the container')
     // The contract carries the rich question, so a feature asks the host and
     // never a library.
-    assert.match(read('packages/core/types/platform.ts'), /probeInfo\(src: string, hints\?: TmcutProbeHints\)/)
+    assert.match(read('node_modules/tm-cut-core/types/platform.ts'), /probeInfo\(src: string, hints\?: TmcutProbeHints\)/)
     // Slice I deleted the element probe (`webProbe.ts`) along with the ffprobe
     // leg it mirrored, so this service is now the only MediaInfo collector on
     // either host. A file that came back would be the second answer.

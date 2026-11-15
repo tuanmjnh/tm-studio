@@ -43,7 +43,9 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const SELF = `tests${sep}unit${sep}tmcut_doc_citations.spec.ts`
-const SOURCE_DIRS = ['app', 'server', 'shared', 'packages', 'electron', 'tests']
+// The engine is a linked package now, so its sources live under node_modules;
+// SKIP_DIRS would hide them, hence the explicit entry.
+const SOURCE_DIRS = ['app', 'server', 'shared', 'node_modules/tm-cut-core', 'electron', 'tests']
 const SOURCE_EXT = new Set(['.ts', '.mts', '.mjs', '.js', '.cjs', '.vue'])
 const SKIP_DIRS = new Set(['node_modules', 'dist', '.nuxt', '.output', 'coverage', 'release'])
 
@@ -89,7 +91,9 @@ function sources(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(abs, { withFileTypes: true })) {
     const rel = join(dir, entry.name)
     if (entry.isDirectory()) {
-      if (!SKIP_DIRS.has(entry.name)) sources(rel, out)
+      // The linked engine is the one node_modules subtree worth walking: its
+      // sources carry the citations this guard exists to verify.
+      if (!SKIP_DIRS.has(entry.name) || slashes(rel) === 'node_modules/tm-cut-core') sources(rel, out)
     } else if (SOURCE_EXT.has(extname(entry.name)) && rel !== SELF) {
       out.push(rel)
     }

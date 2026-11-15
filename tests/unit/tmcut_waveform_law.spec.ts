@@ -33,7 +33,7 @@ async function check(label: string, fn: () => void | Promise<void>) {
   console.log(`   ${label} PASSED`)
 }
 
-const core = await import('tmcut-core')
+const core = await import('tm-cut-core')
 const { floatPeakBuckets, buildWaveformPayload, readWaveformPayload, TMCUT_WAVEFORM_ALGORITHM } = core
 
 async function main() {
@@ -49,13 +49,13 @@ async function main() {
     for (const name of ['floatPeakBuckets', 'buildWaveformPayload', 'readWaveformPayload']) {
       assert.ok(source.includes(name), `${name} is not re-exported to the app`)
     }
-    assert.match(source, /from 'tmcut-core'/, 'the app module stopped delegating to core')
+    assert.match(source, /from 'tm-cut-core'/, 'the app module stopped delegating to core')
   })
 
   await check('core declares the waveform law, not only exports it', () => {
     // The app types tmcut-core from hand-written declarations, so a runtime
     // export nobody declared is invisible to the caller that must use it.
-    const dts = read('packages/core/src/index.d.ts')
+    const dts = read('node_modules/tm-cut-core/src/index.d.ts')
     for (const name of [
       'TMCUT_WAVEFORM_ALGORITHM', 'TMCUT_WAVEFORM_PEAK_PRECISION', 'floatPeakBuckets',
       'buildWaveformPayload', 'readWaveformPayload'
@@ -94,7 +94,7 @@ async function main() {
     assert.equal(core.isStoredByteCacheKey(derived), true, 'the store takes the union explicitly')
     assert.equal(core.frameRequestKey(derived, 1.5, 320), null, 'a frame cannot be keyed by an artifact')
     assert.equal(core.frameRequestKey('a1b2c3d4', 1.5, 320), 'a1b2c3d4-f1500-w320', 'the real revision still keys')
-    const frames = read('packages/core/src/frames.mjs')
+    const frames = read('node_modules/tm-cut-core/src/frames.mjs')
     assert.ok(frames.includes('isByteCacheKey(fingerprint)'), 'frames.mjs asks the source-only predicate')
     assert.doesNotMatch(frames, /isStoredByteCacheKey/, 'frames.mjs never asks the union')
   })

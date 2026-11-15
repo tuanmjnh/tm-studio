@@ -19,7 +19,7 @@
 //  - take a shortcut when the caller has no revision. Without a fingerprint there
 //    is nothing to cache the answer under, so there is no answer.
 
-import { buildWaveformPayload, floatPeakBuckets, readWaveformPayload, waveformCacheKey } from 'tmcut-core'
+import { buildWaveformPayload, floatPeakBuckets, readWaveformPayload, waveformCacheKey } from 'tm-cut-core'
 import type { TmcutPcmAsk } from './audioDecode'
 import { putCachedBytes, readCachedBytes } from './byteStore'
 

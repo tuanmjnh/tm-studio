@@ -6,8 +6,8 @@ import {
   buildTemplateFromPlan,
   summarizeTemplatePlan,
   validateTemplate
-} from 'tmcut-core'
-import type { AiTemplatePlan, TmcutTemplate } from 'tmcut-core'
+} from 'tm-cut-core'
+import type { AiTemplatePlan, TmcutTemplate } from 'tm-cut-core'
 import { useTmcutAi } from './useTmcutAi'
 import { useTmcutMedia } from './useTmcutMedia'
 

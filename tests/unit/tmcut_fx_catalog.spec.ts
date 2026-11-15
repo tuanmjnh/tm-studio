@@ -23,7 +23,7 @@ import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { KNOWN_TRANSITIONS } from 'tmcut-core'
+import { KNOWN_TRANSITIONS } from 'tm-cut-core'
 import {
   FFMPEG_XFADE_NAMES,
   TRANSITION_CATEGORIES,

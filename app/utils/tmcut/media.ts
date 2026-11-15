@@ -8,7 +8,7 @@ export {
   classifyAssetKind,
   formatDurationSec,
   formatFileSize
-} from 'tmcut-core'
+} from 'tm-cut-core'
 
 /**
  * A stored locator as a URL a surface can paint or play.

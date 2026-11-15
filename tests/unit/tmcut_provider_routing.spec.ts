@@ -32,7 +32,7 @@ import {
   isProviderHealthy,
   routeScene,
   routeStoryboard
-} from 'tmcut-core'
+} from 'tm-cut-core'
 
 let passed = 0
 function check(name: string, fn: () => void) {

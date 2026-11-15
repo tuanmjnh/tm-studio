@@ -244,7 +244,7 @@ function harness(glue: GlueModule, options: HarnessOptions = {}): Harness {
 
 async function main() {
   console.log('=== [TMCut web codecs export] Starting ===\n')
-  const core = await import('tmcut-core')
+  const core = await import('tm-cut-core')
   T = core.TICKS_PER_SECOND
   const glue = await import('../../app/utils/tmcut/webCodecsExport') as unknown as GlueModule
 

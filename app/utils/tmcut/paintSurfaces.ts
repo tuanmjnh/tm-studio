@@ -16,8 +16,8 @@
 // whoever has an evaluation. Both callers now see the same `PaintSurface` for
 // the same `at`, which is what lets an export frame ask the decoder for the same
 // instant the preview asked for.
-import { compositePlan, ticksToSec } from 'tmcut-core'
-import type { CoreEvaluatedLayer, CoreTimelineEvaluation } from 'tmcut-core'
+import { compositePlan, ticksToSec } from 'tm-cut-core'
+import type { CoreEvaluatedLayer, CoreTimelineEvaluation } from 'tm-cut-core'
 import type { TmcutTimelineItem, TmcutTrack } from '~/composables/useTmcutProject'
 
 /**

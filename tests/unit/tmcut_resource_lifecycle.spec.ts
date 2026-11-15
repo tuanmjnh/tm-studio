@@ -72,7 +72,7 @@ async function main() {
   console.log('=== [TMCut resource lifecycle] Starting ===\n')
   const g = globalThis as Record<string, unknown>
   if (!g.window) g.window = {}
-  const core = await import('tmcut-core')
+  const core = await import('tm-cut-core')
 
   // -------------------------------------------------------------------------
   // Core: the two ledger powers an owner needs to give a slot back.
@@ -109,9 +109,9 @@ async function main() {
     assert.equal(ledger.release('hud', second.token), true, 'the current owner gets its slot back')
     assert.equal(ledger.size(), 0)
     assert.equal(ledger.release('hud', second.token), false, 'releasing twice is not an error')
-    assert.ok(read('packages/core/src/index.d.ts').includes('release('),
+    assert.ok(read('node_modules/tm-cut-core/src/index.d.ts').includes('release('),
       'and the app can see the power through the types')
-    assert.ok(read('packages/core/src/index.d.ts').includes('clear('),
+    assert.ok(read('node_modules/tm-cut-core/src/index.d.ts').includes('clear('),
       'both are declared, not just exported')
   })
 
@@ -291,7 +291,7 @@ async function main() {
 
   await check('the app asks the batch leg for a batch, and the singleton can be disposed', () => {
     const frameStore = read('app/utils/tmcut/frameStore.ts')
-    assert.match(frameStore, /from 'tmcut-core'/, 'the slot powers come from core')
+    assert.match(frameStore, /from 'tm-cut-core'/, 'the slot powers come from core')
     assert.ok(frameStore.includes('ledger.clear()'), 'disposal hands the whole ledger back')
     assert.ok(frameStore.includes('ledger.release('), 'and a batch releases token by token')
     const moduleExports = exportedNames(frameStore)

@@ -31,7 +31,7 @@ import { createServer } from 'node:http'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { TmcutMediaInfo } from 'tmcut-core'
+import type { TmcutMediaInfo } from 'tm-cut-core'
 import './helpers/tmcut_store_env'
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..')
@@ -113,7 +113,7 @@ async function main() {
   const g = globalThis as Record<string, unknown>
   if (!g.window) g.window = {}
   const { probeMedia, getMediaCapabilities } = await import('../../app/utils/tmcut/mediaProbe')
-  const core = await import('tmcut-core')
+  const core = await import('tm-cut-core')
 
   for (const fixture of FIXTURES) {
     const name = fixture.rel.split('/').pop()!

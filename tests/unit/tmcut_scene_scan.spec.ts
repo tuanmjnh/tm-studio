@@ -47,7 +47,7 @@ async function check(label: string, fn: () => void | Promise<void>) {
 
 async function main() {
   console.log('=== [TMCut scene scan] Starting ===\n')
-  const core = await import('tmcut-core')
+  const core = await import('tm-cut-core')
   const { createSceneScan } = await import('../../app/utils/tmcut/sceneScan')
 
   /** One uniform grid, so a score can be aimed at an exact number. */
