@@ -172,6 +172,9 @@ importers:
       '@fontsource-variable/jetbrains-mono':
         specifier: ^5.3.0
         version: 5.3.0
+      '@he-tree/vue':
+        specifier: 2.10.1
+        version: 2.10.1(vue@3.5.44(typescript@6.0.3))
       '@iconify-json/lucide':
         specifier: ^1.2.120
         version: 1.2.149
@@ -441,6 +444,10 @@ packages:
     engines: {node: '>=6.9.0'}
     peerDependencies:
       '@babel/core': ^7.0.0-0
+
+  '@babel/runtime@7.29.14':
+    resolution: {integrity: sha512-Y5tqevQaUAZhhj82BpYMNC1ssvLQTVAfwKdm8iy8qwmhvC2/CpcAu8OC+QEtjM7pMk7knx83u1Qj8gzkicyelw==}
+    engines: {node: '>=6.9.0'}
 
   '@babel/template@7.29.7':
     resolution: {integrity: sha512-puq+Gf35oI24FeN11LkoUQFqv9uwNeWpxXZi/Ji3rRIoKAzKnxRaZ+Gkj0vKS9ZCiTESfng1N9LyOyXvo+m+Gg==}
@@ -1378,6 +1385,22 @@ packages:
 
   '@hapi/topo@6.0.2':
     resolution: {integrity: sha512-KR3rD5inZbGMrHmgPxsJ9dbi6zEK+C3ZwUwTa+eMwWLz7oijWUTWD2pMSNNYJAU6Qq+65NkxXjqHr/7LM2Xkqg==}
+
+  '@he-tree/dnd-utils@0.1.0-alpha.4':
+    resolution: {integrity: sha512-DuxkFOQ8eztoHrX1/VelqOnQphQbRszemfMKSKlAEEhVjqR/IkaOE2QSRlAdj6OC6AfMvHDPvIZOiEPFwP6/ZQ==}
+
+  '@he-tree/tree-utils@0.1.0-alpha.8':
+    resolution: {integrity: sha512-4M4BzXbjCg2uY/GDPUGzq1EFGgna5L7NGFF85fF2pSnCIUkWOZY18eaSqvvlOFtyD5DWkkDqxzu0GHFlp/Zb4g==}
+
+  '@he-tree/vue@2.10.1':
+    resolution: {integrity: sha512-0L0jIWfb92YQfv5ndY5Sv8l3ZSn39MZC41Edl6ux7DQ9grfaEPigpHLxElUVm2XV3bUCfX1xg4ooi116Uwg4HQ==}
+    engines: {node: '>=12'}
+    peerDependencies:
+      '@vue/composition-api': ^1.4.6
+      vue: ^2.0.0 || >=3.0.0
+    peerDependenciesMeta:
+      '@vue/composition-api':
+        optional: true
 
   '@hono/node-server@2.1.5':
     resolution: {integrity: sha512-MgP/I06GdvsilDspMk/qmRzpk8LOUStP6jFAbSRi40W09DhoyUn+Mj7eyKICPqeYKybOjVFLVIAQzvu1bfIa7Q==}
@@ -3324,6 +3347,16 @@ packages:
     engines: {node: '>=20'}
     hasBin: true
 
+  '@virtual-list/vue@1.2.1':
+    resolution: {integrity: sha512-sVangNRLgHJsrwjf2EeXuc8mUExbLRJO39J9/FXFWXXQkue/FBT4ZWN7GH5+GJTeVaEEfHW1W2UuVaf3LEB3jQ==}
+    engines: {node: '>=12'}
+    peerDependencies:
+      '@vue/composition-api': ^1.4.6
+      vue: ^2.0.0 || >=3.0.0
+    peerDependenciesMeta:
+      '@vue/composition-api':
+        optional: true
+
   '@vitejs/plugin-vue-jsx@5.1.6':
     resolution: {integrity: sha512-YXvi4as2clxt6DFw5+a0tTA97ntiQXm/raR8ofNj3aNwwdlVGTiG2gp7EvfZW17P50acL/9bP0ccF4XnqNmlgA==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -4231,6 +4264,9 @@ packages:
     resolution: {integrity: sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw==}
     engines: {node: '>=12'}
 
+  drag-event-service@2.0.0:
+    resolution: {integrity: sha512-JVEnOEbbNDS3RrWd+tVVIDu2SHQZ9luhEFGSQ1hXMjl+ABw0PxhHmnkGjzPVE836Tsg+k7rkm5GM9Ln/UgbYpA==}
+
   dunder-proto@1.0.1:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
     engines: {node: '>= 0.4'}
@@ -4948,6 +4984,9 @@ packages:
   hasown@2.0.4:
     resolution: {integrity: sha512-T2UbfbBEF32wiepXIsMlTW9+dDYC6wMh/t/vYA4tuOMKqWz/n3vr1NFSxQiyP+zk2mXsoMA/i/7qV6LKut1t1A==}
     engines: {node: '>= 0.4'}
+
+  helper-js@3.1.7:
+    resolution: {integrity: sha512-GTvMTs/W7A5YKuMyPKPOuL7GVEDgPajFtI05pjwfiG/nzxFbyobOUwHlnf5AVT+JIEaNp0LsDDINSKToJ5Pwow==}
 
   hey-listen@1.0.8:
     resolution: {integrity: sha512-COpmrF2NOg4TBWUJ5UVyaCU2A88wEMkUPK4hNqyCkqHbxT92BbvfjoSozkAIIm6XhicGlJHhFdullInrdhwU8Q==}
@@ -7663,6 +7702,8 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@babel/runtime@7.29.14': {}
+
   '@babel/template@7.29.7':
     dependencies:
       '@babel/code-frame': 7.29.7
@@ -8573,6 +8614,27 @@ snapshots:
   '@hapi/topo@6.0.2':
     dependencies:
       '@hapi/hoek': 11.0.7
+
+  '@he-tree/dnd-utils@0.1.0-alpha.4':
+    dependencies:
+      '@babel/runtime': 7.29.14
+      drag-event-service: 2.0.0
+      helper-js: 3.1.7
+
+  '@he-tree/tree-utils@0.1.0-alpha.8':
+    dependencies:
+      '@babel/runtime': 7.29.14
+      drag-event-service: 2.0.0
+      helper-js: 3.1.7
+
+  '@he-tree/vue@2.10.1(vue@3.5.44(typescript@6.0.3))':
+    dependencies:
+      '@he-tree/dnd-utils': 0.1.0-alpha.4
+      '@he-tree/tree-utils': 0.1.0-alpha.8
+      '@virtual-list/vue': 1.2.1(vue@3.5.44(typescript@6.0.3))
+      helper-js: 3.1.7
+      vue: 3.5.44(typescript@6.0.3)
+      vue-demi: 0.14.10(vue@3.5.44(typescript@6.0.3))
 
   '@hono/node-server@2.1.5(hono@4.13.14)':
     dependencies:
@@ -10832,6 +10894,12 @@ snapshots:
       - rollup
       - supports-color
 
+  '@virtual-list/vue@1.2.1(vue@3.5.44(typescript@6.0.3))':
+    dependencies:
+      helper-js: 3.1.7
+      vue: 3.5.44(typescript@6.0.3)
+      vue-demi: 0.14.10(vue@3.5.44(typescript@6.0.3))
+
   '@vitejs/plugin-vue-jsx@5.1.6(supports-color@10.2.2)(vite@8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))(vue@3.5.44(typescript@6.0.3))':
     dependencies:
       '@babel/core': 7.29.7(supports-color@10.2.2)
@@ -11768,6 +11836,11 @@ snapshots:
   dotenv@16.6.1: {}
 
   dotenv@17.4.2: {}
+
+  drag-event-service@2.0.0:
+    dependencies:
+      '@babel/runtime': 7.29.14
+      helper-js: 3.1.7
 
   dunder-proto@1.0.1:
     dependencies:
@@ -12765,6 +12838,10 @@ snapshots:
   hasown@2.0.4:
     dependencies:
       function-bind: 1.1.2
+
+  helper-js@3.1.7:
+    dependencies:
+      '@babel/runtime': 7.29.14
 
   hey-listen@1.0.8: {}
 
