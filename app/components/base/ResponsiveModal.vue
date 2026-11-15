@@ -27,11 +27,25 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <TmResponsiveModal :model-value="modelValue" :open="open" :title="title" :description="description" :modal="modal"
-    :fullscreen="fullscreen" :loading="loading" :disabled="disabled" :dismissible="dismissible" :close="close"
-    :icon="icon" :ui="ui" :back-label="t('common.back')" v-bind="$attrs"
-    @update:model-value="emit('update:modelValue', $event)" @update:open="emit('update:open', $event)"
-    @close="emit('close')">
+  <TmResponsiveModal
+    :model-value="modelValue"
+    :open="open"
+    :title="title"
+    :description="description"
+    :modal="modal"
+    :fullscreen="fullscreen"
+    :loading="loading"
+    :disabled="disabled"
+    :dismissible="dismissible"
+    :close="close"
+    :icon="icon"
+    :ui="ui"
+    :back-label="t('common.back')"
+    v-bind="$attrs"
+    @update:model-value="emit('update:modelValue', $event)"
+    @update:open="emit('update:open', $event)"
+    @close="emit('close')"
+  >
     <template v-for="(_, name) in $slots" #[name]="data">
       <slot :name="name" v-bind="data ?? {}" />
     </template>

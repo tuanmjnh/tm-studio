@@ -1,22 +1,8 @@
 import {
   toSlug,
-  toCode,
   toNormalize,
-  generateEan13,
-  minifySvg,
   escapeRegExp,
-  sanitizeSvg,
   getImage,
-  cleanImageUrl,
-  isRawSvg,
-  isIconify,
-  isSpecialImage,
-  isImage,
-  detectDisplayType,
-  ensureForwardSlash,
-  readCsv,
-  readJson,
-  downloadFile,
   formatTimeAgo as coreFormatTimeAgo
 } from '@tuanmjnh/tm-core'
 

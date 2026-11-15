@@ -21,9 +21,19 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <TmTable :data="data" :columns="columns" :loading="loading" :total="total" :page-size="pageSize" :page="page"
-    :styled="styled" :ui="ui" :showing-template="t('global.showingCount')" v-bind="$attrs"
-    @update:page="emit('update:page', $event)">
+  <TmTable
+    :data="data"
+    :columns="columns"
+    :loading="loading"
+    :total="total"
+    :page-size="pageSize"
+    :page="page"
+    :styled="styled"
+    :ui="ui"
+    :showing-template="t('global.showingCount')"
+    v-bind="$attrs"
+    @update:page="emit('update:page', $event)"
+  >
     <template v-for="(_, name) in $slots" #[name]="data">
       <slot :name="name" v-bind="data ?? {}" />
     </template>

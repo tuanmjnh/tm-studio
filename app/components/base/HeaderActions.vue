@@ -19,5 +19,10 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <TmHeaderActions :actions="actions" :max-inline="maxInline" :more-label="t('common.more')" v-bind="$attrs" />
+  <TmHeaderActions
+    :actions="actions"
+    :max-inline="maxInline"
+    :more-label="t('common.more')"
+    v-bind="$attrs"
+  />
 </template>

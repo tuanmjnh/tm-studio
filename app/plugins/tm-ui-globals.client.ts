@@ -29,7 +29,7 @@ import {
   USkeleton,
   USlideover,
   UTable,
-  UTooltip,
+  UTooltip
 } from '#components'
 
 export default defineNuxtPlugin((nuxtApp) => {

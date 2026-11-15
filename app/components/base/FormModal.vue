@@ -26,10 +26,20 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <TmFormModal v-model:open="open" :title="title" :description="description" :schema="schema" :state="state"
-    :loading="loading" :ui="ui" :cancel-label="cancelLabel || t('global.cancel')"
-    :submit-label="submitLabel || t('global.save')" v-bind="$attrs" @submit="emit('submit', $event)"
-    @cancel="emit('cancel')">
+  <TmFormModal
+    v-model:open="open"
+    :title="title"
+    :description="description"
+    :schema="schema"
+    :state="state"
+    :loading="loading"
+    :ui="ui"
+    :cancel-label="cancelLabel || t('global.cancel')"
+    :submit-label="submitLabel || t('global.save')"
+    v-bind="$attrs"
+    @submit="emit('submit', $event)"
+    @cancel="emit('cancel')"
+  >
     <template v-for="(_, name) in $slots" #[name]="data">
       <slot :name="name" v-bind="data ?? {}" />
     </template>

@@ -15,5 +15,10 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <TmRowActions :items="items" :align="align" :label="t('common.actions')" v-bind="$attrs" />
+  <TmRowActions
+    :items="items"
+    :align="align"
+    :label="t('common.actions')"
+    v-bind="$attrs"
+  />
 </template>

@@ -126,7 +126,7 @@ export default defineNuxtConfig({
     tsConfig: {
       compilerOptions: {
         paths: {
-          vue: ['../node_modules/vue'],
+          'vue': ['../node_modules/vue'],
           'vue/*': ['../node_modules/vue/*']
         }
       }

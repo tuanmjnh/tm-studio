@@ -21,7 +21,14 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <TmPasswordInput v-model="model" :placeholder="placeholder" :size="size" :aria-label="ariaLabel"
-    :autocomplete="autocomplete" :show-label="t('auth.showPassword')" :hide-label="t('auth.hidePassword')"
-    v-bind="$attrs" />
+  <TmPasswordInput
+    v-model="model"
+    :placeholder="placeholder"
+    :size="size"
+    :aria-label="ariaLabel"
+    :autocomplete="autocomplete"
+    :show-label="t('auth.showPassword')"
+    :hide-label="t('auth.hidePassword')"
+    v-bind="$attrs"
+  />
 </template>

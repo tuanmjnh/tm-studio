@@ -10,6 +10,11 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <TmViewModeToggle :model-value="modelValue" :list-label="t('common.list')" :grid-label="t('common.grid')"
-    v-bind="$attrs" @update:model-value="emit('update:modelValue', $event)" />
+  <TmViewModeToggle
+    :model-value="modelValue"
+    :list-label="t('common.list')"
+    :grid-label="t('common.grid')"
+    v-bind="$attrs"
+    @update:model-value="emit('update:modelValue', $event)"
+  />
 </template>

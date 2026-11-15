@@ -61,20 +61,42 @@ const labels = computed(() => ({
 </script>
 
 <template>
-  <TmPage :id="id" :title="title" :description="description" :navbar-ui="navbarUi" :flush="flush"
-    :compact="compact" :actions="actions" :search="search" :search-placeholder="searchPlaceholder"
-    :view-mode="viewMode" :count="count" :has-more="hasMore" :loading="loading" :refresh="refresh"
-    :labels="labels" v-bind="$attrs" @update:search="emit('update:search', $event)"
-    @update:view-mode="emit('update:viewMode', $event)">
+  <TmPage
+    :id="id"
+    :title="title"
+    :description="description"
+    :navbar-ui="navbarUi"
+    :flush="flush"
+    :compact="compact"
+    :actions="actions"
+    :search="search"
+    :search-placeholder="searchPlaceholder"
+    :view-mode="viewMode"
+    :count="count"
+    :has-more="hasMore"
+    :loading="loading"
+    :refresh="refresh"
+    :labels="labels"
+    v-bind="$attrs"
+    @update:search="emit('update:search', $event)"
+    @update:view-mode="emit('update:viewMode', $event)"
+  >
     <template v-for="(_, name) in $slots" #[name]="data">
       <slot :name="name" v-bind="data ?? {}" />
     </template>
 
     <template v-if="!hideDefaultActions" #chrome>
       <LazyDashboardBellButton />
-      <UButton v-if="auth.isAuthenticated.value" icon="i-lucide-settings" color="neutral" variant="ghost" square
-        :aria-label="t('settings.title')" :ui="{ leadingIcon: 'text-dimmed' }"
-        @click="isSettingsSlideoverOpen = !isSettingsSlideoverOpen" />
+      <UButton
+        v-if="auth.isAuthenticated.value"
+        icon="i-lucide-settings"
+        color="neutral"
+        variant="ghost"
+        square
+        :aria-label="t('settings.title')"
+        :ui="{ leadingIcon: 'text-dimmed' }"
+        @click="isSettingsSlideoverOpen = !isSettingsSlideoverOpen"
+      />
     </template>
   </TmPage>
 </template>

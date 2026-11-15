@@ -24,16 +24,26 @@ withDefaults(defineProps<{
 })
 
 const open = defineModel<boolean>('open', { default: false })
-const emit = defineEmits<{ confirm: []; cancel: [] }>()
+const emit = defineEmits<{ confirm: [], cancel: [] }>()
 
 const { t } = useI18n()
 </script>
 
 <template>
-  <TmConfirmModal v-model:open="open" :title="title" :description="description" :icon="icon" :color="color"
-    :confirm-icon="confirmIcon" :loading="loading" :cancel-label="cancelLabel || t('global.cancel')"
-    :confirm-label="confirmLabel || t('global.confirm')" v-bind="$attrs" @confirm="emit('confirm')"
-    @cancel="emit('cancel')">
+  <TmConfirmModal
+    v-model:open="open"
+    :title="title"
+    :description="description"
+    :icon="icon"
+    :color="color"
+    :confirm-icon="confirmIcon"
+    :loading="loading"
+    :cancel-label="cancelLabel || t('global.cancel')"
+    :confirm-label="confirmLabel || t('global.confirm')"
+    v-bind="$attrs"
+    @confirm="emit('confirm')"
+    @cancel="emit('cancel')"
+  >
     <template v-for="(_, name) in $slots" #[name]="data">
       <slot :name="name" v-bind="data ?? {}" />
     </template>

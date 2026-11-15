@@ -48,29 +48,30 @@ function scannedRoots(): Array<{ dir: string, prefix: string, relativeTo: string
 
 function scanClicks() {
   const sites: ClickSite[] = []
-  for (const { dir, prefix, relativeTo } of scannedRoots())
-  for (const path of vueFiles(dir)) {
-    const rel = prefix + relative(relativeTo, path).replace(/\\/g, '/')
-    const src = readFileSync(path, 'utf8')
-    for (const match of src.matchAll(CLICKABLE)) {
-      const attrs = match[2] ?? ''
-      const click = attrs.match(/@click(?:\.\w+)*\s*=\s*"([^"]*)"/)
-      if (!click) continue
-      const expr = click[1].trim()
-      // Bare @click.stop/@click.prevent only contain the event; they are not
-      // interactive targets of their own.
-      if (/^(?:stop|prevent)(?:\.(?:stop|prevent))*$/.test(expr)) continue
-      sites.push({
-        file: rel,
-        line: src.slice(0, match.index).split('\n').length,
-        tag: match[1]!,
-        expr,
-        attrs,
-        tabindex: /\btabindex\s*=/.test(attrs),
-        keydown: /@keydown/.test(attrs),
-        keydownSelf: /@keydown\.(?:enter|space)\.self|@keydown\.self/.test(attrs),
-        role: /\brole\s*=/.test(attrs)
-      })
+  for (const { dir, prefix, relativeTo } of scannedRoots()) {
+    for (const path of vueFiles(dir)) {
+      const rel = prefix + relative(relativeTo, path).replace(/\\/g, '/')
+      const src = readFileSync(path, 'utf8')
+      for (const match of src.matchAll(CLICKABLE)) {
+        const attrs = match[2] ?? ''
+        const click = attrs.match(/@click(?:\.\w+)*\s*=\s*"([^"]*)"/)
+        if (!click) continue
+        const expr = click[1].trim()
+        // Bare @click.stop/@click.prevent only contain the event; they are not
+        // interactive targets of their own.
+        if (/^(?:stop|prevent)(?:\.(?:stop|prevent))*$/.test(expr)) continue
+        sites.push({
+          file: rel,
+          line: src.slice(0, match.index).split('\n').length,
+          tag: match[1]!,
+          expr,
+          attrs,
+          tabindex: /\btabindex\s*=/.test(attrs),
+          keydown: /@keydown/.test(attrs),
+          keydownSelf: /@keydown\.(?:enter|space)\.self|@keydown\.self/.test(attrs),
+          role: /\brole\s*=/.test(attrs)
+        })
+      }
     }
   }
   return sites
