@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { BentoCard, BentoGrid } from '@tuanmjnh/tm-ui'
 const { t } = useI18n()
 
 definePageMeta({
@@ -48,9 +49,9 @@ const cards = computed(() => [
         <div class="tm-iso-grid" />
       </div>
 
-      <BaseBentoGrid>
+      <BentoGrid>
         <!-- Hero -->
-        <BaseBentoCard :span="12" :span-sm="6" refract>
+        <BentoCard :span="12" :span-sm="6" refract>
           <div class="relative overflow-hidden px-5 py-6 sm:px-7 sm:py-7">
             <div class="tm-orb-soft -right-24 -bottom-40 size-104" aria-hidden="true" />
 
@@ -98,10 +99,10 @@ const cards = computed(() => [
               </div>
             </div>
           </div>
-        </BaseBentoCard>
+        </BentoCard>
 
         <!-- Modules -->
-        <BaseBentoCard
+        <BentoCard
           v-for="card in cards"
           :key="card.to"
           :span="4"
@@ -128,8 +129,8 @@ const cards = computed(() => [
               <UIcon name="i-lucide-arrow-right" class="size-3 transition-transform group-hover:translate-x-0.5" />
             </p>
           </NuxtLink>
-        </BaseBentoCard>
-      </BaseBentoGrid>
+        </BentoCard>
+      </BentoGrid>
     </div>
   </BasePage>
 </template>
