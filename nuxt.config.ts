@@ -57,10 +57,6 @@ export default defineNuxtConfig({
     }
   },
 
-  alias: {
-    'tm-cut-core': fileURLToPath(new URL('./node_modules/tm-cut-core/src/index.mjs', import.meta.url))
-  },
-
   build: {
     transpile: [
       'firebase',
@@ -105,7 +101,6 @@ export default defineNuxtConfig({
     },
     resolve: {
       alias: {
-        'tm-cut-core': fileURLToPath(new URL('./node_modules/tm-cut-core/src/index.mjs', import.meta.url)),
         'striptags': 'striptags/src/striptags.js'
       },
       dedupe: [

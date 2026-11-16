@@ -102,14 +102,13 @@ describe('the core keeps Node-only imports out of the client graph', () => {
       /(?:from|import)\s*\(?\s*['"](fs|fs\/promises|path|os|child_process|url|crypto|worker_threads)['"]/g,
       /require\(\s*['"](node:[^'"]+|fs|fs\/promises|path|os)['"]\s*\)/g
     ]
-    for (const name of readdirSync(join(ROOT, 'node_modules/tm-cut-core/src'))) {
-      if (!name.endsWith('.mjs')) continue
-      const rel = `node_modules/tm-cut-core/src/${name}`
-      const src = stripComments(read(rel))
-      for (const pattern of patterns) {
-        for (const match of src.matchAll(pattern)) {
-          found.push(`${relative(ROOT, join(ROOT, rel)).replace(/\\/g, '/')} -> ${match[1]}`)
-        }
+    // The published package is a bundle, so one file is the whole engine. Scanning
+    // it is strictly stronger than scanning 62 sources one by one.
+    const rel = 'node_modules/tm-cut-core/index.js'
+    const src = stripComments(read(rel))
+    for (const pattern of patterns) {
+      for (const match of src.matchAll(pattern)) {
+        found.push(`${rel} -> ${match[1]}`)
       }
     }
     assert.deepEqual(found, [],
@@ -117,7 +116,7 @@ describe('the core keeps Node-only imports out of the client graph', () => {
   })
 
   it('the probe still finds the real filesystem when one exists', async () => {
-    const { runHealthChecks } = await import('../../node_modules/tm-cut-core/src/crashRecovery.mjs') as {
+    const { runHealthChecks } = await import('tm-cut-core') as {
       runHealthChecks: () => Promise<{ checks: Array<{ name: string, status: string, detail: string }> }>
     }
     const { checks } = await runHealthChecks()
@@ -127,7 +126,7 @@ describe('the core keeps Node-only imports out of the client graph', () => {
   })
 
   it('that probe tolerates the browser build providing no filesystem', async () => {
-    const { describeDiskAccess } = await import('../../node_modules/tm-cut-core/src/crashRecovery.mjs') as {
+    const { describeDiskAccess } = await import('tm-cut-core') as {
       describeDiskAccess: (fsModule: unknown) => Promise<{ status: string, detail: string }>
     }
     // This is what the bundler hands the renderer: an object with no `stat`.

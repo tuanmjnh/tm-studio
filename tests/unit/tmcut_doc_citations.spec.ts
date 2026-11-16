@@ -43,9 +43,10 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const SELF = `tests${sep}unit${sep}tmcut_doc_citations.spec.ts`
-// The engine is a linked package now, so its sources live under node_modules;
-// SKIP_DIRS would hide them, hence the explicit entry.
-const SOURCE_DIRS = ['app', 'server', 'shared', 'node_modules/tm-cut-core', 'electron', 'tests']
+// ADR-034: the engine is a published package whose bundle strips comments, so
+// the citations it carries are not in the installed tree. This guard is about
+// the code this repo owns, which is where the ADR cross-references live.
+const SOURCE_DIRS = ['app', 'server', 'shared', 'electron', 'tests']
 const SOURCE_EXT = new Set(['.ts', '.mts', '.mjs', '.js', '.cjs', '.vue'])
 const SKIP_DIRS = new Set(['node_modules', 'dist', '.nuxt', '.output', 'coverage', 'release'])
 
@@ -170,7 +171,10 @@ const bare = citations.filter(c => c.family === BARE)
 describe('source citations name a document that exists', () => {
   it('scans a real surface (the guard is not vacuous)', () => {
     assert.ok(files.length > 400, `expected hundreds of source files, found ${files.length}`)
-    assert.ok(citations.length >= 150, `expected 150+ citations, found ${citations.length}`)
+    // Measured at 113 after ADR-034 dropped the engine's 62 sources from the scan:
+    // the bundle strips comments, so the engine's own citations no longer reach
+    // this guard. The floor tracks the code this repo owns.
+    assert.ok(citations.length >= 100, `expected 100+ citations, found ${citations.length}`)
     assert.ok(families.length >= 7, `expected 7 citation families, found ${families.join(', ')}`)
   })
 

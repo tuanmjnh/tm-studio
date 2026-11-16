@@ -65,7 +65,7 @@ async function main() {
     assert.equal(typeof core.TMCUT_FRAME_MAX_CONCURRENT, 'number', 'the pool size answers from core')
     assert.ok(Number.isInteger(core.TMCUT_FRAME_MAX_CONCURRENT), 'a pool size is a whole number of decoders')
     assert.ok(core.TMCUT_FRAME_MAX_CONCURRENT > 0, 'at least one decode must be allowed to run')
-    const dts = read('node_modules/tm-cut-core/src/index.d.ts')
+    const dts = read('node_modules/tm-cut-core/index.d.ts')
     assert.ok(dts.includes('TMCUT_FRAME_MAX_CONCURRENT'), 'the app must be able to see the bound')
   })
 

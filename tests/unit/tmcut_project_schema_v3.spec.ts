@@ -32,12 +32,18 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8')
 
 /** Shipped code only. Specs must be allowed to name the field they forbid. */
-const CODE_DIRS = ['app', 'server', 'shared', 'electron', 'node_modules/tm-cut-core/src', 'node_modules/tm-cut-core/types']
+// The published package is a bundle, so the engine's code lives in one file.
+const CODE_DIRS = ['app', 'server', 'shared', 'electron', 'node_modules/tm-cut-core/index.js']
 const CODE_EXT = /\.(ts|mts|cts|js|mjs|cjs|vue)$/
 
 function walk(dir: string, out: string[] = []): string[] {
   const abs = join(ROOT, dir)
   if (!existsSync(abs)) return out
+  // A CODE_DIRS entry may name one file (the published bundle) rather than a tree.
+  if (statSync(abs).isFile()) {
+    if (CODE_EXT.test(dir)) out.push(dir)
+    return out
+  }
   for (const entry of readdirSync(abs, { withFileTypes: true })) {
     if (entry.name === 'node_modules' || entry.name === '.nuxt' || entry.name === 'dist') continue
     const rel = `${dir}/${entry.name}`
@@ -148,6 +154,7 @@ describe('the plan-only sequences shape', () => {
         })
       }
     }
-    assert.deepEqual(readers, ['node_modules/tm-cut-core/src/timeline.mjs:344'], 'the app file container label must stay unread')
+    assert.equal(readers.length, 1, 'exactly one reader, and it is the core')
+    assert.ok(readers[0]!.startsWith('node_modules/tm-cut-core/index.js:'), 'the app file container label must stay unread')
   })
 })

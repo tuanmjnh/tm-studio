@@ -4,8 +4,9 @@
     "moduleResolution": "NodeNext",
     "baseUrl": ".",
     "paths": {
-      "~/*": ["./app/*"],
-      "tm-cut-core": ["./node_modules/tm-cut-core/src/index.mjs"]
+      "~/*": [
+        "./app/*"
+      ]
     },
     "noEmit": true
   }

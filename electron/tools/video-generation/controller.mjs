@@ -15,9 +15,9 @@ import {
   registerGenerationAdapter,
   getGenerationAdapter,
   listGenerationAdapters
-} from '../../../node_modules/tm-cut-core/src/generationAdapter.mjs'
+} from '../../../node_modules/tm-cut-core/generationAdapter.js'
 
-import { registerProviderAdapter } from '../../../node_modules/tm-cut-core/src/providerAdapter.mjs'
+import { registerProviderAdapter } from '../../../node_modules/tm-cut-core/providerAdapter.js'
 
 const require = createRequire(import.meta.url)
 const { app, ipcMain } = require('electron')

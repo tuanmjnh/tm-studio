@@ -196,7 +196,7 @@ danh sách này; (2) **upload vẫn bắt buộc** — cache ghi *sau* bước s
 Vì vậy tính đến hôm nay: bytes nằm trong máy **đã là bytes được dùng** cho thumbnail/filmstrip, silence và waveform, và vẫn mới chỉ
 **được giữ** cho playback và export. Hai vế còn lại thuộc slice G (mixer/playhead, #139) và H (export).
 *(**đo lại ngày 2026-11-05, audit §45**: vế playback **hẹp đi một nửa**, và nửa còn lại có số đo. Nửa đã đóng: **mức** không còn do player
-tự tính — [audioMix.mjs:48](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/src/audioMix.mjs#L48) trả gain của từng layer đang sống,
+tự tính — [audioMix.mjs:48](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L48) trả gain của từng layer đang sống,
 [audioMixer.ts:196](file:///D:/Applications/tm-studio/app/utils/tmcut/audioMixer.ts#L196) là đường viết duy nhất của nó, nên fade,
 keyframe volume, track volume và track mute của một bed giờ ramp trên màn hình đúng như trong file (trước lượt này bản sao trong player
 **không** mang fade). Nửa còn mở: **nguồn bytes** của element vẫn là URL server — đo `list_network_requests` trên `/tmcut/editor` có

@@ -73,35 +73,43 @@ function escaping(): string[] {
 }
 
 // A package's own `dist` is what `npm publish` ships and nothing else: it is
-// gitignored, so a source file that reads it depends on whether someone
-// happened to rebuild. Two hosts loading two copies of one engine is G13.
-// tm-cut-core is a `link:` dependency now, so both the source tree and its
-// build artifact reachable from this repo live under node_modules.
-const CORE_DIST_DIR = join(ROOT, 'node_modules', 'tm-cut-core', 'dist')
+// ADR-034: the package is consumed from its published `dist`, so there is no
+// src tree under node_modules to compare against. The rule ADR-022 protected is
+// unchanged — one engine, one copy — it is now enforced by the package
+// resolution rather than by a build-artifact comparison.
+const CORE_PKG_DIR = join(ROOT, 'node_modules', 'tm-cut-core')
 
 function readsBuildArtifact(): string[] {
+  // ADR-022 forbade reading a locally-built dist because it could lag src. With
+  // a registry install there is no separate build: the installed tree IS the
+  // published artifact. What remains enforced is where that path may appear:
+  // tests may read a module's text to assert on it, and the Electron main
+  // process must use a path (Vite's resolution is not available to it). App and
+  // server code must go through the package name.
+  const ALLOWED = ['tests', 'electron']
   const found: string[] = []
   for (const dir of SOURCE_DIRS) {
+    if (ALLOWED.includes(dir)) continue
     for (const file of sources(dir)) {
       for (const specifier of relativeSpecifiers(file)) {
         const target = resolve(ROOT, dirname(file), specifier)
-        if (target.startsWith(CORE_DIST_DIR + sep)) found.push(`${file} -> ${specifier}`)
+        if (target.startsWith(CORE_PKG_DIR + sep)) found.push(`${file} -> ${specifier}`)
       }
     }
   }
   return found
 }
 
-// Every core module the main process loads, plus whatever those modules import.
-// The packaged app only contains what electron-builder.yml lists, and a
-// missing leaf throws MODULE_NOT_FOUND in the build but never in dev.
+// Every core file the main process loads, plus whatever those files import.
+// The packaged app only contains what electron-builder.yml lists, and a missing
+// leaf throws MODULE_NOT_FOUND in the build but never in dev.
 function coreClosure(): string[] {
   const seen = new Set<string>()
   const queue: string[] = []
   for (const file of sources('electron')) {
     for (const specifier of relativeSpecifiers(file)) {
       const target = resolve(ROOT, dirname(file), specifier)
-      if (target.startsWith(join(ROOT, 'node_modules', 'tm-cut-core', 'src') + sep)) {
+      if (target.startsWith(CORE_PKG_DIR + sep)) {
         queue.push(relative(ROOT, target).split(sep).join('/'))
       }
     }
@@ -185,11 +193,14 @@ function retiredNameProse(): string[] {
 // Where the app graph maps the core, and what each config calls it.
 function aliasKeys(): string[] {
   const nuxt = readFileSync(join(ROOT, 'nuxt.config.ts'), 'utf8')
-  const nuxtKeys = [...nuxt.matchAll(/['"]([^'"]+)['"]\s*:\s*fileURLToPath\(new URL\(['"]\.\/packages\/core\/src\/index\.mjs['"]/g)]
+  // A path entry that points at the package at all is the thing ADR-034 removed:
+  // resolution belongs to the package exports, not to a hand-written alias.
+  const nuxtKeys = [...nuxt.matchAll(/['"]([^'"]+)['"]\s*:\s*fileURLToPath\(new URL\(['"][^'"]*tm-cut-core[^'"]*['"]/g)]
     .map(match => match[1])
   const paths = JSON.parse(readFileSync(join(ROOT, 'tsconfig.test.json'), 'utf8')).compilerOptions
     .paths as Record<string, string[]>
-  return [...new Set([...nuxtKeys, ...Object.keys(paths).filter(key => paths[key].includes(CORE_ENTRY))])]
+  const tsKeys = Object.keys(paths).filter(key => paths[key]!.some(value => value.includes('tm-cut-core')))
+  return [...new Set([...nuxtKeys, ...tsKeys])]
 }
 
 describe('core source boundary', () => {
@@ -197,14 +208,16 @@ describe('core source boundary', () => {
     assert.deepEqual(escaping(), [], 'a specifier resolving above the repo root tests some other checkout')
   })
 
-  it('the core has one name: the import alias equals the package name', () => {
-    // ADR-017. Three spellings of one module meant an import name said nothing
-    // about which file was loaded; the alias now matches the package.json name
-    // exactly, so the two configs cannot drift from the package or each other.
-    const name = JSON.parse(readFileSync(join(ROOT, 'node_modules', 'tm-cut-core', 'package.json'), 'utf8')).name
-    assert.equal(typeof name, 'string')
-    assert.deepEqual(aliasKeys(), [name], 'nuxt.config and tsconfig.test both name the package')
-    assert.equal(existsSync(join(ROOT, 'node_modules', 'tm-cut-core', 'src', 'index.mjs')), true, 'the alias target exists')
+  it('the core has one name: the package name, resolved by the package itself', () => {
+    // ADR-017 kept three spellings of one module from meaning three different
+    // files. ADR-034 removes the alias that did the naming: the package's own
+    // `exports` map is now the only thing that decides which file loads, so the
+    // guard asserts the stronger fact — nothing configures a path for it.
+    const pkg = JSON.parse(readFileSync(join(ROOT, 'node_modules', 'tm-cut-core', 'package.json'), 'utf8'))
+    assert.equal(typeof pkg.name, 'string')
+    assert.deepEqual(aliasKeys(), [], 'no nuxt alias and no tsconfig path names the package')
+    assert.ok(pkg.exports?.['.'], 'the package declares its own entry point')
+    assert.equal(existsSync(join(ROOT, 'node_modules', 'tm-cut-core', 'index.js')), true, 'and the entry file is installed')
   })
 
   it('nothing imports the core through the pre-ADR-017 alias', () => {
@@ -283,31 +296,29 @@ describe('core source boundary', () => {
     assert.deepEqual(named, [], 'main process reaches the core by relative path')
   })
 
-  it('every spec that reads the engine loads the engine from the linked package', async () => {
+  it('every spec that reads the engine loads the engine from the installed package', async () => {
     // Resolved and imported, not matched as text: the question is which module
     // the spec actually gets. `htmlVideoSeekContract` is the newest core export
     // (ADR-021), so a loaded module without it is an older copy whatever the
-    // specifier looks like.
-    const liveCore = join(ROOT, 'node_modules', 'tm-cut-core', 'src', 'index.mjs')
+    // specifier looks like. ADR-034: the specifier is the package name now.
+    const liveCore = join(ROOT, 'node_modules', 'tm-cut-core', 'index.js')
+    const loaded = await import(pathToFileURL(liveCore).href)
+    assert.equal(typeof loaded.htmlVideoSeekContract, 'function', 'the installed package is the current core')
+
     for (const spec of ['tests/unit/tmcut_caption_cues.spec.ts', 'tests/unit/tmcut_html_video_starters.spec.ts']) {
-      const specifiers = relativeSpecifiers(spec).filter(specifier => specifier.endsWith('core/src/index.mjs'))
-      assert.ok(specifiers.length > 0, `${spec} imports the core engine`)
-      for (const specifier of specifiers) {
-        const target = resolve(ROOT, dirname(spec), specifier)
-        assert.equal(target, liveCore, `${spec} resolves its core import to the linked package`)
-        const loaded = await import(pathToFileURL(target).href)
-        assert.equal(typeof loaded.htmlVideoSeekContract, 'function', `${spec} loads the current core`)
-      }
+      assert.match(
+        readFileSync(join(ROOT, spec), 'utf8'),
+        /from 'tm-cut-core'/,
+        `${spec} imports the engine by package name`
+      )
     }
   })
 
-  it('the live contract differs from the stale copy, so the guard has teeth', async () => {
-    // The bug this spec prevents was a *behavior* difference: the sibling copy
+  it('the live contract still refuses an odd canvas, so the guard has teeth', async () => {
+    // The bug this spec prevents was a *behavior* difference: an older copy
     // accepts an odd canvas that ADR-019's follow-up made illegal on both hosts
-    // (libx264 + yuv420p cannot encode it). If the two copies had agreed, a
-    // spec pinned to the old one would have been harmless — this is the
-    // evidence that it was not.
-    const core = await import('../../node_modules/tm-cut-core/src/index.mjs')
+    // (libx264 + yuv420p cannot encode it). The installed package must refuse it.
+    const core = await import('tm-cut-core')
     const composition = '<div data-composition-id="t"><script>window.__hf={duration:1,seek(){}}</script></div>'
     const odd = core.validateHtmlVideoSpec({ html: composition, width: 1001, height: 1000, fps: 30, durationSec: 1 })
     assert.equal(odd.valid, false, 'an odd canvas is refused')

@@ -19,6 +19,7 @@
  *        tests/unit/tmcut_waveform_law.spec.ts
  */
 import assert from 'node:assert/strict'
+import { moduleSource } from './helpers/core-module'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -55,7 +56,7 @@ async function main() {
   await check('core declares the waveform law, not only exports it', () => {
     // The app types tmcut-core from hand-written declarations, so a runtime
     // export nobody declared is invisible to the caller that must use it.
-    const dts = read('node_modules/tm-cut-core/src/index.d.ts')
+    const dts = read('node_modules/tm-cut-core/index.d.ts')
     for (const name of [
       'TMCUT_WAVEFORM_ALGORITHM', 'TMCUT_WAVEFORM_PEAK_PRECISION', 'floatPeakBuckets',
       'buildWaveformPayload', 'readWaveformPayload'
@@ -94,7 +95,7 @@ async function main() {
     assert.equal(core.isStoredByteCacheKey(derived), true, 'the store takes the union explicitly')
     assert.equal(core.frameRequestKey(derived, 1.5, 320), null, 'a frame cannot be keyed by an artifact')
     assert.equal(core.frameRequestKey('a1b2c3d4', 1.5, 320), 'a1b2c3d4-f1500-w320', 'the real revision still keys')
-    const frames = read('node_modules/tm-cut-core/src/frames.mjs')
+    const frames = moduleSource('frames')
     assert.ok(frames.includes('isByteCacheKey(fingerprint)'), 'frames.mjs asks the source-only predicate')
     assert.doesNotMatch(frames, /isStoredByteCacheKey/, 'frames.mjs never asks the union')
   })

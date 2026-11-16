@@ -109,9 +109,9 @@ async function main() {
     assert.equal(ledger.release('hud', second.token), true, 'the current owner gets its slot back')
     assert.equal(ledger.size(), 0)
     assert.equal(ledger.release('hud', second.token), false, 'releasing twice is not an error')
-    assert.ok(read('node_modules/tm-cut-core/src/index.d.ts').includes('release('),
+    assert.ok(read('node_modules/tm-cut-core/index.d.ts').includes('release('),
       'and the app can see the power through the types')
-    assert.ok(read('node_modules/tm-cut-core/src/index.d.ts').includes('clear('),
+    assert.ok(read('node_modules/tm-cut-core/index.d.ts').includes('clear('),
       'both are declared, not just exported')
   })
 

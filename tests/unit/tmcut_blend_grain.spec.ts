@@ -29,6 +29,7 @@
  *        tests/unit/tmcut_blend_grain.spec.ts
  */
 import assert from 'node:assert/strict'
+import { moduleSource } from './helpers/core-module'
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -37,7 +38,7 @@ import { BLEND_MODES, EFFECT_REGISTRY, TICKS_PER_SECOND, blendModeOf, evaluateTi
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8')
 const PLAYER = 'app/components/tmcut/TmcutPreviewPlayer.vue'
-const EXPORT_CONTENT = 'node_modules/tm-cut-core/src/exportContent.mjs'
+const EXPORT_CONTENT = 'exportContent'
 const WEB_EXPORT_CHOICE = 'app/utils/tmcut/webExportChoice.ts'
 const PROJECT_TYPES = 'app/composables/useTmcutProject.ts'
 const INSPECTOR = 'app/components/tmcut/TmcutInspector.vue'
@@ -123,10 +124,11 @@ async function main() {
     // Slice I deleted the FFmpeg emitter: the export leg is the content law,
     // which normalizes through core and refuses a non-normal mode by name
     // instead of interpolating it into a filtergraph.
-    const content = read(EXPORT_CONTENT)
+    const content = moduleSource(EXPORT_CONTENT)
     assert.match(content, /blendModeOf\(/, 'the content law must normalize through core')
     assert.doesNotMatch(content, /clip\.raw\.blend\b/, 'no raw read of the authored mode beside the law')
-    assert.match(content, /reasons\.add\('blend'\)/, 'a non-normal mode is a named refusal')
+    // The bundle re-quotes string literals, so the assertion accepts either form.
+    assert.match(content, /reasons\.add\(['"]blend['"]\)/, 'a non-normal mode is a named refusal')
     const choice = read(WEB_EXPORT_CHOICE)
     assert.doesNotMatch(choice, /blendModeOf|clip\.blend/, 'the dialog must not re-decide what core already answered')
   })

@@ -13,6 +13,7 @@
  *        tests/unit/tmcut_frame_scheduler.spec.ts
  */
 import assert from 'node:assert/strict'
+import { moduleSource } from './helpers/core-module'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -200,9 +201,9 @@ async function main() {
   // 8. The roadmap forbids a wall clock as frame timing — checked at the
   // source of the module that owns the sequence, comments excluded.
   await check('the scheduler reads no clock of its own', async () => {
-    const code = stripComments(read('node_modules/tm-cut-core/src/scheduler.mjs'))
+    const code = stripComments(moduleSource('scheduler'))
     for (const forbidden of WALL_CLOCK) {
-      assert.ok(!code.includes(forbidden), `tm-cut-core/src/scheduler.mjs uses ${forbidden}`)
+      assert.ok(!code.includes(forbidden), `tm-cut-core scheduler uses ${forbidden}`)
     }
     assert.match(code, /evaluateTimeline\(/, 'the frame content is the evaluator answer, not a second model')
   })

@@ -287,7 +287,7 @@ async function main() {
       assert.doesNotMatch(read(file), /asset\.waveformPath\s*(&&|\?|===|!==|\|\|)/,
         `${file} still gates a waveform on a server path`)
     }
-    const declarations = read('node_modules/tm-cut-core/src/index.d.ts')
+    const declarations = read('node_modules/tm-cut-core/index.d.ts')
     for (const name of ['waveformCacheKey', 'TMCUT_WAVEFORM_CACHE_KIND', 'TMCUT_WAVEFORM_CACHE_VERSION']) {
       assert.ok(declarations.includes(name), `tmcut-core does not declare ${name}`)
     }

@@ -287,9 +287,11 @@ async function main() {
   })
 
   await check('the mix law lives in core, not in the player', () => {
-    const barrel = read('node_modules/tm-cut-core/src/index.mjs')
-    const types = read('node_modules/tm-cut-core/src/index.d.ts')
-    assert.match(barrel, /from '\.\/audioMix\.mjs'/, 'the module is part of the public surface')
+    // The published package is a bundle, so "the module is part of the public
+    // surface" is proved by the export existing rather than by a re-export line.
+    const bundle = read('node_modules/tm-cut-core/index.js')
+    const types = read('node_modules/tm-cut-core/index.d.ts')
+    assert.match(bundle, /function audioMixAt|audioMixAt as/, 'the mix law is in the shipped code')
     assert.match(types, /export function audioMixAt/, 'and typed for the app')
   })
 

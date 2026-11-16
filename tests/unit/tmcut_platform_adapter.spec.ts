@@ -18,6 +18,7 @@
  *        tests/unit/tmcut_platform_adapter.spec.ts
  */
 import assert from 'node:assert/strict'
+import { moduleSource } from './helpers/core-module'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -256,7 +257,7 @@ async function main() {
     // engine, so the guard is structural: no main-process file may hold a
     // capture pipeline, and the bounds must come from core.
     assert.deepEqual(desktopCaptureEngines(), [], 'the desktop holds no HTML-video engine')
-    const spec = read('node_modules/tm-cut-core/src/htmlVideo.mjs')
+    const spec = moduleSource('htmlVideo')
     assert.match(spec, /minFps: 1/, 'composition spec floor')
     assert.match(spec, /maxFps: 60/, 'composition spec ceiling')
   })
