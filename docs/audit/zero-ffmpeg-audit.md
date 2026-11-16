@@ -9111,7 +9111,7 @@ Renderer (`TmcutExportModal.vue`):
 | Export thật qua UI (`Untitled Project`) | hoàn tất ~173 s, `Untitled Project (1).mp4` **13,550,534 byte** |
 | Hàng đích sau export | `…/tmcut/renders/Untitled Project (1).mp4` |
 | Nút Play (phần tử `<video>` của modal) | nguồn `media://…/renders/Untitled Project (1).mp4`, `readyState 4`, `paused: false`, `currentTime 6.44`, `1920×1080`, `duration 24.45` |
-| `showItemInFolder(path có thật)` | `true`; `showItemInFolder(path không tồn tại)` | `false` |
+| `showItemInFolder` (path có thật / path không tồn tại) | `true` / `false` |
 | Console trong 5 route TMCut | 0 `error` / 0 `warning` / 0 `issue` (ngoài thông báo CSP riêng của Electron dev) |
 
 ### 76.5 Gate
