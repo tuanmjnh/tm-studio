@@ -7,8 +7,10 @@
 // over this file.
 import type { Component } from 'vue'
 import {
+  UAlert,
   UBadge,
   UButton,
+  UCard,
   UCheckbox,
   UDashboardNavbar,
   UDashboardPanel,
@@ -25,16 +27,22 @@ import {
   UPagination,
   UPopover,
   UScrollArea,
+  USelect,
   USelectMenu,
   USkeleton,
   USlideover,
+  USlider,
   UTable,
+  UTabs,
+  UTextarea,
   UTooltip
 } from '#components'
 
 export default defineNuxtPlugin((nuxtApp) => {
+  nuxtApp.vueApp.component('UAlert', UAlert as unknown as Component)
   nuxtApp.vueApp.component('UBadge', UBadge as unknown as Component)
   nuxtApp.vueApp.component('UButton', UButton as unknown as Component)
+  nuxtApp.vueApp.component('UCard', UCard as unknown as Component)
   nuxtApp.vueApp.component('UCheckbox', UCheckbox as unknown as Component)
   nuxtApp.vueApp.component('UDashboardNavbar', UDashboardNavbar as unknown as Component)
   nuxtApp.vueApp.component('UDashboardPanel', UDashboardPanel as unknown as Component)
@@ -51,9 +59,13 @@ export default defineNuxtPlugin((nuxtApp) => {
   nuxtApp.vueApp.component('UPagination', UPagination as unknown as Component)
   nuxtApp.vueApp.component('UPopover', UPopover as unknown as Component)
   nuxtApp.vueApp.component('UScrollArea', UScrollArea as unknown as Component)
+  nuxtApp.vueApp.component('USelect', USelect as unknown as Component)
   nuxtApp.vueApp.component('USelectMenu', USelectMenu as unknown as Component)
   nuxtApp.vueApp.component('USkeleton', USkeleton as unknown as Component)
   nuxtApp.vueApp.component('USlideover', USlideover as unknown as Component)
+  nuxtApp.vueApp.component('USlider', USlider as unknown as Component)
   nuxtApp.vueApp.component('UTable', UTable as unknown as Component)
+  nuxtApp.vueApp.component('UTabs', UTabs as unknown as Component)
+  nuxtApp.vueApp.component('UTextarea', UTextarea as unknown as Component)
   nuxtApp.vueApp.component('UTooltip', UTooltip as unknown as Component)
 })
