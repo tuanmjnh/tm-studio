@@ -197,11 +197,11 @@ importers:
         specifier: ^0.2.1
         version: 0.2.1
       '@tuanmjnh/tm-core':
-        specifier: link:../tm-platform/packages/tm-core
-        version: link:../tm-platform/packages/tm-core
+        specifier: ^0.1.2
+        version: 0.1.2
       '@tuanmjnh/tm-ui':
-        specifier: link:../tm-platform/packages/tm-ui
-        version: link:../tm-platform/packages/tm-ui
+        specifier: ^0.1.4
+        version: 0.1.4(@he-tree/vue@2.10.1(vue@3.5.44(typescript@6.0.3)))(@nuxt/ui@4.12.0(937f688dfa400d4827d19989b5b55edd))(@tuanmjnh/tm-core@0.1.2)(@vueuse/core@15.0.0(vue@3.5.44(typescript@6.0.3)))(sortablejs@1.15.7)(vue@3.5.44(typescript@6.0.3))
       '@vueuse/core':
         specifier: ^15.0.0
         version: 15.0.0(vue@3.5.44(typescript@6.0.3))
@@ -251,8 +251,8 @@ importers:
         specifier: ^4.3.3
         version: 4.3.3
       tm-cut-core:
-        specifier: link:../tm-platform/packages/tm-cut-core
-        version: link:../tm-platform/packages/tm-cut-core
+        specifier: ^0.1.1
+        version: 0.1.1
       tm-hub-client:
         specifier: 1.2.0
         version: 1.2.0
@@ -3054,6 +3054,22 @@ packages:
 
   '@tuanmjnh/tm-ai-client@0.2.1':
     resolution: {integrity: sha512-vSZgqu3VhQb/bXYadICw9C5FQRUqVhXmtylSS7puNIEdSQPPr8nfvoy8ledXMgMkXLo7fyoCj7dMGVre+SBsyQ==}
+
+  '@tuanmjnh/tm-core@0.1.2':
+    resolution: {integrity: sha512-8ZgdJy4ofun7svDxsjcxUFWGJZxT3O+WWWiDu0FS2t+UfvOZVFzC2V9/zHUOO/PzzYKLZNegg5bQNpALBFF61w==}
+
+  '@tuanmjnh/tm-ui@0.1.4':
+    resolution: {integrity: sha512-nl295bcpD/gVq0sV1/sRRQLXjxgMFxhec1A52dU+oaNDUUgQo2Am/Eq4DwQRIzKqtYB8udxImYjFOlbc9GF3VQ==}
+    peerDependencies:
+      '@he-tree/vue': ^2.10.1
+      '@nuxt/ui': ^4.0.0
+      '@tuanmjnh/tm-core': ^0.1.2
+      '@vueuse/core': ^14.0.0 || ^15.0.0
+      sortablejs: ^1.15.0
+      vue: ^3.5.0
+    peerDependenciesMeta:
+      '@nuxt/ui':
+        optional: true
 
   '@tybys/wasm-util@0.10.4':
     resolution: {integrity: sha512-W3c4gRigFS0T/Ma4qIYF3GDAc5AQdHb1yL5znJT1Zv1YaD9Kitx656wBjvr19qbiosmZT8lWDM5BEMynUqX65A==}
@@ -6706,6 +6722,9 @@ packages:
   tinyglobby@0.2.17:
     resolution: {integrity: sha512-wXR/dYpcqKmfWpEdZjiKJOwCNFndD0DMnrW/cYjVGttEkBfVgcLFHoNrlj47mjOVic9yyNu65alsgF4NQyTa2g==}
     engines: {node: '>=12.0.0'}
+
+  tm-cut-core@0.1.1:
+    resolution: {integrity: sha512-gDg35ZmmK36y0Mz9mZq2teaEfzUtw5dWO0CXV4zTeAxJikg8EBpeHZ1GNar3TQkwWfxhY8F1WXTi749FSNvaUw==}
 
   tm-hub-client@1.2.0:
     resolution: {integrity: sha512-pQjZ4kAPrtFJY9CjXF7LSvx4RAMiAN/LrpB53cqvt8KJKaKILA5Szt8TKG0f2C+1LFH8wsLPASC1OLHwlYL+PA==}
@@ -10505,6 +10524,18 @@ snapshots:
       yjs: 13.6.33
 
   '@tuanmjnh/tm-ai-client@0.2.1': {}
+
+  '@tuanmjnh/tm-core@0.1.2': {}
+
+  '@tuanmjnh/tm-ui@0.1.4(@he-tree/vue@2.10.1(vue@3.5.44(typescript@6.0.3)))(@nuxt/ui@4.12.0(937f688dfa400d4827d19989b5b55edd))(@tuanmjnh/tm-core@0.1.2)(@vueuse/core@15.0.0(vue@3.5.44(typescript@6.0.3)))(sortablejs@1.15.7)(vue@3.5.44(typescript@6.0.3))':
+    dependencies:
+      '@he-tree/vue': 2.10.1(vue@3.5.44(typescript@6.0.3))
+      '@tuanmjnh/tm-core': 0.1.2
+      '@vueuse/core': 15.0.0(vue@3.5.44(typescript@6.0.3))
+      sortablejs: 1.15.7
+      vue: 3.5.44(typescript@6.0.3)
+    optionalDependencies:
+      '@nuxt/ui': 4.12.0(937f688dfa400d4827d19989b5b55edd)
 
   '@tybys/wasm-util@0.10.4':
     dependencies:
@@ -14713,6 +14744,8 @@ snapshots:
     dependencies:
       fdir: 6.5.0(picomatch@4.0.7)
       picomatch: 4.0.7
+
+  tm-cut-core@0.1.1: {}
 
   tm-hub-client@1.2.0: {}
 

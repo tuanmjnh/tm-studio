@@ -24,9 +24,9 @@
     "build:electron:win": "pnpm bake:public-config && pnpm build && electron-builder --config electron-builder.yml --win --publish never",
     "build:electron:dir": "pnpm bake:public-config && pnpm build && electron-builder --config electron-builder.yml --dir --publish never",
     "check:hygiene": "tsx scripts/check-source-hygiene.mts",
-    "test:core": "cd node_modules/tm-cut-core && node --test \"test/*.test.mjs\"",
-    "check:core": "node node_modules/tm-cut-core/tools/check-boundaries.mjs",
-    "typecheck:core": "tsc --noEmit -p node_modules/tm-cut-core/tsconfig.check.json",
+    "test:core": "pnpm --dir ../tm-platform/packages/tm-cut-core test",
+    "check:core": "pnpm --dir ../tm-platform/packages/tm-cut-core check",
+    "typecheck:core": "pnpm --dir ../tm-platform/packages/tm-cut-core typecheck",
     "test": "tsx tests/unit/run-all.mts && node --test \"electron/tools/*.test.mjs\"",
     "test:unit": "tsx tests/unit/run-all.mts",
     "test:electron": "node --test \"electron/tools/*.test.mjs\"",
@@ -45,8 +45,8 @@
     "@nuxtjs/i18n": "^10.6.0",
     "@pinia/nuxt": "^1.0.2",
     "@tuanmjnh/tm-ai-client": "^0.2.1",
-    "@tuanmjnh/tm-core": "link:../tm-platform/packages/tm-core",
-    "@tuanmjnh/tm-ui": "link:../tm-platform/packages/tm-ui",
+    "@tuanmjnh/tm-core": "^0.1.2",
+    "@tuanmjnh/tm-ui": "^0.1.4",
     "@vueuse/core": "^15.0.0",
     "@vueuse/nuxt": "^15.0.0",
     "bcryptjs": "^3.0.3",
@@ -67,7 +67,7 @@
     "uuid": "^14.0.2",
     "vue": "^3.5.44",
     "zod": "^4.4.3",
-    "tm-cut-core": "link:../tm-platform/packages/tm-cut-core"
+    "tm-cut-core": "^0.1.1"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
