@@ -138,8 +138,6 @@ function notShipped(files: string[]): string[] {
     : file === pattern))
 }
 
-const CORE_ENTRY = './node_modules/tm-cut-core/src/index.mjs'
-
 // Built at runtime: the old alias must not appear as a literal in the file that
 // proves nothing imports it.
 const OLD_ALIAS = ['@tmcut', 'core'].join('-')

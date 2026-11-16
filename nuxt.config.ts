@@ -88,7 +88,7 @@ export default defineNuxtConfig({
     },
     resolve: {
       alias: {
-        'striptags': 'striptags/src/striptags.js'
+        striptags: 'striptags/src/striptags.js'
       },
       dedupe: [
         'vue'
