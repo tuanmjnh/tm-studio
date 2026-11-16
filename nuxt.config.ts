@@ -1,5 +1,3 @@
-import { fileURLToPath } from 'node:url'
-
 export default defineNuxtConfig({
 
   modules: [
@@ -76,17 +74,6 @@ export default defineNuxtConfig({
   compatibilityDate: '2026-06-30',
 
   vite: {
-    server: {
-      fs: {
-        // tm-cut-core, tm-ui and tm-core are linked from a sibling repo, so
-        // their source must be served from outside this project root too.
-        allow: [
-          fileURLToPath(new URL('../tm-platform/packages/tm-cut-core', import.meta.url)),
-          fileURLToPath(new URL('../tm-platform/packages/tm-ui', import.meta.url)),
-          fileURLToPath(new URL('../tm-platform/packages/tm-core', import.meta.url))
-        ]
-      }
-    },
     optimizeDeps: {
       include: [
         'tm-hub-client',
