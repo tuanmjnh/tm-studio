@@ -81,11 +81,15 @@ AUTH_JWT_JWKS_URL=http://localhost:4000/api/v1/auth/jwks
 > chỉ dành cho một deployment server tin cậy, không dành cho installer. Xem thiết bị đã đăng ký tại
 > `/system/settings/devices`.
 
-> **Lưu ý bảo mật**: Không commit `.env`. Khoá API cho AI provider có **hai** chỗ lưu, và tài liệu cũ
-> gộp chúng làm một:
+> **Lưu ý bảo mật**: Không commit `.env`. Khoá API cho AI provider có **ba** chỗ lưu. Chi tiết hợp đồng
+> biến môi trường, migration và cách triển khai web nằm ở
+> **[Cấu hình AI cục bộ](../ai-configuration.md)**:
 >
 > - **Hub connection** (`/resources/connections`): credential do Hub giữ; studio chỉ đọc catalogue và gọi
 >   qua relay.
+> - **App-local row** (`ai_connections`, theo từng tài khoản, trong MongoDB của studio): khoá nằm trong
+>   `apiKeyCipher`, niêm phong AES-256-GCM bằng `AI_CONFIG_SECRET`; renderer chỉ nhận `hasKey`. Cần
+>   `MONGODB_URI` và `AI_CONFIG_SECRET` (xem [Cấu hình AI cục bộ](../ai-configuration.md)).
 > - **Local vault** (`/system/ai-keys`, chỉ trên Electron): key nằm trong `config.env` ở `userData`, mã hoá
 >   bằng `safeStorage` của OS (`electron/tools/ai-secure.cjs`). Nếu keychain không dùng được, trang hiện
 >   banner cảnh báo và key được ghi ở dạng plaintext — đọc trạng thái đó trước khi nhập key thật.
