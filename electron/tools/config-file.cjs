@@ -55,4 +55,33 @@ function writeConfigValues(file, values) {
   fs.writeFileSync(file, `${lines.join('\n')}\n`, 'utf8')
 }
 
-module.exports = { readConfigFile, writeConfigValues }
+/**
+ * Append a single `KEY=VALUE` line instead of rewriting the file. This exists
+ * because `writeConfigValues` rewrites every line — comments and `********`
+ * masks echoed from get-config would be lost — and `readConfigFile` yields the
+ * keychain tokens, not the plaintext, so neither can seed a generated value.
+ * Secret slots are encrypted exactly like the rewrite path; the separator is
+ * added only when the file does not already end with a newline. A write
+ * failure throws to the caller.
+ */
+function appendConfigValue(file, key, value) {
+  let prefix = ''
+  try {
+    const { size } = fs.statSync(file)
+    if (size > 0) {
+      const fd = fs.openSync(file, 'r')
+      try {
+        const last = Buffer.alloc(1)
+        fs.readSync(fd, last, 0, 1, size - 1)
+        if (last[0] !== 0x0a) prefix = '\n'
+      } finally {
+        fs.closeSync(fd)
+      }
+    }
+  } catch {
+    // no config file yet — the new line starts the file
+  }
+  fs.appendFileSync(file, `${prefix}${key}=${SECRET_SLOT_RE.test(key) ? encrypt(String(value)) : String(value)}\n`, 'utf8')
+}
+
+module.exports = { readConfigFile, writeConfigValues, appendConfigValue }

@@ -87,6 +87,8 @@ describe('TMCut AI key vault — channel contract (R140)', () => {
     assert.ok(re.test('AI_API_KEY_PLAN'))
     assert.ok(!re.test('AI_BASE_URL'), 'non-key slots stay unencrypted')
     assert.ok(re.test('TMCUT_GEMINI_API_KEY'), 'Gemini TTS key must use the encrypted secret slot')
+    assert.ok(re.test('AI_CONFIG_SECRET'), 'the AI store master key must use the encrypted secret slot')
+    assert.ok(!re.test('AI_CONFIG_SECRET_BACKUP'), 'only the exact master-key slot is a secret')
   })
 })
 

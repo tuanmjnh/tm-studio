@@ -25,7 +25,7 @@ const { migrateKeyContent } = require('./tools/key-migrate.cjs')
 // The config.env parser is shared by get-config, ai-key-status and
 // set-config — one implementation, so "file missing" can never be read
 // differently by two handlers. Shape: { exists, values }.
-const { readConfigFile, writeConfigValues } = require('./tools/config-file.cjs')
+const { readConfigFile, writeConfigValues, appendConfigValue } = require('./tools/config-file.cjs')
 const { applyPublicConfig } = require('./tools/public-config.cjs')
 const { createHubLoginBroker } = require('./tools/hub-login-broker.cjs')
 const { mediaSchemePrivileges, createMediaHandler } = require('./media-protocol.cjs')
@@ -152,6 +152,18 @@ function loadUserConfig() {
     const value = SECRET_SLOT_RE.test(key) ? decrypt(raw) : raw
     if (!process.env[key] && value !== null) {
       process.env[key] = value
+    }
+  }
+  // AI_CONFIG_SECRET seals provider keys in the app-local AI store. It is
+  // generated once and appended (the file still holds every other slot as a
+  // keychain token); Nitro reads process.env, never the file.
+  if (!process.env.AI_CONFIG_SECRET) {
+    const generated = require('node:crypto').randomBytes(32).toString('base64')
+    try {
+      appendConfigValue(path.join(app.getPath('userData'), 'config.env'), 'AI_CONFIG_SECRET', generated)
+      process.env.AI_CONFIG_SECRET = generated
+    } catch (err) {
+      console.error('[AI config] could not persist AI_CONFIG_SECRET:', err)
     }
   }
 }

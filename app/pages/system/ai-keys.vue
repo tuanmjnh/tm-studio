@@ -2146,6 +2146,7 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
       <!-- TAB 3: KEY VAULT & LOCAL DESKTOP SURFACES                          -->
       <!-- ================================================================== -->
       <div v-if="activeTab === 'surfaces'" class="space-y-4 max-w-3xl">
+        <AiLocalConnectionsCard />
         <p v-if="!hasElectron" class="text-xs text-warning">
           {{ t('tmcut.aiConnect.desktopOnly') }}
         </p>

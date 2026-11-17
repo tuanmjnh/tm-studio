@@ -19,7 +19,11 @@
 //
 // HUB_DEVICE_SECRET is the per-device credential (v2) issued to this install at
 // sign-in; the same vault slot family, encrypted at rest and masked on read.
-const SECRET_SLOT_RE = /^(AI_API_KEY(_.+)?|TMCUT_GEMINI_API_KEY|NUXT_HUB_APP_SECRET|HUB_DEVICE_SECRET)$/
+//
+// AI_CONFIG_SECRET is the master key that seals provider keys in the app-local
+// AI store. It is generated once per install and lives in the same vault, so it
+// is encrypted at rest and masked on read like every other credential.
+const SECRET_SLOT_RE = /^(AI_API_KEY(_.+)?|TMCUT_GEMINI_API_KEY|NUXT_HUB_APP_SECRET|HUB_DEVICE_SECRET|AI_CONFIG_SECRET)$/
 
 /** True when a config key is an API-key slot (encrypted at rest, masked
  *  to the renderer, re-encrypted by the migration). */

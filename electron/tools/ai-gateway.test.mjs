@@ -3,12 +3,14 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const require = createRequire(import.meta.url)
 const gw = require('./ai-gateway.cjs')
+const configFile = require('./config-file.cjs')
+const secure = require('./ai-secure.cjs')
 
 describe('aiConfig', () => {
   it('freezes guarded defaults', () => {
@@ -529,6 +531,89 @@ describe('task config slots', () => {
         if (saved[key] === undefined) delete process.env[key]
         else process.env[key] = saved[key]
       }
+    }
+  })
+})
+
+// ===== config.env append helper (R18-2) =====================================
+// AI_CONFIG_SECRET is generated on first run and must be added WITHOUT
+// rewriting the file: a rewrite drops comments and `********` masks, and the
+// in-memory values are decrypted while the file holds keychain tokens.
+
+describe('appendConfigValue', () => {
+  const fakeStorage = {
+    encryptString: s => Buffer.from(`enc:${s}`),
+    decryptString: b => b.toString().slice(4),
+    isEncryptionAvailable: () => true
+  }
+
+  function withFakeStorage(fn) {
+    secure.__setSafeStorage(fakeStorage)
+    try {
+      return fn()
+    } finally {
+      secure.__setSafeStorage(null)
+    }
+  }
+
+  function withFile(content) {
+    const dir = mkdtempSync(join(tmpdir(), 'tmcut-config-'))
+    const file = join(dir, 'config.env')
+    if (content !== null) writeFileSync(file, content)
+    return { dir, file }
+  }
+
+  it('leaves every existing line byte-identical and adds exactly one line', () => {
+    const original = [
+      '# AI keys for this install',
+      'AI_API_KEY=tmcut:enc:v1:preexisting',
+      'AI_BASE_URL=https://x/v1'
+    ].join('\n') + '\n'
+    const { dir, file } = withFile(original)
+    try {
+      withFakeStorage(() => configFile.appendConfigValue(file, 'AI_CONFIG_SECRET', 'master-value'))
+      const after = readFileSync(file, 'utf8')
+      assert.ok(after.startsWith(original), 'existing lines must not move or change')
+      const appended = after.slice(original.length)
+      assert.ok(appended.startsWith('AI_CONFIG_SECRET='))
+      assert.ok(appended.endsWith('\n'))
+      assert.equal(appended.trimEnd().split('\n').length, 1, 'exactly one new line')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('encrypts a secret slot and round-trips through decrypt', () => {
+    const { dir, file } = withFile('AI_MODEL=gpt-4o-mini\n')
+    try {
+      withFakeStorage(() => configFile.appendConfigValue(file, 'AI_CONFIG_SECRET', 'master-value'))
+      const stored = configFile.readConfigFile(file).values.AI_CONFIG_SECRET
+      assert.ok(stored.startsWith('tmcut:enc:v1:'), 'the master key must not sit in the file as plaintext')
+      assert.equal(withFakeStorage(() => secure.decrypt(stored)), 'master-value')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('writes a non-secret key as plaintext even with a keychain available', () => {
+    const { dir, file } = withFile(null)
+    try {
+      withFakeStorage(() => configFile.appendConfigValue(file, 'AI_BASE_URL', 'https://local.example/v1'))
+      assert.equal(readFileSync(file, 'utf8'), 'AI_BASE_URL=https://local.example/v1\n')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('separates the new line from a file without a trailing newline', () => {
+    const { dir, file } = withFile('AI_MODEL=gpt-4o-mini')
+    try {
+      withFakeStorage(() => configFile.appendConfigValue(file, 'AI_CONFIG_SECRET', 'master-value'))
+      const lines = readFileSync(file, 'utf8').split('\n')
+      assert.equal(lines[0], 'AI_MODEL=gpt-4o-mini', 'the old line must not be glued to the new one')
+      assert.ok(lines[1].startsWith('AI_CONFIG_SECRET='))
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
     }
   })
 })
