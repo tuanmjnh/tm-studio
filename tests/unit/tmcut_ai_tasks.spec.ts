@@ -15,6 +15,7 @@ import {
   AI_TASK_META,
   type AiTriageSpan
 } from '../../app/utils/tmcut/aiTasks'
+import { localRowsToCatalog, mergeRelayCatalog, type RelayConnectionLike } from '../../app/utils/tmcut/aiLocalCatalog'
 
 let passed = 0
 function check(name: string, fn: () => void) {
@@ -175,6 +176,61 @@ check('registry metadata matches the gateway task ids', () => {
     assert.ok(meta.labelKey.startsWith('tmcut.'))
     assert.ok(meta.icon.startsWith('i-lucide-'))
   }
+})
+
+// =============================================================================
+//  Task 17 — app-local connection catalogue (app/utils/tmcut/aiLocalCatalog)
+// =============================================================================
+
+const labRow = {
+  connectionId: 'lab',
+  providerKey: 'freemodel',
+  baseUrl: 'http://127.0.0.1:31415/v1',
+  hasKey: true,
+  enabled: true,
+  models: [
+    { modelId: 'auto', enabled: true },
+    { modelId: 'smart', enabled: true, isPrimary: true },
+    { modelId: 'off', enabled: false }
+  ]
+}
+
+function hubConn(over: Partial<RelayConnectionLike> = {}): RelayConnectionLike {
+  return {
+    connectionId: 'hub-1',
+    provider: 'google_ai',
+    name: 'Hub Google',
+    adapterType: 'openai-compatible',
+    origin: 'own',
+    hasKey: true,
+    model: 'gemini-x',
+    models: [{ modelId: 'gemini-x', displayName: 'Gemini X' }],
+    ...over
+  }
+}
+
+check('local rows become catalogue connections defaulting to the primary model', () => {
+  const catalog = localRowsToCatalog([labRow, { ...labRow, connectionId: 'off-conn', enabled: false }])
+  assert.equal(catalog.length, 1)
+  assert.equal(catalog[0]!.connectionId, 'lab')
+  assert.equal(catalog[0]!.model, 'smart')
+  assert.deepEqual(catalog[0]!.models.map(model => model.modelId), ['auto', 'smart'])
+})
+
+check('merging keeps app rows first and preserves their models', () => {
+  const merged = mergeRelayCatalog([hubConn()], localRowsToCatalog([labRow]))
+  assert.deepEqual(merged.map(conn => conn.connectionId), ['app:lab', 'hub-1'])
+  assert.equal(merged[0]!.models.length, 2)
+  assert.equal(merged[0]!.models.find(model => model.isPrimary)?.modelId, 'smart')
+  assert.equal(merged[0]!.origin, 'own')
+  assert.equal(merged[0]!.hasKey, true)
+})
+
+check('an identical provider and model keeps the app row and hides the hub twin', () => {
+  const hub = hubConn({ provider: 'freemodel', models: [{ modelId: 'auto', displayName: 'Auto' }, { modelId: 'hub-only', displayName: 'Hub Only' }] })
+  const merged = mergeRelayCatalog([hub], localRowsToCatalog([labRow]))
+  assert.deepEqual(merged[0]!.models.map(model => model.modelId), ['auto', 'smart'])
+  assert.deepEqual(merged[1]!.models.map(model => model.modelId), ['hub-only'])
 })
 
 console.log(`\n=== All ${passed} AI-task-registry checks passed ===`)

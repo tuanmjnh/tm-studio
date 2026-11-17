@@ -10,6 +10,7 @@ import type {
   AiTaskStatus
 } from '#shared/types/electron'
 import { useHub } from './useHub'
+import { localRowsToCatalog, mergeRelayCatalog, type LocalConnectionRow, type AppCatalogRow } from '~/utils/tmcut/aiLocalCatalog'
 
 function aiApi() {
   return tmcutHostBridge()?.tools?.aiGateway
@@ -23,6 +24,7 @@ function aiApi() {
 
 type RelayChatResponse = { success: boolean, data?: { ok: boolean, content: string, provider: string, model: string, usage: unknown } }
 type RelayCatalogResponse = { success: boolean, data?: { connections?: AiRelayConnection[] } }
+type LocalChatResponse = { success: boolean, data?: { ok: boolean, content: string, model: string, usage: unknown } }
 
 /**
  * Turn a relay HTTP failure into a message worth reading. Our proxy answers
@@ -52,23 +54,33 @@ const RELAY_CACHE_TTL_MS = 60_000
 /** Why the last catalogue read failed — the UI's "no AI" message is useless without it. */
 const relayCatalogFailure: { message: string } = { message: '' }
 
+async function localCatalog(): Promise<AppCatalogRow[]> {
+  try {
+    const res = await $fetch<{ success: boolean, data?: { connections?: LocalConnectionRow[] } }>('/api/v1/ai/connections')
+    return localRowsToCatalog(res?.data?.connections ?? [])
+  } catch {
+    return []
+  }
+}
+
 async function relayCatalog(): Promise<AiRelayConnection[]> {
   if (relayCache.connections && Date.now() - relayCache.at < RELAY_CACHE_TTL_MS) {
     return relayCache.connections
   }
+  let hub: AiRelayConnection[] = []
   try {
     const res = await $fetch<RelayCatalogResponse>('/api/v1/ai/relay/catalog')
-    const conns = res?.data?.connections ?? []
-    // Cache only in the browser and only when usable; an empty catalogue
-    // stays uncached so a hub-side adoption becomes visible on the next call.
-    if (conns.length && typeof window !== 'undefined') relayCache.connections = conns
-    relayCache.at = Date.now()
+    hub = res?.data?.connections ?? []
     relayCatalogFailure.message = ''
-    return conns
   } catch (err: unknown) {
     relayCatalogFailure.message = relayFailure(err).message
-    return []
   }
+  const conns = mergeRelayCatalog(hub, await localCatalog()) as unknown as AiRelayConnection[]
+  // Cache only in the browser and only when usable; an empty catalogue
+  // stays uncached so a hub-side adoption becomes visible on the next call.
+  if (conns.length && typeof window !== 'undefined') relayCache.connections = conns
+  relayCache.at = Date.now()
+  return conns
 }
 
 // ===== Web persisted per-surface routing choice ==============================
@@ -172,6 +184,26 @@ async function relayChat(call: {
   timeoutMs?: number
 }): Promise<AiCompleteResult> {
   const started = Date.now()
+  if (call.connectionId.startsWith('app:')) {
+    const localId = call.connectionId.replace(/^app:/, '')
+    let local: LocalChatResponse
+    try {
+      local = await $fetch<LocalChatResponse>(`/api/v1/ai/connections/${encodeURIComponent(localId)}/chat`, {
+        method: 'POST',
+        body: { messages: call.messages, maxTokens: call.maxTokens, temperature: call.temperature },
+        timeout: call.timeoutMs
+      })
+    } catch (err: unknown) {
+      throw relayFailure(err)
+    }
+    if (!local?.success || !local.data?.ok) {
+      throw new Error(`AI local call failed (${call.model})`)
+    }
+    if (!String(local.data.content ?? '').trim()) {
+      throw new Error(`AI local returned no content (${call.model})`)
+    }
+    return { content: local.data.content, usage: local.data.usage, model: local.data.model || call.model, latencyMs: Date.now() - started }
+  }
   let res: RelayChatResponse
   try {
     res = await $fetch<RelayChatResponse>('/api/v1/ai/relay/chat', {
