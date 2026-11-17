@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
   if (!ownerId) {
     throw createError({ statusCode: 401, statusMessage: 'error.unauthorized', message: 'Unauthorized' })
   }
-  const connectionId = decodeURIComponent(getRouterParam(event, 'connectionId') || '')
+  const connectionId = getRouterParam(event, 'connectionId') || ''
   if (!connectionId) throw createError({ statusCode: 400, statusMessage: 'error.badRequest', message: 'connectionId is required' })
   const body = (await readBody<Body>(event)) ?? {}
 
@@ -42,13 +42,16 @@ export default defineEventHandler(async (event) => {
     || record.models.find(entry => entry.enabled)?.modelId
   if (!model) throw createError({ statusCode: 400, statusMessage: 'error.aiNoModel', message: 'Connection has no enabled model' })
 
+  // Key resolution stays outside the try: a missing master key is a 503 config
+  // error, not a provider failure worth retrying.
+  const apiKey = await tmStudioOpen(record)
   const started = Date.now()
   try {
     const client = createAIClient({
       endpoint: {
         provider: record.providerKey,
         baseUrl: record.baseUrl,
-        apiKey: await tmStudioOpen(record),
+        apiKey,
         mode: 'local'
       },
       assertModeAllowed: () => {}

@@ -18,13 +18,14 @@ export default defineEventHandler(async (event) => {
     || record.models.find(entry => entry.enabled)?.modelId
   if (!model) throw createError({ statusCode: 400, statusMessage: 'error.aiNoModel', message: 'No enabled model to test' })
 
+  const apiKey = await tmStudioOpen(record)
   const started = Date.now()
   try {
     const client = createAIClient({
       endpoint: {
         provider: record.providerKey,
         baseUrl: record.baseUrl,
-        apiKey: await tmStudioOpen(record),
+        apiKey,
         mode: 'local'
       },
       timeoutMs: 20_000,

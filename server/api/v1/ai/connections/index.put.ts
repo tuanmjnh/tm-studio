@@ -32,6 +32,13 @@ export default defineEventHandler(async (event) => {
 
   const store = tmStudioAIConfigStore(ownerId)
   const existing = (await store.listConnections()).find(row => row.connectionId === connectionId)
+  // apiKeyEnv names a server env var. Values outside the AI_API_KEY namespace let
+  // a caller point a connection at their own baseUrl and read AI_CONFIG_SECRET
+  // back as the Bearer token, so the shape is enforced here as parseAppConnections does.
+  const apiKeyEnv = String(body.apiKeyEnv ?? existing?.apiKeyEnv ?? '').trim()
+  if (apiKeyEnv && !/^AI_API_KEY(_[A-Z0-9_]+)?$/.test(apiKeyEnv)) {
+    throw createError({ statusCode: 400, statusMessage: 'error.badRequest', message: 'apiKeyEnv must be AI_API_KEY or AI_API_KEY_<SUFFIX>' })
+  }
   const typedKey = String(body.apiKey ?? '').trim()
   const apiKeyCipher = typedKey ? await tmStudioSeal(typedKey) : existing?.apiKeyCipher ?? ''
   if (apiKeyCipher) requireStudioAIConfigSecret()
@@ -48,7 +55,6 @@ export default defineEventHandler(async (event) => {
     }
   }).filter((model): model is StoredAIModel => model !== null)
 
-  const apiKeyEnv = String(body.apiKeyEnv ?? existing?.apiKeyEnv ?? '').trim()
   const enabled = typeof body.enabled === 'boolean' ? body.enabled : existing?.enabled ?? true
 
   let saved: StoredAIConnection
