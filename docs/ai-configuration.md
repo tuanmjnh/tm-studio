@@ -37,6 +37,10 @@ riêng của từng tài khoản, còn local vault là di sản của bản desk
 > khác, nên cách xử lý duy nhất là nhập lại khoá cho từng kết nối. Hãy sao lưu secret ở nơi quản lý bí mật
 > của bạn trước khi đổi máy hoặc tạo deployment mới.
 
+> **Dev khác bản desktop đóng gói.** `pnpm dev:electron` chạy `nuxt dev` như một tiến trình riêng, đọc
+> `.env` của project chứ không đọc `userData/config.env`, nên muốn lưu khoá ở chế độ dev thì người vận hành
+> phải tự đặt `AI_CONFIG_SECRET` trong `.env` (tooling không bao giờ sửa `.env`).
+
 ---
 
 ## 3. Khoá AI không rời máy chủ

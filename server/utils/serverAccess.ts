@@ -42,8 +42,13 @@ const SIGNED_IN_PREFIXES = [
   '/api/v1/ai/relay/'
 ]
 
-/** Provider discovery is configuration, not a workspace feature. */
-const ADMIN_ONLY_PREFIXES = ['/api/v1/ai/discover']
+/**
+ * Provider discovery and app-local connection management are configuration,
+ * not workspace features. A connection row carries a caller-supplied `baseUrl`
+ * plus an env slot the server will read, so admitting any signed-in caller
+ * would let them point a key-bearing request at a host they control.
+ */
+const ADMIN_ONLY_PREFIXES = ['/api/v1/ai/discover', '/api/v1/ai/connections']
 
 /**
  * Discovery changes which credentials/provider a connection uses, so it takes

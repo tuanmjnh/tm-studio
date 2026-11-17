@@ -25,7 +25,7 @@ const { migrateKeyContent } = require('./tools/key-migrate.cjs')
 // The config.env parser is shared by get-config, ai-key-status and
 // set-config — one implementation, so "file missing" can never be read
 // differently by two handlers. Shape: { exists, values }.
-const { readConfigFile, writeConfigValues, appendConfigValue } = require('./tools/config-file.cjs')
+const { readConfigFile, writeConfigValues, ensureMasterKey } = require('./tools/config-file.cjs')
 const { applyPublicConfig } = require('./tools/public-config.cjs')
 const { createHubLoginBroker } = require('./tools/hub-login-broker.cjs')
 const { mediaSchemePrivileges, createMediaHandler } = require('./media-protocol.cjs')
@@ -144,7 +144,12 @@ async function migrateLegacyOrigin() {
 let win = null
 
 function loadUserConfig() {
-  const { values } = readConfigFile(path.join(app.getPath('userData'), 'config.env'))
+  const configPath = path.join(app.getPath('userData'), 'config.env')
+  const { values } = readConfigFile(configPath)
+  // Captured before the slot loop: only a value the operator already supplied
+  // counts as "configured", and the loop below must not turn an unopenable
+  // token into the current value.
+  const envMasterKey = process.env.AI_CONFIG_SECRET
   for (const [key, raw] of Object.entries(values)) {
     // The file holds keychain TOKENS; env carries plaintext so the gateway
     // and every existing consumer stay untouched. decrypt() passes plaintext
@@ -156,15 +161,28 @@ function loadUserConfig() {
   }
   // AI_CONFIG_SECRET seals provider keys in the app-local AI store. It is
   // generated once and appended (the file still holds every other slot as a
-  // keychain token); Nitro reads process.env, never the file.
-  if (!process.env.AI_CONFIG_SECRET) {
-    const generated = require('node:crypto').randomBytes(32).toString('base64')
-    try {
-      appendConfigValue(path.join(app.getPath('userData'), 'config.env'), 'AI_CONFIG_SECRET', generated)
-      process.env.AI_CONFIG_SECRET = generated
-    } catch (err) {
-      console.error('[AI config] could not persist AI_CONFIG_SECRET:', err)
-    }
+  // keychain token); Nitro reads process.env, never the file. A slot that
+  // exists but cannot be opened must NOT be replaced: readConfigFile is
+  // last-line-wins, so a fresh key would win on every later start and leave
+  // every row sealed with the old one undecryptable — silently.
+  const master = ensureMasterKey(configPath, {
+    values,
+    currentEnv: envMasterKey,
+    decrypt,
+    encryptionAvailable: isEncryptionAvailable()
+  })
+  if (master.decision === 'generate' && master.value) {
+    process.env.AI_CONFIG_SECRET = master.value
+  } else if (master.error) {
+    console.error('[AI config] could not persist AI_CONFIG_SECRET:', master.error)
+  } else if (master.decision === 'skip-unreadable') {
+    // Leave the env unset (the API answers 503 error.aiConfigSecretMissing);
+    // an env holding the unopenable token would look configured instead.
+    delete process.env.AI_CONFIG_SECRET
+    console.error('[AI config] stored AI_CONFIG_SECRET cannot be decrypted on this machine: the AI keys sealed with it must be re-entered')
+  } else if (master.decision === 'skip-unavailable') {
+    delete process.env.AI_CONFIG_SECRET
+    console.error('[AI config] OS keychain unavailable: saving AI keys is disabled and no AI_CONFIG_SECRET was generated')
   }
 }
 

@@ -118,6 +118,40 @@ await check('configured connections skip disabled rows and models', async () => 
   assert.equal(part.apiKey, 'sk-z')
 })
 
+await check('hasKey follows the row shape and the named env slot', () => {
+  const base = {
+    ownerId: 'user-1',
+    providerKey: 'openai',
+    baseUrl: 'https://api.openai.com/v1',
+    enabled: true,
+    models: []
+  }
+  // A sealed key answers without being opened.
+  assert.equal(mod.tmStudioSafeConnection({ ...base, connectionId: 'sealed', apiKeyCipher: 'v1.cipher' }).hasKey, true)
+  // No sealed key and no slot is the intentional keyless shape (local ollama).
+  assert.equal(mod.tmStudioSafeConnection({ ...base, connectionId: 'keyless', apiKeyCipher: '' }).hasKey, true)
+
+  const secret = Buffer.alloc(32, 7).toString('base64')
+  mod.__setTestHooks({ db: fakeDb, secret, env: { FILLED_KEY: 'sk-env', BLANK_KEY: '   ' } })
+  try {
+    // An env-backed row is keyed only when the slot it names holds a value.
+    assert.equal(
+      mod.tmStudioSafeConnection({ ...base, connectionId: 'filled', apiKeyCipher: '', apiKeyEnv: 'FILLED_KEY' }).hasKey,
+      true
+    )
+    assert.equal(
+      mod.tmStudioSafeConnection({ ...base, connectionId: 'blank', apiKeyCipher: '', apiKeyEnv: 'BLANK_KEY' }).hasKey,
+      false
+    )
+    assert.equal(
+      mod.tmStudioSafeConnection({ ...base, connectionId: 'absent', apiKeyCipher: '', apiKeyEnv: 'MISSING_KEY' }).hasKey,
+      false
+    )
+  } finally {
+    mod.__setTestHooks({ db: fakeDb, secret, env: {} })
+  }
+})
+
 await check('a missing master key fails with a 503', () => {
   mod.__setTestHooks({ db: fakeDb, secret: null, env: {} })
   assert.throws(() => mod.requireStudioAIConfigSecret(), (err: unknown) => {

@@ -617,3 +617,143 @@ describe('appendConfigValue', () => {
     }
   })
 })
+
+// ===== startup master-key decision ===========================================
+// A master key that is silently replaced is worse than a missing one: every
+// row sealed with the old key stops opening and nothing says why. These cases
+// pin the decision `loadUserConfig()` takes before it appends anything.
+
+describe('master-key startup decision', () => {
+  const fakeStorage = {
+    encryptString: s => Buffer.from(`enc:${s}`),
+    decryptString: b => b.toString().slice(4),
+    isEncryptionAvailable: () => true
+  }
+  // simulate a token sealed on another machine / a reset keychain
+  const corruptStorage = {
+    encryptString: s => Buffer.from(`enc:${s}`),
+    decryptString: () => { throw new Error('cannot decrypt') },
+    isEncryptionAvailable: () => true
+  }
+
+  function withStorage(storage, fn) {
+    secure.__setSafeStorage(storage)
+    try {
+      return fn()
+    } finally {
+      secure.__setSafeStorage(null)
+    }
+  }
+
+  function withFile(content) {
+    const dir = mkdtempSync(join(tmpdir(), 'tmcut-master-'))
+    const file = join(dir, 'config.env')
+    if (content !== null) writeFileSync(file, content)
+    return { dir, file }
+  }
+
+  function startup(file, currentEnv) {
+    const values = configFile.readConfigFile(file).values
+    return configFile.ensureMasterKey(file, {
+      values,
+      currentEnv,
+      decrypt: secure.decrypt,
+      encryptionAvailable: secure.isEncryptionAvailable()
+    })
+  }
+
+  it('generates exactly one line when the file has no master key slot', () => {
+    const { dir, file } = withFile('AI_MODEL=gpt-4o-mini\n')
+    try {
+      const before = readFileSync(file, 'utf8')
+      const out = withStorage(fakeStorage, () => startup(file, undefined))
+      assert.equal(out.decision, 'generate')
+      assert.ok(out.value, 'a generated key must be returned for the env')
+      const after = readFileSync(file, 'utf8')
+      assert.ok(after.startsWith(before), 'existing lines must stay byte-identical')
+      const added = after.slice(before.length).trimEnd().split('\n')
+      assert.equal(added.length, 1, 'exactly one new line')
+      assert.ok(added[0].startsWith('AI_CONFIG_SECRET='))
+      assert.ok(
+        configFile.readConfigFile(file).values.AI_CONFIG_SECRET.startsWith('tmcut:enc:v1:'),
+        'the generated key must be a keychain token, not plaintext'
+      )
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('treats an empty slot as absent (first run after a wiped panel)', () => {
+    const { dir, file } = withFile('AI_CONFIG_SECRET=\n')
+    try {
+      const out = withStorage(fakeStorage, () => startup(file, undefined))
+      assert.equal(out.decision, 'generate')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps a slot it can open and adds no second line', () => {
+    const sealed = withStorage(fakeStorage, () => secure.encrypt('master-value'))
+    const { dir, file } = withFile(`AI_CONFIG_SECRET=${sealed}\n`)
+    try {
+      const out = withStorage(fakeStorage, () => startup(file, undefined))
+      assert.equal(out.decision, 'keep')
+      assert.equal(out.value, null)
+      assert.equal(readFileSync(file, 'utf8'), `AI_CONFIG_SECRET=${sealed}\n`)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('an operator-provided env value wins without touching the file', () => {
+    const { dir, file } = withFile('AI_MODEL=gpt-4o-mini\n')
+    try {
+      const out = withStorage(fakeStorage, () => startup(file, 'from-env'))
+      assert.equal(out.decision, 'keep')
+      assert.equal(readFileSync(file, 'utf8'), 'AI_MODEL=gpt-4o-mini\n')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  // Fails against the old unconditional generate: that path appended a new
+  // key here, and every row sealed with the unreadable one was orphaned.
+  it('never replaces a token it cannot decrypt', () => {
+    const content = 'AI_MODEL=gpt-4o-mini\nAI_CONFIG_SECRET=tmcut:enc:v1:AAAA\n'
+    const { dir, file } = withFile(content)
+    try {
+      const out = withStorage(corruptStorage, () => startup(file, undefined))
+      assert.equal(out.decision, 'skip-unreadable')
+      assert.equal(out.value, null, 'nothing may be handed to the env')
+      assert.equal(readFileSync(file, 'utf8'), content, 'the unreadable slot stays exactly as it was')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('does not generate a master key when the keychain is unavailable', () => {
+    const content = 'AI_MODEL=gpt-4o-mini\n'
+    const { dir, file } = withFile(content)
+    try {
+      const out = withStorage(null, () => startup(file, undefined))
+      assert.equal(out.decision, 'skip-unavailable')
+      assert.equal(out.value, null, 'a plaintext master key would expose every stored key')
+      assert.equal(readFileSync(file, 'utf8'), content)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('cannot verify an encrypted slot without a keychain, so it skips', () => {
+    const content = 'AI_CONFIG_SECRET=tmcut:enc:v1:AAAA\n'
+    const { dir, file } = withFile(content)
+    try {
+      const out = withStorage(null, () => startup(file, undefined))
+      assert.equal(out.decision, 'skip-unavailable')
+      assert.equal(readFileSync(file, 'utf8'), content)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})

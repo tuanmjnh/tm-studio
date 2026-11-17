@@ -135,7 +135,9 @@ export function tmStudioSafeConnection(record: StoredAIConnection): SafeStudioAI
     providerName: providerDisplayName(record.providerKey),
     baseUrl: record.baseUrl,
     apiKeyEnv: record.apiKeyEnv ?? null,
-    hasKey: Boolean(record.apiKeyCipher) || !record.apiKeyEnv,
+    // A row with no sealed key and no env slot is keyless on purpose (local
+    // ollama); an env-backed row only reports a key when that slot is filled.
+    hasKey: Boolean(record.apiKeyCipher) || !record.apiKeyEnv || Boolean(String(envValue(record.apiKeyEnv) || '').trim()),
     enabled: record.enabled,
     models: record.models.map(model => ({
       modelId: model.modelId,

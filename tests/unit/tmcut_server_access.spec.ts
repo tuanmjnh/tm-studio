@@ -52,6 +52,33 @@ describe('server authorization policy', () => {
     assert.equal(decide('/api/v1/ai/discover', 'POST', admin).allowed, true)
   })
 
+  it('app-local AI connections are configuration, not a workspace feature', () => {
+    // A connection row pairs a caller-supplied `baseUrl` with an env slot the
+    // server reads, so admitting any signed-in caller is the key-exfiltration
+    // shape. The decision must be explicit: without a prefix here the route
+    // falls through to default-deny and 403s even for an admin.
+    const denied = decide('/api/v1/ai/connections', 'GET', endUser)
+    assert.equal(denied.allowed, false)
+    if (!denied.allowed) {
+      assert.equal(denied.statusCode, 403)
+      assert.equal(denied.statusMessage, 'error.forbidden')
+    }
+    assert.equal(decide('/api/v1/ai/connections', 'GET', admin).allowed, true)
+    assert.equal(decide('/api/v1/ai/connections', 'PUT', root).allowed, true)
+  })
+
+  it('a sub-path inherits the connections decision', () => {
+    for (const [path, method] of [
+      ['/api/v1/ai/connections/x', 'DELETE'],
+      ['/api/v1/ai/connections/x/chat', 'POST'],
+      ['/api/v1/ai/connections/x/models/refresh', 'POST'],
+      ['/api/v1/ai/connections/x/test', 'POST']
+    ] as const) {
+      assert.equal(decide(path, method, endUser).allowed, false, `${method} ${path} leaked to a non-admin`)
+      assert.equal(decide(path, method, admin).allowed, true, `${method} ${path} is denied to an admin`)
+    }
+  })
+
   it('the workspace features stay available to any signed-in user', () => {
     // Relay, media, process and stock are the editor's own calls; the hub
     // already scopes what the relay may reach per app connection.
@@ -122,6 +149,8 @@ describe('the middleware actually enforces the policy', () => {
     }
     assert.equal(decide('/api/v1/ai/discover', 'POST', admin).allowed, true,
       'discover must be reachable by an admin-capable account')
+    assert.equal(decide('/api/v1/ai/connections/x', 'DELETE', admin).allowed, true,
+      'app-local connection routes must be reachable by an admin-capable account')
   })
 })
 
