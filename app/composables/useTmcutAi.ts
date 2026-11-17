@@ -68,10 +68,12 @@ async function relayCatalog(): Promise<AiRelayConnection[]> {
     return relayCache.connections
   }
   let hub: AiRelayConnection[] = []
+  let hubOk = false
   try {
     const res = await $fetch<RelayCatalogResponse>('/api/v1/ai/relay/catalog')
     hub = res?.data?.connections ?? []
     relayCatalogFailure.message = ''
+    hubOk = true
   } catch (err: unknown) {
     relayCatalogFailure.message = relayFailure(err).message
   }
@@ -79,7 +81,7 @@ async function relayCatalog(): Promise<AiRelayConnection[]> {
   // Cache only in the browser and only when usable; an empty catalogue
   // stays uncached so a hub-side adoption becomes visible on the next call.
   if (conns.length && typeof window !== 'undefined') relayCache.connections = conns
-  relayCache.at = Date.now()
+  if (hubOk) relayCache.at = Date.now()
   return conns
 }
 
@@ -145,7 +147,8 @@ function pickRelayConnection(
     const byId = conns.find(c => c.connectionId === slot.connectionId)
     if (byId) return byId
   }
-  // Default: the first usable connection — hub ordering puts own rows first.
+  // Default: the first usable connection — the merged list puts app-local
+  // rows first, then the hub rows.
   return conns[0] ?? null
 }
 
@@ -309,8 +312,9 @@ async function relayStatus(): Promise<AiGatewayStatus | null> {
     keyless: !conn.hasKey,
     needsBaseUrl: false,
     needsModel: !model,
-    // The catalogue only lists connections the hub deems usable (has key or
-    // keyless provider), so presence + a resolvable model is "configured".
+    // The merged catalogue only lists usable connections from either source
+    // (app-local rows first, then hub rows), so presence + a resolvable model
+    // is "configured".
     configured: Boolean(model),
     rpm: 0,
     timeoutMs: 0

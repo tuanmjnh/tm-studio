@@ -210,7 +210,7 @@ function hubConn(over: Partial<RelayConnectionLike> = {}): RelayConnectionLike {
 }
 
 check('local rows become catalogue connections defaulting to the primary model', () => {
-  const catalog = localRowsToCatalog([labRow, { ...labRow, connectionId: 'off-conn', enabled: false }])
+  const catalog = localRowsToCatalog([labRow, { ...labRow, connectionId: 'off-conn', enabled: false }, { ...labRow, connectionId: 'empty', models: [{ modelId: 'off-only', enabled: false }] }])
   assert.equal(catalog.length, 1)
   assert.equal(catalog[0]!.connectionId, 'lab')
   assert.equal(catalog[0]!.model, 'smart')
@@ -224,6 +224,7 @@ check('merging keeps app rows first and preserves their models', () => {
   assert.equal(merged[0]!.models.find(model => model.isPrimary)?.modelId, 'smart')
   assert.equal(merged[0]!.origin, 'own')
   assert.equal(merged[0]!.hasKey, true)
+  assert.equal(merged[0]!.model, 'smart')
 })
 
 check('an identical provider and model keeps the app row and hides the hub twin', () => {

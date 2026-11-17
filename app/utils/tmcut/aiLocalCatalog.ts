@@ -41,6 +41,7 @@ export function localRowsToCatalog(rows: LocalConnectionRow[]): CatalogConnectio
       ...(model.displayName ? { displayName: model.displayName } : {}),
       ...(model.isPrimary ? { isPrimary: true } : {})
     }))
+    if (!catalogModels.length) continue
     const base = toAppCatalogConnection({
       connectionId: row.connectionId,
       providerKey: row.providerKey,
