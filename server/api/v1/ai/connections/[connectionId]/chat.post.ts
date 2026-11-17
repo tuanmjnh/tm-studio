@@ -40,7 +40,7 @@ export default defineEventHandler(async (event) => {
   if (!record) throw createError({ statusCode: 404, statusMessage: 'error.notFound', message: 'Unknown connection' })
   const model = record.models.find(entry => entry.isPrimary)?.modelId
     || record.models.find(entry => entry.enabled)?.modelId
-  if (!model) throw createError({ statusCode: 400, statusMessage: 'error.badRequest', message: 'Connection has no enabled model' })
+  if (!model) throw createError({ statusCode: 400, statusMessage: 'error.aiNoModel', message: 'Connection has no enabled model' })
 
   const started = Date.now()
   try {
@@ -61,7 +61,7 @@ export default defineEventHandler(async (event) => {
   } catch (err) {
     throw createError({
       statusCode: 502,
-      statusMessage: 'error.aiFailed',
+      statusMessage: 'error.aiLocalUpstreamFailed',
       message: String((err as Error).message || err).slice(0, 300)
     })
   }

@@ -31,7 +31,7 @@ export default defineEventHandler(async (event) => {
   } catch (err) {
     throw createError({
       statusCode: 502,
-      statusMessage: 'error.discoveryFailed',
+      statusMessage: 'error.aiLocalUpstreamFailed',
       message: `Model discovery failed: ${(err as Error).message}`
     })
   }

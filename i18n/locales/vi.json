@@ -82,6 +82,8 @@
     "messagesRequired": "Thiếu nội dung tin nhắn",
     "aiNotConfigured": "AI API key chưa được cấu hình",
     "aiFailed": "Yêu cầu AI thất bại",
+    "aiNoModel": "Kết nối này chưa có model nào được bật",
+    "aiLocalUpstreamFailed": "Không kết nối được nhà cung cấp AI cục bộ",
     "chatNoPermission": "Bạn không có quyền sử dụng chat",
     "notRoot": "Chỉ root mới được thực hiện thao tác này",
     "required": "Không được để trống trường này",

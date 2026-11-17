@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
 
   const model = record.models.find(entry => entry.isPrimary)?.modelId
     || record.models.find(entry => entry.enabled)?.modelId
-  if (!model) throw createError({ statusCode: 400, statusMessage: 'error.badRequest', message: 'No enabled model to test' })
+  if (!model) throw createError({ statusCode: 400, statusMessage: 'error.aiNoModel', message: 'No enabled model to test' })
 
   const started = Date.now()
   try {

@@ -82,6 +82,8 @@
     "messagesRequired": "Messages are required",
     "aiNotConfigured": "AI API key is not configured",
     "aiFailed": "AI request failed",
+    "aiNoModel": "This connection has no enabled model",
+    "aiLocalUpstreamFailed": "The local AI provider could not be reached",
     "chatNoPermission": "You do not have permission to use the chat",
     "notRoot": "Only root can perform this action",
     "required": "This field cannot be left blank",
