@@ -32,8 +32,8 @@
 //    because a glue that re-stamps an audio request or re-scales a progress number
 //    is a second clock, and two clocks is the bug this programme is retiring.
 
-import { createFrameScheduler, encodeCanvasFill, planEncodeContent, planEncodePlate } from 'tm-cut-core'
-import type { CoreEncodePlateRect, CoreEvaluatedLayer, TmcutCanvas, TmcutClipEffect, TmcutProject, TmcutTrack } from 'tm-cut-core'
+import { createFrameScheduler, encodeCanvasFill, planEncodeContent, planEncodePlate } from '@tuanmjnh/tm-cut-core'
+import type { CoreEncodePlateRect, CoreEvaluatedLayer, TmcutCanvas, TmcutClipEffect, TmcutProject, TmcutTrack } from '@tuanmjnh/tm-cut-core'
 import { createEncodeCapability } from './exportEncodePlan'
 import type { TmcutEncodeCapability, TmcutEncodeDecision } from './exportEncodePlan'
 import { createEncodeSession } from './exportEncodeSession'

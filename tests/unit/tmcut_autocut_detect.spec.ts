@@ -84,7 +84,7 @@ function recorder(options: {
 
 async function main() {
   console.log('=== [TMCut autocut detect] Starting ===\n')
-  const core = await import('tm-cut-core')
+  const core = await import('@tuanmjnh/tm-cut-core')
   const store = await import('../../app/utils/tmcut/byteStore')
   const { createAutocutDetect } = await import('../../app/utils/tmcut/autocutDetect')
 

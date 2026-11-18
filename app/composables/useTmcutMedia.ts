@@ -38,8 +38,8 @@ import {
   secToTicks,
   FOLDER_TAG_COLORS
 
-} from 'tm-cut-core'
-import type { TmcutImportStatus, TmcutMediaInfo } from 'tm-cut-core'
+} from '@tuanmjnh/tm-cut-core'
+import type { TmcutImportStatus, TmcutMediaInfo } from '@tuanmjnh/tm-cut-core'
 
 const ASSET_STORAGE_KEY = 'tmcut_assets_v1'
 const FOLDER_STORAGE_KEY = 'tmcut_folders_v1'

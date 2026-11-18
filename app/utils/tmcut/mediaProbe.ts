@@ -23,7 +23,7 @@ import {
   getEncodableVideoCodecs
 } from 'mediabunny'
 import type { InputAudioTrack, InputVideoTrack } from 'mediabunny'
-import { buildMediaCapabilities, buildMediaInfo, classifyAssetKind, mediaInfoToMetadata } from 'tm-cut-core'
+import { buildMediaCapabilities, buildMediaInfo, classifyAssetKind, mediaInfoToMetadata } from '@tuanmjnh/tm-cut-core'
 import type {
   TmcutMediaCapabilities,
   TmcutMediaInfo,
@@ -33,7 +33,7 @@ import type {
   TmcutProbeOptions,
   TmcutProbeSource,
   TmcutProbeVideoTrack
-} from 'tm-cut-core'
+} from '@tuanmjnh/tm-cut-core'
 
 /**
  * The core source widened with the one thing core may not name (rule 13: no

@@ -51,7 +51,7 @@ const ENTRY = 'app/utils/tmcut/webExportHost.ts'
  * it would make the census describe a graph that never executes. The one such
  * edge in this graph is `paintSurfaces.ts` naming the store's clip types.
  *
- * Only `./`, `~/` and `app/` specifiers: a package import (`tm-cut-core`,
+ * Only `./`, `~/` and `app/` specifiers: a package import (`@tuanmjnh/tm-cut-core`,
  * `mediabunny`) is not part of this graph, and a later check names the packages
  * that are allowed.
  */
@@ -191,12 +191,12 @@ function main() {
   })
 
   // 3. The packages the graph may use are the browser's. `mediabunny` demuxes
-  //    and muxes in-process, and `tm-cut-core` is pure; a Node-only package here
+  //    and muxes in-process, and `@tuanmjnh/tm-cut-core` is pure; a Node-only package here
   //    would be a process by another name. Same runtime-edge rule as above: a
   //    type-only `vue` edge (fxPreview naming `CSSProperties`) compiles away and
   //    is not a package the browser bundle pulls in.
   check('the graph imports only the browser and pure-core packages', () => {
-    const allowed = new Set(['tm-cut-core', 'mediabunny'])
+    const allowed = new Set(['@tuanmjnh/tm-cut-core', 'mediabunny'])
     const local = (spec: string) => spec.startsWith('.') || spec.startsWith('~/') || spec.startsWith('app/')
     for (const file of reachable) {
       const specs = [...runtimeSource(file).matchAll(/from\s+'([^']+)'/g)].map(m => m[1]!)

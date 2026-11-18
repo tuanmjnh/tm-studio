@@ -27,7 +27,7 @@ import { useTmcutMedia } from './useTmcutMedia'
 import { useTmcutPlayback } from './useTmcutPlayback'
 import { secToTicks,
   TICKS_PER_SECOND
-} from 'tm-cut-core'
+} from '@tuanmjnh/tm-cut-core'
 
 // -----------------------------------------------------------------------------
 // Structured tool registry (self-describing for MCP / LLM tool schemas)

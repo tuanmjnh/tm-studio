@@ -25,7 +25,7 @@ import {
   TMCUT_PLAYBACK_DRIFT_TOLERANCE_SEC,
   TMCUT_PLAYBACK_PRESENTING_READY_STATE,
   TMCUT_PLAYBACK_STALL_LIMIT_MS
-} from 'tm-cut-core'
+} from '@tuanmjnh/tm-cut-core'
 
 const HAVE_METADATA = 1
 const HAVE_CURRENT_DATA = 2

@@ -15,7 +15,7 @@ import {
   checkLimit,
   resetUsageStore,
   exportUsageData
-} from 'tm-cut-core'
+} from '@tuanmjnh/tm-cut-core'
 
 export interface UsageLimits {
   aiTokensMonthly: number

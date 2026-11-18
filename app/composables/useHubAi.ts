@@ -1,4 +1,4 @@
-import type { HubConnectionStatus } from 'tm-hub-client'
+import type { HubConnectionStatus } from '@tuanmjnh/tm-hub-client'
 import type { NitroFetchOptions, NitroFetchRequest } from 'nitropack'
 
 /**

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { HubConnectionProvider, HubConnectionTestResult } from 'tm-hub-client'
+import type { HubConnectionProvider, HubConnectionTestResult } from '@tuanmjnh/tm-hub-client'
 import { getErrorMessage } from '~/shared/utils/errors'
 
 type ConnectionProvider = HubConnectionProvider & { quick?: boolean, ai?: boolean, category?: string, connections?: HubConnectionProvider['connection'][] }

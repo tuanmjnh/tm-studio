@@ -358,7 +358,7 @@ async function main() {
     ], 'the services own the container')
     // The contract carries the rich question, so a feature asks the host and
     // never a library.
-    assert.match(read('node_modules/tm-cut-core/types/platform.ts'), /probeInfo\(src: string, hints\?: TmcutProbeHints\)/)
+    assert.match(read('node_modules/@tuanmjnh/tm-cut-core/types/platform.ts'), /probeInfo\(src: string, hints\?: TmcutProbeHints\)/)
     // Slice I deleted the element probe (`webProbe.ts`) along with the ffprobe
     // leg it mirrored, so this service is now the only MediaInfo collector on
     // either host. A file that came back would be the second answer.

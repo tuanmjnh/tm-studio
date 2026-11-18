@@ -1,11 +1,11 @@
 import type { TmcutAsset } from '~/types/tmcut'
-import type { TmcutEdl, TmcutEdlSegment } from 'tm-cut-core'
+import type { TmcutEdl, TmcutEdlSegment } from '@tuanmjnh/tm-cut-core'
 import {
   scoreSegments,
   validateEdl,
   editPlanFromEdl,
   validateEditPlan
-} from 'tm-cut-core'
+} from '@tuanmjnh/tm-cut-core'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
 import { useTmcutAi } from '~/composables/useTmcutAi'

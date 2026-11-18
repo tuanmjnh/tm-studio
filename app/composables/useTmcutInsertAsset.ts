@@ -1,4 +1,4 @@
-import { mediaFileKey } from 'tm-cut-core'
+import { mediaFileKey } from '@tuanmjnh/tm-cut-core'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { clipEndSec } from '~/utils/tmcut/clipTime'

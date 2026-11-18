@@ -1,5 +1,5 @@
 import type { NitroFetchOptions, NitroFetchRequest } from 'nitropack'
-import { HubClient } from 'tm-hub-client'
+import { HubClient } from '@tuanmjnh/tm-hub-client'
 
 export const useHub = () => {
   const config = useRuntimeConfig()

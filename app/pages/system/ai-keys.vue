@@ -9,7 +9,8 @@ import { tmcutHostBridge } from '~/utils/tmcut/hostBridge'
 import type { AiTaskStatus, AiGatewayStatus, AiKeyVaultStatus } from '#shared/types/electron'
 import { useHubAi } from '~/composables/useHubAi'
 import type { HubAiConnection, HubAiModel, HubAiProviderItem } from '~/composables/useHubAi'
-import type { HubConnectionStatus } from 'tm-hub-client'
+import type { HubConnectionStatus } from '@tuanmjnh/tm-hub-client'
+import { providerIconFor } from '@tuanmjnh/tm-ai-client'
 import { getErrorMessage } from '~/shared/utils/errors'
 
 /**
@@ -882,20 +883,15 @@ watch([searchModel, filterModelProvider, filterModelConnection, filterModelStatu
 })
 
 // ---- Provider UI Helpers ----------------------------------------------------
+// The shared registry owns provider identity and icons; only the non-LLM media
+// providers this admin page also lists keep a local icon.
 function providerIcon(key: string): string {
   switch (key.toLowerCase()) {
-    case 'openai': return 'i-simple-icons-openai'
-    case 'anthropic': return 'i-simple-icons-anthropic'
-    case 'google':
-    case 'gemini': return 'i-simple-icons-google'
-    case 'groq': return 'i-lucide-zap'
-    case 'deepseek': return 'i-lucide-brain'
-    case 'ollama': return 'i-simple-icons-ollama'
-    case 'openrouter': return 'i-lucide-network'
-    case 'mistral': return 'i-lucide-wind'
     case 'elevenlabs': return 'i-lucide-audio-waveform'
     case 'runway': return 'i-lucide-video'
-    default: return 'i-lucide-bot'
+    case 'google':
+    case 'gemini': return 'i-simple-icons-google'
+    default: return providerIconFor(key)
   }
 }
 

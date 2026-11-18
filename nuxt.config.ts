@@ -76,7 +76,7 @@ export default defineNuxtConfig({
   vite: {
     optimizeDeps: {
       include: [
-        'tm-hub-client',
+        '@tuanmjnh/tm-hub-client',
         'zod',
         // mediabunny reaches the app only through app/utils/tmcut/*.ts, and
         // those modules load behind dynamic imports. On a cold dep cache Vite

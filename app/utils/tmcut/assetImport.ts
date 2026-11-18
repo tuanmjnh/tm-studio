@@ -14,8 +14,8 @@
  * state read them, so a card and a clip cannot disagree about what `partial`
  * means.
  */
-import { cacheKeyForPath } from 'tm-cut-core'
-import type { TmcutAssetKind, TmcutImportStatus } from 'tm-cut-core'
+import { cacheKeyForPath } from '@tuanmjnh/tm-cut-core'
+import type { TmcutAssetKind, TmcutImportStatus } from '@tuanmjnh/tm-cut-core'
 import type { TmcutAsset, TmcutAssetStatus } from '~/types/tmcut'
 import { createEmptyTmcutAssetMeta } from '~/types/tmcut'
 import { mediaFileName, normalizeMediaPath } from '~/utils/tmcut/media'

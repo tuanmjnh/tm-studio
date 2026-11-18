@@ -20,6 +20,7 @@ import {
   UEmpty,
   UFieldGroup,
   UForm,
+  UFormField,
   UIcon,
   UInput,
   UModal,
@@ -52,6 +53,7 @@ export default defineNuxtPlugin((nuxtApp) => {
   nuxtApp.vueApp.component('UEmpty', UEmpty as unknown as Component)
   nuxtApp.vueApp.component('UFieldGroup', UFieldGroup as unknown as Component)
   nuxtApp.vueApp.component('UForm', UForm as unknown as Component)
+  nuxtApp.vueApp.component('UFormField', UFormField as unknown as Component)
   nuxtApp.vueApp.component('UIcon', UIcon as unknown as Component)
   nuxtApp.vueApp.component('UInput', UInput as unknown as Component)
   nuxtApp.vueApp.component('UModal', UModal as unknown as Component)

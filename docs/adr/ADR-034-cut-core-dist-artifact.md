@@ -17,14 +17,14 @@ Vite alias. Both facts changed:
 - The engine moved to `tm-platform/packages/tm-cut-core` and is installed from
   npm like every other shared package.
 - The published tarball is **the contents of `dist`**. There is no `src` inside
-  an installed copy, so the alias `'tm-cut-core' → node_modules/tm-cut-core/index.js`
+  an installed copy, so the alias `'tm-cut-core' → node_modules/@tuanmjnh/tm-cut-core/index.js`
   resolves to a file that does not exist.
 
 Measured on the registry install (`tm-cut-core@0.1.1`):
 
 ```
 $ pnpm build
-[UNLOADABLE_DEPENDENCY] Could not load node_modules/tm-cut-core/index.js
+[UNLOADABLE_DEPENDENCY] Could not load node_modules/@tuanmjnh/tm-cut-core/index.js
   app/pages/tmcut/editor.vue:27  import { instantiateTemplate } from "tm-cut-core"
 ```
 
@@ -62,7 +62,7 @@ needed."* That gate exists now and is stronger than the alias was:
 |---|---|---|
 | App + tests | alias → `src/index.mjs` | `import … from 'tm-cut-core'` |
 | Electron main | relative path to `src/*.mjs` | relative path to the packaged `*.js` |
-| Packaging | `node_modules/tm-cut-core/src/**/*` | `node_modules/tm-cut-core/**/*` |
+| Packaging | `node_modules/@tuanmjnh/tm-cut-core/src/**/*` | `node_modules/@tuanmjnh/tm-cut-core/**/*` |
 | `tsconfig.test.json` | `paths['tm-cut-core']` | no entry; Node resolution applies |
 
 ## Specs that read engine source

@@ -45,7 +45,7 @@ async function check(label: string, fn: () => void | Promise<void>) {
 
 async function main() {
   console.log('=== [TMCut silence scan] Starting ===\n')
-  const core = await import('tm-cut-core')
+  const core = await import('@tuanmjnh/tm-cut-core')
   const { createSilenceScan } = await import('../../app/utils/tmcut/silenceScan')
 
   const rate = 8000

@@ -156,14 +156,14 @@ Plan §2 vẽ 8 layer. Repo đã có sẵn phần xương sống của 4 layer, 
 
 | Layer plan yêu cầu | Đã có ở đâu | Bằng chứng |
 |---|---|---|
-| Timeline Core (time model) | [packages/core/src/time.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js), [clock.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js) | integer ticks `TICKS_PER_SECOND = 120000`, `fpsToRational`, `createClock` với `frameStarts`/`durationFrames` — khớp §7 "chọn một internal time unit, rational frame rate" |
-| Timeline Core (evaluator) | [packages/core/src/evaluate.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js) | pure function, không DOM/clock/filesystem; ADR-018 half-open — khớp §7 |
-| Export Core (scheduler) | [packages/core/src/scheduler.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js), [renderAt.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js) | timestamp suy từ frame index + rational fps, không `setTimeout` — khớp §12 "Frame scheduler deterministic" |
-| Rendering semantics (stack) | [packages/core/src/paintStack.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js) | `selectPaintRows` trả `{rows, base}` một lần cho mọi host — khớp §9 "composition graph độc lập renderer" |
+| Timeline Core (time model) | [packages/core/src/time.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js), [clock.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js) | integer ticks `TICKS_PER_SECOND = 120000`, `fpsToRational`, `createClock` với `frameStarts`/`durationFrames` — khớp §7 "chọn một internal time unit, rational frame rate" |
+| Timeline Core (evaluator) | [packages/core/src/evaluate.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js) | pure function, không DOM/clock/filesystem; ADR-018 half-open — khớp §7 |
+| Export Core (scheduler) | [packages/core/src/scheduler.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js), [renderAt.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js) | timestamp suy từ frame index + rational fps, không `setTimeout` — khớp §12 "Frame scheduler deterministic" |
+| Rendering semantics (stack) | [packages/core/src/paintStack.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js) | `selectPaintRows` trả `{rows, base}` một lần cho mọi host — khớp §9 "composition graph độc lập renderer" |
 | Platform Adapter | `packages/core/types/platform.ts:84`, `packages/core/src/platform.mjs` | `TmcutPlatformAdapter {info, media, capture, encoder}` + capability flags — đúng hình §16; `media.probe` ở `packages/core/types/platform.ts:47` |
-| Project Core | [packages/core/src/project.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js), [v1compat.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js) | `schemaVersion` + migration v1→v3 lossless, fixture test — khớp §6 và rule 12 |
-| Audio maths | [audio.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js), [waveform.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js) | `gainAt`, fade envelope, `int16ToPeaks` — dùng lại được cho Web Audio |
-| Text style law | [textStyle.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js) | một nguồn sự thật cho size/colour/stroke/shadow — §13 subtitle burn-in cần đúng cái này |
+| Project Core | [packages/core/src/project.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js), [v1compat.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js) | `schemaVersion` + migration v1→v3 lossless, fixture test — khớp §6 và rule 12 |
+| Audio maths | [audio.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js), [waveform.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js) | `gainAt`, fade envelope, `int16ToPeaks` — dùng lại được cho Web Audio |
+| Text style law | [textStyle.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js) | một nguồn sự thật cho size/colour/stroke/shadow — §13 subtitle burn-in cần đúng cái này |
 
 và một điểm hay bị hiểu nhầm: `MediaRecorder` trong repo **không** vi phạm plan.
 Nó chỉ dùng cho voiceover realtime ([useTmcutRecorder.ts:77](file:///D:/Applications/tm-studio/app/composables/useTmcutRecorder.ts#L77),
@@ -182,26 +182,26 @@ và một bản văn bản FFmpeg (dùng cho export). Bản thứ hai phải b�
 
 | Module | Dấu vết FFmpeg | Hệ quả khi xóa |
 |---|---|---|
-| [canvas.mjs:125](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L125) | **Đã nghỉ hưu ở slice J (§55)**: `buildFfmpegFitFilters`, `buildFfmpegTransform`, `stillImageInputFlags`, `buildBackgroundSource` | Fit/crop/rotate sống ở `computeFitObjectStyle` + `resolveClipLayout`; background/still input do painter WebCodecs đọc từ plan |
-| [mask.mjs:67](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L67) | **Đã nghỉ hưu ở slice J (§55)**: `maskAlphaExpr` — biểu thức `geq` alpha per-pixel | `maskCssMaskImage` (SVG alpha mask) là hình học duy nhất còn sống; exporter từ chối clip có mask theo tên |
-| [audio.mjs:56](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L56) | **Đã nghỉ hưu ở slice J (§55)**: `volumeExpr` (fade theo `t`), `panFilter` phát filter `stereotools` | `gainAt` (số học) là luật gain duy nhất; mixer Web Audio chưa áp pan — gap §55 |
-| [keyframes.mjs:50](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L50) | **Đã nghỉ hưu ở slice J (§55)**: `keyframeExpr` — biểu thức toán FFmpeg cho property theo thời gian | `evalKeyframe` là bản "evaluate at tick" mà renderer đọc |
-| [retime.mjs:221](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L221) | **Đã nghỉ hưu ở slice J (§55)**: `rampSetptsExpr` — `setpts` cho speed curve phi tuyến | Source-time mapping tính từ cùng curve: `rampTimelineToSource` / `rampElapsedForConsumed` |
-| [effects.mjs:512](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L512) | **Đã nghỉ hưu ở slice J (§55)**: `buildFfmpegEffectFilters` + `lut3dChain`: 20 preset → chuỗi grade | Thay bằng `lutGrade` (ops semantics) + `cssFromGrade` ở `app/utils/tmcut/fxPreview.ts` |
-| [textStyle.mjs:6](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L6) | Module chỉ giữ **số dùng chung** (borderw/shadow/boxborderw ↔ CSS); chuỗi `drawtext` thật nằm ở engine | Giữ CSS, bỏ `drawtext` — và thấy luôn rằng text không có emitter nào trong core để xóa |
-| [transitions.mjs:253](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L253) | `XFADE_POSITION_LAWS` / `XFADE_PREVIEW` — hình học đo từ binary. **Tên spelling FFmpeg không ở đây**: nó sống ở `app/utils/tmcut/fxCatalog.ts:5`, bên ngoài core | **Semantics giữ được** (window, progress, vùng), spelling bỏ mà không đụng core |
-| `packages/core/src/probe.mjs` (đã xoá ở slice J, §55) | `normalizeProbe` theo shape JSON của ffprobe | Thay bằng `buildMediaInfo` ở [mediaInfo.mjs:231](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L231), schema rộng hơn |
+| [canvas.mjs:125](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L125) | **Đã nghỉ hưu ở slice J (§55)**: `buildFfmpegFitFilters`, `buildFfmpegTransform`, `stillImageInputFlags`, `buildBackgroundSource` | Fit/crop/rotate sống ở `computeFitObjectStyle` + `resolveClipLayout`; background/still input do painter WebCodecs đọc từ plan |
+| [mask.mjs:67](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L67) | **Đã nghỉ hưu ở slice J (§55)**: `maskAlphaExpr` — biểu thức `geq` alpha per-pixel | `maskCssMaskImage` (SVG alpha mask) là hình học duy nhất còn sống; exporter từ chối clip có mask theo tên |
+| [audio.mjs:56](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L56) | **Đã nghỉ hưu ở slice J (§55)**: `volumeExpr` (fade theo `t`), `panFilter` phát filter `stereotools` | `gainAt` (số học) là luật gain duy nhất; mixer Web Audio chưa áp pan — gap §55 |
+| [keyframes.mjs:50](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L50) | **Đã nghỉ hưu ở slice J (§55)**: `keyframeExpr` — biểu thức toán FFmpeg cho property theo thời gian | `evalKeyframe` là bản "evaluate at tick" mà renderer đọc |
+| [retime.mjs:221](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L221) | **Đã nghỉ hưu ở slice J (§55)**: `rampSetptsExpr` — `setpts` cho speed curve phi tuyến | Source-time mapping tính từ cùng curve: `rampTimelineToSource` / `rampElapsedForConsumed` |
+| [effects.mjs:512](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L512) | **Đã nghỉ hưu ở slice J (§55)**: `buildFfmpegEffectFilters` + `lut3dChain`: 20 preset → chuỗi grade | Thay bằng `lutGrade` (ops semantics) + `cssFromGrade` ở `app/utils/tmcut/fxPreview.ts` |
+| [textStyle.mjs:6](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L6) | Module chỉ giữ **số dùng chung** (borderw/shadow/boxborderw ↔ CSS); chuỗi `drawtext` thật nằm ở engine | Giữ CSS, bỏ `drawtext` — và thấy luôn rằng text không có emitter nào trong core để xóa |
+| [transitions.mjs:253](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L253) | `XFADE_POSITION_LAWS` / `XFADE_PREVIEW` — hình học đo từ binary. **Tên spelling FFmpeg không ở đây**: nó sống ở `app/utils/tmcut/fxCatalog.ts:5`, bên ngoài core | **Semantics giữ được** (window, progress, vùng), spelling bỏ mà không đụng core |
+| `packages/core/src/probe.mjs` (đã xoá ở slice J, §55) | `normalizeProbe` theo shape JSON của ffprobe | Thay bằng `buildMediaInfo` ở [mediaInfo.mjs:231](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L231), schema rộng hơn |
 | `packages/core/src/stabilize.mjs` (đã xoá ở slice J, §55) | `buildVidstabDetectArgs` / `buildVidstabTransformArgs`: argv 2-pass | Không có thay thế → tính năng khai tử; exporter từ chối clip `stabilize` theo tên |
-| [cache.mjs:29](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L29) | **Đã nghỉ hưu ở slice J (§55)**: `buildProxyArgs` | Bỏ được — proxy là optional; `cacheKeyForPath` / `cachePathFor` còn sống |
-| [analysis.mjs:20](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L20) | **Đã nghỉ hưu ở slice J (§55)**: `parseSceneOutput` / `parseSilenceOutput` — parse stderr FFmpeg | Autocut đọc cut từ decoder (`sceneScore`, `silenceSpans`); `cutsToShots` ở [detection.mjs:193](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L193) là đường duy nhất |
+| [cache.mjs:29](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L29) | **Đã nghỉ hưu ở slice J (§55)**: `buildProxyArgs` | Bỏ được — proxy là optional; `cacheKeyForPath` / `cachePathFor` còn sống |
+| [analysis.mjs:20](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L20) | **Đã nghỉ hưu ở slice J (§55)**: `parseSceneOutput` / `parseSilenceOutput` — parse stderr FFmpeg | Autocut đọc cut từ decoder (`sceneScore`, `silenceSpans`); `cutsToShots` ở [detection.mjs:193](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L193) là đường duy nhất |
 | `packages/core/src/platform.mjs:18` | Capability flag `nativeFFmpeg` | Xóa flag khi engine gone; **đây là flag duy nhất cần giữ lại là `webCodecs`** |
-| [crashRecovery.mjs:159](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L159) | Health check `{name:'ffmpeg'}` | Thay bằng check WebCodecs/muxer capability |
+| [crashRecovery.mjs:159](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L159) | Health check `{name:'ffmpeg'}` | Thay bằng check WebCodecs/muxer capability |
 
 Bảng trên chạm **14 module**, nhưng đo kỹ thì FFmpeg sống trong core ở **bốn mức khác nhau**, và chỉ hai mức đầu là việc của slice J:
 
 | Mức | Module | Ý nghĩa với migration |
 |---|---|---|
-| **Emit văn bản FFmpeg** | `canvas`, `mask`, `audio` (`stereotools` đã nghỉ hưu — còn `gainAt` ở [dòng 56](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L56)), `keyframes`, `retime`, `effects`, `stabilize`, `cache` — **8 module** | slice J đã thay cả 8 bằng instruction cho canvas/Web Audio (**§55**). Đây là khối việc thật |
+| **Emit văn bản FFmpeg** | `canvas`, `mask`, `audio` (`stereotools` đã nghỉ hưu — còn `gainAt` ở [dòng 56](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L56)), `keyframes`, `retime`, `effects`, `stabilize`, `cache` — **8 module** | slice J đã thay cả 8 bằng instruction cho canvas/Web Audio (**§55**). Đây là khối việc thật |
 | **Parse output FFmpeg** | `probe` (JSON ffprobe), `analysis` (stderr) — **2 module** | phải đổi sang schema MediaInfo mới; không có "bản dịch" nào khác |
 | **Mang tên FFmpeg trong metadata** | `platform` (flag `nativeFFmpeg`), `crashRecovery` (health check `'ffmpeg'`) — **2 module** | xóa tên là xong, không đụng semantics |
 | **Chỉ nhắc trong comment** | `textStyle`, `transitions` — **2 module** | **không có gì để gỡ**: `textStyle` chỉ export số dùng chung, còn spelling `xfade=` nằm ở `app/utils/tmcut/fxCatalog.ts` phía app. Sửa comment là đủ |
@@ -284,7 +284,7 @@ khớp với `VideoEncoder` của WebCodecs. Đếm file, không đếm dòng.
 | `VideoEncoder` / `VideoDecoder` / `isConfigSupported` | **0** |
 | `OfflineAudioContext` / `AudioContext` / `decodeAudioData` | **0** |
 | `OffscreenCanvas` / OPFS | **0** |
-| `WebGL2` class | **0**; chuỗi `'webgl2'` chỉ **1** lần trong source, như capability sniff ở [crashRecovery.mjs:165](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L165) — hit thứ hai khi grep cả `dist/` chỉ là bản compile của đúng dòng đó |
+| `WebGL2` class | **0**; chuỗi `'webgl2'` chỉ **1** lần trong source, như capability sniff ở [crashRecovery.mjs:165](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L165) — hit thứ hai khi grep cả `dist/` chỉ là bản compile của đúng dòng đó |
 | `MediaRecorder` | 3 file, tất cả là voiceover/mic realtime (hợp lệ) |
 | `IndexedDB` | 5 file, tất cả là xóa storage hệ thống, không phải media cache |
 
@@ -668,7 +668,7 @@ Phép đo chạy từ repo root, chỉ đọc, trên cây code hiện tại. Hai
 | App file (`localStorage` `tmcut_project_<id>`, và cùng object đó ghi ra JSON file qua IPC) | **12** key top-level: `canvas, cover, created_at, durationMs, id, name, revision, schemaVersion, settings, source, timeline, updated_at`. `timeline` có **4** key `durationMs, markers, tracks, version`; `schemaVersion: 3`; `timeline.version: 1`; ba track mặc định `t-text-1, t-video-1, t-audio-1`; `markers` luôn là array |
 | Core project (`createProject()` trong `packages/core/src/project.mjs`) | **4** key `canvas, project, timeline, version`; `version: 3`; `timeline` có **3** key `markers, tracks, version`; `timeline.version: 3`; `validateTimeline(project.timeline)` trả `[]`, còn `{ version: 1, tracks: [], markers: [] }` trả `["unsupported timeline version: 1"]` |
 | `sequences` | **0** hit trên **420** file shipped — `app` 261, `server` 35, `shared` 16, `electron` 41, `packages/core/src` 56, `packages/core/types` 11 — tổng **104 719** dòng, regex `\bsequences\b` có word boundary nên `choices_consequences` trong prompt chữ không bị tính |
-| Nơi duy nhất đọc `timeline.version` | [packages/core/src/timeline.mjs:344](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L344) — luật của DSL core. Không một dòng `app/` nào đọc nhãn `1` của file app, khớp nguyên văn câu "chỉ là nhãn cũ; **không** phải DSL version" ở `docs/v4-phase-0-audit.md:114` |
+| Nơi duy nhất đọc `timeline.version` | [packages/core/src/timeline.mjs:344](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L344) — luật của DSL core. Không một dòng `app/` nào đọc nhãn `1` của file app, khớp nguyên văn câu "chỉ là nhãn cũ; **không** phải DSL version" ở `docs/v4-phase-0-audit.md:114` |
 
 Guard mới `tests/unit/tmcut_project_schema_v3.spec.ts` — **7 test / 3 suite** — khoá cả hai bảng, cộng luật "stamp là oracle duy nhất"
 (`const isLegacy = (project.schemaVersion ?? 1) < TMCUT_PROJECT_SCHEMA_VERSION`) và fail nếu `sequences` xuất hiện ở bất kỳ file shipped nào.
@@ -892,10 +892,10 @@ chưa phải đã xong; nói cách khác C2b chứng minh phần **ghi** của A
 
 | File | Vai | Bằng chứng |
 |---|---|---|
-| [packages/core/src/byteCache.mjs:10](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L10) | `TMCUT_BYTE_CACHE_MAX_BYTES` = 2 GiB và `TMCUT_BYTE_CACHE_QUOTA_SHARE` = 0.4 — một disk to không mua được một cache vô hạn | check "a budget is never unlimited, even when the device says nothing": quota `NaN`/0/âm cho budget **đúng bằng trần** chứ không phải `Infinity`, và `Math.floor(quota * 0.4)` khi quota hợp lệ |
-| [packages/core/src/byteCache.mjs:37](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L37) | `isByteCacheKey`: một fingerprint đúng tám hex, **không** gì khác được phép đặt tên file | check "a cache key is exactly one revision fingerprint" liệt kê path, digest in hoa, digest bị cắt và bị nối thêm — tất cả `false`; "a file larger than the whole budget is never copied" đo `byteCacheFits` (file to hơn cả ngân sách thì không vào cache, trước cả eviction) |
-| [packages/core/src/byteCache.mjs:68](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L68) | `planByteCacheEviction(entries, budget, liveKeys)` → `{drop, keep, keptBytes, invalid}`: khoá sai dạng bị **khai** và loại trước; rồi bytes mà library không còn gọi tên; rồi entry không tự lọt; rồi LRU theo `(accessedAt, key)` | bốn checks "eviction drops the leak first…", "bytes whose asset is gone are dropped before the LRU runs", "an entry that cannot fit the budget alone is dropped even when live", "an index entry that is not a fingerprint is reported, not obeyed" đo đúng **thứ tự** drop (không phải chỉ tập drop) và `keptBytes` trong ngân sách; "eviction is deterministic and tolerates a messy index" chứng minh một mảng vào lộn xộn/trùng key vẫn cho **một** kế hoạch duy nhất |
-| [packages/core/src/index.mjs:23](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L23) + `packages/core/src/index.d.ts:2063` | luật được export **và** có khối khai kiểu viết tay (tsup chỉ build runtime; `.d.ts` do `scripts/prepare-dist.mjs` sao sang `dist`, và app type-check lấy `dist`) | check "core declares the byte-cache law to the app": năm tên cộng `TmcutByteCachePlan` phải có trong `.d.ts`. Check này **fail trước** khi khối được viết, và `nuxt typecheck` lúc đó báo 4 × TS2305 |
+| [packages/core/src/byteCache.mjs:10](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L10) | `TMCUT_BYTE_CACHE_MAX_BYTES` = 2 GiB và `TMCUT_BYTE_CACHE_QUOTA_SHARE` = 0.4 — một disk to không mua được một cache vô hạn | check "a budget is never unlimited, even when the device says nothing": quota `NaN`/0/âm cho budget **đúng bằng trần** chứ không phải `Infinity`, và `Math.floor(quota * 0.4)` khi quota hợp lệ |
+| [packages/core/src/byteCache.mjs:37](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L37) | `isByteCacheKey`: một fingerprint đúng tám hex, **không** gì khác được phép đặt tên file | check "a cache key is exactly one revision fingerprint" liệt kê path, digest in hoa, digest bị cắt và bị nối thêm — tất cả `false`; "a file larger than the whole budget is never copied" đo `byteCacheFits` (file to hơn cả ngân sách thì không vào cache, trước cả eviction) |
+| [packages/core/src/byteCache.mjs:68](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L68) | `planByteCacheEviction(entries, budget, liveKeys)` → `{drop, keep, keptBytes, invalid}`: khoá sai dạng bị **khai** và loại trước; rồi bytes mà library không còn gọi tên; rồi entry không tự lọt; rồi LRU theo `(accessedAt, key)` | bốn checks "eviction drops the leak first…", "bytes whose asset is gone are dropped before the LRU runs", "an entry that cannot fit the budget alone is dropped even when live", "an index entry that is not a fingerprint is reported, not obeyed" đo đúng **thứ tự** drop (không phải chỉ tập drop) và `keptBytes` trong ngân sách; "eviction is deterministic and tolerates a messy index" chứng minh một mảng vào lộn xộn/trùng key vẫn cho **một** kế hoạch duy nhất |
+| [packages/core/src/index.mjs:23](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L23) + `packages/core/src/index.d.ts:2063` | luật được export **và** có khối khai kiểu viết tay (tsup chỉ build runtime; `.d.ts` do `scripts/prepare-dist.mjs` sao sang `dist`, và app type-check lấy `dist`) | check "core declares the byte-cache law to the app": năm tên cộng `TmcutByteCachePlan` phải có trong `.d.ts`. Check này **fail trước** khi khối được viết, và `nuxt typecheck` lúc đó báo 4 × TS2305 |
 | [app/utils/tmcut/byteStore.ts:90](file:///D:/Applications/tm-studio/app/utils/tmcut/byteStore.ts#L90) | `byteStoreBackend()`: thang OPFS → IndexedDB → `none`, probe memoised; `none` là **một trạng thái**, không phải exception | checks "the store names the backend it actually reached" và "the store off is a state, not an exception" đo cả ba nhánh; "only one module in the app opens a browser byte store" quét **toàn bộ** cây `app/`: đúng **một** file gọi `getDirectory()` (`byteStore.ts`), và `indexedDB` chỉ xuất hiện ở `byteStore.ts` cùng `useSystemStorage.ts` — file sau xoá database chứ không bao giờ cất một byte |
 | [app/utils/tmcut/byteStore.ts:129](file:///D:/Applications/tm-studio/app/utils/tmcut/byteStore.ts#L129) | index `tmcut_byte_index_v1` (Map) là **authority** về việc cache đang mang tên những gì — budget đọc từ nó, panel đọc từ nó | check "the storage layer asks core for every decision": mọi quyết định của store đi qua `byteCacheBudgetBytes`/`isByteCacheKey`/`byteCacheFits`/`planByteCacheEviction`, không một ngưỡng nào tự chế trong `app/` |
 | [app/utils/tmcut/byteStore.ts:266](file:///D:/Applications/tm-studio/app/utils/tmcut/byteStore.ts#L266) + [:299](file:///D:/Applications/tm-studio/app/utils/tmcut/byteStore.ts#L299) | `putCachedBytes` chỉ nhận key hợp lệ và file vừa ngân sách; `readCachedBytes` **tự lành**: row nói có mà bytes không còn thì quên row, trả `null`. Cả hai không bao giờ throw | checks "a stored revision reads back as the same bytes", "a read the cache cannot serve is forgotten, not trusted", "an unknown or illegal key never reaches the filesystem", "a file bigger than the budget stays uncached" |
@@ -911,7 +911,7 @@ chưa phải đã xong; nói cách khác C2b chứng minh phần **ghi** của A
 
 1. **Luật ở core, storage ở app — và app không được tự quyết một ngưỡng nào.** Ngân sách, tư cách
    key, thứ tự drop đều là những câu hỏi trả lời được bằng số học, nên chúng sống trong
-   [packages/core/src/byteCache.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js),
+   [packages/core/src/byteCache.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js),
    chỗ không có một API trình duyệt nào và plain node chạy được đúng luật đó. `byteStore.ts` là chỗ
    duy nhất trong `app/` mở OPFS/IndexedDB, và check "only one module in the app opens a browser byte
    store" không tin lời comment: nó quét cây `app/`.
@@ -994,13 +994,13 @@ docs — và nó sẽ đòi được sửa **cùng lúc** slice I xoá file đó
 
 | File | Vai | Bằng chứng |
 |---|---|---|
-| [packages/core/src/frames.mjs:127](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L127) | `frameRequestMillis`: instant của một request là **số nguyên millisecond**, làm tròn chứ không cắt; âm/NaN/Infinity/chuỗi là một **lời từ chối** (`null`), không phải frame 0 | check "a frame request is the instant it asks for, to the millisecond" đo `1.2345 → 1235` (round, không floor), `1.2344 → 1234`, `0 → 0`, và bốn dạng vô nghiệm đều `null` — kể cả `'1'`, vì một chuỗi không phải timestamp |
-| [packages/core/src/frames.mjs:133](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L133) | `frameRequestWidth`: trần **1280**, sàn **16**, mặc định **320**, làm tròn pixel | check "the width a frame asks for is clamped the same on both hosts" đo `6400 → 1280` (một yêu cầu 4K không mua được một lần giải 4K), `5 → 16`, `320.6 → 321`, `NaN → mặc định` |
-| [packages/core/src/frames.mjs:143](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L143) | `isFrameCacheKey`: một frame chỉ do đúng một request đặt tên — `/^[0-9a-f]{8}-f\d+-w\d+$/`, lấy **hộ chiếu** của C2b (`isByteCacheKey`) làm nửa đầu | check "a frame key never carries a path or a bad fingerprint" liệt kê bảy dạng rác bị từ chối (`deadbeef`, `deadbeef-f3000`, `DEADBEEF-f1-w2`, `deadbeef-f-1-w320`, `…-w320.png`, `/uploads/a.mp4`, chuỗi rỗng, `null`) — một ảnh đang được hiển thị không do một request hợp lệ đặt tên thì không được phép tồn tại |
-| [packages/core/src/frames.mjs:155](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L155) | `frameRequestKey(fingerprint, atSec, width)` → `deadbeef-f3000-w320`: đúng chuỗi desktop vẫn dùng để đặt tên PNG của nó | check "two hosts asking the same frame build the same key": `3.000 s` và `2.9996 s` là **một** key, `2.999 s` là key khác, width khác/fingerprint khác là key khác; rồi `assert.match` vào đúng template `` `${cacheKeyFor(filePath, stat)}-f${Math.round(wanted * 1000)}-w${px}` `` trong controller |
-| [packages/core/src/frames.mjs:168](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L168) + [:104](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L104) | `frameTimeWithinMedia` + `TMCUT_FRAME_MAX_TIME_SEC` = 24 h: seek quá cuối file thì hỏi **frame cuối thật** (guard 50 ms), duration chưa biết thì mũ **một ngày**, seek âm là bug của caller nên trả `null` | checks "the decoder is asked inside the media" (100 s trong file 10 s → `9.95`, `0.02` trong file 0.01 s → `0`) và "an unknown duration caps instead of pretending" (`7` với duration 0/null vẫn là `7`, `1e9` → `86400`, `-3`/NaN → `null`) — số học lấy từ nhánh desktop đang chạy, không phải từ một suy đoán |
-| [packages/core/src/frames.mjs:186](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L186) | `createFrameSlotLedger()`: `begin(slot, key)` trả `{token, superseded}`, `isCurrent(slot, token)` trả lời câu "kết quả này còn được vẽ không", `forget(slot)` khi chủ slot biến mất, `size()` để đo rỉ | check "only the newest request for a slot may paint": request thứ hai trên slot `hud` báo `superseded` đúng bằng token thứ nhất, và `isCurrent` với token đó là `false` — chín frame thua cuộc đua của một cú scrub không được phép đè frame thứ mười. Check "a token does not travel between slots or across a forget": token của clip này **không** hủy clip khác, `forget` hai lần không phải lỗi, và slot đã quên **không** tái sử dụng token |
-| [packages/core/src/frames.mjs:230](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L230) + [:111](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L111) | `planFrameCacheEviction(entries, maxEntries)` và trần **512** frame: đếm theo **số frame** chứ không theo byte (thumbnail vài chục KB, 512 cái là vài chục MB — một cache, không phải bản sao thứ hai của thư viện), `drop` báo rác trước rồi LRU, `keep` trả về xếp **cũ trước** để lượt sau lấy từ đầu | check "the frame cache is bounded and drops the least recently used" đo thứ tự drop, `kept`, rằng dưới trần thì không drop gì, rằng trần `0`/`-1`/`NaN` **giữ không gì cả** (một ngân sách không phải ngân sách không được đọc thành "vô hạn" — cùng bệnh C2b đã chữa), rằng row trùng key gom lại và giữ **lần chạm muộn hơn** nên một mảng lộn xộn vẫn cho **một** kế hoạch, và rằng key rác bị **khai** chứ không bị obey |
+| [packages/core/src/frames.mjs:127](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L127) | `frameRequestMillis`: instant của một request là **số nguyên millisecond**, làm tròn chứ không cắt; âm/NaN/Infinity/chuỗi là một **lời từ chối** (`null`), không phải frame 0 | check "a frame request is the instant it asks for, to the millisecond" đo `1.2345 → 1235` (round, không floor), `1.2344 → 1234`, `0 → 0`, và bốn dạng vô nghiệm đều `null` — kể cả `'1'`, vì một chuỗi không phải timestamp |
+| [packages/core/src/frames.mjs:133](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L133) | `frameRequestWidth`: trần **1280**, sàn **16**, mặc định **320**, làm tròn pixel | check "the width a frame asks for is clamped the same on both hosts" đo `6400 → 1280` (một yêu cầu 4K không mua được một lần giải 4K), `5 → 16`, `320.6 → 321`, `NaN → mặc định` |
+| [packages/core/src/frames.mjs:143](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L143) | `isFrameCacheKey`: một frame chỉ do đúng một request đặt tên — `/^[0-9a-f]{8}-f\d+-w\d+$/`, lấy **hộ chiếu** của C2b (`isByteCacheKey`) làm nửa đầu | check "a frame key never carries a path or a bad fingerprint" liệt kê bảy dạng rác bị từ chối (`deadbeef`, `deadbeef-f3000`, `DEADBEEF-f1-w2`, `deadbeef-f-1-w320`, `…-w320.png`, `/uploads/a.mp4`, chuỗi rỗng, `null`) — một ảnh đang được hiển thị không do một request hợp lệ đặt tên thì không được phép tồn tại |
+| [packages/core/src/frames.mjs:155](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L155) | `frameRequestKey(fingerprint, atSec, width)` → `deadbeef-f3000-w320`: đúng chuỗi desktop vẫn dùng để đặt tên PNG của nó | check "two hosts asking the same frame build the same key": `3.000 s` và `2.9996 s` là **một** key, `2.999 s` là key khác, width khác/fingerprint khác là key khác; rồi `assert.match` vào đúng template `` `${cacheKeyFor(filePath, stat)}-f${Math.round(wanted * 1000)}-w${px}` `` trong controller |
+| [packages/core/src/frames.mjs:168](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L168) + [:104](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L104) | `frameTimeWithinMedia` + `TMCUT_FRAME_MAX_TIME_SEC` = 24 h: seek quá cuối file thì hỏi **frame cuối thật** (guard 50 ms), duration chưa biết thì mũ **một ngày**, seek âm là bug của caller nên trả `null` | checks "the decoder is asked inside the media" (100 s trong file 10 s → `9.95`, `0.02` trong file 0.01 s → `0`) và "an unknown duration caps instead of pretending" (`7` với duration 0/null vẫn là `7`, `1e9` → `86400`, `-3`/NaN → `null`) — số học lấy từ nhánh desktop đang chạy, không phải từ một suy đoán |
+| [packages/core/src/frames.mjs:186](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L186) | `createFrameSlotLedger()`: `begin(slot, key)` trả `{token, superseded}`, `isCurrent(slot, token)` trả lời câu "kết quả này còn được vẽ không", `forget(slot)` khi chủ slot biến mất, `size()` để đo rỉ | check "only the newest request for a slot may paint": request thứ hai trên slot `hud` báo `superseded` đúng bằng token thứ nhất, và `isCurrent` với token đó là `false` — chín frame thua cuộc đua của một cú scrub không được phép đè frame thứ mười. Check "a token does not travel between slots or across a forget": token của clip này **không** hủy clip khác, `forget` hai lần không phải lỗi, và slot đã quên **không** tái sử dụng token |
+| [packages/core/src/frames.mjs:230](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L230) + [:111](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L111) | `planFrameCacheEviction(entries, maxEntries)` và trần **512** frame: đếm theo **số frame** chứ không theo byte (thumbnail vài chục KB, 512 cái là vài chục MB — một cache, không phải bản sao thứ hai của thư viện), `drop` báo rác trước rồi LRU, `keep` trả về xếp **cũ trước** để lượt sau lấy từ đầu | check "the frame cache is bounded and drops the least recently used" đo thứ tự drop, `kept`, rằng dưới trần thì không drop gì, rằng trần `0`/`-1`/`NaN` **giữ không gì cả** (một ngân sách không phải ngân sách không được đọc thành "vô hạn" — cùng bệnh C2b đã chữa), rằng row trùng key gom lại và giữ **lần chạm muộn hơn** nên một mảng lộn xộn vẫn cho **một** kế hoạch, và rằng key rác bị **khai** chứ không bị obey |
 | `packages/core/src/index.d.ts:339` | khối khai kiểu viết tay cho chín tên mới + hai shape có tên (`TmcutFrameCachePlan`, `TmcutFrameSlotLedger`) — app type-check lấy `index.d.ts`, không lấy runtime | check "core declares the frame-request law to the app" đọc thẳng file `.d.ts`; nó RED trước khi khối được viết (check 1 cũng RED vì `frameRequestMillis` còn `undefined`), nên "export rồi mới khai" không lọt được tới gate 1 |
 | `tests/unit/tmcut_frame_cache.spec.ts:53`→`tests/unit/tmcut_frame_cache.spec.ts:200` | **11** checks, chạy trong **441 ms**, không cần fixture và không cần trình duyệt: toàn bộ là số học và một lần đọc file | suite **100/100** specs (99 → 100), `TEST_EXIT=0`, `PASS tmcut_frame_cache.spec.ts (441ms) === All 11 frame request checks passed ===` |
 
@@ -1083,7 +1083,7 @@ export vẫn đi `/uploads/` như dòng trên nói.)*
 | [app/utils/tmcut/frameDecode.ts:58](file:///D:/Applications/tm-studio/app/utils/tmcut/frameDecode.ts#L99) | `decodeFrame`: chỗ **duy nhất** trong `app/` mở `Input` + `CanvasSink`. Ưu tiên `bytes` đã có trong cache, chỉ đọc `src` khi cache không giữ gì; `signal` abort thì `input.dispose()` ngay | check "one module in the app opens a frame decoder" quét cây `app/` và assert danh sách file chứa `CanvasSink` == `[frameDecode.ts]`, danh sách file import `./frameDecode` == `[frameStore.ts]` — pixel chỉ có một nguồn, nên hai host không thể tự vẽ khác nhau |
 | [app/utils/tmcut/frameDecode.ts:38](file:///D:/Applications/tm-studio/app/utils/tmcut/frameDecode.ts#L42) | `hasFrameDecoder()` hỏi `globalThis.VideoDecoder` **trước** khi thử dùng: runtime không có WebCodecs trả `null`, không mượn một engine khác | check "the app has one frame entry point, and a runtime without WebCodecs says null" — `decodeFrame` chạy trong plain node trả `null` chứ không ném |
 | [app/utils/tmcut/frameStore.ts:75](file:///D:/Applications/tm-studio/app/utils/tmcut/frameStore.ts#L75) | `createFrameService(decode, { maxEntries })`: **decode là tham số**, không phải import cứng trong luật. Node không có `VideoDecoder`, nên mọi quy tắc quanh nó (đọc bytes nào, bao nhiêu cái một lúc, ai được vẽ, cái gì vẫn được giữ) phải test được mà không cần trình duyệt | **19** checks của `tmcut_frame_service.spec.ts` chạy hết trong **1250 ms** với decoder giả; phần thật sự cần Chrome chỉ là hai mươi dòng ở `frameDecode.ts` |
-| [app/utils/tmcut/frameStore.ts:91](file:///D:/Applications/tm-studio/app/utils/tmcut/frameStore.ts#L91) + [packages/core/src/frames.mjs:120](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L120) | Pool giải frame, trần lấy từ core: `TMCUT_FRAME_MAX_CONCURRENT = 3` — một con số cho **cả hai** host để không bên nào âm thầm nhân đôi tải | checks "core owns the decoder pool bound, not the app", "both hosts run the same number of decoders" (đọc `MAX_CONCURRENT_FRAMES` trong `useTmcutFrames.ts` và so với core — ràng buộc tạm thời, mất cùng slice I) và "at most the stated number of decoders run at once" đo **peak = 3** khi 8 slot cùng hỏi, và cả 8 đều được trả lời |
+| [app/utils/tmcut/frameStore.ts:91](file:///D:/Applications/tm-studio/app/utils/tmcut/frameStore.ts#L91) + [packages/core/src/frames.mjs:120](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L120) | Pool giải frame, trần lấy từ core: `TMCUT_FRAME_MAX_CONCURRENT = 3` — một con số cho **cả hai** host để không bên nào âm thầm nhân đôi tải | checks "core owns the decoder pool bound, not the app", "both hosts run the same number of decoders" (đọc `MAX_CONCURRENT_FRAMES` trong `useTmcutFrames.ts` và so với core — ràng buộc tạm thời, mất cùng slice I) và "at most the stated number of decoders run at once" đo **peak = 3** khi 8 slot cùng hỏi, và cả 8 đều được trả lời |
 | [app/utils/tmcut/frameStore.ts:141](file:///D:/Applications/tm-studio/app/utils/tmcut/frameStore.ts#L141) | Đường đọc byte cache: mọi decode xin `readCachedBytes(fingerprint)` trước, chỉ khi không có bản nào mới đọc `src`; cả hai đều trống thì **từ chối**, không mở một decoder vô vọng | checks "the frame cache is read before any decoder opens" (ghi bytes thật vào `byteStore` với fake OPFS, assert `ask.bytes.size === 5000` và `ask.src === null`), "no cached copy, the location is what the decoder reads", "a frame with nothing to read is refused, not decoded", "a browser with no byte store still gets its frames" |
 | [app/utils/tmcut/frameStore.ts:129](file:///D:/Applications/tm-studio/app/utils/tmcut/frameStore.ts#L129) + [:168](file:///D:/Applications/tm-studio/app/utils/tmcut/frameStore.ts#L168) | One-flight theo **key**, không theo slot: hai ask trùng frame thì **một** lần giải, người đến sau nhập vào kết quả đang chạy | checks "two asks for one frame are one decode", "the frame cache answers a repeat ask without a decoder", "the decoder is asked inside the media, at the width it can pay for" (90 s trong file 10 s → `9.95`, width 6000 → 1280, key `deadbeef-f9950-w1280` — mọi con số xin từ core, không tự làm số học) |
 | [app/utils/tmcut/frameStore.ts:118](file:///D:/Applications/tm-studio/app/utils/tmcut/frameStore.ts#L118) | `retire(waiter, stillWanted)` — hai luật cùng lúc: ask **thua** cuộc đua bị `abort()` để ngừng trả tiền, nhưng bytes nó đã tạo vẫn **được giữ** (chín frame một cú scrub thua chính là chín frame người dùng sẽ scrub lại); và ask **trùng frame** thì nhập vào, không hủy | "a newer ask for the same slot retires the older one" đo `asks[0].signal.aborted === true`, kết quả cũ trả `null`, mà `deadbeef-f1000-w320` **vẫn nằm trong cache**; "the same slot asking the same frame again keeps its decode" là check **bắt ra lỗi thật**: code trước RED ở `2 !== 1` vì re-ask đã abort chính decode đang chạy |
@@ -1268,7 +1268,7 @@ Trước E1, các con số của hai câu hỏi đó nằm ở **hai chỗ khôn
 lấy mẫu nằm trong chuỗi argv của FFmpeg
 (`shared/utils/detection-args.cjs:19`, `:24`, `:29` — file đã xoá ở slice I), còn hình dạng câu trả
 lời nằm trong hai reader parse stderr
-([packages/core/src/analysis.mjs:19](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L19)).
+([packages/core/src/analysis.mjs:19](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L19)).
 E1 gom hết vào **một** module: luật lấy mẫu ở đâu, hai khung hình khác nhau bao nhiêu thì gọi là cắt,
 shot ngắn tới mức nào thì bỏ, im lặng tính bằng dBFS nào, và một đoạn im phải dài bao lâu. App sẽ đưa
 một lưới luma và một cửa sổ PCM, không tự quyết gì — đúng khuôn mà D1 đã dựng cho frame.
@@ -1277,13 +1277,13 @@ một lưới luma và một cửa sổ PCM, không tự quyết gì — đúng 
 
 | File | Vai | Bằng chứng |
 |---|---|---|
-| [detection.mjs:27](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L27)→[:39](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L39) | **Năm** hằng số duy nhất: ngưỡng cắt **0.4**, tốc độ lấy mẫu **5 Hz**, ngưỡng ồn **−30 dBFS**, cửa sổ/im tối thiểu **0.5 s**, sàn **−120 dBFS**. Không chỗ nào khác trong repo được phép có bản sao của những số này khi E2/E3 chạy | check "the defaults are one number for both producers" ([packages/core/test/scene-silence-detection.test.mjs:144](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L144)) đối chiếu **trực tiếp** `detection-args.cjs`: `sceneThreshold(undefined) === 0.4`, `silenceNoise(undefined) === -30`, `silenceDuration(undefined) === 0.5`. Check này là **tạm thời**: nó chết cùng slice I khi argv builder bị xoá |
-| [detection.mjs:78](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L78) | `sceneSampleTimes` **không** tự chế phép chia dải: nó gọi `filmstripTimes` của C14 với `count = floor(durationSec × sampleHz)`. Một dải scan và một dải thumbnail trên cùng clip vì thế không bao giờ đứng ở hai khoảnh khắc khác nhau | check [:27](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L27): 10 s @5 Hz cho ra **đúng** `core.filmstripTimes(start, duration, 50)` (so từng phần tử), bước đều nhau, và `[]` cho dải dưới 1 mẫu / duration 0 / hz 0 |
-| [detection.mjs:147](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L147) | `sceneScore` = mean abs delta trên lưới luma, chia 255, scale 0..1. Con số **0.4** lấy từ `select='gt(scene,X)'` (`shared/utils/detection-args.cjs:42`, đã xoá ở slice I) nhưng **thang thì không chung** — §23 đo trên clip thật: một cut hard cho core **0.2626** còn FFmpeg cho **0.694299**, nên 0.4 hiện **bỏ sót** chính cut mà nó được kế thừa sang. Lưới **không so sánh được** thì trả `null`, không trả `0` | check [:47](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L47) đo `0` / `1` / `0.5` (nửa số ô đổi hết dải) và tính **đối xứng** `sceneScore(b,a) === sceneScore(a,b)`; check [:61](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L61) buộc `null` khi độ dài khác nhau, lưới rỗng, hoặc một ô là `NaN` |
-| [detection.mjs:193](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L193) | `cutsToShots`: sắp xếp, bỏ cut ≤ 0 và ≥ duration, chống rung `minGapSec` **0.04**, bỏ shot dưới `minShotSec` **0.2**, đóng đuôi bằng duration — hoặc bằng cut cuối khi **không biết** duration, vì đó là câu trả lời trung thực chứ không phải một con số đoán | **6** assert của check [:68](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L68): shot liền mạch, input lộn thứ tự == input đã sắp xếp, shot 0.1 s bị bỏ, `3.00` và `3.02` gộp thành **một** cut, `cutsToShots([4], 0) === [{0,4}]`, `cutsToShots([], 8) === [{0,8}]`, `cutsToShots([], 0) === []` |
-| [detection.mjs:217](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L217) + [:227](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L227) + [:256](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L305) | Thang im lặng: `dbfsOf` (RMS → dBFS, sàn −120 thay cho −Infinity), `levelSeries` (một mức cho mỗi cửa sổ, **cả cửa sổ đuôi cụt**, mẫu không phải số thì bỏ qua không tính là im), `silenceSpans` (chuỗi cửa sổ ≤ ngưỡng, giữ khi đủ dài, đóng ở duration). Hình dạng output **giống hệt** reader stderr để không module phía dưới nào phải học shape mới | checks [:93](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L93) (`dbfsOf(1) === 0`, `dbfsOf(0.5) === -6.02`, sàn cho 0/âm/NaN), [:103](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L103) (225 mẫu @100 Hz → **5** cửa sổ `[0,0,sàn,sàn,sàn]`, `[]` khi mẫu rỗng hoặc rate 0), [:117](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L117) (giữ/bỏ theo độ dài, ngưỡng **bao gồm** `<=`, `NaN` **không** im), [:155](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L155) (vòng round-trip ticks↔seconds mà app dùng) |
-| [detection.mjs:193](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L193) | `cutsToShots` là **đường duy nhất** biến cut thành shot. Slice E1 ràng buộc reader stderr vào đây; slice J (§55) xoá reader đó, nên hôm nay cut đến từ `sceneCuts` của decoder, còn luật cắt đuôi EOF vẫn nằm nguyên một chỗ | `cutsToShots` giữ nguyên hành vi đã đo ở E1: cut vượt duration bị cắt về duration, không tạo shot dài hơn file. Case đó nay do test của `detection` phủ, không còn reader stderr để đối chiếu |
-| [packages/core/src/index.mjs:41](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L41) + `packages/core/src/index.d.ts:482` | Barrel export + khai báo tay cho detection (`sceneSampleTimes`, `sceneScore`, `sceneCuts`, `cutsToShots`, `dbfsOf`, `peakLevelSeries`, `silenceSpans`), dùng lại `CoreSceneSegment` ([index.d.ts:169](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L169)) và `CoreSilenceRange` ([index.d.ts:174](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L174)) thay vì chế type trùng | `tsc --noEmit -p packages/core/tsconfig.check.json` (strict + `noUnusedLocals`) exit **0**, 0 `error TS` sau slice J |
+| [detection.mjs:27](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L27)→[:39](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L39) | **Năm** hằng số duy nhất: ngưỡng cắt **0.4**, tốc độ lấy mẫu **5 Hz**, ngưỡng ồn **−30 dBFS**, cửa sổ/im tối thiểu **0.5 s**, sàn **−120 dBFS**. Không chỗ nào khác trong repo được phép có bản sao của những số này khi E2/E3 chạy | check "the defaults are one number for both producers" ([packages/core/test/scene-silence-detection.test.mjs:144](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L144)) đối chiếu **trực tiếp** `detection-args.cjs`: `sceneThreshold(undefined) === 0.4`, `silenceNoise(undefined) === -30`, `silenceDuration(undefined) === 0.5`. Check này là **tạm thời**: nó chết cùng slice I khi argv builder bị xoá |
+| [detection.mjs:78](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L78) | `sceneSampleTimes` **không** tự chế phép chia dải: nó gọi `filmstripTimes` của C14 với `count = floor(durationSec × sampleHz)`. Một dải scan và một dải thumbnail trên cùng clip vì thế không bao giờ đứng ở hai khoảnh khắc khác nhau | check [:27](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L27): 10 s @5 Hz cho ra **đúng** `core.filmstripTimes(start, duration, 50)` (so từng phần tử), bước đều nhau, và `[]` cho dải dưới 1 mẫu / duration 0 / hz 0 |
+| [detection.mjs:147](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L147) | `sceneScore` = mean abs delta trên lưới luma, chia 255, scale 0..1. Con số **0.4** lấy từ `select='gt(scene,X)'` (`shared/utils/detection-args.cjs:42`, đã xoá ở slice I) nhưng **thang thì không chung** — §23 đo trên clip thật: một cut hard cho core **0.2626** còn FFmpeg cho **0.694299**, nên 0.4 hiện **bỏ sót** chính cut mà nó được kế thừa sang. Lưới **không so sánh được** thì trả `null`, không trả `0` | check [:47](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L47) đo `0` / `1` / `0.5` (nửa số ô đổi hết dải) và tính **đối xứng** `sceneScore(b,a) === sceneScore(a,b)`; check [:61](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L61) buộc `null` khi độ dài khác nhau, lưới rỗng, hoặc một ô là `NaN` |
+| [detection.mjs:193](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L193) | `cutsToShots`: sắp xếp, bỏ cut ≤ 0 và ≥ duration, chống rung `minGapSec` **0.04**, bỏ shot dưới `minShotSec` **0.2**, đóng đuôi bằng duration — hoặc bằng cut cuối khi **không biết** duration, vì đó là câu trả lời trung thực chứ không phải một con số đoán | **6** assert của check [:68](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L68): shot liền mạch, input lộn thứ tự == input đã sắp xếp, shot 0.1 s bị bỏ, `3.00` và `3.02` gộp thành **một** cut, `cutsToShots([4], 0) === [{0,4}]`, `cutsToShots([], 8) === [{0,8}]`, `cutsToShots([], 0) === []` |
+| [detection.mjs:217](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L217) + [:227](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L227) + [:256](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L305) | Thang im lặng: `dbfsOf` (RMS → dBFS, sàn −120 thay cho −Infinity), `levelSeries` (một mức cho mỗi cửa sổ, **cả cửa sổ đuôi cụt**, mẫu không phải số thì bỏ qua không tính là im), `silenceSpans` (chuỗi cửa sổ ≤ ngưỡng, giữ khi đủ dài, đóng ở duration). Hình dạng output **giống hệt** reader stderr để không module phía dưới nào phải học shape mới | checks [:93](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L93) (`dbfsOf(1) === 0`, `dbfsOf(0.5) === -6.02`, sàn cho 0/âm/NaN), [:103](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L103) (225 mẫu @100 Hz → **5** cửa sổ `[0,0,sàn,sàn,sàn]`, `[]` khi mẫu rỗng hoặc rate 0), [:117](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L117) (giữ/bỏ theo độ dài, ngưỡng **bao gồm** `<=`, `NaN` **không** im), [:155](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L155) (vòng round-trip ticks↔seconds mà app dùng) |
+| [detection.mjs:193](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L193) | `cutsToShots` là **đường duy nhất** biến cut thành shot. Slice E1 ràng buộc reader stderr vào đây; slice J (§55) xoá reader đó, nên hôm nay cut đến từ `sceneCuts` của decoder, còn luật cắt đuôi EOF vẫn nằm nguyên một chỗ | `cutsToShots` giữ nguyên hành vi đã đo ở E1: cut vượt duration bị cắt về duration, không tạo shot dài hơn file. Case đó nay do test của `detection` phủ, không còn reader stderr để đối chiếu |
+| [packages/core/src/index.mjs:41](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L41) + `packages/core/src/index.d.ts:482` | Barrel export + khai báo tay cho detection (`sceneSampleTimes`, `sceneScore`, `sceneCuts`, `cutsToShots`, `dbfsOf`, `peakLevelSeries`, `silenceSpans`), dùng lại `CoreSceneSegment` ([index.d.ts:169](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L169)) và `CoreSilenceRange` ([index.d.ts:174](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L174)) thay vì chế type trùng | `tsc --noEmit -p packages/core/tsconfig.check.json` (strict + `noUnusedLocals`) exit **0**, 0 `error TS` sau slice J |
 
 ### 22.2 Một luật dùng chung phơi ra một lỗi thật của đường cũ
 
@@ -1379,15 +1379,15 @@ trong Node bắt được, vì Node không có decoder.
 
 | Chỗ | Nội dung | Chứng minh bằng |
 |---|---|---|
-| [detection.mjs:41](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L41) + [:48](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L48) + [:92](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L92) | `TMCUT_SCENE_GRID_CELLS` **8** (64 số cho một frame), `LUMA_WEIGHTS` BT.601 `[0.299, 0.587, 0.114]`, và `lumaOf` — channel ngoài 0..255 bị **kẹp** chứ không làm hỏng phép tính, channel không phải số thì trả **NaN** để ô đó tố cáo thay vì âm thầm thành 0 | check [:30](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L30) neo ba màu primaries (đỏ **76**, xanh lục **150**, xanh lam **29**) và xám **128 → 128**; check [:39](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L39) buộc `lumaOf(-40, 900, 300) === lumaOf(0, 255, 255)` và NaN lan ra |
-| [detection.mjs:112](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L112) | `lumaCells` block-average RGBA → `cells × cells` theo **thứ tự đọc row-major**; frame không vuông dùng được; input cụt / width 0 / height âm trả `[]`; **một** pixel NaN làm rớt **cả** lưới | checks [:49](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L49) (độ dài và thứ tự), [:55](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L55) (8×8 sáng/tối → 4×4, lưới **thô hơn** frame chứ không phải một bức ảnh khác), [:66](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L66), [:72](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L72), [:81](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L81) |
-| [detection.mjs:171](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L171) | `sceneCuts` chỉ so **hai mẫu kề**, so **nghiêm ngặt lớn hơn** (`select='gt(scene,X)'` là dấu so nó thay), và **đứt chuỗi tại một lỗ** thay vì bắc cầu: bắc cầu là đặt một cut lên một **đoán** | checks [:23](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L23), [:29](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L29), [:36](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L36) (`[lưới 0, lỗ, lưới 255]` → `[]`), [:45](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L45) (cặp **đúng bằng** 0.4 — `flat(0)` vs `flat(102)`, vì `102/255 === 0.4` — **không** là cut), [:54](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L54), [:62](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L62), [:70](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L70), [:76](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L76) |
+| [detection.mjs:41](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L41) + [:48](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L48) + [:92](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L92) | `TMCUT_SCENE_GRID_CELLS` **8** (64 số cho một frame), `LUMA_WEIGHTS` BT.601 `[0.299, 0.587, 0.114]`, và `lumaOf` — channel ngoài 0..255 bị **kẹp** chứ không làm hỏng phép tính, channel không phải số thì trả **NaN** để ô đó tố cáo thay vì âm thầm thành 0 | check [:30](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L30) neo ba màu primaries (đỏ **76**, xanh lục **150**, xanh lam **29**) và xám **128 → 128**; check [:39](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L39) buộc `lumaOf(-40, 900, 300) === lumaOf(0, 255, 255)` và NaN lan ra |
+| [detection.mjs:112](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L112) | `lumaCells` block-average RGBA → `cells × cells` theo **thứ tự đọc row-major**; frame không vuông dùng được; input cụt / width 0 / height âm trả `[]`; **một** pixel NaN làm rớt **cả** lưới | checks [:49](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L49) (độ dài và thứ tự), [:55](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L55) (8×8 sáng/tối → 4×4, lưới **thô hơn** frame chứ không phải một bức ảnh khác), [:66](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L66), [:72](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L72), [:81](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L81) |
+| [detection.mjs:171](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L171) | `sceneCuts` chỉ so **hai mẫu kề**, so **nghiêm ngặt lớn hơn** (`select='gt(scene,X)'` là dấu so nó thay), và **đứt chuỗi tại một lỗ** thay vì bắc cầu: bắc cầu là đặt một cut lên một **đoán** | checks [:23](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L23), [:29](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L29), [:36](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L36) (`[lưới 0, lỗ, lưới 255]` → `[]`), [:45](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L45) (cặp **đúng bằng** 0.4 — `flat(0)` vs `flat(102)`, vì `102/255 === 0.4` — **không** là cut), [:54](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L54), [:62](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L62), [:70](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L70), [:76](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L76) |
 | `packages/core/src/index.d.ts:410`→`packages/core/src/index.d.ts:423` | **Bốn** khai báo mới (`TMCUT_SCENE_GRID_CELLS`, `lumaOf`, `lumaCells`, `sceneCuts`) — `npx tsc --noEmit -p packages/core/tsconfig.check.json` là chỗ duy nhất hợp đồng này được kiểm, vì core là `.mjs` | exit **0**, **0** `error TS` (§23.4 gate 3b) |
 | [app/utils/tmcut/frameDecode.ts:144](file:///D:/Applications/tm-studio/app/utils/tmcut/frameDecode.ts#L147) + [:160](file:///D:/Applications/tm-studio/app/utils/tmcut/frameDecode.ts#L163) + [:19](file:///D:/Applications/tm-studio/app/utils/tmcut/frameDecode.ts#L19) | `decodeLumaSeries`: **một** hàm, **một** `Input`, **một** `CanvasSink` cho cả dải; `canvasesAtTimestamps` là lý do nó tồn tại — mỗi packet giải mã **tối đa một lần** cho cả danh sách mốc, điều một vòng `getCanvas` không có; lưới thiếu vẫn được **chèn `null` cho đủ chỗ** ([:166](file:///D:/Applications/tm-studio/app/utils/tmcut/frameDecode.ts#L169)) nên slot không dịch; canvas đọc ở **64 px** ([`TMCUT_SCENE_PIXEL_WIDTH`](file:///D:/Applications/tm-studio/app/utils/tmcut/frameDecode.ts#L19)) vì điểm cắt chỉ so 64 số | check [:186](file:///D:/Applications/tm-studio/tests/unit/tmcut_scene_scan.spec.ts#L186) buộc seam có `lumaCells(` và `canvasesAtTimestamps`, và **không** có `sceneScore`/`sceneCuts`/`cutsToShots` — seam giao pixel, ý nghĩa quyết định ở core |
 | [app/utils/tmcut/frameDecode.ts:66](file:///D:/Applications/tm-studio/app/utils/tmcut/frameDecode.ts#L69) + [:116](file:///D:/Applications/tm-studio/app/utils/tmcut/frameDecode.ts#L119) | `openMedia` + `rgbaOf` là **private**: `decodeFrame` (D2) và `decodeLumaSeries` (E2) dùng chung một chỗ mở `Input`, một chỗ gỡ (`close` bỏ listener abort rồi dispose) — không có bản sao thứ hai của đường đọc byte | check [:56](file:///D:/Applications/tm-studio/tests/unit/tmcut_scene_scan.spec.ts#L56) buộc scan **không** chứa `CanvasSink`/`getImageData`, tức glue không thể âm thầm thành một decoder thứ hai |
 | [app/utils/tmcut/sceneScan.ts:59](file:///D:/Applications/tm-studio/app/utils/tmcut/sceneScan.ts#L59) | `createSceneScan(readGrids)` nhận người đọc lưới qua tham số nên **toàn bộ** đường plan→read→score→shots chạy được trong Node, không decoder. Dải không thật (NaN, `to <= from`, `times.length === 0`) và signal đã huỷ trả rỗng **trước khi** hỏi decoder ([63](file:///D:/Applications/tm-studio/app/utils/tmcut/sceneScan.ts#L63), [65](file:///D:/Applications/tm-studio/app/utils/tmcut/sceneScan.ts#L65), [68](file:///D:/Applications/tm-studio/app/utils/tmcut/sceneScan.ts#L68)); **< 2 lưới dùng được** cũng trả rỗng ([79](file:///D:/Applications/tm-studio/app/utils/tmcut/sceneScan.ts#L79)) vì `cutsToShots([], duration)` sẽ tuyên bố cả file là **một** shot | **6** trong **11** check của [tests/unit/tmcut_scene_scan.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_scene_scan.spec.ts): dòng 65 (mốc hỏi **bằng đúng** `sceneSampleTimes` của dải đã trim, và **một** lần hỏi cho cả dải), 80, 96, 111, 120 (**4** dải ảo → decoder hỏi **0** lần), 169 |
 | [app/utils/tmcut/sceneScan.ts:81](file:///D:/Applications/tm-studio/app/utils/tmcut/sceneScan.ts#L81) + [:85](file:///D:/Applications/tm-studio/app/utils/tmcut/sceneScan.ts#L85) | `threshold` và `sampleHz` người gọi đưa **được chuyển xuống core**, không có bản sao số nào trong `app/`; shot đóng ở `durationSec` khi biết, ngược lại ở mép scan | checks [:140](file:///D:/Applications/tm-studio/tests/unit/tmcut_scene_scan.spec.ts#L140) và [:157](file:///D:/Applications/tm-studio/tests/unit/tmcut_scene_scan.spec.ts#L157) |
-| [detection.mjs:21](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L21)→[:27](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L27) và [packages/core/test/scene-silence-detection.test.mjs:47](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L47) | **Hai chỗ nói sai đã bị sửa, không bị giữ lại.** Comment cũ tuyên bố 0.4 là "unchanged from the FFmpeg pass"; tên check cũ nói "on the same 0..1 scale AutoCut already knows". §23.2 đo được cả hai **sai về thang**, nên comment nay chép thẳng số đo và tên check nay chỉ còn assertion thật sự chạy | §23.3 quyết định 2 — **sửa claim, giữ nguyên assertion** |
+| [detection.mjs:21](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L21)→[:27](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L27) và [packages/core/test/scene-silence-detection.test.mjs:47](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L47) | **Hai chỗ nói sai đã bị sửa, không bị giữ lại.** Comment cũ tuyên bố 0.4 là "unchanged from the FFmpeg pass"; tên check cũ nói "on the same 0..1 scale AutoCut already knows". §23.2 đo được cả hai **sai về thang**, nên comment nay chép thẳng số đo và tên check nay chỉ còn assertion thật sự chạy | §23.3 quyết định 2 — **sửa claim, giữ nguyên assertion** |
 
 ### 23.2 Phép đo thật: đường scene chạy trên clip thật, trong Chromium
 
@@ -1513,10 +1513,10 @@ trong core. Hai trong ba luật đó chỉ tồn tại vì có **phép đo thậ
 
 | Chỗ | Nội dung | Chứng minh bằng |
 |---|---|---|
-| [detection.mjs:257](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L257) + [:262](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L262) + [:264](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L264) + [:270](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L270) | `loudestLevelSeries`: một cửa sổ lấy mức của **kênh to nhất**, không phải một bản mix. Kênh **không được giao** hoặc rỗng bị **bỏ qua** chứ không tính thành im ([:262](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L262)); không kênh nào thì trả `[]` chứ không trả "cửa sổ im" ([:264](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L264)); hàng dài hơn hàng khác thì ô thiếu bị **bỏ qua**, không đọc thành −Infinity ([:270](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L270)) | xem dòng dưới |
-| [packages/core/test/silence-channels.test.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js) | **7** check của luật kênh, **0** chỗ nào cần decoder | [:19](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L19) to nhất từng cửa sổ, [:26](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L26) chỉ im khi **mọi** kênh im, [:32](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L32) một kênh thì **trùng hết** `levelSeries`, [:37](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L37) giữ cửa sổ đuôi cụt, [:44](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L44) kênh `null` bị bỏ, [:49](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L49) không kênh / rate 0 / window 0 đều ra `[]`, [:56](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L56) sàn −120 cho kênh im tuyệt đối và **một** kênh loud kéo cả cửa sổ lên |
-| [:309](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L309)  + [:321](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L321) + [:322](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L322) | `silenceSpans` nhận `offsetSec` — nơi cửa sổ **đầu** của series nằm trong source — nên clip đã trim báo **giây nguồn**, không phải giây từ chỗ cắt. Offset âm/NaN = **đầu file**; trần `durationSec` tính **trên series** rồi mới dịch, nên phép dịch không nới dải đã nghe | **5** check trong [silence-span-offset.test.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js): [:13](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L13), [:20](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L20) mặc định 0 nên hành vi cũ **không đổi**, [:27](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L27) trần theo dải đọc, [:34](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L34) độ dài run **không** cộng offset — dịch chuyển không bịa thêm, không mất span, [:46](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L46) |
-| [detection.mjs:287](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L287) + [:293](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L293) | `pcmHeadTrim(askedSec, deliveredSec, sampleRate)` = **số mẫu đầu** nằm trước mốc hỏi. Input không tin được trả **0**: thà chưa cắt còn hơn bịa một chỗ cắt | **4** check trong [packages/core/test/silence-pcm-trim.test.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js): [:15](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L15) ra đúng **546** mẫu (số **đo** được, không suy ra), [:22](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L22), [:27](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L27), và [:34](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L34) — check dựng **chính cái defect đó** bằng mẫu giả rồi cho nó biến mất khi cắt đầu, để luật này không bao giờ chỉ là một hằng số trang trí |
+| [detection.mjs:257](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L257) + [:262](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L262) + [:264](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L264) + [:270](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L270) | `loudestLevelSeries`: một cửa sổ lấy mức của **kênh to nhất**, không phải một bản mix. Kênh **không được giao** hoặc rỗng bị **bỏ qua** chứ không tính thành im ([:262](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L262)); không kênh nào thì trả `[]` chứ không trả "cửa sổ im" ([:264](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L264)); hàng dài hơn hàng khác thì ô thiếu bị **bỏ qua**, không đọc thành −Infinity ([:270](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L270)) | xem dòng dưới |
+| [packages/core/test/silence-channels.test.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js) | **7** check của luật kênh, **0** chỗ nào cần decoder | [:19](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L19) to nhất từng cửa sổ, [:26](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L26) chỉ im khi **mọi** kênh im, [:32](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L32) một kênh thì **trùng hết** `levelSeries`, [:37](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L37) giữ cửa sổ đuôi cụt, [:44](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L44) kênh `null` bị bỏ, [:49](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L49) không kênh / rate 0 / window 0 đều ra `[]`, [:56](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L56) sàn −120 cho kênh im tuyệt đối và **một** kênh loud kéo cả cửa sổ lên |
+| [:309](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L309)  + [:321](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L321) + [:322](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L322) | `silenceSpans` nhận `offsetSec` — nơi cửa sổ **đầu** của series nằm trong source — nên clip đã trim báo **giây nguồn**, không phải giây từ chỗ cắt. Offset âm/NaN = **đầu file**; trần `durationSec` tính **trên series** rồi mới dịch, nên phép dịch không nới dải đã nghe | **5** check trong [silence-span-offset.test.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js): [:13](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L13), [:20](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L20) mặc định 0 nên hành vi cũ **không đổi**, [:27](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L27) trần theo dải đọc, [:34](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L34) độ dài run **không** cộng offset — dịch chuyển không bịa thêm, không mất span, [:46](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L46) |
+| [detection.mjs:287](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L287) + [:293](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L293) | `pcmHeadTrim(askedSec, deliveredSec, sampleRate)` = **số mẫu đầu** nằm trước mốc hỏi. Input không tin được trả **0**: thà chưa cắt còn hơn bịa một chỗ cắt | **4** check trong [packages/core/test/silence-pcm-trim.test.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js): [:15](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L15) ra đúng **546** mẫu (số **đo** được, không suy ra), [:22](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L22), [:27](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L27), và [:34](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L34) — check dựng **chính cái defect đó** bằng mẫu giả rồi cho nó biến mất khi cắt đầu, để luật này không bao giờ chỉ là một hằng số trang trí |
 | `packages/core/src/index.d.ts:439` + `packages/core/src/index.d.ts:445` + `packages/core/src/index.d.ts:447` + `packages/core/src/index.d.ts:449` | Ba khai báo mới (`loudestLevelSeries`, `pcmHeadTrim`, và `offsetSec` trong options của `silenceSpans`) — `.d.ts` viết tay nên chỉ `tsc -p packages/core/tsconfig.check.json` mới kiểm được | exit **0**, **0** `error TS` (§24.4 gate 3b) |
 | [app/utils/tmcut/audioDecode.ts:23](file:///D:/Applications/tm-studio/app/utils/tmcut/audioDecode.ts#L23) + [:52](file:///D:/Applications/tm-studio/app/utils/tmcut/audioDecode.ts#L52) + [:70](file:///D:/Applications/tm-studio/app/utils/tmcut/audioDecode.ts#L70) | Seam **thứ ba** và cũng là seam **duy nhất** đọc sound. `hasAudioDecoder()` hỏi **cả hai** `AudioDecoder` và `AudioBuffer`, vì một packet WebCodecs không tự thành sample: thiếu một trong hai nghĩa là host **không làm được sample**, trả `null` chứ không mượn đường khác. `decodePcm` đi **một vòng** `AudioBufferSink.buffers(from, to)` cho cả dải, không lặp lại `getBuffer()` | check [:175](file:///D:/Applications/tm-studio/tests/unit/tmcut_silence_scan.spec.ts#L175) buộc seam có `decodePcm`, `AudioBufferSink`, `.buffers(`, `hasAudioDecoder`, `pcmHeadTrim(` và **không gọi** `silenceSpans(`, `loudestLevelSeries(`, `dbfsOf(`, `levelSeries(` |
 | [app/utils/tmcut/audioDecode.ts:75](file:///D:/Applications/tm-studio/app/utils/tmcut/audioDecode.ts#L75) + [:76](file:///D:/Applications/tm-studio/app/utils/tmcut/audioDecode.ts#L76) + [:89](file:///D:/Applications/tm-studio/app/utils/tmcut/audioDecode.ts#L89)→[:94](file:///D:/Applications/tm-studio/app/utils/tmcut/audioDecode.ts#L94) | Các kênh được **giữ riêng**, không trộn: trộn thì một kênh chết và một kênh to "thỏa hiệp" ở mức giữa. `firstPacketSec` lấy từ packet **đầu tiên thật sự được giao**, rồi `pcmHeadTrim` cắt đúng số mẫu đó khỏi **mọi** kênh | hai phép đo §24.2 trên `l25-r-silent.m4a` và `antiphase-minus20.m4a` — hai file mà luật "kênh to nhất" và luật "trộn rồi đo" cho **kết quả ngược nhau** |
@@ -1580,7 +1580,7 @@ này mọi cửa sổ đều cách ngưỡng **từ 5 dB trở lên** nên parit
 | Gate | Lệnh | Kết quả | Chứng cứ |
 |---|---|---|---|
 | 1 Types | `npx nuxt typecheck` | PASS | exit **0**, **0** `error TS`; `.nuxt/eslint.config.mjs` **28 552** byte, mtime **16:51** — cấu hình sinh **trước** gate 2 |
-| 2 Lint | `npx eslint` trên **12** file chạm tới, chạy **sau** gate 1 | PASS | lần đầu **2** error: `no-unused-vars 'size'` ở [silence-pcm-trim.test.mjs:36](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L36) và `@stylistic/arrow-parens` ở [tmcut_silence_scan.spec.ts:79](file:///D:/Applications/tm-studio/tests/unit/tmcut_silence_scan.spec.ts#L79) — sửa **bằng tay trong đúng hai file đó**; lần hai exit **0**, **0** problem |
+| 2 Lint | `npx eslint` trên **12** file chạm tới, chạy **sau** gate 1 | PASS | lần đầu **2** error: `no-unused-vars 'size'` ở [silence-pcm-trim.test.mjs:36](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L36) và `@stylistic/arrow-parens` ở [tmcut_silence_scan.spec.ts:79](file:///D:/Applications/tm-studio/tests/unit/tmcut_silence_scan.spec.ts#L79) — sửa **bằng tay trong đúng hai file đó**; lần hai exit **0**, **0** problem |
 | 3 Tests | `npx tsx tests/unit/run-all.mts` | PASS | exit **0**, **105/105** specs; `PASS tmcut_silence_scan.spec.ts … === [TMCut silence scan] 10 passed ===`; hai guard có đổi chủ/trả lời mới: `tmcut_media_probe` **13**, `tmcut_frame_service` **19**, `tmcut_scene_scan` **10** |
 | 3b Core | `node --test "test/*.test.mjs"` + `check-boundaries.mjs` + `tsc -p packages/core/tsconfig.check.json` | PASS | **642/642** pass, **0** fail, **983,95 ms** (E2 khép ở 626; +7 kênh, +5 offset, +4 trim); `check-boundaries` chạy từ `packages/core/tools/`, không phải `scripts/`; boundaries "PASS — core imports nothing platform-specific"; tsc exit **0**, **0** `error TS` |
 | 4 Live | `/_nuxt/@fs/…` trong trang Chromium thật + server media 4199 trả 206 | PASS | **toàn bộ bảng §24.2** — bảy lần scan, bốn fixture, và phép đo packet trước/sau khi cắt đầu |
@@ -1619,7 +1619,7 @@ này mọi cửa sổ đều cách ngưỡng **từ 5 dB trở lên** nên parit
 [:147](file:///D:/Applications/tm-studio/app/utils/tmcut/frameDecode.ts#L147),
 [:163](file:///D:/Applications/tm-studio/app/utils/tmcut/frameDecode.ts#L163),
 [:169](file:///D:/Applications/tm-studio/app/utils/tmcut/frameDecode.ts#L169),
-[detection.mjs:305](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L305) (silenceSpans)
+[detection.mjs:305](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L305) (silenceSpans)
 và `packages/core/src/index.d.ts:2063` (khối khai
 `TmcutByteCachePlan`). Một con số trong bảng §24.2 cũng đã bị **sửa vì sai**, không phải vì không khớp code:
 check offset từng đòi `{31, 33}` cho một run có số đúng là `{34, 38}`, và `pcmHeadTrim` từng được ghi là
@@ -1850,12 +1850,12 @@ trên chính geometry mà app chạy.
 | `app/composables/useTmcutAutocut.ts:107` + `app/composables/useTmcutAutocut.ts:110` + `app/composables/useTmcutAutocut.ts:120` | `running: AbortController` đặt **trong composable** nên `cancel()` tới được tận decoder, không chỉ tới `await` — một lượt quét đang mở demuxer thì Promise `await` tự nó không dừng lại | check [:122](file:///D:/Applications/tm-studio/tests/unit/tmcut_autocut_analyze.spec.ts#L122) + phép đo huỷ thật §26.2 |
 | `app/pages/tmcut/autocut.vue:414`→`app/pages/tmcut/autocut.vue:422` | Bốn câu khác nhau cho bốn lý do rỗng: `cancelled` có **khung riêng** (`app/pages/tmcut/autocut.vue:929`, "không có gì bị thay đổi"), ba lỗi kia chung một khung lỗi với **đúng một** dòng chữ (`no-decoder` ≠ `no-video`) | **6** khoá i18n mới trên **cả hai** locale: [vi.json:352](file:///D:/Applications/tm-studio/i18n/locales/vi.json#L352)→[:355](file:///D:/Applications/tm-studio/i18n/locales/vi.json#L355) (cancelScan / scanCancelled / errNoDecoder / errNoVideo) và [:1329](file:///D:/Applications/tm-studio/i18n/locales/vi.json#L1329)→[:1331](file:///D:/Applications/tm-studio/i18n/locales/vi.json#L1331) |
 | `app/pages/tmcut/autocut.vue:1330` + `app/pages/tmcut/autocut.vue:1342` + [en.json:1329](file:///D:/Applications/tm-studio/i18n/locales/en.json#L1329) | `windows`/`sampled`/`missing` **có chỗ hiển thị** — câu hỏi §24.5 để ngỏ: `metricScenesSub` Nay nói "Read {sampled} frames in the browser" (không còn là "FFmpeg scene detection"), `metricFramesMissing` nói bao nhiêu frame không đọc được, `metricNoAudio` nói **không nghe thấy gì** chứ không nói "file im lặng" | hai dòng template trên, và `audioHeard` là cột phân biệt chúng — xem 8 dòng đo live §26.2 |
-| [:251](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L251) `peakLevelSeries` + [:280](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L280) `loudestPeakSeries` | **Đổi thước đo, không chỉ đổi số**: cửa sổ tính bằng **sample to nhất** (`20·log10` của trị tuyệt đối lớn nhất), không bằng năng lượng. `silencedetect` so **từng sample** với `noise=`; cửa sổ RMS trả lời câu hỏi khác | **11** check trong [silence-peak-law.test.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js): [:39](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L39) peak chứ không energy, [:49](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L49) full-scale = 0 dBFS và im tuyệt đối = sàn, [:62](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L62) mặc định **20 ms**, [:77](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L77) NaN không thành im, [:89](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L89) kênh to nhất, [:108](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L108) click ở **đầu** run quiet không bị nuốt |
-| [detection.mjs:48](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L48) `TMCUT_SILENCE_WINDOW_SEC = 0.02` + [:40](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L40) `MIN_DURATION 0.5` (giữ nguyên) | Cửa sổ hẹp lại **25 lần** (0.5 s → 0.02 s) còn độ dài tối thiểu một run **không đổi**: cửa sổ là đơn vị định vị biên, `d=` là đơn vị quyết định run có được tính không — hai thứ mà bản cũ gộp làm một | bảng 12 file §26.2: **cùng số span** với oracle trên **cả 12** file, sai số biên mean **7 ms** / worst **16 ms** |
-| [detection.mjs:30](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L30) `TMCUT_SCENE_THRESHOLD = 0.18` (từ 0.2) + [:36](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L36) `SAMPLE_HZ = 5` (giữ) | Ngưỡng đặt **giữa dải đo được trên geometry mà app thật chạy**, không phải giữa hai số trong bảng notes (§26.3.3) | sweep 8 file trong browser §26.2: `fast-motion` (motion liên tục, không cut) đạt **0.1558**, `cuts-4` (3 cut thật) thấp nhất **0.1988** — 0.20 mất một cut thật, 0.15 sinh 3 cut giả |
+| [:251](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L251) `peakLevelSeries` + [:280](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L280) `loudestPeakSeries` | **Đổi thước đo, không chỉ đổi số**: cửa sổ tính bằng **sample to nhất** (`20·log10` của trị tuyệt đối lớn nhất), không bằng năng lượng. `silencedetect` so **từng sample** với `noise=`; cửa sổ RMS trả lời câu hỏi khác | **11** check trong [silence-peak-law.test.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js): [:39](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L39) peak chứ không energy, [:49](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L49) full-scale = 0 dBFS và im tuyệt đối = sàn, [:62](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L62) mặc định **20 ms**, [:77](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L77) NaN không thành im, [:89](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L89) kênh to nhất, [:108](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L108) click ở **đầu** run quiet không bị nuốt |
+| [detection.mjs:48](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L48) `TMCUT_SILENCE_WINDOW_SEC = 0.02` + [:40](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L40) `MIN_DURATION 0.5` (giữ nguyên) | Cửa sổ hẹp lại **25 lần** (0.5 s → 0.02 s) còn độ dài tối thiểu một run **không đổi**: cửa sổ là đơn vị định vị biên, `d=` là đơn vị quyết định run có được tính không — hai thứ mà bản cũ gộp làm một | bảng 12 file §26.2: **cùng số span** với oracle trên **cả 12** file, sai số biên mean **7 ms** / worst **16 ms** |
+| [detection.mjs:30](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L30) `TMCUT_SCENE_THRESHOLD = 0.18` (từ 0.2) + [:36](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L36) `SAMPLE_HZ = 5` (giữ) | Ngưỡng đặt **giữa dải đo được trên geometry mà app thật chạy**, không phải giữa hai số trong bảng notes (§26.3.3) | sweep 8 file trong browser §26.2: `fast-motion` (motion liên tục, không cut) đạt **0.1558**, `cuts-4` (3 cut thật) thấp nhất **0.1988** — 0.20 mất một cut thật, 0.15 sinh 3 cut giả |
 | [silenceScan.ts:24](file:///D:/Applications/tm-studio/app/utils/tmcut/silenceScan.ts#L24) + [:71](file:///D:/Applications/tm-studio/app/utils/tmcut/silenceScan.ts#L71) + [audioDecode.ts:11](file:///D:/Applications/tm-studio/app/utils/tmcut/audioDecode.ts#L11) | Đổi tên luật **không đổi** cấu trúc glue: seam vẫn chỉ giao sample, glue vẫn chỉ gọi đúng một hàm core | check [:185](file:///D:/Applications/tm-studio/tests/unit/tmcut_silence_scan.spec.ts#L185) cấm seam gọi `silenceSpans(`, `loudestPeakSeries(`, `peakLevelSeries(`, `dbfsOf(` — danh sách được **cập nhật cùng lượt**, không phải để nguyên tên đã mất |
 | `packages/core/src/index.d.ts:405`→`packages/core/src/index.d.ts:406` + `packages/core/src/index.d.ts:436`→`packages/core/src/index.d.ts:441` | Khai báo viết tay theo đúng luật mới: `TMCUT_SILENCE_WINDOW_SEC` được khai báo riêng (không còn chung dòng với `MIN_DURATION`), `levelSeries` → `peakLevelSeries`, `loudestLevelSeries` → `loudestPeakSeries` | `tsc -p packages/core/tsconfig.check.json` exit **0**, **0** `error TS` (§26.4 gate 3b) — `.d.ts` tay thì chỉ tsc mới kiểm được |
-| [frames.mjs:31](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L31) + [:40](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L40) | Không phải code mới, mà là **điều chỉnh cách đọc code cũ**: `sceneSampleTimes` đi qua `filmstripTimes`, nên mốc lấy mẫu là **giữa mỗi lát** sau edge guard (`guard + (index + 0.5) * slice`), **không phải** bội số của `1/hz`. Clip 12 s @5 Hz: 60 ask, bước **0.192 s**, ask đầu **0.336 s** | toàn bộ bảng scene §26.2 được đo bằng geometry này; bảng của harness offline (`ffmpeg -vf fps=5` + `i/hz`) **đã bị thay** vì nó chấm một hình học khác (§26.3.5) |
+| [frames.mjs:31](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L31) + [:40](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L40) | Không phải code mới, mà là **điều chỉnh cách đọc code cũ**: `sceneSampleTimes` đi qua `filmstripTimes`, nên mốc lấy mẫu là **giữa mỗi lát** sau edge guard (`guard + (index + 0.5) * slice`), **không phải** bội số của `1/hz`. Clip 12 s @5 Hz: 60 ask, bước **0.192 s**, ask đầu **0.336 s** | toàn bộ bảng scene §26.2 được đo bằng geometry này; bảng của harness offline (`ffmpeg -vf fps=5` + `i/hz`) **đã bị thay** vì nó chấm một hình học khác (§26.3.5) |
 | [tmcut_frame_service.spec.ts:423](file:///D:/Applications/tm-studio/tests/unit/tmcut_frame_service.spec.ts#L423) | Danh sách holder của seam pixel nay có **ba** entry, trong đó `app/composables/useTmcutAutocut.ts` — bằng chứng guard **nhìn thấy** việc nối consumer chứ không tin lời mô tả | `tmcut_frame_service` **19** check, exit 0 (§26.4 gate 3) |
 | [tmcut_scene_scan.spec.ts:146](file:///D:/Applications/tm-studio/tests/unit/tmcut_scene_scan.spec.ts#L146) | Fixture của scene scan được **nâng biên độ** (45/255) vì dưới luật 0.18 thì mức lift cũ nằm **dưới** ngưỡng và check sẽ pass vì một lý do khác lý do nó định test | `tmcut_scene_scan` **10** check, exit 0 |
 
@@ -1889,7 +1889,7 @@ Bốn điểm đáng ghi: `podcast-30/300/600` có **0** span ở **cả hai** b
 ngưỡng −30 nằm **giữa hai fixture** chứ không phải dưới cả hai; `impulse.wav` là một **click** giữa vùng mà
 năng lượng đo được −56.3 dBFS — oracle **không** báo im và bản peak cũng không, còn bản RMS-cửa-sổ báo im
 (chính là lý do `peakLevelSeries` tồn tại, và là lý do con số "7.87 s im-lặng-giả" của cửa sổ năng lượng 0.5 s
-được ghi thẳng vào [detection.mjs:246](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L246));
+được ghi thẳng vào [detection.mjs:246](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L246));
 và `FN` **0.42 s** trên tổng ≈ 3.6 phút audio là **0,19 %**, tập trung ở biên run — không phải mất cả run.
 
 **(b) Hai pass chạy trong Chromium thật**, qua `createAutocutDetect` của app (module import
@@ -1965,7 +1965,7 @@ footage thật có motion **thấp hơn** plate chuyển động nhanh (`real-14
    **≤ 18 ms**.
 3. **Ngưỡng 0.18 đặt giữa dải *đo trên geometry của app*, không giữa dải ghi trong notes.** Bảng offline đầu
    tiên của lượt này (harness Node, `ffmpeg -vf fps=5` + mốc `i/hz`) cho `tc` cuts-4 = 0.2126 và kết luận
-   "flash bị bỏ ở 5 Hz"; chạy lại đúng hình học mà `filmstripTimes` sinh ra ([frames.mjs:40](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L40),
+   "flash bị bỏ ở 5 Hz"; chạy lại đúng hình học mà `filmstripTimes` sinh ra ([frames.mjs:40](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L40),
    bước 0.192 s, ask đầu 0.336 s) thì `tc` = **0.1988** và flash **được tìm thấy** (điểm 0.5121). Một ngưỡng
    chọn theo bảng cũ sẽ lệch mà không có phép đo nào báo. Vì vậy **bảng scene của harness bị thay** bằng bảng
    (c); chỉ bảng im lặng (a) giữ được, vì nó không đi qua geometry frame.
@@ -1989,7 +1989,7 @@ footage thật có motion **thấp hơn** plate chuyển động nhanh (`real-14
 | 3b Core | `node --test "test/*.test.mjs"` + `tools/check-boundaries.mjs` + `tsc -p tsconfig.check.json` | PASS | **653/653** pass, **0** fail, **95** suites, **1074 ms** (E3 khép 642; **+11** của `silence-peak-law`); boundaries "PASS — core imports nothing platform-specific"; tsc exit **0**, **0** `error TS` |
 | 4 Live | `/_nuxt/@fs/…` trong Chromium thật + server 4199 trả 206, **không** dùng seed credential | PASS | **toàn bộ** bảng (b) 8 file, (c) 8 file, và (d) 5 dòng — kể cả hai mục từng fail vì harness (§26.5) |
 | 4b Routes | console sweep `/_nuxt` trên năm route `/tmcut*` | PARTIAL | xem §26.5 dòng cuối: ba route sau login **không** được quét lượt này |
-| 5 Docs | năm guard `docs_markdown` / `tmcut_doc_citations` / `tmcut_doc_line_length` / `tmcut_doc_table_shape` / `tmcut_docs_link_integrity`, chạy lại **sau** lần sửa markdown cuối | PASS | **28** checks (**12/5/4/3/4**), exit **0** cả năm. Hai guard từng **fail** trên bản nháp của §26 và đã sửa **trong doc**, không nới guard: `table_shape` bắt một ký tự pipe **trần** trong ô bảng (công thức peak ở [detection.mjs:251](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L251)), `link_integrity` bắt một link trỏ **thư mục** `e4live/` chứ không trỏ file. Gate 3 chạy lại sau lần sửa markdown cuối: **106/106**, exit **0** |
+| 5 Docs | năm guard `docs_markdown` / `tmcut_doc_citations` / `tmcut_doc_line_length` / `tmcut_doc_table_shape` / `tmcut_docs_link_integrity`, chạy lại **sau** lần sửa markdown cuối | PASS | **28** checks (**12/5/4/3/4**), exit **0** cả năm. Hai guard từng **fail** trên bản nháp của §26 và đã sửa **trong doc**, không nới guard: `table_shape` bắt một ký tự pipe **trần** trong ô bảng (công thức peak ở [detection.mjs:251](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L251)), `link_integrity` bắt một link trỏ **thư mục** `e4live/` chứ không trỏ file. Gate 3 chạy lại sau lần sửa markdown cuối: **106/106**, exit **0** |
 
 ### 26.5 Chưa chứng minh
 
@@ -2064,8 +2064,8 @@ một tuỳ chọn tối ưu.
 | Quyết định | Trước F1 | Sau F1 |
 | --- | --- | --- |
 | Hàng footage nào **đủ điều kiện** vẽ ở tick này | core `paintStack.selectPaintRows` — đã đúng chỗ | không đổi; `compositePlan` **gọi** nó chứ không chép luật |
-| Layer nào của một hàng là **ảnh**, layer nào là **partner `outgoing`** của một transition | app, tự quyết mỗi frame: [useTmcutPlayback.ts:133](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L133) và [:158](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L158) | core [composite.mjs:62](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L62) |
-| Cái gì **phủ lên toàn stack** (chữ overlay ở mọi hàng text đang hiện) | app `activeTextClips` [:181](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L181), còn export thì tự quyết ở `app/utils/tmcut/render/clip.ts:155` | core [composite.mjs:98](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L98) |
+| Layer nào của một hàng là **ảnh**, layer nào là **partner `outgoing`** của một transition | app, tự quyết mỗi frame: [useTmcutPlayback.ts:133](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L133) và [:158](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L158) | core [composite.mjs:62](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L62) |
+| Cái gì **phủ lên toàn stack** (chữ overlay ở mọi hàng text đang hiện) | app `activeTextClips` [:181](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L181), còn export thì tự quyết ở `app/utils/tmcut/render/clip.ts:155` | core [composite.mjs:98](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L98) |
 
 Ô thứ nhất của dòng cuối là **nguồn của nợ F3**: `selectExportTracks` vẫn tự bổ hàng `videoRows[0]` thành
 `videoBase` và `videoRows.slice(1)` thành `extraVideoTracks`
@@ -2075,7 +2075,7 @@ chuyển về. *(Nợ này đã đóng ở §30; hai dòng code được trích 
 
 ### 27.2 Luật mới
 
-`compositePlan(evaluation) → { at, slots }` ([composite.mjs:53](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L53)),
+`compositePlan(evaluation) → { at, slots }` ([composite.mjs:53](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L53)),
 declaration trong `packages/core/src/index.d.ts:1962`.
 Mỗi slot là `{ kind, role, clipId, trackId, trackIndex, layer }`:
 
@@ -2095,7 +2095,7 @@ host; **tập hợp và thứ tự** là của core.
 
 ### 27.3 TDD: RED đo được, và hai bẫy fixture đáng ghi lại
 
-Test viết trước: [composite-plan.test.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js)
+Test viết trước: [composite-plan.test.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js)
 **212** dòng, **16** check, **4** describe. RED chạy thật, fail vì đúng một lý do:
 
 ```
@@ -2107,7 +2107,7 @@ Hai lần sửa fixture trước khi GREEN, cả hai là bẫy sẽ gặp lại 
 
 1. **Cửa transition không sinh từ clip "ra đi".** `transitionWindows` chỉ tạo window khi clip **đến** có
    `transitionIn.duration > 0`, và cần một hàng xóm có `span.end` trùng `endTicks`
-   ([transitions.mjs:628-639](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L628)).
+   ([transitions.mjs:628-639](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L628)).
    Bản nháp đặt hai clip **kề nhau đúng** (`in` bắt đầu ở 4 s sau clip 4 s) → không overlap → không window →
    `role` không bao giờ xuất hiện. Fix: `out` ở `[0, 4)`, `in` ở `[3, 7)` với `transitionIn` 1 s, probe giữa
    cửa ở `3.5 * T` (`T = TICKS_PER_SECOND = 120000`, nên bản nháp probe `4500` tick thực ra là **0,0375 s**).
@@ -2123,12 +2123,12 @@ trên cùng một evaluation, và `plan.at === evaluation.at` (không đánh gi�
 Luật "duy nhất một hàng được chiếm canvas" chưa bao giờ bị **đo** là sai; nó là một giới hạn của host, và host
 sắp bỏ giới hạn đó. Việc của F1 là thôi ghi nó như một **luật**:
 
-- header [paintStack.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js): "which footage
+- header [paintStack.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js): "which footage
   rows are paintable… `rows[0]` is the BOTTOM of the stack", kèm câu `base` sống tiếp **cho** host một bề mặt;
 - JSDoc `@returns` bỏ đoạn "anything after it is footage the single-row law drops";
 - comment của `CorePaintStack.rows` trong `index.d.ts` đổi từ "owns the canvas, the rest are dropped" sang
   "the BOTTOM of the stack";
-- mô tả trong [paint-stack.test.mjs:52](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L52)
+- mô tả trong [paint-stack.test.mjs:52](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L52)
   đổi tên từ "the single-row law" thành "the row law, bottom of the stack first". **Mọi assertion giữ nguyên**,
   kể cả case overlap (`baseIdAt(both, 3s) === 'row-a'`) vẫn đúng vì `base === rows[0]`; chỉ comment của nó được
   viết lại thành "hàng ở ĐÁY stack".
@@ -2454,7 +2454,7 @@ không phải test kể lại.
 ### 30.1 Luật per-file mới trong core
 
 `selectFileRows(input) → { rows, base, stacked, overlays, audio }`
-([paintStack.mjs:140](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L140)), declaration ở
+([paintStack.mjs:140](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L140)), declaration ở
 `packages/core/src/index.d.ts:1962` với
 `CoreFileRow` (`packages/core/src/index.d.ts:1939`) và
 `CoreFileRows` (`packages/core/src/index.d.ts:1945`).
@@ -2467,17 +2467,17 @@ không phải test kể lại.
 
 Core trả **danh tính hàng** (`{ trackId, trackIndex }`), không mang item — cùng khuôn với mọi luật per-tick,
 nên host vẫn là chỗ duy nhất biết clip là gì. Input chấp nhận cả project lồng `timeline` lẫn timeline trần
-(`timelineOf`, [paintStack.mjs:97](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L97)).
+(`timelineOf`, [paintStack.mjs:97](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L97)).
 
 Mười check mới trong
-[paint-stack.test.mjs:216](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L216),
+[paint-stack.test.mjs:216](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L216),
 hai check nặng nhất **đo** mệnh đề "một luật, hai scope" thay vì assert độc lập:
 
-- **union-equality** ([:234](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L234)):
+- **union-equality** ([:234](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L234)):
   quét 6 timeline qua mọi tick nguyên giây, tập hàng per-tick của `selectPaintRows` **bằng** tập hàng
   per-file của `selectFileRows`.
 - **hàng đọc từ timeline, không từ mẫu tick**
-  ([:251](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L251)): một clip 0.1 s nằm
+  ([:251](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L251)): một clip 0.1 s nằm
   lọt giữa hai probe vẫn khiến hàng đó hợp lệ — lưới tick **không** phải nguồn sự thật.
 
 ### 30.2 Bản sao luật bị xóa, và vì sao `src` không phải là luật
@@ -2541,9 +2541,9 @@ khóa ở tầng nguồn: file phải gọi `selectFileRows`, và **không** đ�
 
 | File | Trước | Sau | Lệch |
 | --- | --- | --- | --- |
-| [packages/core/src/paintStack.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js) | 84 | 169 | **+85** (luật per-file + header) |
+| [packages/core/src/paintStack.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js) | 84 | 169 | **+85** (luật per-file + header) |
 | `packages/core/src/index.d.ts` | 2115 | 2144 | **+29** |
-| [packages/core/test/paint-stack.test.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js) | 203 | 364 | **+161** (10 check) |
+| [packages/core/test/paint-stack.test.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js) | 203 | 364 | **+161** (10 check) |
 | `app/utils/tmcut/render/clip.ts` | 214 | 222 | **+8**, và `paints()` bị **xóa** |
 | `app/utils/tmcut/render/index.ts` | 316 | 331 | **+15** (composite ở cả hai nhánh) |
 | `tests/unit/tmcut_paint_stack.spec.ts` | 273 | 329 | 6 → **9** check |
@@ -2585,9 +2585,9 @@ module '../src/paintStack.mjs' does not provide an export named 'selectFileRows'
 
 Lượt này staged **10** đường dẫn: `app/utils/tmcut/render/clip.ts`,
 `app/utils/tmcut/render/index.ts`,
-[paintStack.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js),
+[paintStack.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js),
 `packages/core/src/index.d.ts`,
-[paint-stack.test.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js),
+[paint-stack.test.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js),
 `tests/unit/tmcut_paint_stack.spec.ts`,
 `tests/unit/tmcut_export_track_parity.spec.ts`,
 `tests/unit/tmcut_footage_row_rule.spec.ts`,
@@ -2737,12 +2737,12 @@ và `× 0.82`. Ở intensity 50, hai luật cho **0.43** và **0.41** — hai s�
 `fidelity` không trả lời câu "cái overlay này có phải thứ file nung không". `illustrative` thì chắc chắn
 không (chromakey vẽ dải key, pixelate vẽ lưới ô), nhưng `approximate` cũng chưa đủ: vignette approximate
 **là** chính plate mà file nung, còn grain approximate **là** chính lớp noise. Nên registry cần một cờ
-riêng — [effects.mjs:11-16](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L11) định nghĩa
+riêng — [effects.mjs:11-16](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L11) định nghĩa
 `preview.layerOverlay`, bật `true` cho đúng ba mặt
-[ vignette :53](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L53),
-[grain :63](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L63),
-[letterbox :185](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L185) — và
-[`fxCapabilities` :548](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L548) luôn trả về
+[ vignette :53](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L53),
+[grain :63](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L63),
+[letterbox :185](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L185) — và
+[`fxCapabilities` :548](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L548) luôn trả về
 một boolean (không `undefined`), kiểu hóa ở
 `packages/core/src/index.d.ts:960` và
 `packages/core/src/index.d.ts:994`.
@@ -2839,7 +2839,7 @@ Số dòng: player **159/103**, fxPreview **27/0**, `effects.mjs` **11/4**, `ind
   tĩnh động, khác `noise` trong export về chuyển động — ghi nợ, không phải bug mới.
 - **`blend` vẫn đọc từ clip authored**
   ([TmcutPreviewPlayer.vue:834](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L834)):
-  `layerFor` ([evaluate.mjs:290](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L290) là
+  `layerFor` ([evaluate.mjs:290](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L290) là
   nơi effects, mask, layout đi ra) chưa mang `blend`. Nhóm blend **có** nằm trong group nên nó đã theo
   transform/opacity; chỉ riêng **số** blend chưa đến từ plan.
 - **F4 còn một vế**: đường rAF riêng của `TmcutHtmlVideoStudio` (leg 4 của #125) chưa về đồng hồ core; nó
@@ -2848,7 +2848,7 @@ Số dòng: player **159/103**, fxPreview **27/0**, `effects.mjs` **11/4**, `ind
 
 ### 32.8 Bảo vệ working tree
 
-Lượt này staged **9** đường dẫn: [effects.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js),
+Lượt này staged **9** đường dẫn: [effects.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js),
 `packages/core/src/index.d.ts`,
 [fxPreview.ts](file:///D:/Applications/tm-studio/app/utils/tmcut/fxPreview.ts),
 [TmcutPreviewPlayer.vue](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue),
@@ -3058,7 +3058,7 @@ file docs) còn `app/utils/tmcut/mediaElement.ts` cùng `tests/unit/tmcut_media_
 `compositePlan` trao cho preview cái layer mà core đã tính cho tick đó, và layer ấy
 đã trả lời câu "bức tranh này nằm ở đâu trong file nguồn": `sourceTicks` — tốc độ,
 ramp và reverse đều đã gộp vào, kết quả đã kẹp trong `[in, out]` của chính clip
-([evaluate.mjs:67](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L67)).
+([evaluate.mjs:67](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L67)).
 Nhưng [useTmcutPlayback.ts](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts)
 còn giữ một câu trả lời thứ hai cho đúng một case: khi core nói "clip này sống
 nhưng ta không có khoảng nguồn nào cho nó", surface rơi vào `clipMediaTimeSec`
@@ -3066,15 +3066,15 @@ của app — tức `clip.in + local * speed`
 ([clipTime.ts](file:///D:/Applications/tm-studio/app/utils/tmcut/clipTime.ts), helper đã gỡ ở §46).
 
 Case đó không phải tưởng tượng. `clipSpan` ưu tiên hình dạng DSL và chỉ cần
-`timeline.{start,duration}` là clip sống ([timeline.mjs:55](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L55)),
+`timeline.{start,duration}` là clip sống ([timeline.mjs:55](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L55)),
 còn `sourceRangeOf` cần `source.{in,out}` hoặc một `in` dạng số
-([evaluate.mjs:55](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L55)). Một project đi vào
+([evaluate.mjs:55](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L55)). Một project đi vào
 app theo đúng hình v3 (template, AI plan, file mở từ DSL) thỏa mãn vế đầu và vi phạm
 vế sau: nó sống trên canvas và core trả `null`.
 
 Giá của nhánh đó đã **đo**, không suy ra: với `clip.in = undefined`, phép tính thành
 `NaN`, và `ticksToSec` gấp mọi giá trị không hữu hạn về `0`
-([time.mjs:18](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L18)). Số đo ở playhead 1 s là
+([time.mjs:18](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L18)). Số đo ở playhead 1 s là
 `mediaTimeSec = 0`. Element vì thế bị đỗ ở khung hình đầu tiên của nguồn và bị kiểm
 tra drift xin seek lại — biểu hiện là một clip đứng hình chứ không phải một crash,
 nên nó lọt qua mắt người dùng và lọt qua cả console.
@@ -3221,7 +3221,7 @@ qua clock của core — không còn cộng dồn nào cả:
 | [useTmcutPlayback.ts:435](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts#L435) | `const newTime = pacedTime(timestamp)` — **một** phép tính, nhánh reverse và nhánh forward cùng đọc |
 
 `clock.frameStartAt` tự kẹp số học lùi (`Math.max(0, Math.floor(index))` ở
-[clock.mjs:42](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L42)), nên J không cần một
+[clock.mjs:42](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L42)), nên J không cần một
 phép cộng delta riêng nữa: hai chiều đi trên **cùng một grid**, chỉ khác dấu của số
 frame đã chạy.
 
@@ -3235,7 +3235,7 @@ không bị **đi lại** ở 8x — đổi tốc độ giữa chừng tính t�
 điểm neo cũ.
 
 Không đổi: `TICKS_PER_SECOND` là hằng core nên phép quy đổi ms → ticks dùng đúng
-timebase 120 000 mà mọi module khác dùng ([time.mjs:9](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L9)).
+timebase 120 000 mà mọi module khác dùng ([time.mjs:9](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L9)).
 `renderPosition` và đường scrub không liên quan tới nhịp nên đứng nguyên.
 
 ### 35.3 RED rồi GREEN
@@ -3348,16 +3348,16 @@ cái vừa xem.
 
 ### 36.2 Luật: nhịp nằm trong core, hai host chỉ giao timestamp
 
-`createFramePace(clock)` — [pace.mjs:84](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L84) —
+`createFramePace(clock)` — [pace.mjs:84](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L84) —
 là chuyển đổi duy nhất từ "host nói ngần này thời gian trôi" sang "playhead đứng
 trên khung hình này". Neo là bộ ba `(timestamp, frame, rate)`; mỗi lần gọi
 `at(timestampMs, rate, currentFrame)` chỉ mua một số **nguyên** khung
-([pace.mjs:93](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L93))
-và đặt xuống bằng `clock.frameStartAt` ([pace.mjs:61](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L61)),
+([pace.mjs:93](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L93))
+và đặt xuống bằng `clock.frameStartAt` ([pace.mjs:61](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L61)),
 nên vị trí luôn là một **điểm bắt đầu khung**, không bao giờ là một float giữa hai
-khung. Ba đường re-arms ([pace.mjs:88](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L88)):
+khung. Ba đường re-arms ([pace.mjs:88](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L88)):
 đổi rate, vị trí không do nhịp sinh ra, và `reset()`
-([pace.mjs:103](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L103)) —
+([pace.mjs:103](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L103)) —
 khoảng thời gian đã mang theo bị **tiêu**, không được chi tiếp.
 
 Module law giữ nguyên: host vẫn sở hữu WHEN (nó giao timestamp của rAF), core sở
@@ -3460,8 +3460,8 @@ Console: `/tmcut/html-video` **sạch** (chỉ `[info] <Suspense>`, hết thời
 ### 36.8 Bảo vệ working tree
 
 Lượt này chạm **5** file code/spec —
-[packages/core/src/pace.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js) (mới, 111 dòng),
-[index.mjs:4](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L4),
+[packages/core/src/pace.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js) (mới, 111 dòng),
+[index.mjs:4](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L4),
 `packages/core/src/index.d.ts:2008`,
 [useTmcutPlayback.ts](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts),
 `app/components/tmcut/TmcutHtmlVideoStudio.vue` —
@@ -3501,13 +3501,13 @@ surface đầu tiên bằng cách riêng.
 Bốn chỗ này đọc lại ba câu trả lời **đã tồn tại** trong core, không module mới:
 
 - `selectFileRows(project).overlays` — mọi lane phụ đề của cả file, đã trừ lane ẩn
-  và lane không có clip nào sống được ([paintStack.mjs:140](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L140));
+  và lane không có clip nào sống được ([paintStack.mjs:140](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L140));
 - `selectExportTracks(project).textTracks` — chính câu trả lời đó sau chỗ join mà
   compiler export đang dùng (`app/utils/tmcut/render/clip.ts:160`),
   nên validation rotation giờ kiểm **đúng những lane file sẽ paint**, không kiểm
   danh sách track do UI tự đoán;
 - `paintStackAt(project, atTicks).rows` — hàng footage **đang vẽ tại tick này**
-  ([paintStack.mjs:92](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L92)),
+  ([paintStack.mjs:92](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L92)),
   tức clip được transcribe là clip mà người dùng đang thực sự nhìn thấy.
 
 Host vẫn chỉ làm việc của host: cầm `trackIndex`/`clipId` nối về object mình authored.
@@ -3633,12 +3633,12 @@ xử lý khi tên **không** hợp lệ:
 | Export (FFmpeg) | lỗi **lúc parse filtergraph** | **cả** render chết, không phải một clip |
 
 Chính tính bất đối xứng đó là lý do luật nằm trong core chứ không nằm ở hai chỗ đọc:
-[packages/core/src/blend.mjs:19](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L19)
+[packages/core/src/blend.mjs:19](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L19)
 là danh sách,
-[blend.mjs:28](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L28)
+[blend.mjs:28](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L28)
 `blendModeOf` là bộ chuẩn hóa (absent / không phải chuỗi / không thuộc danh sách →
 `normal`), và
-[evaluate.mjs:294](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L294)
+[evaluate.mjs:294](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L294)
 đặt kết quả lên layer — cùng chỗ `layerFor` đã sinh effects, mask, layout. Một project
 JSON bẩn vì thế không còn đường nào để làm hỏng một export.
 
@@ -3674,7 +3674,7 @@ ra một transition không ai authored. Check 7 của spec mới khóa đúng đ
 có `tmfx-grain`, tile vẫn có cả hai).
 
 `vhs` cũng mang grain nhưng **không** phải `layerOverlay`
-([effects.mjs:53](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L53)/[63](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L63)/[185](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L185)
+([effects.mjs:53](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L53)/[63](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L63)/[185](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L185)
 là ba chỗ `layerOverlay: true`: vignette, grain, letterbox), nên nó ở lại tile — và
 `effectOverlay` trả `null` trước khi đọc tới animation của nó. Field thừa đã bị xóa sau
 khi đo, không để lại một key không ai đọc.
@@ -3769,9 +3769,9 @@ máy đo là `false`.
 
 ### 38.10 Bảo vệ working tree
 
-Lượt này chạm **4** file core ([blend.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js) mới,
-[index.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js),
-[evaluate.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js),
+Lượt này chạm **4** file core ([blend.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js) mới,
+[index.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js),
+[evaluate.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js),
 `packages/core/src/index.d.ts`),
 **6** file app ([TmcutPreviewPlayer.vue](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue),
 [TmcutInspector.vue](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutInspector.vue),
@@ -3800,8 +3800,8 @@ mọi con số trong DOM.
 
 | Cái | Export | Preview trước F7 (DOM tự tính) |
 | --- | --- | --- |
-| vị trí / scale / opacity | `layer.transform`, `layer.opacity` ([evaluate.mjs:274](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L274)) | `evalKeyframe(textClip, 'x'…)` bốn lần, rồi `textClip.scale / 100`, `textClip.opacity / 100` |
-| in/out animation | `text.animation` sinh ngay trong evaluator ([evaluate.mjs:223](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L223)) | `textAnimationAt(textClip, …)` gọi lại từ DOM |
+| vị trí / scale / opacity | `layer.transform`, `layer.opacity` ([evaluate.mjs:274](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L274)) | `evalKeyframe(textClip, 'x'…)` bốn lần, rồi `textClip.scale / 100`, `textClip.opacity / 100` |
+| in/out animation | `text.animation` sinh ngay trong evaluator ([evaluate.mjs:223](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L223)) | `textAnimationAt(textClip, …)` gọi lại từ DOM |
 | độ dài cửa sổ animation | `durationTicks` của evaluator | `clipDurationTicks({ in, out, speed })` rồi `Math.max(TICKS_PER_SECOND / 20, …)` tự chế |
 | màu shadow / stroke / box | `clip.shadowColor\|\|'black'` (`app/utils/tmcut/render/text.ts:133`) | `textClip.shadowColor\|\|'rgba(0, 0, 0, 0.85)'` |
 
@@ -3812,9 +3812,9 @@ filter string của project cũ mà golden spec đang khóa byte-identical, mộ
 render — đó là một quyết định parity chứ không phải một dọn nguồn, nên nó nằm lại ở §39.7
 như một nợ **đã đo**, không phải một khác biệt bị giấu.
 
-Cái F7 đổi là **nguồn của giá trị authored**: [evaluate.mjs:203](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L203)
+Cái F7 đổi là **nguồn của giá trị authored**: [evaluate.mjs:203](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L203)
 `textOf` nay trả `shadowColor` / `strokeColor` / `bgColor` lên layer
-([evaluate.mjs:216](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L216)), `null` khi không authored — core
+([evaluate.mjs:216](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L216)), `null` khi không authored — core
 không bịa default, và DOM chỉ còn việc áp preview scale. Kiểu
 `packages/core/src/index.d.ts:1829` mang đúng ba field đó.
 
@@ -3898,7 +3898,7 @@ T thì chỉ còn một đường: hỏi `evaluateTimeline`.
 
 ### 39.8 Working tree
 
-Lượt này chạm **2** file core ([evaluate.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js),
+Lượt này chạm **2** file core ([evaluate.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js),
 `packages/core/src/index.d.ts`), **2** file app
 ([useTmcutPlayback.ts](file:///D:/Applications/tm-studio/app/composables/useTmcutPlayback.ts),
 [TmcutPreviewPlayer.vue](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue)), **4** spec
@@ -4126,10 +4126,10 @@ nó là khác biệt thật giữa «test này fail» và «test này đã đư�
 | Chỗ | Thay đổi |
 | --- | --- |
 | [fxPreview.ts:313](file:///D:/Applications/tm-studio/app/utils/tmcut/fxPreview.ts#L313) | bỏ `saturate(1 + 0.25t)`; mặt sepia còn đúng `sepia(t)`, kèm comment nêu vì sao hàm thứ hai là hàng giả |
-| [effects.mjs:200](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L200) | negate `exact` → `approximate`, comment nêu đích danh `alpha` |
+| [effects.mjs:200](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L200) | negate `exact` → `approximate`, comment nêu đích danh `alpha` |
 
 Hai test cũ nêu claim cũ cũng phải sửa theo, và sửa **vì claim sai**, không vì code đổi:
-[packages/core/test/effects.test.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js) (dòng 255 khi đó)
+[packages/core/test/effects.test.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js) (dòng 255 khi đó)
 và [tmcut_fx_preview.spec.ts:124](file:///D:/Applications/tm-studio/tests/unit/tmcut_fx_preview.spec.ts#L124).
 Không có assertion nào được nới để chiều production.
 
@@ -4240,8 +4240,8 @@ autocut = **0**, `bitmap.close()` trong `readStill` = **0**, `release`/`clear` c
 
 ### 42.2 Luật core mới: nhường có token, và nhường tất cả
 
-`createFrameSlotLedger()` thêm hai phương thức — [frames.mjs:224](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L224)
-và [`:231`](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L231), kiểu ở
+`createFrameSlotLedger()` thêm hai phương thức — [frames.mjs:224](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L224)
+và [`:231`](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L231), kiểu ở
 `packages/core/src/index.d.ts:368`/`packages/core/src/index.d.ts:370`:
 
 - `release(slot, token)` chỉ xóa một slot khi **đúng token của người gọi** đang được ghi cho slot
@@ -4439,7 +4439,7 @@ nó **sai thang** cho đường không-FFmpeg. Đo trước lượt này:
 | `electron/tools/tmcut.controller.cjs:429` | 429-443 | `int16ToPeaks` được **nhân bản trong controller** — một bản chia 32768 đứng cạnh bản core |
 | `electron/tools/tmcut.controller.cjs:402` | 402-406 | guard đọc cache chỉ là `Array.isArray(cached.buckets)`; artifact không có algorithm, không có sampleRate |
 | `electron/tools/tmcut.controller.cjs:420` | 420-427 | FFmpeg chết → ghi **toàn zeros** rồi trả `ok:true`; lần đọc sau coi đó là thành công |
-| [waveform.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L22) | 22 | `max / 32768` — đúng với `-f s16le`, sai với cái mà [decodePcm](file:///D:/Applications/tm-studio/app/utils/tmcut/audioDecode.ts#L52) trả |
+| [waveform.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L22) | 22 | `max / 32768` — đúng với `-f s16le`, sai với cái mà [decodePcm](file:///D:/Applications/tm-studio/app/utils/tmcut/audioDecode.ts#L52) trả |
 
 Phép đo thang, chạy bằng chính hai hàm: một sine biên độ **0.35** (mức tiếng nói thật) dài 8000 mẫu ở
 8 kHz — reducer cũ trả peak lớn nhất **1.068e-5**, reducer mới trả **0.35**. Sai số không phải "nhỏ
@@ -4448,12 +4448,12 @@ mà không sửa luật.
 
 ### 43.2 Luật float — `floatPeakBuckets`
 
-[waveform.mjs:69](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L69). Cùng một phép
+[waveform.mjs:69](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L69). Cùng một phép
 chia bucket với `int16ToPeaks` (tỉ lệ, cửa cuối ngắn được giữ, bucket không mẫu thì 0), khác đúng một
 điều: peak là magnitude trên thang full-scale, không phải `max / 32768`. Ba luật được pin bằng test:
 
 - **fold theo kênh to nhất**, không trung bình, không RMS — cùng luật mà
-  [detection.mjs:280 `loudestPeakSeries`](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L280)
+  [detection.mjs:280 `loudestPeakSeries`](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L280)
   đã áp cho dBFS từ slice E4. Kênh im lặng không được kéo biên độ xuống; test đo bằng cặp
   `[1.0, 0.0] → 1.0`, tức trung bình (0.5) và RMS (0.707) đều sập.
 - **mẫu không phải số bị bỏ**, không bị đọc thành im lặng: một NaN đứng đầu cửa không xoá được click
@@ -4468,8 +4468,8 @@ hàm cho **cùng một dãy** khi cùng một biên độ vật lý — `[0, 163
 
 ### 43.3 Envelope có đóng dấu — và ba trạng thái của "không có waveform"
 
-`buildWaveformPayload` ([waveform.mjs:114](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L114))
-và `readWaveformPayload` ([`:142`](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L142)).
+`buildWaveformPayload` ([waveform.mjs:114](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L114))
+và `readWaveformPayload` ([`:142`](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L142)).
 Một file không nói ai đo thì không thể đọc một cách an toàn sau khi app đổi phiên bản — đó chính xác là
 chỗ dòng thứ hai của bảng §43.1 đã hỏng. Envelope mang sáu trường: `algorithm` (`'peak-v1'`),
 `durationSec`, `sampleRate`, `channelCount`, `bucketCount`, `peaks` (làm tròn ba chữ số thập phân, và
@@ -4492,15 +4492,15 @@ artifact phải xác định (cùng một PCM luôn ra cùng một nội dung), 
 
 ### 43.4 Trục key mới cho artifact — và cái bẫy nếu nới `isByteCacheKey`
 
-[byteCache.mjs:24](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L24) là
+[byteCache.mjs:24](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L24) là
 `/^([0-9a-f]{8})-([a-z][a-z0-9]{0,15})-v([1-9][0-9]*)$/`: fingerprint của bản gốc, kind, phiên bản luật
-— `a1b2c3d4-wave-v1`. API mới: `derivedByteCacheKey` ([`:63`](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L63),
+— `a1b2c3d4-wave-v1`. API mới: `derivedByteCacheKey` ([`:63`](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L63),
 từ chối fingerprint không hợp lệ, kind viết hoa / có gạch dưới / có dấu chéo, version `0`, `1.5`,
 `'v1'`), `parseDerivedByteCacheKey` (`:71`), `isDerivedByteCacheKey` (`:79`), `isStoredByteCacheKey`
 (`:84`, **union**), `byteCacheFingerprint` (`:93`, hoặc chính nó hoặc nguồn của nó).
 
 Cái bẫy, và đó là lý do `isByteCacheKey` giữ nguyên nghĩa:
-[frames.mjs:165](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L165) là
+[frames.mjs:165](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L165) là
 `if (!isByteCacheKey(fingerprint)) return null` — nó hỏi "đây có phải một bản ghi hình không" trước khi
 đặt tên cho một frame. Một key dẫn xuất **chứa** một fingerprint hợp lệ, nên nới predicate đó lên thành
 union sẽ cho phép `a1b2c3d4-wave-v1` đóng vai một revision. Vì vậy predicate nguồn đứng nguyên, union
@@ -4511,7 +4511,7 @@ vẫn chạy.
 
 ### 43.5 Eviction: artifact sống nhờ nguồn của nó
 
-[byteCache.mjs:147](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L147) thêm
+[byteCache.mjs:147](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L147) thêm
 `isLive = key => live.has(key) || live.has(byteCacheFingerprint(key))`. Thư viện kê tên **revision**,
 không kê tên artifact; nếu eviction chỉ hỏi `live.has(entry.key)` thì mỗi lần mở lại dự án là một lần
 xoá sạch waveform vừa tạo. Chiều ngược cũng được pin: artifact của một revision đã rời thư viện bị bỏ
@@ -4528,8 +4528,8 @@ Luật mới viết sau khi hai file test đã chạy đỏ: `pass 0 / fail 2` v
 
 | File | Check | Đo gì |
 | --- | --- | --- |
-| [waveform-float-peaks.test.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L41) | 17 | thang float, fold theo kênh to nhất, NaN, clamp, round-trip int16↔float, envelope, ba trạng thái, `readWaveformPayload` từ chối |
-| [byte-cache-derived-key.test.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L31) | 18 | build/parse key, kind và version bị từ chối, nguồn tinh, eviction theo nguồn, thứ tự LRU hỗn hợp, hành vi cũ còn nguyên |
+| [waveform-float-peaks.test.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L41) | 17 | thang float, fold theo kênh to nhất, NaN, clamp, round-trip int16↔float, envelope, ba trạng thái, `readWaveformPayload` từ chối |
+| [byte-cache-derived-key.test.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L31) | 18 | build/parse key, kind và version bị từ chối, nguồn tinh, eviction theo nguồn, thứ tự LRU hỗn hợp, hành vi cũ còn nguyên |
 | [tmcut_waveform_law.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_waveform_law.spec.ts#L42) | 6 | luật đi qua alias `tmcut-core` và qua barrel app, `index.d.ts` khai đủ tên, sai thang bị đo **từ alias**, `frames.mjs` không được dùng union |
 
 Bốn mutation, mỗi cái một run, tất cả đã revert (md5 đầu và cuối khớp —
@@ -4751,19 +4751,19 @@ thêm một chỗ phải nhớ nhân đúng các thừa số.
 
 ### 45.2 Luật chọn: `audioMixAt` là một SELECTION, không phải công thức thứ hai
 
-[audioMix.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js) (86 dòng) không có một phép nhân nào.
-Nó đọc `compositePlan` rồi **chọn**: [gainOf :33-35](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L33)
+[audioMix.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js) (86 dòng) không có một phép nhân nào.
+Nó đọc `compositePlan` rồi **chọn**: [gainOf :33-35](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L33)
 trả `layer.volume`, và trả `0` khi `layer.audible === false` — tức mute đã được evaluator fold một lần duy nhất.
 
 | Nhánh | Dòng | Luật |
 | --- | --- | --- |
-| footage | [:52-63](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L52) | duyệt slot, bỏ overlay, **chỉ nhận `role: 'paint'`** (`:54`), và chỉ **một** lần (`footageClaimed`). Tiếng của file thuộc hàng dưới cùng đang sơn — cùng hàng mà export concat |
-| audio | [:65-80](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L65) | **mọi** hàng audio đang sống, theo thứ tự track; `hidden` không chặn tiếng, `muted` thì có |
-| trả về | [:82-85](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L82) | `{ at, sources }` — một tick không có gì live trả tập rỗng, không trả `null` |
+| footage | [:52-63](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L52) | duyệt slot, bỏ overlay, **chỉ nhận `role: 'paint'`** (`:54`), và chỉ **một** lần (`footageClaimed`). Tiếng của file thuộc hàng dưới cùng đang sơn — cùng hàng mà export concat |
+| audio | [:65-80](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L65) | **mọi** hàng audio đang sống, theo thứ tự track; `hidden` không chặn tiếng, `muted` thì có |
+| trả về | [:82-85](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L82) | `{ at, sources }` — một tick không có gì live trả tập rỗng, không trả `null` |
 
 `role: 'outgoing'` bị bỏ ở `:54` là một quyết định có tên: trong một crossfade, **clip đến** là thứ đang kêu, không phải clip
 đang rời đi. Check 'a transition window leaves the sound with the layer that paints'
-([audio-mix-plan.test.mjs:96](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L96)) pin cả hai
+([audio-mix-plan.test.mjs:96](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L96)) pin cả hai
 chiều: `deepEqual(roles, ['outgoing/out', 'paint/in'])` (:116) chứng minh plan **thật sự** có hai slot, rồi
 `gainOf(mix,'in') === 0.6` / `gainOf(mix,'out') === null` (:120-121) chứng minh chỉ một slot được chọn. Tổng core cho file
 này: **11** check.
@@ -4840,7 +4840,7 @@ Lượt đo **trước** trong cùng slice (khi timeline có một clip audio `t
 | # | Mutation | Kết quả |
 | --- | --- | --- |
 | M1 | mixer bỏ `element.volume = 1` khi vào graph ([audioMixer.ts:165](file:///D:/Applications/tm-studio/app/utils/tmcut/audioMixer.ts#L165)) | **RED** — `FAILED: … entering the graph gives the element its unity back / 0.4 !== 1` tại [tmcut_audio_mixer.spec.ts:131](file:///D:/Applications/tm-studio/tests/unit/tmcut_audio_mixer.spec.ts#L131), exit **1** |
-| M2 | core bỏ vế `slot.role !== 'paint'` ở [audioMix.mjs:54](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L54) | **SỐNG lần đầu**: `node --test test/audio-mix-plan.test.mjs` in `tests 10 / pass 10 / fail 0`, exit 0 |
+| M2 | core bỏ vế `slot.role !== 'paint'` ở [audioMix.mjs:54](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L54) | **SỐNG lần đầu**: `node --test test/audio-mix-plan.test.mjs` in `tests 10 / pass 10 / fail 0`, exit 0 |
 | M2 (sau khi đóng) | cùng mutation, chạy lại với check mới | **RED** — `AssertionError … actual: null, expected: 0.6`, `tests 11 / pass 10 / fail 1` |
 | M3 | master bị nhân vào **từng layer** chứ không chỉ bus (`entry.gain.gain.value = layer * level` ở [:184](file:///D:/Applications/tm-studio/app/utils/tmcut/audioMixer.ts#L184)) | **RED** — `FAILED: … the layer keeps the number core answered / 0.2 !== 0.5` tại :214, exit **1** |
 | M4 | `applyPlan` không còn silence key ngoài plan (xóa [:200](file:///D:/Applications/tm-studio/app/utils/tmcut/audioMixer.ts#L200)) | **RED** — `FAILED: … the plan is the only set that sounds / 0.4 !== 0` tại :206, exit **1** |
@@ -4850,7 +4850,7 @@ Lượt đo **trước** trong cùng slice (khi timeline có một clip audio `t
 
 Hai mutation sống, và chúng **cùng một hình hài lỗ hổng**: một check hỏi một câu **hợp**.
 M2 sống vì fixture crossfade mô tả transition bằng `transition: { in: { … } }` trong khi evaluator chỉ dựng
-`transition.role` khi clip mang **`transitionIn`** ([transitions.mjs:628-641](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L628)
+`transition.role` khi clip mang **`transitionIn`** ([transitions.mjs:628-641](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L628)
 đọc `clip.transitionIn?.duration`). Một probe trực tiếp trên fixture đó in ra `slots: footage/paint/in` — **không** có slot
 `outgoing` nào, nên vế `role !== 'paint'` chưa từng được hỏi tới; check đó trông như pin crossfade nhưng thật ra chỉ pin "clip
 sau thắng clip trước khi chồng nhau". Check mới (:96) dựng đúng **hình hài đã apply** của crossfade (incoming shift trái một
@@ -4925,22 +4925,22 @@ giữ `clipMediaTimeSecLinear` **bỏ qua curve** có chủ đích, để bed au
 
 | chỗ | dòng | nội dung |
 | --- | --- | --- |
-| [retime.mjs:135](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L135) và :137 | 135 / 137 | `ELEMENT_RATE_MIN = 0.25`, `ELEMENT_RATE_MAX = 16` — cửa sổ element, **một** chỗ khai báo |
-| [retime.mjs:144](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L144) | 144 | `clampedElementRate(rate, shuttle = 1)` — shuttle là **tham số**; clamp ở [:149](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L149) áp lên **tích đã compose**, không áp lên từng thừa số |
-| [retime.mjs:153](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L153) | 153 | `elementRate(clip, atTicks, shuttle)` — luật đầy đủ cho một clip, ramp hay không ramp |
-| [evaluate.mjs:292-293](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L292) | 292-293 | mỗi layer mang thêm `sourceRate: speedAt(clip, localTicks)` và `reverse` — evaluation tự kể tốc độ của nó tại tick đã sơn |
-| [audioMix.mjs:52-58](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L52) | 52-58 | `playoutOf(layer, shuttle)` — bốn field thời gian cho **cả hai** leg |
-| [audioMix.mjs:77](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L77) | 77 | `audioMixAt(evaluation, { shuttle })` — host **giao** đồng hồ của mình cho core thay vì nhân ở đầu kia |
+| [retime.mjs:135](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L135) và :137 | 135 / 137 | `ELEMENT_RATE_MIN = 0.25`, `ELEMENT_RATE_MAX = 16` — cửa sổ element, **một** chỗ khai báo |
+| [retime.mjs:144](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L144) | 144 | `clampedElementRate(rate, shuttle = 1)` — shuttle là **tham số**; clamp ở [:149](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L149) áp lên **tích đã compose**, không áp lên từng thừa số |
+| [retime.mjs:153](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L153) | 153 | `elementRate(clip, atTicks, shuttle)` — luật đầy đủ cho một clip, ramp hay không ramp |
+| [evaluate.mjs:292-293](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L292) | 292-293 | mỗi layer mang thêm `sourceRate: speedAt(clip, localTicks)` và `reverse` — evaluation tự kể tốc độ của nó tại tick đã sơn |
+| [audioMix.mjs:52-58](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L52) | 52-58 | `playoutOf(layer, shuttle)` — bốn field thời gian cho **cả hai** leg |
+| [audioMix.mjs:77](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L77) | 77 | `audioMixAt(evaluation, { shuttle })` — host **giao** đồng hồ của mình cho core thay vì nhân ở đầu kia |
 
 | Field mỗi source | Dòng | Luật |
 | --- | --- | --- |
-| `mediaTicks` | [:55](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L55) | `layer.sourceTicks` khi hữu hạn, ngược lại `null` — **chính** con số mà picture đã được sơn theo, nên trim/speed/ramp đã fold xong |
-| `rate` | [:56](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L56) | `clampedElementRate(layer.sourceRate, shuttle)` — một trần 0.25..16 dùng chung footage và audio |
-| `plays` | [:57](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L57) | `refusal === null` — element có chạy được không |
-| `refusal` | [:53](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L53) và :58 | **tên** của lời từ chối; hiện tại một giá trị duy nhất `'reverse'`, vì `HTMLMediaElement` không phát ngược |
+| `mediaTicks` | [:55](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L55) | `layer.sourceTicks` khi hữu hạn, ngược lại `null` — **chính** con số mà picture đã được sơn theo, nên trim/speed/ramp đã fold xong |
+| `rate` | [:56](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L56) | `clampedElementRate(layer.sourceRate, shuttle)` — một trần 0.25..16 dùng chung footage và audio |
+| `plays` | [:57](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L57) | `refusal === null` — element có chạy được không |
+| `refusal` | [:53](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L53) và :58 | **tên** của lời từ chối; hiện tại một giá trị duy nhất `'reverse'`, vì `HTMLMediaElement` không phát ngược |
 
 `audioMixAt` vẫn là **selection** như §45.2 — không một phép nhân gain nào mới xuất hiện; `playoutOf` chỉ được gọi ở hai
-chỗ push (footage [:84-92](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L84) và audio), nên mọi source
+chỗ push (footage [:84-92](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L84) và audio), nên mọi source
 đều mang đúng bốn field.
 
 ### 46.3 Nối dây: những bản sao nghỉ việc, đo bằng `grep`
@@ -4966,8 +4966,8 @@ không phải **thêm chỗ thứ hai**.
 | [template :1829-1834](file:///D:/Applications/tm-studio/app/components/tmcut/TmcutPreviewPlayer.vue#L1829) | 1829-1834 | `<audio v-for="a in activeAudioSrcs">` không còn binding nào tính thời gian |
 
 Bốn assertion trong `tmcut_time_domain.spec.ts` (check 'media time stays in the seconds domain') nghỉ theo luật bị gỡ — spec
-từ 7 check xuống **6**. Luật đó giờ sống ở nơi nó được quyết: [audio-time-plan.test.mjs:54](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L54)
-/:65 (vị trí + trim) và `evaluate.test.mjs` cho `sourceTicks`; reverse ở [:144](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L144).
+từ 7 check xuống **6**. Luật đó giờ sống ở nơi nó được quyết: [audio-time-plan.test.mjs:54](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L54)
+/:65 (vị trí + trim) và `evaluate.test.mjs` cho `sourceTicks`; reverse ở [:144](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L144).
 Guard mới [tmcut_audio_mixer.spec.ts:296](file:///D:/Applications/tm-studio/tests/unit/tmcut_audio_mixer.spec.ts#L296) đọc **nguồn**
 của hai file app để pin phần retirement: phải có `mediaTicks` và `elementRate`, phải **không** còn ba cái tên cũ và `if (clip.reverse) continue`.
 
@@ -4986,8 +4986,8 @@ Hệ quả đo được, ghi thẳng vào nợ: export vẫn `aSpeed = clip.spee
 
 | File | Số check | Nội dung mới |
 | --- | --- | --- |
-| [audio-time-plan.test.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js) (mới, **185** dòng) | **11** | cùng vị trí với layer (:54), trim (:65), gap (:73), overlap (:85), 2× (:94), ramp (:105), vượt trần cũ (:117), shuttle + clamp (:131), reverse refusal (:144), hai leg cùng số (:156), footage leg cũng trả lời thời gian (:173) |
-| [audio-mix-plan.test.mjs:194](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L194) | 11 (giữ) | `deepEqual` **nguyên khối** một source: thêm `mediaTicks: T(1)`, `rate: 1`, `plays: true`, `refusal: null` — đổi shape là một **lựa chọn** có chữ ký, không phải tai nạn |
+| [audio-time-plan.test.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js) (mới, **185** dòng) | **11** | cùng vị trí với layer (:54), trim (:65), gap (:73), overlap (:85), 2× (:94), ramp (:105), vượt trần cũ (:117), shuttle + clamp (:131), reverse refusal (:144), hai leg cùng số (:156), footage leg cũng trả lời thời gian (:173) |
+| [audio-mix-plan.test.mjs:194](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L194) | 11 (giữ) | `deepEqual` **nguyên khối** một source: thêm `mediaTicks: T(1)`, `rate: 1`, `plays: true`, `refusal: null` — đổi shape là một **lựa chọn** có chữ ký, không phải tai nạn |
 | [tmcut_audio_mixer.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_audio_mixer.spec.ts) | **15 → 16** | check 16 (:296) pin retirement bằng cách đọc nguồn app |
 | [tmcut_speed_clock.spec.ts](file:///D:/Applications/tm-studio/tests/unit/tmcut_speed_clock.spec.ts) | **5** | check 5 viết lại: `elementRate(` = 1 và `speedAt(` = 0 trong composable — composable không tự lấy mẫu curve |
 | `tests/unit/tmcut_time_domain.spec.ts` | **7 → 6** | bỏ check mà luật đã về core |
@@ -5003,10 +5003,10 @@ Mỗi mutation chạy trên `packages/core/test/audio-time-plan.test.mjs` (11 ch
 
 | # | Mutation | Check bị bắt | Kết quả đo |
 | --- | --- | --- | --- |
-| M1 | `playoutOf` bỏ từ chối: `const refusal = null` ([audioMix.mjs:53](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L53)) | `a reverse clip refuses the element and names the reason` | fail **1**/11, exit **1**, `actual: true, expected: false` (`g4-m1.log`) |
-| M2 | bỏ clamp ở [retime.mjs:149](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L149), trả tích thô | `a clip past the old audio ceiling runs at its own speed` + `the host clock multiplies the rate and the clamp binds` | fail **2**/11, exit **1**, `actual: 200, expected: 16` (`g4-m2.log`) |
+| M1 | `playoutOf` bỏ từ chối: `const refusal = null` ([audioMix.mjs:53](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L53)) | `a reverse clip refuses the element and names the reason` | fail **1**/11, exit **1**, `actual: true, expected: false` (`g4-m1.log`) |
+| M2 | bỏ clamp ở [retime.mjs:149](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L149), trả tích thô | `a clip past the old audio ceiling runs at its own speed` + `the host clock multiplies the rate and the clamp binds` | fail **2**/11, exit **1**, `actual: 200, expected: 16` (`g4-m2.log`) |
 | M3 | `mediaTicks` không đọc layer (bỏ `layer.sourceTicks`) | checks :54, :65, :73, :85, :94, :105, :117, :173 — **8** check | fail **8**/11, exit **1**, `actual: null, expected: 12240000` (`g4-m3.log`) |
-| M4 | evaluator ngừng trả `sourceRate` (xóa [evaluate.mjs:292](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L292)) | `a ramp gives the sound the rate the picture is riding` + `the sound and the picture are handed the same rate at the same tick` | fail **2**/11, exit **1**, `actual: 1, expected: 1.5` (`g4-m4.log`) |
+| M4 | evaluator ngừng trả `sourceRate` (xóa [evaluate.mjs:292](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L292)) | `a ramp gives the sound the rate the picture is riding` + `the sound and the picture are handed the same rate at the same tick` | fail **2**/11, exit **1**, `actual: 1, expected: 1.5` (`g4-m4.log`) |
 
 Bốn lần đều **bị bắt**, và M3 là phép thử cho câu hỏi "luật có thật sự nằm trong core không": bỏ một field ở `playoutOf` làm
 sập **tám** check, tức cả trim lẫn overlap lẫn ramp đều đọc cùng một nguồn. Baseline md5 dựng trước khi mutate
@@ -5765,11 +5765,11 @@ Bảng này là câu trả lời của **máy này**, viết ra để lượt sa
 | Câu hỏi | Số đo | Luật nó buộc |
 |---|---|---|
 | `VideoEncoder` có đổi thứ tự output không? | 9 run (avc1.640028 ở 48 frame màu quét, 48 frame đặc, 120 frame nhiễu mỗi điểm ảnh 1080p, `latencyMode` bỏ trống / `realtime` / `quality`; vp09.00.50.08 48 frame; avc 1280x720): `chunks == frames`, `maxReorder 0`, `unknownTimestamps 0`, `maxSentAheadOfOutput 0`, output stamp khớp **từng µs** với stamp đã đưa | giữ luật khớp-theo-timestamp của §51 cho video, nhưng không được **dựa** vào nó: một runtime im lặng hôm nay không hứa gì cho ngày mai, nên stamp lạ vẫn phải là một lời từ chối (§52.2) |
-| `AudioEncoder` có echo timestamp không? | **Không.** Core grid đưa `[0, 21333, 42667, 64000, 85333, 106667]` → nhận `[0, 21333, 42666, 64000, 85333, 106666]`; 44,1 kHz đưa `[0, 23220, 46440]` → nhận `[0, 23219, 46439]`; **8 packet cùng stamp 12345** → `12345, 33678, 55011, 76345`; input **giảm dần** `170664, 149331, …` → `170664, 191997, 213330` | audio không có danh tính theo timestamp: encoder tự sinh clock của nó và chỉ packet **đầu** ăn theo input. `planEncodeChunk` ([exportEncode.mjs:764](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L764)) trả luôn danh tính, seam chỉ vâng |
-| Trần dưới của một luồng AAC | 1 hand (sine **hoặc** silence thuần) → `flush()` **ném** `EncodingError: Flushing error.`; 2 hand → flush sạch và trả đúng 2 output | số **hand** tối thiểu là một luật riêng (`AUDIO_MIN_HAND_PACKETS`, [:662](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L662)), không suy ra được từ số packet |
-| Bao nhiêu output cho N hand? | aac cỡ 1024: 2→2, 3→3, 4→4, 5→5, 8→8, 10→10, 47→47, 50→50; opus cỡ 960: 1→2, 3→4, 5→6, 25→26, 50→51, 100→101 | seam **đưa** `encodeAudioHandCount` ([:681](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L681)) nhưng **ghi** `encodeAudioPacketCount`: hai số khác nhau là chuyện thường của codec, không phải chỗ nào đó sai |
+| `AudioEncoder` có echo timestamp không? | **Không.** Core grid đưa `[0, 21333, 42667, 64000, 85333, 106667]` → nhận `[0, 21333, 42666, 64000, 85333, 106666]`; 44,1 kHz đưa `[0, 23220, 46440]` → nhận `[0, 23219, 46439]`; **8 packet cùng stamp 12345** → `12345, 33678, 55011, 76345`; input **giảm dần** `170664, 149331, …` → `170664, 191997, 213330` | audio không có danh tính theo timestamp: encoder tự sinh clock của nó và chỉ packet **đầu** ăn theo input. `planEncodeChunk` ([exportEncode.mjs:764](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L764)) trả luôn danh tính, seam chỉ vâng |
+| Trần dưới của một luồng AAC | 1 hand (sine **hoặc** silence thuần) → `flush()` **ném** `EncodingError: Flushing error.`; 2 hand → flush sạch và trả đúng 2 output | số **hand** tối thiểu là một luật riêng (`AUDIO_MIN_HAND_PACKETS`, [:662](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L662)), không suy ra được từ số packet |
+| Bao nhiêu output cho N hand? | aac cỡ 1024: 2→2, 3→3, 4→4, 5→5, 8→8, 10→10, 47→47, 50→50; opus cỡ 960: 1→2, 3→4, 5→6, 25→26, 50→51, 100→101 | seam **đưa** `encodeAudioHandCount` ([:681](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L681)) nhưng **ghi** `encodeAudioPacketCount`: hai số khác nhau là chuyện thường của codec, không phải chỗ nào đó sai |
 | Phần đuôi thì sao? | 10 hand nguyên + remainder `R` trong `{1024, 1023, 1008, 960, 896, 512, 256, 128, 64, 1}` → **11 output cả 10 lần**, `lastTs` luôn bằng grid(10) = 213333, `lastDur` 21328..21504; 47 hand nguyên + 896 → 48 output, `lastDur` 21333 trong khi content chỉ 18667 µs | encoder trả một **frame nguyên**, không trả phần còn lại. Packet vượt lịch là packet thừa: audio thì **bỏ**, video thì **từ chối cả run** |
-| Cỡ hand có phải của encoder không? | aac nhận packet 960 sample → 20 in / 19 out, stamp vẫn nằm trên grid 1024; opus nhận packet 480 → 50 in / 26 out | **có**: `AUDIO_PACKET_FRAMES` ([:110](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L110)) đúng là cỡ frame của encoder. Đưa cỡ khác thì encoder tự chia lại và lịch không còn mô tả cái đã đưa |
+| Cỡ hand có phải của encoder không? | aac nhận packet 960 sample → 20 in / 19 out, stamp vẫn nằm trên grid 1024; opus nhận packet 480 → 50 in / 26 out | **có**: `AUDIO_PACKET_FRAMES` ([:110](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L110)) đúng là cỡ frame của encoder. Đưa cỡ khác thì encoder tự chia lại và lịch không còn mô tả cái đã đưa |
 | Khai báo codec | `"aac"` @48 kHz 2 kênh → `supported: false`; `mp4a.40.2` → true; opus true ở 48/44,1/22,05 kHz; mp4a false ở 22 050 và 32 000 Hz, true ở 48 000 Hz mono và 6 kênh | §49.3 đã đúng khi hỏi **cả hai spelling**; với AAC trên máy này chỉ một spelling sống, nên thang preset phải là nơi sinh ra nó |
 | Keyframe và description | `keyCount` == số lần yêu cầu (4/48 frame, 1/120 frame); `decoderConfig` của avc **43 byte**, của vp09 là `description: null` | luật "description chỉ đi packet đầu của mỗi track" (§51) đứng nguyên; nhưng vp09 không description là một đường **chưa từng mở file** (§52.7) |
 | Chặng nào chậm? | 1080p30, 90 frame vẽ bằng canvas: avc @6 039 360 hết 1438 ms tính cả flush = **16,0 ms/frame** (1136 kbps); vp09 1182 ms = 13,1 ms/frame (4318 kbps); 720p avc @5 Mbps 762 ms = 8,5 ms/frame. Vòng gọi `encode()` thuần: 0,3 ms/frame | encode **không** phải chặng chậm nhất: con số 53,9 ms/frame đo cùng ngày thuộc về máy **sinh frame** (`ImageData` từng điểm ảnh), không thuộc encoder. Muốn nhanh thì lo chỗ vẽ trước |
@@ -5799,7 +5799,7 @@ một con số — một video packet ở stamp lạ vẫn phải là `fail`. Te
 **(3) Số hand không phải số packet.** `encodeAudioHandCount` là `max(packets, floor)`; với dự án 2 240 tick
 (= 896 sample, một packet) thì file nhận 1 packet mà encoder đòi 2 hand. Seam hỏi mixer theo **hand**
 ([:675](file:///D:/Applications/tm-studio/app/utils/tmcut/exportEncodeSession.ts#L675)) và
-`planEncodeAudioPadding` ([:707](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L707)) cấp nguyên
+`planEncodeAudioPadding` ([:707](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L707)) cấp nguyên
 một frame 1024 sample im lặng, đặt đúng grid, cho cái hand mà file không nhận. Test:
 `'a one-packet AAC stream is handed a second packet the file never takes'`
 ([spec:529](file:///D:/Applications/tm-studio/tests/unit/tmcut_export_encode_session.spec.ts#L529)).
@@ -5930,14 +5930,14 @@ Trước khi viết consumer, lượt này phải trả lời hai câu mà **kh�
    là chỗ vẽ — và chưa có luật nào mô tả chỗ đó.
 
 Cả hai đều là luật **core**, chạy được không cần browser, nên đều có RED trước. Văn kiện của luật:
-[exportContent.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js) —
-`planEncodeContent` ([:159](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L159)) và
-`planEncodePlate` ([:294](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L294)).
+[exportContent.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js) —
+`planEncodeContent` ([:159](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L159)) và
+`planEncodePlate` ([:294](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L294)).
 
 ### 53.1 Luật thứ nhất: từ chối **có tên**, đừng xuất ra đen
 
 `ENCODE_REFUSAL_REASONS`
-([:63](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L63)) là một từ vựng **đóng và đủ**:
+([:63](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L63)) là một từ vựng **đóng và đủ**:
 `bad-canvas`, `background-image`, `background-transparent`, `empty`, `stacked-rows`, `text`, `effects`, `mask`, `blend`,
 `transition`, `reverse`, `stabilize`, `fit-unsupported`, `rotation` — 14 tên, chứ không phải 13: khi viết chân video của
 consumer (increment H3d-2) mới lộ ra rằng canvas `background.type === 'transparent'` cũng là một thứ file không trả lời được.
@@ -5957,19 +5957,19 @@ preview và FFmpeg-export đang đọc, vì mỗi quy tắc viết lại là m�
 | Clip nào thật sự sống tại tick này? | `evaluateTimeline` / `clipSpan` |
 | Blend mode thật của clip là gì? | `blendModeOf` (đã chuẩn hoá về `normal`) |
 | Mask có hiệu lực không? | `normalizeMask` (hình lạ trả `null`, tức không từ chối oan) |
-| Clip có ra tiếng không? | `isTrackMuted` + `makesSound` ([exportContent.mjs:133](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L133)): volume mặc định 100, nên chỉ volume 0 **kèm** không keyframe volume dương mới là im lặng |
+| Clip có ra tiếng không? | `isTrackMuted` + `makesSound` ([exportContent.mjs:133](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L133)): volume mặc định 100, nên chỉ volume 0 **kèm** không keyframe volume dương mới là im lặng |
 | Fit nào vẽ được? | `resolveClipLayout`; `isPaintableFit` chỉ loại `smart` |
 | Lưới frame là bao nhiêu? | `createFrameScheduler` — **không** tính lại |
 
 Và ba thứ module **cố ý không** sở hữu: kích thước chẵn (đã thuộc `planEncodePresets`/`evenDimensionError`), lưới frame
 (đã thuộc `createFrameScheduler`), chọn row (đã thuộc `selectFileRows`). Test "a single footage row is eligible and
 reports the grid core already counts"
-([:52](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L52)) khẳng định
+([:52](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L52)) khẳng định
 `verdict.totalFrames`/`contentEndTicks` **bằng đúng** `scheduler.frameCount`/`endTicks` của một lời gọi
 `createFrameScheduler` ngay trong test — một mutant tính lại lịch sẽ chết ở đó.
 
 `audio` của request là `ENCODE_AUDIO_REQUEST = { 48_000, 2 }`
-([:56](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L56)) chứ không phải con số đẹp: đó là
+([:56](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L56)) chứ không phải con số đẹp: đó là
 **cặp duy nhất** §52.1 đo là sống cho `mp4a.40.2` trên máy này (22 050 và 32 000 Hz: `supported: false`). Project không
 ra tiếng thì `audio: null`, nên một dự án chữ-trên-nền không phải trả giá hai kênh im lặng.
 
@@ -5984,7 +5984,7 @@ ngay cả khi preview hiện ảnh — đúng loại lỗi im lặng mà §48 v�
 `planEncodePlate` trả `{ source: {sx,sy,sw,sh}, dest: {dx,dy,dw,dh}, alpha }` cho một clip trên canvas. Nó không phải
 hình học tự nghĩ: từng dòng được đọc sang từ hai chỗ đã được chứng minh bằng pixel ở các slice trước —
 `computeFitObjectStyle` (CSS của preview) và `buildFfmpegFitFilters`/`buildFfmpegTransform` (filtergraph của FFmpeg),
-cả hai trong [canvas.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js).
+cả hai trong [canvas.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js).
 
 | Yếu tố | Luật, và chỗ nó được sao |
 |---|---|
@@ -5998,7 +5998,7 @@ cả hai trong [canvas.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cu
 | `smart` | trả `null` — core không có luật focus cho nó, và `planEncodeContent` đã từ chối clip đó rồi |
 | rotation | **không** áp dụng; thay vào đó là lời từ chối `rotation`. Một plate tự xoay nửa vời nguy hiểm hơn một lời từ chối |
 
-19 test trong [export-plate-rect.test.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js)
+19 test trong [export-plate-rect.test.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js)
 khẳng định **chữ nhật thô**, không phải thuộc tính dẫn xuất — ví dụ nguồn 960×1920 trên canvas 1920×1080:
 `fit` cho `dest {690, 0, 540, 1080}`, `fill` cho `source {0, 690, 960, 540}`; `scaleX: 2, scaleY: 0.5` cho
 `dest {dx:-960, dy:270, dw:3840, dh:540}` (phóng **to** rồi offset **âm**, đúng như CSS/FFmpeg làm, không kẹp về canvas).
@@ -6016,7 +6016,7 @@ khẳng định **chữ nhật thô**, không phải thuộc tính dẫn xuất 
    bằng chứng của luật. §52.8 đã phải nhận một lỗi cùng loại ("release-at-flush law written before its RED").
 2. **Fixture sai, không phải assertion sai.** Test "clip audio đứng một mình thì từ chối `empty`" ban đầu đặt clip
    `type: 'audio'` trên **track video** và chờ `['empty']` — nó fail. Nguyên nhân thật: lane là thuộc tính của **track**
-   (`selectFileRows` chỉ đọc `track?.type`, [paintStack.mjs:148](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L148));
+   (`selectFileRows` chỉ đọc `track?.type`, [paintStack.mjs:148](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L148));
    `clip.type` chỉ là nhãn. Đã sửa **fixture** khai báo track `type: 'audio'`, **giữ nguyên** assertion. Sửa chiều
    ngược lại thì test trở thành thứ bảo vệ một mô hình không tồn tại.
 3. **Hai expectation sai của chính test plate, bắt được trước khi code.** `scaleX: 2` ban đầu viết là `dw: 1920` (tưởng
@@ -6095,7 +6095,7 @@ Ba luật mà check giữ, và vì sao chúng không phải trang trí:
    "a plate that will not decode fails instead of painting black"
    ([:434](file:///D:/Applications/tm-studio/tests/unit/tmcut_web_codecs_export.spec.ts#L434)) chặn đúng đường đó. Màu
    bắt đầu của frame cũng lấy từ câu trả lời của core, không phải từ một chuỗi đẹp trong keo
-   (`encodeCanvasFill` ở [exportContent.mjs:424](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js#L424);
+   (`encodeCanvasFill` ở [exportContent.mjs:424](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js#L424);
    nhánh `null` rời với `surface.dispose()` ở [webCodecsExport.ts:219](file:///D:/Applications/tm-studio/app/utils/tmcut/webCodecsExport.ts#L219)).
 3. **Mixer, abort và progress đi qua nguyên trạng.** File **có tiếng mà không có mixer** thì từ chối
    ([webCodecsExport.ts:213](file:///D:/Applications/tm-studio/app/utils/tmcut/webCodecsExport.ts#L213)) chứ **không** tự viết im lặng vào
@@ -6331,7 +6331,7 @@ Hai luật nhỏ đi kèm, mỗi cái đều có check riêng:
    đổi một sample nào và tiết kiệm cả một lần đọc file.
 
 Một **luật core mới** xuất hiện trong lượt này: `clipSourceRange(clip)` trong
-[evaluate.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js), cùng file đã có `sourceRangeOf` dạng
+[evaluate.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js), cùng file đã có `sourceRangeOf` dạng
 private. Nó đọc cả hai hình dạng đã lưu — DSL v3 `source.{in,out}` và flat `in`/`out` của store — vì leg cần biết "file
 này bị dùng tới giây nào". Một bản copy thứ hai của luật hai-hình-dạng đó trong `app/` chính là kiểu trôi mà cả chương
 trình này đang đóng; nên nó được export (kèm khai báo trong `index.d.ts`, tay-maintained) thay vì viết lại. Ba test core
@@ -6392,7 +6392,7 @@ mở được. Nguyên nhân: `surfacesAt` và `exportMixLeg` join clip theo ind
 `evaluate`, `scheduler`, `paintStack`, `exportContent` — bốn bản copy private), nên `planEncodeContent` nói eligible, còn
 app join ra rỗng. Đó đúng là loại file "mở lên được là bằng chứng có nội dung" mà §52 dành cả chương để bác.
 
-**Luật core mới: `projectTracks(input)`** trong [evaluate.mjs](file:///D:/Applications/tm-studio/node_modules/tm-cut-core/index.js),
+**Luật core mới: `projectTracks(input)`** trong [evaluate.mjs](file:///D:/Applications/tm-studio/node_modules/@tuanmjnh/tm-cut-core/index.js),
 export kèm khai báo `index.d.ts` (generic, vì nó là pass-through: core không nhìn vào trong một hàng, và hàng của store
 không phải `TmcutTrack` của core). Bốn bản copy private được thay bằng nó — `evaluateTimeline` tự dùng nó luôn, nên
 "cùng một luật" là sự thật của code chứ không chỉ của comment. Bốn test core mới; suite **953 → 957**.

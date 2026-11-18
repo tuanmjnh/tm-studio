@@ -94,7 +94,7 @@ function sources(dir: string, out: string[] = []): string[] {
     if (entry.isDirectory()) {
       // The linked engine is the one node_modules subtree worth walking: its
       // sources carry the citations this guard exists to verify.
-      if (!SKIP_DIRS.has(entry.name) || slashes(rel) === 'node_modules/tm-cut-core') sources(rel, out)
+      if (!SKIP_DIRS.has(entry.name) || slashes(rel) === 'node_modules/@tuanmjnh/tm-cut-core') sources(rel, out)
     } else if (SOURCE_EXT.has(extname(entry.name)) && rel !== SELF) {
       out.push(rel)
     }

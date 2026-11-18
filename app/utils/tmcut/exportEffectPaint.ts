@@ -24,7 +24,7 @@
  * Pure and store-free: the export glue runs in a worker on some hosts, and a
  * spec has to hold this list against core's without a canvas.
  */
-import { exportBakesEffectInstance } from 'tm-cut-core'
+import { exportBakesEffectInstance } from '@tuanmjnh/tm-cut-core'
 import { effectCssParts } from './fxPreview'
 
 /**

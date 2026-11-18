@@ -35,7 +35,7 @@ import {
   planEncodeContent,
   resolveClipLayout,
   transitionWindows
-} from 'tm-cut-core'
+} from '@tuanmjnh/tm-cut-core'
 import type { TmcutProject } from '../../app/composables/useTmcutProject'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')

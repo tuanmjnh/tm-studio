@@ -13,7 +13,7 @@
 // be tested without a video decoder.
 
 import { ALL_FORMATS, BlobSource, CanvasSink, Input, UrlSource } from 'mediabunny'
-import { TMCUT_SCENE_GRID_CELLS, lumaCells } from 'tm-cut-core'
+import { TMCUT_SCENE_GRID_CELLS, lumaCells } from '@tuanmjnh/tm-cut-core'
 
 /** How wide a canvas a scene scan draws: the grid it fills is 8x8 numbers. */
 export const TMCUT_SCENE_PIXEL_WIDTH = 64

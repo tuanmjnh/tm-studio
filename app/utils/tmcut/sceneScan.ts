@@ -19,7 +19,7 @@
 // Every decision around it stays testable, and the ten lines that need a browser
 // stay in `frameDecode.ts`.
 
-import { cutsToShots, sceneCuts, sceneSampleTimes, secToTicks, ticksToSec } from 'tm-cut-core'
+import { cutsToShots, sceneCuts, sceneSampleTimes, secToTicks, ticksToSec } from '@tuanmjnh/tm-cut-core'
 
 export interface TmcutSceneScanAsk {
   /** Source range to look at, seconds — the clip's own in/out, not the timeline. */

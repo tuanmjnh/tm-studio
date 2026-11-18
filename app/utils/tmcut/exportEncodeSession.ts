@@ -42,8 +42,8 @@ import {
   planEncodeQueue,
   planEncodeSample,
   rationalToFloat
-} from 'tm-cut-core'
-import type { CoreEncodePreset } from 'tm-cut-core'
+} from '@tuanmjnh/tm-cut-core'
+import type { CoreEncodePreset } from '@tuanmjnh/tm-cut-core'
 import {
   BufferTarget,
   EncodedAudioPacketSource,

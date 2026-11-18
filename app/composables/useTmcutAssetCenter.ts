@@ -28,8 +28,8 @@ import {
   storageReport,
   takedownAudit,
   transitionInstall
-} from 'tm-cut-core'
-import type { AssetCenterCatalogEntry, AssetCenterInstallState, TakedownNotice, TakedownRegistry } from 'tm-cut-core'
+} from '@tuanmjnh/tm-cut-core'
+import type { AssetCenterCatalogEntry, AssetCenterInstallState, TakedownNotice, TakedownRegistry } from '@tuanmjnh/tm-cut-core'
 
 type IpcAssetCenter = NonNullable<NonNullable<ReturnType<typeof tmcutHostIpc>>['assetCenter']>
 

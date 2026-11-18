@@ -21,7 +21,7 @@
 // furthest second any clip uses of it, and the law's own out-of-run tap answers
 // silence past the end.
 
-import { TICKS_PER_SECOND, audioMixAt, clipSourceRange, evaluateTimeline, planExportMixPacket, projectTracks } from 'tm-cut-core'
+import { TICKS_PER_SECOND, audioMixAt, clipSourceRange, evaluateTimeline, planExportMixPacket, projectTracks } from '@tuanmjnh/tm-cut-core'
 import type { TmcutTrack } from '~/composables/useTmcutProject'
 import { decodePcm, hasAudioDecoder } from './audioDecode'
 

@@ -17,10 +17,10 @@ files:
   # verbatim, so an uncalled argv builder would still be FFmpeg in the release.
   - shared/**/*
   # The main process reads the core from the package: video-generation/controller.mjs
-  # imports the adapter registries from tm-cut-core, the same artifact the app and
+  # imports the adapter registries from @tuanmjnh/tm-cut-core, the same artifact the app and
   # the tests resolve through the package exports — one engine, one copy (G13).
   # The tarball is the contents of dist, so this path is flat: there is no src/.
-  - node_modules/tm-cut-core/**/*
+  - node_modules/@tuanmjnh/tm-cut-core/**/*
   - .output/**/*
   - public/icon.ico
   - public/icon.png

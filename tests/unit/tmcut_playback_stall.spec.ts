@@ -22,7 +22,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { TMCUT_PLAYBACK_STALL_LIMIT_MS, planPlaybackFollow } from 'tm-cut-core'
+import { TMCUT_PLAYBACK_STALL_LIMIT_MS, planPlaybackFollow } from '@tuanmjnh/tm-cut-core'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8')

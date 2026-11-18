@@ -33,7 +33,7 @@ const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8')
 
 /** Shipped code only. Specs must be allowed to name the field they forbid. */
 // The published package is a bundle, so the engine's code lives in one file.
-const CODE_DIRS = ['app', 'server', 'shared', 'electron', 'node_modules/tm-cut-core/index.js']
+const CODE_DIRS = ['app', 'server', 'shared', 'electron', 'node_modules/@tuanmjnh/tm-cut-core/index.js']
 const CODE_EXT = /\.(ts|mts|cts|js|mjs|cjs|vue)$/
 
 function walk(dir: string, out: string[] = []): string[] {
@@ -114,7 +114,7 @@ describe('project schema v3 (app file)', () => {
 
 describe('project schema v3 (core DSL)', () => {
   it('creates a v3 project whose timeline validates', async () => {
-    const core = await import('tm-cut-core')
+    const core = await import('@tuanmjnh/tm-cut-core')
     const project = core.createProject('schema lock')
     assert.equal(project.version, 3)
     assert.deepEqual(Object.keys(project).sort(), ['canvas', 'project', 'timeline', 'version'])
@@ -125,7 +125,7 @@ describe('project schema v3 (core DSL)', () => {
   })
 
   it('rejects a timeline whose DSL version is not 3', async () => {
-    const core = await import('tm-cut-core')
+    const core = await import('@tuanmjnh/tm-cut-core')
     const errors = core.validateTimeline({ version: 1, tracks: [], markers: [] })
     assert.deepEqual(errors, ['unsupported timeline version: 1'])
   })
@@ -155,6 +155,6 @@ describe('the plan-only sequences shape', () => {
       }
     }
     assert.equal(readers.length, 1, 'exactly one reader, and it is the core')
-    assert.ok(readers[0]!.startsWith('node_modules/tm-cut-core/index.js:'), 'the app file container label must stay unread')
+    assert.ok(readers[0]!.startsWith('node_modules/@tuanmjnh/tm-cut-core/index.js:'), 'the app file container label must stay unread')
   })
 })

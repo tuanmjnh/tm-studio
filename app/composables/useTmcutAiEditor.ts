@@ -12,8 +12,8 @@ import {
   applyEditPlan,
   parseEditPlanReply,
   summarizeEditPlan
-} from 'tm-cut-core'
-import type { AiEditPlan, AiEditPlanTrace } from 'tm-cut-core'
+} from '@tuanmjnh/tm-cut-core'
+import type { AiEditPlan, AiEditPlanTrace } from '@tuanmjnh/tm-cut-core'
 
 // =============================================================================
 //  AI Editor orchestration (roadmap v3 PART C / §13).

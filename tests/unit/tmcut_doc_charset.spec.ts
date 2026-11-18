@@ -49,7 +49,7 @@ function textFiles(dir: string, out: string[] = []): string[] {
   return out
 }
 
-const SCOPES = ['docs', 'node_modules/tm-cut-core', 'app/composables', 'app/utils/tmcut', 'tests/unit', 'i18n/locales']
+const SCOPES = ['docs', 'node_modules/@tuanmjnh/tm-cut-core', 'app/composables', 'app/utils/tmcut', 'tests/unit', 'i18n/locales']
 const files = SCOPES.flatMap(scope => textFiles(scope))
 
 function foreignLines(file: string): string[] {

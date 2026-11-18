@@ -25,7 +25,7 @@ import {
   lintHtmlVideo,
   replaceHtmlTokens,
   validateHtmlVideoSpec
-} from 'tm-cut-core'
+} from '@tuanmjnh/tm-cut-core'
 
 function fill(starter: (typeof HTML_VIDEO_STARTERS)[number]): string {
   const values: Record<string, string> = {}

@@ -104,7 +104,7 @@ describe('the core keeps Node-only imports out of the client graph', () => {
     ]
     // The published package is a bundle, so one file is the whole engine. Scanning
     // it is strictly stronger than scanning 62 sources one by one.
-    const rel = 'node_modules/tm-cut-core/index.js'
+    const rel = 'node_modules/@tuanmjnh/tm-cut-core/index.js'
     const src = stripComments(read(rel))
     for (const pattern of patterns) {
       for (const match of src.matchAll(pattern)) {
@@ -116,7 +116,7 @@ describe('the core keeps Node-only imports out of the client graph', () => {
   })
 
   it('the probe still finds the real filesystem when one exists', async () => {
-    const { runHealthChecks } = await import('tm-cut-core') as {
+    const { runHealthChecks } = await import('@tuanmjnh/tm-cut-core') as {
       runHealthChecks: () => Promise<{ checks: Array<{ name: string, status: string, detail: string }> }>
     }
     const { checks } = await runHealthChecks()
@@ -126,7 +126,7 @@ describe('the core keeps Node-only imports out of the client graph', () => {
   })
 
   it('that probe tolerates the browser build providing no filesystem', async () => {
-    const { describeDiskAccess } = await import('tm-cut-core') as {
+    const { describeDiskAccess } = await import('@tuanmjnh/tm-cut-core') as {
       describeDiskAccess: (fsModule: unknown) => Promise<{ status: string, detail: string }>
     }
     // This is what the bundler hands the renderer: an object with no `stat`.

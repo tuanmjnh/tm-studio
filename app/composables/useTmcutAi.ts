@@ -1,4 +1,5 @@
 import { tmcutHostBridge } from '~/utils/tmcut/hostBridge'
+import { providerDisplayName } from '@tuanmjnh/tm-ai-client'
 import type {
   AiChatMessage,
   AiCompleteInput,
@@ -305,7 +306,7 @@ async function relayStatus(): Promise<AiGatewayStatus | null> {
   const model = relayModelFor(conn, { messages: [] }, null)
   return {
     provider: conn.provider,
-    providerLabel: conn.name || conn.provider,
+    providerLabel: conn.name || providerDisplayName(conn.provider),
     baseUrl: '',
     model,
     hasKey: conn.hasKey,
@@ -512,7 +513,7 @@ export function useTmcutAi() {
           return {
             ...chatSurface,
             provider: slot.provider,
-            providerLabel: conn?.name || slot.provider,
+            providerLabel: conn?.name || providerDisplayName(slot.provider),
             model: slot.model,
             overridden: true,
             customized: true,

@@ -44,7 +44,7 @@ import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { TICKS_PER_SECOND, audioMixAt, evaluateTimeline, planExportMixPacket } from 'tm-cut-core'
+import { TICKS_PER_SECOND, audioMixAt, evaluateTimeline, planExportMixPacket } from '@tuanmjnh/tm-cut-core'
 import { createExportMixLeg } from '../../app/utils/tmcut/exportMixLeg'
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..')

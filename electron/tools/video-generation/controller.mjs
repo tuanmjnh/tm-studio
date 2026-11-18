@@ -15,15 +15,15 @@ import {
   registerGenerationAdapter,
   getGenerationAdapter,
   listGenerationAdapters
-} from '../../../node_modules/tm-cut-core/generationAdapter.js'
+} from '../../../node_modules/@tuanmjnh/tm-cut-core/generationAdapter.js'
 
-import { registerProviderAdapter } from '../../../node_modules/tm-cut-core/providerAdapter.js'
+import { registerProviderAdapter } from '../../../node_modules/@tuanmjnh/tm-cut-core/providerAdapter.js'
 
 const require = createRequire(import.meta.url)
 const { app, ipcMain } = require('electron')
 
 // Adapter registry lives in the core's generationAdapter + providerAdapter
-// modules, read from tm-cut-core's src — the same artifact the `tm-cut-core`
+// modules, read from @tuanmjnh/tm-cut-core's src — the same artifact the `@tuanmjnh/tm-cut-core`
 // alias gives the app and the tests — and not from the package's dist, a
 // gitignored build artifact that goes stale whenever src changes without a
 // rebuild (G13). Both modules import nothing further, and electron-builder.yml

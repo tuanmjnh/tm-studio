@@ -36,7 +36,7 @@ import {
   textBoxPadding,
   textShadowOffset,
   textStrokeWidth
-} from 'tm-cut-core'
+} from '@tuanmjnh/tm-cut-core'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const PREVIEW_HOST = 'app/components/tmcut/TmcutPreviewPlayer.vue'
@@ -57,13 +57,13 @@ describe('the text style law has one home', () => {
     }
   })
 
-  it('the preview takes the numbers from tm-cut-core', () => {
+  it('the preview takes the numbers from @tuanmjnh/tm-cut-core', () => {
     const source = read(PREVIEW_HOST)
-    const fromCore = /import\s*\{([^}]*)\}\s*from\s*'tm-cut-core'/s.exec(source)
-    assert.ok(fromCore, `${PREVIEW_HOST} has no tmcut-core import to read the law from`)
+    const fromCore = /import\s*\{([^}]*)\}\s*from\s*'@tuanmjnh\/tm-cut-core'/s.exec(source)
+    assert.ok(fromCore, `${PREVIEW_HOST} has no @tuanmjnh/tm-cut-core import to read the law from`)
     const names = fromCore![1]!.split(',').map(part => part.trim()).filter(Boolean)
     for (const needed of ['textBoxPadding', 'textStrokeWidth', 'textShadowOffset', 'DEFAULT_TEXT_FONT_SIZE']) {
-      assert.ok(names.includes(needed), `${PREVIEW_HOST} does not import ${needed} from tm-cut-core`)
+      assert.ok(names.includes(needed), `${PREVIEW_HOST} does not import ${needed} from @tuanmjnh/tm-cut-core`)
     }
   })
 

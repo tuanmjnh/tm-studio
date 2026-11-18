@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
-import { TICKS_PER_SECOND, audioMixAt, createFramePace, createFrameScheduler, elementRate, planPlaybackFollow, renderAt, ticksToSec } from 'tm-cut-core'
-import type { CoreFramePace, TmcutClock } from 'tm-cut-core'
+import { TICKS_PER_SECOND, audioMixAt, createFramePace, createFrameScheduler, elementRate, planPlaybackFollow, renderAt, ticksToSec } from '@tuanmjnh/tm-cut-core'
+import type { CoreFramePace, TmcutClock } from '@tuanmjnh/tm-cut-core'
 import { useTmcutProject } from './useTmcutProject'
 import type { TmcutTimelineItem } from './useTmcutProject'
 import { surfacesAt } from '~/utils/tmcut/paintSurfaces'

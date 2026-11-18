@@ -9,7 +9,7 @@ import { useTmcutFrames } from '~/composables/useTmcutFrames'
 import { useTmcutRelink } from '~/composables/useTmcutRelink'
 import { assetStateView, isMediaOffline } from '~/utils/tmcut/assetImport'
 import { useI18n } from 'vue-i18n'
-import { propsWithKeyframes, keyframeTimes, secToTicks, ticksToSec, KNOWN_TRANSITIONS, TICKS_PER_SECOND } from 'tm-cut-core'
+import { propsWithKeyframes, keyframeTimes, secToTicks, ticksToSec, KNOWN_TRANSITIONS, TICKS_PER_SECOND } from '@tuanmjnh/tm-cut-core'
 import { clipDurationSec, clipStartSec, clipEndSec, clipEndTicks } from '~/utils/tmcut/clipTime'
 import { useTmcutContextMenu } from '~/composables/useTmcutContextMenu'
 

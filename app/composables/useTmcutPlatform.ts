@@ -31,7 +31,7 @@
  * The adapter is safe to hold in a component: the desktop/web split cannot
  * change after load, because it is the presence of the preload bridge.
  */
-import { createPlatformInfo, HTML_VIDEO_LIMITS, classifyAssetKind, mediaFileName, rationalToFloat } from 'tm-cut-core'
+import { createPlatformInfo, HTML_VIDEO_LIMITS, classifyAssetKind, mediaFileName, rationalToFloat } from '@tuanmjnh/tm-cut-core'
 import type {
   FrameRate,
   TmcutMediaInfo,
@@ -39,7 +39,7 @@ import type {
   TmcutPlatformInfo,
   TmcutProbeHints,
   TmcutProbeSource
-} from 'tm-cut-core'
+} from '@tuanmjnh/tm-cut-core'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
 import { tmcutHostIpc } from '~/utils/tmcut/hostBridge'
 

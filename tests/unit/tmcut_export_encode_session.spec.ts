@@ -33,7 +33,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { AUDIO_PACKET_FRAMES, encodeAudioHandCount, planEncodeAudioSample, planEncodeSample } from 'tm-cut-core'
+import { AUDIO_PACKET_FRAMES, encodeAudioHandCount, planEncodeAudioSample, planEncodeSample } from '@tuanmjnh/tm-cut-core'
 import { createEncodeSession, webEncodePorts } from '../../app/utils/tmcut/exportEncodeSession'
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..')

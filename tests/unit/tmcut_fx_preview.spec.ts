@@ -22,7 +22,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { EFFECT_REGISTRY, KNOWN_TRANSITIONS, XFADE_COMB_PERIOD, XFADE_PREVIEW, exportBakesEffect, exportBakesEffectInstance, fxCapabilities, lutGrade } from 'tm-cut-core'
+import { EFFECT_REGISTRY, KNOWN_TRANSITIONS, XFADE_COMB_PERIOD, XFADE_PREVIEW, exportBakesEffect, exportBakesEffectInstance, fxCapabilities, lutGrade } from '@tuanmjnh/tm-cut-core'
 import {
   resolveFxPreview,
   effectAdapterKeys,

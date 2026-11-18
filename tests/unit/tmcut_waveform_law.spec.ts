@@ -34,7 +34,7 @@ async function check(label: string, fn: () => void | Promise<void>) {
   console.log(`   ${label} PASSED`)
 }
 
-const core = await import('tm-cut-core')
+const core = await import('@tuanmjnh/tm-cut-core')
 const { floatPeakBuckets, buildWaveformPayload, readWaveformPayload, TMCUT_WAVEFORM_ALGORITHM } = core
 
 async function main() {
@@ -50,13 +50,13 @@ async function main() {
     for (const name of ['floatPeakBuckets', 'buildWaveformPayload', 'readWaveformPayload']) {
       assert.ok(source.includes(name), `${name} is not re-exported to the app`)
     }
-    assert.match(source, /from 'tm-cut-core'/, 'the app module stopped delegating to core')
+    assert.match(source, /from '@tuanmjnh\/tm-cut-core'/, 'the app module stopped delegating to core')
   })
 
   await check('core declares the waveform law, not only exports it', () => {
     // The app types tmcut-core from hand-written declarations, so a runtime
     // export nobody declared is invisible to the caller that must use it.
-    const dts = read('node_modules/tm-cut-core/index.d.ts')
+    const dts = read('node_modules/@tuanmjnh/tm-cut-core/index.d.ts')
     for (const name of [
       'TMCUT_WAVEFORM_ALGORITHM', 'TMCUT_WAVEFORM_PEAK_PRECISION', 'floatPeakBuckets',
       'buildWaveformPayload', 'readWaveformPayload'

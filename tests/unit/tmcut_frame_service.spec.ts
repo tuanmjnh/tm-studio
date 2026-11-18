@@ -59,13 +59,13 @@ async function main() {
   console.log('=== [TMCut frame service] Starting ===\n')
   const g = globalThis as Record<string, unknown>
   if (!g.window) g.window = {}
-  const core = await import('tm-cut-core')
+  const core = await import('@tuanmjnh/tm-cut-core')
 
   await check('core owns the decoder pool bound, not the app', () => {
     assert.equal(typeof core.TMCUT_FRAME_MAX_CONCURRENT, 'number', 'the pool size answers from core')
     assert.ok(Number.isInteger(core.TMCUT_FRAME_MAX_CONCURRENT), 'a pool size is a whole number of decoders')
     assert.ok(core.TMCUT_FRAME_MAX_CONCURRENT > 0, 'at least one decode must be allowed to run')
-    const dts = read('node_modules/tm-cut-core/index.d.ts')
+    const dts = read('node_modules/@tuanmjnh/tm-cut-core/index.d.ts')
     assert.ok(dts.includes('TMCUT_FRAME_MAX_CONCURRENT'), 'the app must be able to see the bound')
   })
 
@@ -434,7 +434,7 @@ async function main() {
 
   await check('the service asks core for every frame decision', () => {
     const source = read('app/utils/tmcut/frameStore.ts')
-    assert.match(source, /from 'tm-cut-core'/, 'identity, clamping, slots and eviction come from core')
+    assert.match(source, /from '@tuanmjnh\/tm-cut-core'/, 'identity, clamping, slots and eviction come from core')
     for (const name of ['frameRequestKey', 'frameTimeWithinMedia', 'createFrameSlotLedger',
       'planFrameCacheEviction', 'TMCUT_FRAME_MAX_CONCURRENT', 'TMCUT_FRAME_CACHE_MAX_ENTRIES']) {
       assert.ok(source.includes(name), `${name} is used, not re-implemented`)

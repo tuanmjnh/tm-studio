@@ -27,7 +27,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { TICKS, freshStore } from './helpers/tmcut_store_env'
-import { createFrameScheduler } from 'tm-cut-core'
+import { createFrameScheduler } from '@tuanmjnh/tm-cut-core'
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..')
 const read = (rel: string) => readFileSync(join(root, rel), 'utf8')

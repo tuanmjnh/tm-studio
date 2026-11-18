@@ -24,7 +24,7 @@ import type {
   VideoBatchItem
 } from '~/types/videoFactory'
 import type { VideoTemplate } from '~/types/videoTemplate'
-import { routeStoryboard } from 'tm-cut-core'
+import { routeStoryboard } from '@tuanmjnh/tm-cut-core'
 import {
   buildStoryboard,
   buildTemplateInputs,

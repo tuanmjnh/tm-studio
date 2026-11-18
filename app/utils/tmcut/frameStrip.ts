@@ -18,7 +18,7 @@
 // keyed by (revision, instant, width), and a second cache of arrays would only
 // add a way to hand back a revoked URL.
 
-import { filmstripTimes, secToTicks, ticksToSec } from 'tm-cut-core'
+import { filmstripTimes, secToTicks, ticksToSec } from '@tuanmjnh/tm-cut-core'
 import type { TmcutFrameService } from './frameStore'
 
 /** How many stills a timeline clip shows when nobody says. */

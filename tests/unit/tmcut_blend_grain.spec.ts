@@ -33,7 +33,7 @@ import { moduleSource } from './helpers/core-module'
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { BLEND_MODES, EFFECT_REGISTRY, TICKS_PER_SECOND, blendModeOf, evaluateTimeline, fxCapabilities } from 'tm-cut-core'
+import { BLEND_MODES, EFFECT_REGISTRY, TICKS_PER_SECOND, blendModeOf, evaluateTimeline, fxCapabilities } from '@tuanmjnh/tm-cut-core'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8')

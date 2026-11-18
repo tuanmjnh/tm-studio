@@ -17,7 +17,7 @@ import { moduleSource } from './helpers/core-module'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { TICKS_PER_SECOND, renderAt, ticksToSec } from 'tm-cut-core'
+import { TICKS_PER_SECOND, renderAt, ticksToSec } from '@tuanmjnh/tm-cut-core'
 import { freshStore, TICKS } from './helpers/tmcut_store_env'
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..')
@@ -212,7 +212,7 @@ async function main() {
   // core, and its seek keeps no trace of the rAF delta it replaced.
   await check('the transport asks core for frames instead of counting time', async () => {
     const playback = read('app/composables/useTmcutPlayback.ts')
-    assert.match(playback, /import \{[^}]*createFrameScheduler[^}]*\} from 'tm-cut-core'/)
+    assert.match(playback, /import \{[^}]*createFrameScheduler[^}]*\} from '@tuanmjnh\/tm-cut-core'/)
     const seekBody = bodyOf(playback, 'seekToFrame')
     assert.ok(seekBody, 'the composable no longer defines seekToFrame')
     for (const forbidden of ['timestamp', 'delta', 'lastTimestamp', 'Date.now']) {

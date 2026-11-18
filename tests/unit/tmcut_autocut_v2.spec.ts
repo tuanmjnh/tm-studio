@@ -5,7 +5,7 @@ import {
   analyzeTranscriptSegment,
   scoreSegments,
   DEFAULT_FILLER_WORDS
-} from 'tm-cut-core'
+} from '@tuanmjnh/tm-cut-core'
 
 describe('TMCut AutoCut v2 — Transcript & Vocabulary Analysis', () => {
   it('detects filler words and measures density across languages', () => {

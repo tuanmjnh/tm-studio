@@ -8,8 +8,8 @@ import {
   applyEditPlan,
   ticksTracksToV3,
   syncTicksResult
-} from 'tm-cut-core'
-import type { AiEditPlan } from 'tm-cut-core'
+} from '@tuanmjnh/tm-cut-core'
+import type { AiEditPlan } from '@tuanmjnh/tm-cut-core'
 import { useTmcutProject } from './useTmcutProject'
 import { useTmcutMedia } from './useTmcutMedia'
 import { useTmcutAssetCenter } from './useTmcutAssetCenter'

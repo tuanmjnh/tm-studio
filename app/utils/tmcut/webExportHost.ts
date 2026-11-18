@@ -20,8 +20,8 @@
 // obey both. `begin` clears every frame — a painter that does not is the smear
 // §53.5 pinned in core.
 
-import { planEncodeContent, projectTracks } from 'tm-cut-core'
-import type { TmcutCanvas, TmcutProject } from 'tm-cut-core'
+import { planEncodeContent, projectTracks } from '@tuanmjnh/tm-cut-core'
+import type { TmcutCanvas, TmcutProject } from '@tuanmjnh/tm-cut-core'
 import type { TmcutTrack } from '~/composables/useTmcutProject'
 import { createWebCodecsExport } from './webCodecsExport'
 import type { TmcutWebCodecsExportResult } from './webCodecsExport'

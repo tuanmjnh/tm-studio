@@ -25,7 +25,7 @@
  *  * A read is slower than a scrub: a URL made for a revision that already left the
  *    screen is named by nothing and revoked by nobody.
  */
-import { planBlobUrlLifecycle, planPlaybackByteSource } from 'tm-cut-core'
+import { planBlobUrlLifecycle, planPlaybackByteSource } from '@tuanmjnh/tm-cut-core'
 import { cachedByteKeys, readCachedBytes } from './byteStore'
 
 export interface TmcutPlaybackBytesDeps {

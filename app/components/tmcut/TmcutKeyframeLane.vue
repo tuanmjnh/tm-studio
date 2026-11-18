@@ -32,7 +32,7 @@ import {
   TICKS_PER_SECOND,
   secToTicks,
   KEYFRAME_EASINGS
-} from 'tm-cut-core'
+} from '@tuanmjnh/tm-cut-core'
 import type { TmcutTimelineItem } from '~/composables/useTmcutProject'
 import { clipDurationSec, clipStartSec } from '~/utils/tmcut/clipTime'
 

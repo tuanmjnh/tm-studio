@@ -11,4 +11,4 @@ export {
   int16ToPeaks,
   readWaveformPayload,
   waveformCacheKey
-} from 'tm-cut-core'
+} from '@tuanmjnh/tm-cut-core'

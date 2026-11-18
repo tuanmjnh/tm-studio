@@ -7,7 +7,7 @@
 //  Run: pnpm test:fxlibrary (or through run-all).
 // =============================================================================
 import assert from 'node:assert/strict'
-import { EFFECT_REGISTRY, KNOWN_TRANSITIONS, TICKS_PER_SECOND } from 'tm-cut-core'
+import { EFFECT_REGISTRY, KNOWN_TRANSITIONS, TICKS_PER_SECOND } from '@tuanmjnh/tm-cut-core'
 import {
   effectDefaultParams,
   toggleEffectOnClip,

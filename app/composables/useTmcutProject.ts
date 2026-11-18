@@ -32,8 +32,8 @@ import {
   canApplyTransition,
   applyTransition,
   clearTransition
-} from 'tm-cut-core'
-import type { CoreBlendMode, CoreClipboard, TmcutTimeline, TmcutTextAnimationType, TmcutStabilizeLevel, TmcutStabilizeStatus } from 'tm-cut-core'
+} from '@tuanmjnh/tm-cut-core'
+import type { CoreBlendMode, CoreClipboard, TmcutTimeline, TmcutTextAnimationType, TmcutStabilizeLevel, TmcutStabilizeStatus } from '@tuanmjnh/tm-cut-core'
 
 // Type definitions for TMCut project
 /** R116: FFmpeg `blend` mode for compositing a clip over the track

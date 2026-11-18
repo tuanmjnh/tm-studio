@@ -18,7 +18,7 @@ import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { EFFECT_REGISTRY, clampEffectParam, fxCapabilities } from 'tm-cut-core'
+import { EFFECT_REGISTRY, clampEffectParam, fxCapabilities } from '@tuanmjnh/tm-cut-core'
 import {
   effectAdapterKeys,
   effectCss,

@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const ROOT = join(import.meta.dirname, '..', '..', '..')
-const BUNDLE = join(ROOT, 'node_modules', 'tm-cut-core', 'index.js')
+const BUNDLE = join(ROOT, 'node_modules', '@tuanmjnh', 'tm-cut-core', 'index.js')
 
 let cached = null
 function bundle() {
@@ -29,5 +29,5 @@ export function moduleSource(name) {
 
 /** The package's type declarations. dist/index.d.ts is what a consumer sees. */
 export function typeDeclarations() {
-  return readFileSync(join(ROOT, 'node_modules', 'tm-cut-core', 'index.d.ts'), 'utf8')
+  return readFileSync(join(ROOT, 'node_modules', '@tuanmjnh', 'tm-cut-core', 'index.d.ts'), 'utf8')
 }

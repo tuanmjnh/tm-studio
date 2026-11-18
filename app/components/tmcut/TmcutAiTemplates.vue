@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { TICKS_PER_SECOND } from 'tm-cut-core'
+import { TICKS_PER_SECOND } from '@tuanmjnh/tm-cut-core'
 import { useTmcutAiTemplates } from '~/composables/useTmcutAiTemplates'
 import { useTmcutAiScript } from '~/composables/useTmcutAiScript'
 import { useTmcutTemplates } from '~/composables/useTmcutTemplates'

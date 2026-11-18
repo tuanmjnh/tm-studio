@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { secToTicks } from 'tm-cut-core'
+import { secToTicks } from '@tuanmjnh/tm-cut-core'
 import { useTmcutAi } from './useTmcutAi'
 import { useTmcutProject } from './useTmcutProject'
 import type { TmcutProject } from './useTmcutProject'

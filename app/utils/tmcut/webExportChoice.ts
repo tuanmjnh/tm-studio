@@ -14,8 +14,8 @@
  * things a DIALOG has, which only the app knows exist.
  */
 
-import { fpsToRational } from 'tm-cut-core'
-import type { FrameRate } from 'tm-cut-core'
+import { fpsToRational } from '@tuanmjnh/tm-cut-core'
+import type { FrameRate } from '@tuanmjnh/tm-cut-core'
 
 /** A dialog choice the browser export cannot write, named so a UI can explain it. */
 export type WebExportRefusalCode = 'mode' | 'format' | 'range' | 'effects'

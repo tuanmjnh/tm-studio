@@ -22,7 +22,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { TICKS, freshStore } from './helpers/tmcut_store_env'
-import { evaluateTimeline, compositePlan } from 'tm-cut-core'
+import { evaluateTimeline, compositePlan } from '@tuanmjnh/tm-cut-core'
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..')
 const COMPOSABLE = 'app/composables/useTmcutPlayback.ts'
@@ -154,7 +154,7 @@ async function main() {
   // what it is allowed to keep: the call, not the window math.
   await check('the law reads the plan and the host keeps no local window law', () => {
     const law = read(SURFACE_LAW)
-    assert.match(law, /import \{[^}]*compositePlan[^}]*\} from 'tm-cut-core'/,
+    assert.match(law, /import \{[^}]*compositePlan[^}]*\} from '@tuanmjnh\/tm-cut-core'/,
       'the name comes from tmcut-core, not a local helper')
     assert.doesNotMatch(law, /transition\??\.role/,
       'pair detection belongs to core; reading layer.transition.role here is the drift F1 removed')
