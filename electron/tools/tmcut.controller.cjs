@@ -8,13 +8,20 @@ const { pruneCommandRecordings } = require('./recordings.cjs')
 const { assertDownloadUrl, resolveDownloadTarget, sanitizeFilename } = require('./media-download.cjs')
 const { acceptRenderBytes, resolveRenderTarget, MAX_RENDER_BYTES } = require('./render-save.cjs')
 const { fetchStockJson } = require('./stock-proxy.cjs')
+const { createCitEngine } = require('./cit-engine.cjs')
+const { createVieneuEngine } = require('./vieneu-engine.cjs')
 const { randomUUID } = require('node:crypto')
 const {
-  DEFAULT_VIENEU_BASE_URL,
   MAX_VOICE_REFERENCE_BYTES,
   MAX_TTS_TEXT_LENGTH,
   MAX_TTS_AUDIO_BYTES,
-  normalizeVieNeuBaseUrl,
+  TTS_PROVIDERS,
+  normalizeTtsProvider,
+  normalizeTtsBaseUrl,
+  citCustomVoicePath,
+  speechRequest,
+  audioExtension,
+  isAudioBytes,
   parseVieNeuVoices,
   validateSynthesisInput,
   getServiceError
@@ -554,18 +561,20 @@ function registerTmcutController() {
 
   ipcMain.handle(`${moduleName}:voiceStatus`, async (_event, args = {}) => {
     try {
-      const baseUrl = normalizeVieNeuBaseUrl(args.baseUrl || DEFAULT_VIENEU_BASE_URL)
-      const response = await fetchVieNeu(baseUrl, '/health')
-      if (!response.ok) return { ok: false, error: getServiceError(response.status, await response.text()) }
+      const provider = normalizeTtsProvider(args.provider)
+      const spec = TTS_PROVIDERS[provider]
+      const baseUrl = normalizeTtsBaseUrl(args.baseUrl, provider)
+      const response = await fetchVieNeu(baseUrl, spec.routes.health)
+      if (!response.ok) return { ok: false, error: getServiceError(response.status, await response.text(), provider) }
       let health = null
       try {
         health = await response.json()
       } catch {
         health = null
       }
-      const voicesResponse = await fetchVieNeu(baseUrl, '/v1/voices')
-      if (!voicesResponse.ok) return { ok: false, error: getServiceError(voicesResponse.status, await voicesResponse.text()) }
-      return { ok: true, data: { baseUrl, health, voices: parseVieNeuVoices(await voicesResponse.json()) } }
+      const voicesResponse = await fetchVieNeu(baseUrl, spec.routes.voices)
+      if (!voicesResponse.ok) return { ok: false, error: getServiceError(voicesResponse.status, await voicesResponse.text(), provider) }
+      return { ok: true, data: { provider, baseUrl, health, voices: parseVieNeuVoices(await voicesResponse.json()) } }
     } catch (error) {
       return { ok: false, error: String((error && error.message) || error) }
     }
@@ -573,7 +582,7 @@ function registerTmcutController() {
 
   ipcMain.handle(`${moduleName}:enrollVoice`, async (_event, args = {}) => {
     try {
-      const baseUrl = normalizeVieNeuBaseUrl(args.baseUrl || DEFAULT_VIENEU_BASE_URL)
+      const baseUrl = normalizeTtsBaseUrl(args.baseUrl, 'vieneu')
       const filePath = isUserMediaPath(args.filePath)
       if (!filePath) return { ok: false, error: 'Select a valid local reference audio file' }
       const stat = fs.statSync(filePath)
@@ -599,6 +608,24 @@ function registerTmcutController() {
       }
       if (!response.ok) return { ok: false, error: getServiceError(response.status, body) }
       return { ok: true, data: { voice: name, response: parseJsonOrText(body) } }
+    } catch (error) {
+      return { ok: false, error: String((error && error.message) || error) }
+    }
+  })
+
+  ipcMain.handle(`${moduleName}:voiceConsent`, async (_event, args = {}) => {
+    try {
+      const provider = normalizeTtsProvider(args.provider)
+      const spec = TTS_PROVIDERS[provider]
+      const baseUrl = normalizeTtsBaseUrl(args.baseUrl, provider)
+      if (!spec.routes.consent) return { ok: true, data: null }
+      const response = await fetchVieNeu(baseUrl, spec.routes.consent)
+      const body = await response.text()
+      if (!response.ok) return { ok: false, error: getServiceError(response.status, body, provider) }
+      const payload = parseJsonOrText(body) || {}
+      const termsVersion = String(payload.terms_version || '').trim()
+      if (!termsVersion) return { ok: false, error: `${spec.label} did not return a consent version` }
+      return { ok: true, data: { rightsStatement: String(payload.rights_statement || '').trim(), termsVersion } }
     } catch (error) {
       return { ok: false, error: String((error && error.message) || error) }
     }
@@ -643,8 +670,16 @@ function registerTmcutController() {
     }
   })
 
-  ipcMain.handle(`${moduleName}:deleteManagedVoice`, (_event, id) => {
-    const voiceId = String(id || '')
+  ipcMain.handle(`${moduleName}:deleteManagedVoice`, async (_event, args = {}) => {
+    const voiceId = String(args.id || '')
+    let provider = null
+    if (args.provider !== undefined) {
+      try {
+        provider = normalizeTtsProvider(args.provider)
+      } catch {
+        return { ok: false, error: 'Unknown TTS engine' }
+      }
+    }
     if (!/^[a-f0-9]{32}$/.test(voiceId)) return { ok: false, error: 'Invalid voice id' }
     try {
       const voices = readManagedVoices()
@@ -658,7 +693,22 @@ function registerTmcutController() {
       } catch (error) {
         if (error.code !== 'ENOENT') throw error
       }
-      return { ok: true }
+      // VieNeu forgets cloned voices when the process restarts, so nothing
+      // remote needs deleting. CIT saves them to disk: drop the copy there
+      // too, best-effort — the local registry is the source of truth and an
+      // offline engine must not block the delete.
+      let remote = 'not-needed'
+      if (provider === 'cit') {
+        try {
+          const baseUrl = normalizeTtsBaseUrl(args.baseUrl, 'cit')
+          const response = await fetchVieNeu(baseUrl, citCustomVoicePath(voice.engineName), { method: 'DELETE' })
+          await response.text().catch(() => '')
+          remote = response.ok || response.status === 404 ? 'deleted' : `failed:${response.status}`
+        } catch {
+          remote = 'offline'
+        }
+      }
+      return { ok: true, data: { remote } }
     } catch (error) {
       return { ok: false, error: String((error && error.message) || error) }
     }
@@ -666,24 +716,52 @@ function registerTmcutController() {
 
   ipcMain.handle(`${moduleName}:syncManagedVoice`, async (_event, args = {}) => {
     try {
+      const provider = normalizeTtsProvider(args.provider)
+      const spec = TTS_PROVIDERS[provider]
       const voiceId = String(args.id || '')
       if (!/^[a-f0-9]{32}$/.test(voiceId)) return { ok: false, error: 'Invalid voice id' }
       const voice = readManagedVoices().find(item => item.id === voiceId)
       if (!voice) return { ok: false, error: 'Voice not found' }
-      const baseUrl = normalizeVieNeuBaseUrl(args.baseUrl || DEFAULT_VIENEU_BASE_URL)
+      const baseUrl = normalizeTtsBaseUrl(args.baseUrl, provider)
       const referencePath = path.join(getDirs().voices, voice.referenceFile)
+      if (path.dirname(referencePath) !== getDirs().voices || path.basename(referencePath) !== voice.referenceFile) return { ok: false, error: 'Invalid reference path' }
+      const bytes = fs.readFileSync(referencePath)
       const form = new FormData()
-      form.append('name', voice.engineName)
-      form.append('description', voice.description || voice.name)
-      form.append('denoise', 'true')
-      form.append('file', new Blob([fs.readFileSync(referencePath)]), voice.referenceFile)
-      const response = await fetchVieNeu(baseUrl, '/v1/voices', { method: 'POST', body: form })
+      if (provider === 'cit') {
+        // CIT rejects the upload unless the caller echoes the consent
+        // version the service is currently serving.
+        const consent = await fetchVieNeu(baseUrl, spec.routes.consent)
+        const consentBody = await consent.text()
+        if (!consent.ok) return { ok: false, error: getServiceError(consent.status, consentBody, provider) }
+        const terms = parseJsonOrText(consentBody) || {}
+        const termsVersion = String(terms.terms_version || '').trim()
+        if (!termsVersion) return { ok: false, error: `${spec.label} did not return a consent version` }
+        if (String(args.rightsVersion || '').trim() !== termsVersion) return { ok: false, error: `Confirm the ${spec.label} voice-cloning consent first` }
+        form.append('name', voice.engineName)
+        form.append('ref_audio', new Blob([bytes]), voice.referenceFile)
+        form.append('denoise', 'true')
+        form.append('input_source', 'file')
+        form.append('rights_confirmed', 'true')
+        form.append('rights_version', termsVersion)
+      } else {
+        form.append('name', voice.engineName)
+        form.append('description', voice.description || voice.name)
+        form.append('denoise', 'true')
+        form.append('file', new Blob([bytes]), voice.referenceFile)
+      }
+      const response = await fetchVieNeu(baseUrl, spec.routes.enroll, { method: 'POST', body: form })
       const body = await response.text()
       if (response.status === 409) {
-        const list = await fetchVieNeu(baseUrl, '/v1/voices')
-        if (list.ok && parseVieNeuVoices(await list.json()).some(item => item.name === voice.engineName)) return { ok: true, data: { voice: voice.engineName, alreadyPresent: true } }
+        const list = await fetchVieNeu(baseUrl, spec.routes.voices)
+        if (list.ok) {
+          const entries = parseVoiceEntries(await list.json())
+          const matching = entries.find(item => String(item.name || item.id || '') === voice.engineName)
+          // CIT answers 409 for preset collisions too; only a cloned entry of
+          // the same name means the voice is already there.
+          if (matching && (provider !== 'cit' || matching.isCloned === true)) return { ok: true, data: { voice: voice.engineName, alreadyPresent: true } }
+        }
       }
-      if (!response.ok) return { ok: false, error: getServiceError(response.status, body) }
+      if (!response.ok) return { ok: false, error: getServiceError(response.status, body, provider) }
       return { ok: true, data: { voice: voice.engineName, response: parseJsonOrText(body) } }
     } catch (error) {
       return { ok: false, error: String((error && error.message) || error) }
@@ -741,20 +819,23 @@ function registerTmcutController() {
 
   ipcMain.handle(`${moduleName}:synthesizeVoice`, async (_event, args = {}) => {
     try {
-      const baseUrl = normalizeVieNeuBaseUrl(args.baseUrl || DEFAULT_VIENEU_BASE_URL)
+      const provider = normalizeTtsProvider(args.provider)
+      const spec = TTS_PROVIDERS[provider]
+      const baseUrl = normalizeTtsBaseUrl(args.baseUrl, provider)
       const { text, voice } = validateSynthesisInput(args)
-      const response = await fetchVieNeu(baseUrl, '/v1/audio/speech', {
+      const response = await fetchVieNeu(baseUrl, spec.routes.synthesize, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ model: 'vieneu-v3-turbo', input: text, voice, response_format: 'wav', stream_format: 'audio' })
+        body: JSON.stringify(speechRequest(provider, text, voice))
       })
-      if (!response.ok) return { ok: false, error: getServiceError(response.status, await response.text()) }
+      if (!response.ok) return { ok: false, error: getServiceError(response.status, await response.text(), provider) }
+      const ext = audioExtension(response.headers.get('content-type'))
       const bytes = await readResponseBounded(response, MAX_TTS_AUDIO_BYTES)
-      if (bytes.length < 44 || bytes.toString('ascii', 0, 4) !== 'RIFF' || bytes.toString('ascii', 8, 12) !== 'WAVE') {
-        return { ok: false, error: 'VieNeu-TTS did not return a valid WAV audio stream' }
+      if (!isAudioBytes(bytes, ext)) {
+        return { ok: false, error: `${spec.label} did not return a valid ${ext.toUpperCase()} audio stream` }
       }
       ensureDirs()
-      const filePath = path.join(getDirs().recordings, `tts-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.wav`)
+      const filePath = path.join(getDirs().recordings, `tts-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`)
       fs.writeFileSync(filePath, bytes, { flag: 'wx' })
       return { ok: true, path: filePath, size: bytes.length }
     } catch (error) {
@@ -859,6 +940,70 @@ function registerTmcutController() {
   })
 
   ipcMain.handle(`${moduleName}:listFonts`, () => listSystemFonts())
+
+  // Managed local TTS engines: the renderer may only install/start/stop the
+  // pinned engine — it never supplies a URL, a path or an argument. Both
+  // engines push on the same progress channel; the status carries `provider`.
+  const enginesBaseDir = path.join(app.getPath('userData'), 'tmcut', 'engines')
+  const citEngine = createCitEngine({
+    baseDir: process.env.TMCUT_CIT_ENGINE_DIR || enginesBaseDir
+  })
+  const vieneuEngine = createVieneuEngine({
+    baseDir: process.env.TMCUT_VIENEU_ENGINE_DIR || enginesBaseDir
+  })
+  for (const engine of [citEngine, vieneuEngine]) {
+    engine.onProgress((status) => {
+      for (const win of BrowserWindow.getAllWindows()) {
+        try {
+          win.webContents.send(`${moduleName}:engineProgress`, status)
+        } catch {
+          // A closed window must not break the install.
+        }
+      }
+    })
+  }
+  ipcMain.handle(`${moduleName}:citEngineStatus`, () => ({ ok: true, data: citEngine.status() }))
+  ipcMain.handle(`${moduleName}:citEngineInstall`, () => {
+    void citEngine.install().catch(() => {
+      // The failure is already reported through the progress channel.
+    })
+    return { ok: true, data: citEngine.status() }
+  })
+  ipcMain.handle(`${moduleName}:citEngineStart`, async () => {
+    try {
+      const { origin } = await citEngine.start()
+      return { ok: true, data: { origin } }
+    } catch (error) {
+      return { ok: false, error: String((error && error.message) || error) }
+    }
+  })
+  ipcMain.handle(`${moduleName}:citEngineStop`, async () => {
+    await citEngine.stop()
+    return { ok: true }
+  })
+  ipcMain.handle(`${moduleName}:vieneuEngineStatus`, () => ({ ok: true, data: vieneuEngine.status() }))
+  ipcMain.handle(`${moduleName}:vieneuEngineInstall`, () => {
+    void vieneuEngine.install().catch(() => {
+      // The failure is already reported through the progress channel.
+    })
+    return { ok: true, data: vieneuEngine.status() }
+  })
+  ipcMain.handle(`${moduleName}:vieneuEngineStart`, async () => {
+    try {
+      const { origin } = await vieneuEngine.start()
+      return { ok: true, data: { origin } }
+    } catch (error) {
+      return { ok: false, error: String((error && error.message) || error) }
+    }
+  })
+  ipcMain.handle(`${moduleName}:vieneuEngineStop`, async () => {
+    await vieneuEngine.stop()
+    return { ok: true }
+  })
+  app.on('will-quit', () => {
+    citEngine.dispose()
+    vieneuEngine.dispose()
+  })
 }
 
 // isUserMediaPath exported for the R110 regression spec (pure function,
@@ -908,6 +1053,19 @@ function parseJsonOrText(value) {
   } catch {
     return String(value || '')
   }
+}
+
+// Raw voice entries as the engines list them: CIT adds `id`/`isCloned` to
+// `{name, description}`, VieNeu returns `{name, description}` only.
+function parseVoiceEntries(payload) {
+  const items = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.voices)
+      ? payload.voices
+      : Array.isArray(payload?.data)
+        ? payload.data
+        : []
+  return items.filter(item => item && typeof item === 'object')
 }
 
 module.exports = {

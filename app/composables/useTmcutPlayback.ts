@@ -5,7 +5,7 @@ import { useTmcutProject } from './useTmcutProject'
 import type { TmcutTimelineItem } from './useTmcutProject'
 import { surfacesAt } from '~/utils/tmcut/paintSurfaces'
 import type { PaintSurface, TextSurface } from '~/utils/tmcut/paintSurfaces'
-import { clipStartSec } from '~/utils/tmcut/clipTime'
+import { clipStartSec, mediaSecToTimelineSec } from '~/utils/tmcut/clipTime'
 
 // Shared playback state across TMCut editor
 const playhead = ref(0) // Playhead position in seconds
@@ -395,11 +395,17 @@ export function useTmcutPlayback() {
    * MAIN picture moves the playhead: while it cannot present, the playhead is
    * held on the picture instead of running ahead of it, so the drift stays
    * bounded and the transport readout cannot detach from what the viewer sees.
+   *
+   * The plan speaks ELEMENT seconds (`targetSec` is the surface's media time),
+   * but the playhead lives on the TIMELINE. The held answer is therefore mapped
+   * through the clip before it is written: with `in = 10 s`, `offset = 30 s` a
+   * hold at media 11 s is timeline 31 s, and copying the raw answer parked the
+   * playhead at 11 s.
    */
   function followElement(
     el: HTMLVideoElement | HTMLAudioElement,
     targetSec: number,
-    options: { main?: boolean } = {}
+    options: { main?: boolean, clip?: TmcutTimelineItem | null } = {}
   ): void {
     noteElementPosition(el)
     const plan = planPlaybackFollow({
@@ -418,7 +424,9 @@ export function useTmcutPlayback() {
     }
     if (!options.main) return
     playbackStalled.value = plan.action === 'stalled'
-    if (plan.action === 'hold' || plan.action === 'stalled') playhead.value = plan.playheadSec
+    if ((plan.action === 'hold' || plan.action === 'stalled') && options.clip) {
+      playhead.value = mediaSecToTimelineSec(options.clip, plan.playheadSec)
+    }
   }
 
   // The pace (Zero-FFmpeg slice F6e/F6b): core owns the wall-clock → frame
@@ -548,7 +556,7 @@ export function useTmcutPlayback() {
           // wrong rate. Embedded audio warps with the rate here — the export
           // keeps it at the base speed (documented v1 gap).
           videoRef.value.playbackRate = mediaRate(activeVideoClip.value.clip)
-          followElement(videoRef.value, targetTime, { main: true })
+          followElement(videoRef.value, targetTime, { main: true, clip: activeVideoClip.value.clip })
           if (videoRef.value.paused) {
             videoRef.value.play().catch(() => {})
           }

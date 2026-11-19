@@ -125,9 +125,31 @@ thảo, xem trước trong iframe `sandbox="allow-scripts"`, rồi render. Có 1
 
 ### 6.6 Voice Studio (`/tmcut/voice`)
 
-Chuyển văn bản thành giọng nói. Có hai nguồn: **Local voice** (gọi VieNeu-TTS ở `http://127.0.0.1:8000`,
-chạy trên máy này) và **Gemini TTS** (qua Hub). Nhãn `Check service` cho biết dịch vụ local có sống hay
-không; khi không chạy, app báo `Offline — Could not reach VieNeu-TTS` thay vì im lặng.
+Chuyển văn bản thành giọng nói. Có hai nguồn: **Local voice** và **Gemini TTS** (qua Hub). Nguồn local
+chọn được **hai bộ máy**, cùng chạy trên máy này và cùng đi qua app (không rời máy):
+
+| Bộ máy đọc | Mặc định | Ghi chú |
+| --- | --- | --- |
+| VieNeu-TTS | `http://127.0.0.1:8000` | Máy chủ OpenAI-compatible của VieNeu; hỗ trợ nhân bản giọng từ mẫu thu (chỉ trong phiên chạy, app tự nạp lại khi cần). Trên bản desktop có thể tải và bật/tắt ngay trong app (xem dưới) |
+| CIT Voice Studio | `http://127.0.0.1:8001` | Ứng dụng desktop tích hợp VieNeu-TTS, 25 giọng tiếng Việt; hỗ trợ nhân bản giọng, lưu thẳng vào thư viện của CIT. Trên bản desktop có thể tải và bật/tắt ngay trong app (xem dưới) |
+
+Lựa chọn bộ máy được nhớ cho lần mở sau, mỗi bộ máy nhớ địa chỉ riêng. Nhãn `Check service` cho biết dịch vụ
+local có sống hay không; khi không chạy, app báo `Offline — Could not reach …` thay vì im lặng. Khối
+nhân bản giọng (mẫu thu, danh sách giọng đã quản lý) có trên cả hai bộ máy ở bản desktop. Với CIT, khối này
+hiện thêm nội dung đồng thuận của engine (`/api/voices/consent`): phải tích ô xác nhận trước khi lưu, mẫu
+sạch dài 3–15,5 giây, và giọng được nạp ngay vào CIT sau khi lưu. Xoá một giọng CIT đã nạp sẽ xoá cả bản
+trong engine khi engine đang chạy; nếu engine đang tắt, bản cục bộ vẫn bị xoá và app báo để bạn dọn sau.
+
+**Engine do app quản lý (bản desktop, cho cả VieNeu-TTS và CIT).** Bộ cài **không** kèm engine. Trong khối
+`Engine do app quản lý` chọn `Tải engine`: app tải bản mã nguồn đã khoá theo commit kèm bộ Python `uv`
+(gói ~0,9 GB cho CIT, ~1,5 GB cho VieNeu: mã nguồn, Python, gói pip và model giọng) vào đúng thư mục dữ
+liệu của app (`<userData>/tmcut/engines/cit` cho CIT, đặt lại bằng biến `TMCUT_CIT_ENGINE_DIR`;
+`<userData>/tmcut/engines/vieneu` cho VieNeu, đặt lại bằng biến `TMCUT_VIENEU_ENGINE_DIR`) và kiểm tra
+sha256 từng tệp đã tải.
+Thanh tiến trình báo lần lượt `Đang tải tệp engine → Đang cài gói Python → Đang tải mô hình giọng nói`.
+Tải xong, `Bật engine` / `Tắt engine` điều khiển tiến trình ngay trong app; khi engine chạy, ô địa chỉ tự
+gắn về cổng loopback mà app cấp (VieNeu-TTS 8000–8010, CIT 8001–8010) và `Check service` tự kiểm tra.
+Đóng app sẽ tắt engine theo. Trên bản web (không có Electron) khối này ẩn — chạy engine bên ngoài như bảng trên.
 
 ### 6.7 AutoCut (`/tmcut/autocut`)
 
@@ -186,7 +208,7 @@ thân bài (ví dụ "export") sẽ không ra kết quả. Bộ chọn danh mụ
 | `401 error.unauthorized` ở `/api/v1/ai/relay/catalog` | Token Hub không qua được bước xác minh phía server | Đăng nhập lại; nếu vẫn lỗi, kiểm tra `AUTH_JWT_PUBLIC_KEYS` khớp Hub |
 | AI báo "no content" | Model suy luận hết token trước khi trả lời | Tăng token đầu ra hoặc đổi model |
 | Nút Test AI báo lỗi 401 | Key sai hoặc đã bị thu hồi | Tạo key mới ở provider, cập nhật lại |
-| `502 error.tts.unreachable` ở Voice Studio | VieNeu-TTS không chạy trên máy này | Khởi động dịch vụ ở `127.0.0.1:8000`, hoặc dùng tab Gemini TTS |
+| `502 error.tts.unreachable` ở Voice Studio | Bộ máy đọc đang chọn không chạy trên máy này | Bật engine trong khối `Engine do app quản lý` (desktop), khởi động VieNeu-TTS (`127.0.0.1:8000`) hoặc CIT Voice Studio (`127.0.0.1:8001`), hoặc dùng tab Gemini TTS |
 | Tài liệu không có bài từ Hub | Chưa tạo bài hoặc bài ở app khác | Tạo bài đúng App ID, bật Published |
 | Không tìm thấy bài theo từ khoá | Ô tìm kiếm chỉ đọc tiêu đề/mô tả/key | Tìm theo tiêu đề, hoặc lọc theo danh mục |
 | Video xuất lỗi | Thiếu quyền ghi hoặc hết dung lượng | Kiểm tra thư mục đầu ra và dung lượng đĩa |

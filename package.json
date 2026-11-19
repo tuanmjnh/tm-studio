@@ -18,7 +18,7 @@
     "pnpm-update": "pnpm self-update",
     "lint": "eslint .",
     "typecheck": "nuxt typecheck",
-    "dev:electron": "concurrently -k \"nuxt dev --port 4003\" \"wait-on http://localhost:4003 && node electron/tools/dev-electron-launcher.cjs\"",
+    "dev:electron": "pnpm bake:public-config && concurrently -k \"nuxt dev --port 4003\" \"wait-on http://localhost:4003 && node electron/tools/dev-electron-launcher.cjs\"",
     "build:core": "pnpm --dir ../tm-platform/packages/tm-cut-core build",
     "build:electron": "pnpm bake:public-config && pnpm build && electron-builder --config electron-builder.yml --publish never",
     "build:electron:win": "pnpm bake:public-config && pnpm build && electron-builder --config electron-builder.yml --win --publish never",

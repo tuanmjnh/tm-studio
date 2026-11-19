@@ -153,6 +153,21 @@ export interface TmcutProjectMeta {
   recoveryUpdatedAtMs: number | null
 }
 
+/** Managed local TTS engine state as Main reports it (see electron/tools/*-engine.cjs). */
+export interface ManagedEngineStatus {
+  provider: 'vieneu' | 'cit'
+  platform: string
+  dir: string
+  installed: boolean
+  running: boolean
+  phase: 'idle' | 'downloading' | 'packages' | 'models' | 'installed' | 'starting' | 'running' | 'stopping' | 'stopped' | 'error'
+  origin: string
+  error: string
+  progress: { received: number, total: number, percent: number | null } | null
+  estimatedBytes: number
+  commit: string
+}
+
 /** One system font face (roadmap C-1): `path` feeds drawtext fontfile= so the export renders the very file the preview family shows. */
 export interface TmcutFontEntry {
   family: string
@@ -417,13 +432,24 @@ export interface TmcutNamespace {
   readSnapshot(args: { id: string, ts: number }): Promise<unknown>
   deleteSnapshot(args: { id: string, ts: number }): Promise<boolean>
   statFiles(paths: string[]): Promise<Record<string, TmcutFileStat>>
-  voiceStatus(args?: { baseUrl?: string }): Promise<{ ok: boolean, data?: { baseUrl: string, health: unknown, voices: Array<{ name: string, description: string }> }, error?: string }>
+  voiceStatus(args?: { provider?: 'vieneu' | 'cit', baseUrl?: string }): Promise<{ ok: boolean, data?: { provider?: 'vieneu' | 'cit', baseUrl: string, health: unknown, voices: Array<{ name: string, description: string }> }, error?: string }>
+  voiceConsent(args?: { provider?: 'vieneu' | 'cit', baseUrl?: string }): Promise<{ ok: boolean, data?: { rightsStatement: string, termsVersion: string } | null, error?: string }>
   enrollVoice(args: { baseUrl?: string, filePath: string, name: string, description?: string, denoise?: boolean }): Promise<{ ok: boolean, data?: { voice: string, alreadyPresent?: boolean }, error?: string }>
   listManagedVoices(): Promise<Array<{ id: string, name: string, engineName: string, description: string, createdAt: string }>>
   addManagedVoice(args: { filePath: string, name: string, description?: string }): Promise<{ ok: boolean, data?: { id: string, name: string, engineName: string, description: string, referenceFile: string, createdAt: string }, error?: string }>
-  deleteManagedVoice(id: string): Promise<{ ok: boolean, error?: string }>
-  syncManagedVoice(args: { id: string, baseUrl?: string }): Promise<{ ok: boolean, data?: { voice: string, alreadyPresent?: boolean }, error?: string }>
-  synthesizeVoice(args: { baseUrl?: string, text: string, voice: string }): Promise<{ ok: boolean, path?: string, size?: number, error?: string }>
+  deleteManagedVoice(args: { id: string, provider?: 'vieneu' | 'cit', baseUrl?: string }): Promise<{ ok: boolean, data?: { remote: string }, error?: string }>
+  syncManagedVoice(args: { id: string, provider?: 'vieneu' | 'cit', baseUrl?: string, rightsVersion?: string }): Promise<{ ok: boolean, data?: { voice: string, alreadyPresent?: boolean }, error?: string }>
+  synthesizeVoice(args: { provider?: 'vieneu' | 'cit', baseUrl?: string, text: string, voice: string }): Promise<{ ok: boolean, path?: string, size?: number, error?: string }>
+  /** Managed local TTS engines (install into the app data dir, start/stop one loopback server). */
+  citEngineStatus(): Promise<{ ok: boolean, data: ManagedEngineStatus }>
+  citEngineInstall(): Promise<{ ok: boolean, data: ManagedEngineStatus }>
+  citEngineStart(): Promise<{ ok: boolean, data?: { origin: string }, error?: string }>
+  citEngineStop(): Promise<{ ok: boolean }>
+  vieneuEngineStatus(): Promise<{ ok: boolean, data: ManagedEngineStatus }>
+  vieneuEngineInstall(): Promise<{ ok: boolean, data: ManagedEngineStatus }>
+  vieneuEngineStart(): Promise<{ ok: boolean, data?: { origin: string }, error?: string }>
+  vieneuEngineStop(): Promise<{ ok: boolean }>
+  onEngineProgress(callback: (status: ManagedEngineStatus) => void): () => void
   /** Uses the API key from encrypted desktop config; never pass credentials over renderer IPC. */
   synthesizeGeminiVoice(args: { text: string, voice: string, style?: string, model?: string }): Promise<{ ok: boolean, path?: string, size?: number, error?: string }>
   /**

@@ -50,6 +50,11 @@ yt-dlp.exe
 # Dev Electron profile (dev:electron --user-data-dir)
 .dev-user-data/
 
+# Managed local TTS engines (VieNeu-TTS / CIT) downloaded on demand by the app:
+# pinned uv, Python venv and voice models. Never part of the repo.
+/engines/
+/engines-*/
+
 # Retired FFmpeg engine source, kept on this machine for reference only.
 # Local copy preserved; the repo carries no engine any more (ADR-028).
 backup/

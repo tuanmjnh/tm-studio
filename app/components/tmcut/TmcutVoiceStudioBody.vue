@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import type { DropdownMenuItem } from '@nuxt/ui'
+import type { ManagedEngineStatus } from '#shared/types/electron'
 import { useFileSystem } from '~/composables/useFileSystem'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { useTmcutInsertAsset } from '~/composables/useTmcutInsertAsset'
@@ -19,9 +21,18 @@ const { pickFile } = useFileSystem()
 const { currentProject, addClipToTrack } = useTmcutProject()
 const { insertAsset } = useTmcutInsertAsset()
 
-const DEFAULT_LOCAL_URL = 'http://127.0.0.1:8000'
-const LOCAL_URL_KEY = 'tmcut_vieneu_base_url'
-const baseUrl = ref(DEFAULT_LOCAL_URL)
+// Two loopback engines, same contract as server/utils/tts.ts: VieNeu-TTS is
+// the OpenAI-compatible server on 8000, CIT Voice Studio bundles VieNeu and
+// serves its own API on 8001.
+type LocalProvider = 'vieneu' | 'cit'
+const PROVIDERS: Array<{ id: LocalProvider, defaultUrl: string, urlKey: string }> = [
+  { id: 'vieneu', defaultUrl: 'http://127.0.0.1:8000', urlKey: 'tmcut_vieneu_base_url' },
+  { id: 'cit', defaultUrl: 'http://127.0.0.1:8001', urlKey: 'tmcut_cit_base_url' }
+]
+const PROVIDER_KEY = 'tmcut_tts_provider'
+const provider = ref<LocalProvider>('vieneu')
+const providerSpec = computed(() => PROVIDERS.find(item => item.id === provider.value) || PROVIDERS[0]!)
+const baseUrl = ref(PROVIDERS[0]!.defaultUrl)
 const apiKey = ref('')
 const geminiKeySaved = ref(false)
 const geminiKeySaving = ref(false)
@@ -32,6 +43,13 @@ const geminiBusy = ref(false)
 const localOnline = ref(false)
 const localError = ref('')
 const localVoices = ref<Array<{ name: string, description: string }>>([])
+// Desktop-only: Main downloads each pinned engine into the app data dir and
+// runs one loopback server per engine. The web build keeps the manual URL.
+// Statuses are keyed by provider because both engines report on one channel.
+const engineStatuses = ref<Record<LocalProvider, ManagedEngineStatus | null>>({ vieneu: null, cit: null })
+const engineStatus = computed(() => engineStatuses.value[provider.value])
+const engineBusy = ref(false)
+let engineUnsubscribe: (() => void) | null = null
 const managedVoices = ref<Array<{ id: string, name: string, engineName: string, description: string, createdAt: string }>>([])
 const selectedVoiceId = ref('')
 const selectedGeminiVoice = ref('Kore')
@@ -42,6 +60,9 @@ const narration = ref('')
 const style = ref('')
 const autoCaptions = ref(true)
 const model = ref('gemini-3.8-flash-tts')
+const localSettingsOpen = ref(false)
+const geminiSettingsOpen = ref(false)
+const providerLabel = computed(() => t(`tmcut.voice.providers.${provider.value}`))
 
 const geminiVoices = [
   'Zephyr', 'Puck', 'Charon', 'Kore', 'Fenrir', 'Leda', 'Orus', 'Aoede',
@@ -59,8 +80,14 @@ const geminiVoices = [
 const platform = useTmcutPlatform()
 const isDesktop = computed(() => platform.info.name === 'electron')
 
-const chosenLocal = computed(() => managedVoices.value.find(voice => voice.id === selectedVoiceId.value) || null)
+// Cloned voices are kept in a local registry for both managed engines. VieNeu
+// only holds them in memory per process, so they must be re-synced; CIT stores
+// them on disk but rejects an upload without the consent version it serves.
+const managedAvailable = computed(() => managedVoices.value.length > 0)
+const chosenLocal = computed(() => managedAvailable.value ? managedVoices.value.find(voice => voice.id === selectedVoiceId.value) || null : null)
 const selectedEngineVoice = computed(() => chosenLocal.value?.engineName || selectedLocalVoice.value)
+const citConsent = ref<{ rightsStatement: string, termsVersion: string } | null>(null)
+const consentConfirmed = ref(false)
 
 function requestError(error: unknown): string {
   const data = (error as { data?: { message?: string } })?.data
@@ -69,7 +96,9 @@ function requestError(error: unknown): string {
 
 function readSavedSettings() {
   if (typeof window === 'undefined') return
-  baseUrl.value = localStorage.getItem(LOCAL_URL_KEY) || DEFAULT_LOCAL_URL
+  const saved = localStorage.getItem(PROVIDER_KEY)
+  provider.value = saved === 'cit' ? 'cit' : 'vieneu'
+  baseUrl.value = localStorage.getItem(providerSpec.value.urlKey) || providerSpec.value.defaultUrl
   apiKey.value = ''
   geminiKeySaved.value = false
   void tmcutHostBridge()?.getConfig().then((config) => {
@@ -78,7 +107,262 @@ function readSavedSettings() {
 }
 
 function saveLocalUrl() {
-  if (typeof window !== 'undefined') localStorage.setItem(LOCAL_URL_KEY, baseUrl.value.trim() || DEFAULT_LOCAL_URL)
+  if (typeof window !== 'undefined') localStorage.setItem(providerSpec.value.urlKey, baseUrl.value.trim() || providerSpec.value.defaultUrl)
+}
+
+async function switchProvider(value: LocalProvider) {
+  provider.value = value
+  if (typeof window !== 'undefined') localStorage.setItem(PROVIDER_KEY, provider.value)
+  selectedVoiceId.value = ''
+  selectedLocalVoice.value = ''
+  localVoices.value = []
+  localOnline.value = false
+  localError.value = ''
+  citConsent.value = null
+  consentConfirmed.value = false
+  baseUrl.value = (typeof window !== 'undefined' && localStorage.getItem(providerSpec.value.urlKey)) || providerSpec.value.defaultUrl
+  await checkLocalService()
+}
+
+function formatBytes(bytes: number): string {
+  const mb = Math.max(0, Number(bytes) || 0) / (1024 * 1024)
+  return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${Math.round(mb)} MB`
+}
+
+const engineWorking = computed(() => engineBusy.value || ['downloading', 'packages', 'models', 'starting', 'stopping'].includes(engineStatus.value?.phase || ''))
+const enginePhaseLabel = computed(() => {
+  const phase = engineStatus.value?.phase || 'idle'
+  return ['downloading', 'packages', 'models', 'starting', 'stopping'].includes(phase) ? t(`tmcut.voice.engine.phases.${phase}`) : ''
+})
+
+function applyEngineStatus(status: ManagedEngineStatus) {
+  engineStatuses.value[status.provider] = status
+  // A started managed engine owns the origin; pin that provider's URL field.
+  if (status.phase === 'running' && status.origin) {
+    const spec = PROVIDERS.find(item => item.id === status.provider)
+    if (spec && typeof window !== 'undefined') {
+      localStorage.setItem(spec.urlKey, status.origin)
+    }
+    if (provider.value === status.provider && baseUrl.value !== status.origin) {
+      baseUrl.value = status.origin
+      void checkLocalServiceWhenReady()
+    }
+  }
+}
+
+// The server answers /health as soon as it binds, but /voices stays 503 until
+// the voice model finishes loading (tens of seconds on first run). Polling
+// here keeps the badge honest instead of showing Offline right after Start.
+let serviceRetryTimer: ReturnType<typeof setTimeout> | null = null
+async function checkLocalServiceWhenReady() {
+  if (serviceRetryTimer) return
+  const tick = async () => {
+    serviceRetryTimer = null
+    if (engineStatus.value?.phase !== 'running' || localOnline.value) return
+    await checkLocalService()
+    if (!localOnline.value && engineStatus.value?.phase === 'running') {
+      serviceRetryTimer = setTimeout(tick, 3000)
+    }
+  }
+  await tick()
+}
+
+function engineIpc() {
+  const ipc = tmcutHostIpc()
+  if (!ipc) return null
+  return provider.value === 'cit'
+    ? { status: ipc.citEngineStatus, install: ipc.citEngineInstall, start: ipc.citEngineStart, stop: ipc.citEngineStop }
+    : { status: ipc.vieneuEngineStatus, install: ipc.vieneuEngineInstall, start: ipc.vieneuEngineStart, stop: ipc.vieneuEngineStop }
+}
+
+async function loadEngineStatus() {
+  const ipc = tmcutHostIpc()
+  if (!ipc) return
+  try {
+    const [vieneu, cit] = await Promise.all([ipc.vieneuEngineStatus(), ipc.citEngineStatus()])
+    applyEngineStatus(vieneu.data)
+    applyEngineStatus(cit.data)
+  } catch {
+    // The engine panel is optional; leave the manual URL working.
+  }
+}
+
+async function installEngine() {
+  const ipc = engineIpc()
+  if (!ipc || engineWorking.value) return
+  try {
+    applyEngineStatus((await ipc.install()).data)
+  } catch (error) {
+    toast.add({ title: t('tmcut.voice.engine.failed'), description: String((error as Error)?.message || error), color: 'error' })
+  }
+}
+
+async function startEngine() {
+  const ipc = engineIpc()
+  if (!ipc || engineWorking.value) return
+  engineBusy.value = true
+  try {
+    const result = await ipc.start()
+    if (!result.ok) throw new Error(result.error || t('tmcut.voice.engine.failed'))
+    if (result.data?.origin) {
+      baseUrl.value = result.data.origin
+      saveLocalUrl()
+    }
+    await loadEngineStatus()
+    await checkLocalServiceWhenReady()
+  } catch (error) {
+    toast.add({ title: t('tmcut.voice.engine.failed'), description: String((error as Error)?.message || error), color: 'error' })
+  } finally {
+    engineBusy.value = false
+  }
+}
+
+async function stopEngine() {
+  const ipc = engineIpc()
+  if (!ipc || engineWorking.value) return
+  engineBusy.value = true
+  if (serviceRetryTimer) {
+    clearTimeout(serviceRetryTimer)
+    serviceRetryTimer = null
+  }
+  try {
+    await ipc.stop()
+    localOnline.value = false
+    localError.value = ''
+    localVoices.value = []
+    await loadEngineStatus()
+  } catch (error) {
+    toast.add({ title: t('tmcut.voice.engine.failed'), description: String((error as Error)?.message || error), color: 'error' })
+  } finally {
+    engineBusy.value = false
+  }
+}
+
+const engineHint = computed(() => {
+  const status = engineStatus.value
+  if (!status) return ''
+  if (status.error) return status.error
+  if (enginePhaseLabel.value) return enginePhaseLabel.value
+  return status.installed
+    ? t('tmcut.voice.engine.installed')
+    : t('tmcut.voice.engine.size', { size: formatBytes(status.estimatedBytes || 0) })
+})
+
+const localPrimary = computed(() => {
+  if (isDesktop.value && engineStatus.value) {
+    const status = engineStatus.value
+    if (!status.installed) {
+      return {
+        label: t('tmcut.voice.engine.install'),
+        icon: 'i-lucide-download',
+        color: 'primary' as const,
+        loading: engineWorking.value,
+        disabled: engineWorking.value,
+        run: installEngine
+      }
+    }
+    if (status.phase === 'running') {
+      return {
+        label: t('tmcut.voice.engine.stop'),
+        icon: 'i-lucide-square',
+        color: 'neutral' as const,
+        loading: engineWorking.value,
+        disabled: engineWorking.value,
+        run: stopEngine
+      }
+    }
+    return {
+      label: t('tmcut.voice.engine.start'),
+      icon: 'i-lucide-play',
+      color: 'primary' as const,
+      loading: engineWorking.value,
+      disabled: engineWorking.value,
+      run: startEngine
+    }
+  }
+  return {
+    label: t('tmcut.voice.checkService'),
+    icon: 'i-lucide-refresh-cw',
+    color: 'neutral' as const,
+    loading: localBusy.value,
+    disabled: false,
+    run: checkLocalService
+  }
+})
+
+const localActionItems = computed<DropdownMenuItem[][]>(() => {
+  const items: DropdownMenuItem[][] = [[
+    {
+      label: t('tmcut.voice.settings'),
+      icon: 'i-lucide-settings-2',
+      onSelect: () => {
+        localSettingsOpen.value = true
+      }
+    },
+    {
+      label: t('tmcut.voice.checkService'),
+      icon: 'i-lucide-refresh-cw',
+      disabled: localBusy.value,
+      onSelect: () => {
+        void checkLocalService()
+      }
+    }
+  ]]
+  const status = isDesktop.value ? engineStatus.value : null
+  if (status) {
+    items.push([status.installed
+      ? status.phase === 'running'
+        ? {
+            label: t('tmcut.voice.engine.stop'),
+            icon: 'i-lucide-square',
+            disabled: engineWorking.value,
+            onSelect: () => {
+              void stopEngine()
+            }
+          }
+        : {
+            label: t('tmcut.voice.engine.start'),
+            icon: 'i-lucide-play',
+            disabled: engineWorking.value,
+            onSelect: () => {
+              void startEngine()
+            }
+          }
+      : {
+          label: t('tmcut.voice.engine.install'),
+          icon: 'i-lucide-download',
+          disabled: engineWorking.value,
+          onSelect: () => {
+            void installEngine()
+          }
+        }])
+  }
+  if (managedAvailable.value) {
+    items.push([
+      {
+        label: t('tmcut.voice.sync'),
+        icon: 'i-lucide-refresh-cw',
+        disabled: !chosenLocal.value || !localOnline.value,
+        onSelect: () => {
+          void syncVoice()
+        }
+      },
+      {
+        label: t('tmcut.voice.delete'),
+        icon: 'i-lucide-trash-2',
+        color: 'error',
+        disabled: !chosenLocal.value,
+        onSelect: () => {
+          void deleteVoice()
+        }
+      }
+    ])
+  }
+  return items
+})
+
+function onGeminiSettingsOpen(value: boolean) {
+  if (!value) apiKey.value = ''
 }
 
 async function saveGeminiKey(): Promise<boolean> {
@@ -114,15 +398,16 @@ async function checkLocalService() {
   localError.value = ''
   try {
     if (ipc?.voiceStatus) {
-      const result = await ipc.voiceStatus({ baseUrl: baseUrl.value })
+      const result = await ipc.voiceStatus({ provider: provider.value, baseUrl: baseUrl.value })
       localOnline.value = !!result?.ok
       if (result?.ok && result.data) localVoices.value = result.data.voices
       else localError.value = result?.error || t('tmcut.voice.serviceOffline')
+      if (result?.ok && provider.value === 'cit') void loadConsent()
       return
     }
     const result = await $fetch<{ ok: boolean, data: { voices: Array<{ name: string, description: string }> } }>(
       '/api/v1/media/tts/status',
-      { query: { baseUrl: baseUrl.value } }
+      { query: { provider: provider.value, baseUrl: baseUrl.value } }
     )
     localOnline.value = true
     localVoices.value = result.data.voices
@@ -131,6 +416,20 @@ async function checkLocalService() {
     localError.value = requestError(error) || t('tmcut.voice.serviceOffline')
   } finally {
     localBusy.value = false
+  }
+}
+
+// CIT refuses a clone upload unless the caller echoes the consent version it
+// is currently serving, so the panel reads it from the engine it will enroll into.
+async function loadConsent() {
+  const ipc = tmcutHostIpc()
+  citConsent.value = null
+  if (!ipc?.voiceConsent || provider.value !== 'cit') return
+  try {
+    const result = await ipc.voiceConsent({ provider: 'cit', baseUrl: baseUrl.value })
+    citConsent.value = result?.ok && result.data ? result.data : null
+  } catch {
+    citConsent.value = null
   }
 }
 
@@ -145,6 +444,10 @@ async function chooseSample() {
 async function addVoice() {
   const ipc = tmcutHostIpc()
   if (!ipc?.addManagedVoice || !samplePath.value || !voiceName.value.trim()) return
+  if (provider.value === 'cit' && !consentConfirmed.value) {
+    toast.add({ title: t('tmcut.voice.consentRequired'), color: 'warning' })
+    return
+  }
   localBusy.value = true
   try {
     const result = await ipc.addManagedVoice({ filePath: samplePath.value, name: voiceName.value.trim(), description: voiceDescription.value.trim() })
@@ -154,7 +457,24 @@ async function addVoice() {
     voiceName.value = ''
     voiceDescription.value = ''
     samplePath.value = ''
-    toast.add({ title: t('tmcut.voice.added'), description: t('tmcut.voice.addedLocalOnly'), color: 'success' })
+    // CIT saves clones on its side; enroll right away so the voice is usable
+    // without a manual Sync. VieNeu keeps the historical local-only add.
+    let synced = false
+    if (provider.value === 'cit' && localOnline.value && ipc.syncManagedVoice) {
+      const sync = await ipc.syncManagedVoice({
+        id: result.data.id,
+        provider: 'cit',
+        baseUrl: baseUrl.value,
+        rightsVersion: citConsent.value?.termsVersion
+      })
+      synced = !!sync?.ok
+      if (!sync?.ok) toast.add({ title: t('tmcut.voice.syncFailed'), description: sync?.error || '', color: 'error' })
+    }
+    toast.add({
+      title: t('tmcut.voice.added'),
+      description: synced ? t('tmcut.voice.addedAndSynced') : t('tmcut.voice.addedLocalOnly'),
+      color: 'success'
+    })
   } catch (error) {
     toast.add({ title: t('tmcut.voice.addFailed'), description: String((error as Error)?.message || error), color: 'error' })
   } finally {
@@ -165,9 +485,19 @@ async function addVoice() {
 async function syncVoice() {
   const ipc = tmcutHostIpc()
   if (!ipc?.syncManagedVoice || !chosenLocal.value) return
+  if (provider.value === 'cit' && !citConsent.value) await loadConsent()
+  if (provider.value === 'cit' && !citConsent.value) {
+    toast.add({ title: t('tmcut.voice.syncFailed'), description: t('tmcut.voice.consentUnavailable'), color: 'error' })
+    return
+  }
   localBusy.value = true
   try {
-    const result = await ipc.syncManagedVoice({ id: chosenLocal.value.id, baseUrl: baseUrl.value })
+    const result = await ipc.syncManagedVoice({
+      id: chosenLocal.value.id,
+      provider: provider.value,
+      baseUrl: baseUrl.value,
+      rightsVersion: citConsent.value?.termsVersion
+    })
     if (!result?.ok) throw new Error(result?.error || t('tmcut.voice.syncFailed'))
     await checkLocalService()
     toast.add({ title: t('tmcut.voice.synced'), color: 'success' })
@@ -181,10 +511,13 @@ async function syncVoice() {
 async function deleteVoice() {
   const ipc = tmcutHostIpc()
   if (!ipc?.deleteManagedVoice || !chosenLocal.value) return
-  const deleted = await ipc.deleteManagedVoice(chosenLocal.value.id)
+  const deleted = await ipc.deleteManagedVoice({ id: chosenLocal.value.id, provider: provider.value, baseUrl: baseUrl.value })
   if (!deleted?.ok) {
     toast.add({ title: t('tmcut.voice.deleteFailed'), description: deleted?.error || '', color: 'error' })
     return
+  }
+  if (deleted.data?.remote === 'offline' || deleted.data?.remote?.startsWith('failed')) {
+    toast.add({ title: t('tmcut.voice.deleteRemoteFailed'), color: 'warning' })
   }
   await loadManagedVoices()
 }
@@ -215,17 +548,19 @@ async function makeLocalVoiceover() {
   try {
     let path: string
     if (ipc?.synthesizeVoice) {
-      if (chosenLocal.value) {
-        const sync = await ipc.syncManagedVoice?.({ id: chosenLocal.value.id, baseUrl: baseUrl.value })
+      // VieNeu forgets clones per process; CIT keeps them on disk, and its
+      // upload needs the consent echo that only the add/sync flow carries.
+      if (chosenLocal.value && provider.value === 'vieneu') {
+        const sync = await ipc.syncManagedVoice?.({ id: chosenLocal.value.id, provider: 'vieneu', baseUrl: baseUrl.value })
         if (!sync?.ok) throw new Error(sync?.error || t('tmcut.voice.syncFailed'))
       }
-      const result = await ipc.synthesizeVoice({ baseUrl: baseUrl.value, text: narration.value, voice })
+      const result = await ipc.synthesizeVoice({ provider: provider.value, baseUrl: baseUrl.value, text: narration.value, voice })
       if (!result?.ok || !result.path) throw new Error(result?.error || t('tmcut.voice.generateFailed'))
       path = result.path
     } else {
       const result = await $fetch<{ ok: boolean, url: string }>('/api/v1/media/tts', {
         method: 'POST',
-        body: { baseUrl: baseUrl.value, text: narration.value, voice }
+        body: { provider: provider.value, baseUrl: baseUrl.value, text: narration.value, voice }
       })
       if (!result?.url) throw new Error(t('tmcut.voice.generateFailed'))
       path = result.url
@@ -297,7 +632,16 @@ async function addAutomaticCaptions(audioPath: string, offsetSec: number) {
 
 onMounted(async () => {
   readSavedSettings()
+  if (isDesktop.value) {
+    engineUnsubscribe = tmcutHostIpc()?.onEngineProgress?.(applyEngineStatus) || null
+    await loadEngineStatus()
+  }
   await Promise.all([loadManagedVoices(), checkLocalService()])
+})
+
+onUnmounted(() => {
+  engineUnsubscribe?.()
+  if (serviceRetryTimer) clearTimeout(serviceRetryTimer)
 })
 </script>
 
@@ -321,89 +665,109 @@ onMounted(async () => {
       />
     </header>
 
-    <section class="rounded-lg border border-default p-3 space-y-3">
-      <h3 class="font-medium text-sm">
-        {{ t('tmcut.voice.localTitle') }}
-      </h3>
-      <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2 items-end">
-        <UFormField :label="t('tmcut.voice.baseUrl')">
-          <UInput v-model="baseUrl" class="w-full" @change="saveLocalUrl" />
-        </UFormField>
-        <UButton
-          color="neutral"
-          variant="soft"
-          :loading="localBusy"
-          @click="checkLocalService"
+    <section class="grid grid-cols-1 gap-3 md:grid-cols-2">
+      <article class="flex flex-col gap-2.5 rounded-lg border border-default p-3">
+        <div class="flex items-start gap-2.5">
+          <div class="grid size-8 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+            <UIcon name="i-lucide-hard-drive" class="size-4" />
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex flex-wrap items-center gap-1.5">
+              <p class="text-sm font-medium">
+                {{ t('tmcut.voice.engines.local') }}
+              </p>
+              <UBadge :color="localOnline ? 'success' : 'neutral'" variant="subtle" size="sm">
+                <UIcon :name="localOnline ? 'i-lucide-circle-check' : 'i-lucide-circle-alert'" class="mr-1 size-3" />{{ localOnline ? t('tmcut.voice.online') : t('tmcut.voice.offline') }}
+              </UBadge>
+              <UBadge
+                v-if="engineStatus?.phase === 'running'"
+                color="success"
+                variant="subtle"
+                size="sm"
+              >
+                {{ t('tmcut.voice.engine.running') }}
+              </UBadge>
+            </div>
+            <p class="mt-0.5 truncate text-[11px] text-muted" :title="`${providerLabel} · ${baseUrl}`">
+              {{ providerLabel }} · {{ baseUrl }}
+            </p>
+          </div>
+          <UDropdownMenu :items="localActionItems" :content="{ align: 'end' }" :ui="{ content: 'w-56' }">
+            <UButton
+              icon="i-lucide-ellipsis-vertical"
+              color="neutral"
+              variant="ghost"
+              size="sm"
+              :aria-label="t('tmcut.voice.actions')"
+              class="-me-1 -mt-1"
+            />
+          </UDropdownMenu>
+        </div>
+        <p
+          v-if="engineHint || localError"
+          class="text-[11px]"
+          :class="engineStatus?.error || localError ? 'text-warning-600' : 'text-muted'"
         >
-          {{ t('tmcut.voice.checkService') }}
-        </UButton>
-        <UBadge :color="localOnline ? 'success' : 'neutral'" variant="subtle">
-          <UIcon :name="localOnline ? 'i-lucide-circle-check' : 'i-lucide-circle-alert'" class="mr-1 size-3.5" />{{ localOnline ? t('tmcut.voice.online') : t('tmcut.voice.offline') }}
-        </UBadge>
-      </div>
-      <p v-if="localError" class="text-xs text-warning-600">
-        {{ localError }}
-      </p>
-      <div v-if="isDesktop" class="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2 items-end">
-        <UFormField :label="t('tmcut.voice.name')">
-          <UInput v-model="voiceName" maxlength="64" />
-        </UFormField>
-        <UFormField :label="t('tmcut.voice.reference')">
-          <UInput :model-value="samplePath ? samplePath.split(/[\\/]/).pop() : ''" readonly :placeholder="t('tmcut.voice.pickReference')" />
-        </UFormField>
-        <UButton
-          color="neutral"
-          variant="soft"
-          icon="i-lucide-folder-open"
-          @click="chooseSample"
-        >
-          {{ t('tmcut.voice.browse') }}
-        </UButton>
-      </div>
-      <div v-if="isDesktop" class="flex flex-wrap gap-2">
-        <UButton
-          color="primary"
-          variant="soft"
-          :disabled="!voiceName.trim() || !samplePath"
-          :loading="localBusy"
-          @click="addVoice"
-        >
-          {{ t('tmcut.voice.saveReference') }}
-        </UButton>
-        <span class="text-xs text-muted self-center">{{ t('tmcut.voice.referencePrivacy') }}</span>
-      </div>
-      <p v-else class="text-[11px] text-muted">
-        {{ t('tmcut.voice.referenceDesktopOnly') }}
-      </p>
-      <div v-if="managedVoices.length" class="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-2 items-end">
-        <UFormField :label="t('tmcut.voice.voiceList')">
-          <USelect v-model="selectedVoiceId" :items="managedVoices.map(v => ({ label: `${v.name} · ${v.engineName}`, value: v.id }))" class="w-full" />
-        </UFormField>
-        <UButton
-          color="neutral"
-          variant="soft"
-          :disabled="!chosenLocal || !localOnline"
-          :loading="localBusy"
-          @click="syncVoice"
-        >
-          {{ t('tmcut.voice.sync') }}
-        </UButton>
-        <UButton
-          color="error"
-          variant="ghost"
-          :disabled="!chosenLocal"
-          @click="deleteVoice"
-        >
-          {{ t('tmcut.voice.delete') }}
-        </UButton>
-      </div>
-      <p v-if="localVoices.length" class="text-[11px] text-muted">
-        {{ t('tmcut.voice.serviceVoices', { count: localVoices.length }) }}
-      </p>
-      <p v-if="isDesktop" class="text-[11px] text-muted">
-        {{ t('tmcut.voice.localPersistenceNote') }}
-      </p>
+          {{ engineStatus?.error || localError || engineHint }}
+        </p>
+        <UProgress v-if="engineWorking && engineStatus?.progress" :model-value="engineStatus.progress.percent ?? 0" size="xs" />
+        <div class="flex items-center justify-between gap-2">
+          <UButton
+            size="xs"
+            :color="localPrimary.color"
+            variant="soft"
+            :icon="localPrimary.icon"
+            :loading="localPrimary.loading"
+            :disabled="localPrimary.disabled"
+            @click="localPrimary.run()"
+          >
+            {{ localPrimary.label }}
+          </UButton>
+          <span v-if="localVoices.length" class="text-[11px] text-muted">
+            {{ t('tmcut.voice.serviceVoices', { count: localVoices.length }) }}
+          </span>
+        </div>
+      </article>
+
+      <article class="flex flex-col gap-2.5 rounded-lg border border-default p-3">
+        <div class="flex items-start gap-2.5">
+          <div class="grid size-8 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+            <UIcon name="i-lucide-sparkles" class="size-4" />
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex flex-wrap items-center gap-1.5">
+              <p class="text-sm font-medium">
+                {{ t('tmcut.voice.engines.gemini') }}
+              </p>
+              <UBadge :color="geminiKeySaved ? 'success' : 'neutral'" variant="subtle" size="sm">
+                <UIcon :name="geminiKeySaved ? 'i-lucide-circle-check' : 'i-lucide-circle-alert'" class="mr-1 size-3" />{{ geminiKeySaved ? t('tmcut.voice.keySavedBadge') : t('tmcut.voice.geminiKeyMissing') }}
+              </UBadge>
+            </div>
+            <p class="mt-0.5 truncate text-[11px] text-muted">
+              {{ model }} · {{ selectedGeminiVoice }}
+            </p>
+          </div>
+        </div>
+        <p class="text-[11px] text-warning-600">
+          {{ t('tmcut.voice.geminiPrivacy') }}
+        </p>
+        <div class="flex items-center justify-between gap-2">
+          <UButton
+            size="xs"
+            color="neutral"
+            variant="soft"
+            icon="i-lucide-settings-2"
+            @click="geminiSettingsOpen = true"
+          >
+            {{ t('tmcut.voice.settings') }}
+          </UButton>
+          <span v-if="!isDesktop" class="text-[11px] text-muted">
+            {{ t('tmcut.voice.geminiDesktopOnly') }}
+          </span>
+        </div>
+      </article>
     </section>
+
     <section class="rounded-lg border border-default p-3 space-y-3">
       <div class="flex flex-wrap items-center gap-2">
         <h3 class="font-medium text-sm mr-auto">
@@ -436,7 +800,7 @@ onMounted(async () => {
         />
       </UFormField>
       <template v-if="activeEngine === 'local'">
-        <UFormField v-if="managedVoices.length" :label="t('tmcut.voice.selectedVoice')">
+        <UFormField v-if="managedAvailable" :label="t('tmcut.voice.selectedVoice')">
           <USelect v-model="selectedVoiceId" :items="managedVoices.map(v => ({ label: `${v.name} · ${v.engineName}`, value: v.id }))" class="w-full" />
         </UFormField>
         <UFormField v-else :label="t('tmcut.voice.selectedVoice')">
@@ -447,34 +811,32 @@ onMounted(async () => {
         </p>
       </template>
       <template v-else>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <UFormField :label="t('tmcut.voice.geminiVoice')">
             <USelect v-model="selectedGeminiVoice" :items="geminiVoices" class="w-full" />
           </UFormField>
           <UFormField :label="t('tmcut.voice.geminiModel')">
             <USelect v-model="model" :items="['gemini-3.8-flash-tts', 'gemini-3.8-flash-lite-tts']" class="w-full" />
           </UFormField>
-        </div>
-        <UFormField :label="t('tmcut.voice.style')">
-          <UInput v-model="style" maxlength="500" :placeholder="t('tmcut.voice.styleHint')" />
-        </UFormField>
-        <div class="flex items-end gap-2">
-          <UFormField :label="t('tmcut.voice.geminiKey')" class="flex-1">
+          <UFormField :label="t('tmcut.voice.style')">
             <UInput
-              v-model="apiKey"
-              type="password"
-              autocomplete="off"
-              :placeholder="geminiKeySaved ? t('tmcut.voice.keyAlreadySaved') : t('tmcut.voice.keySetInSettings')"
+              v-model="style"
+              maxlength="500"
+              :placeholder="t('tmcut.voice.styleHint')"
+              class="w-full"
             />
           </UFormField>
+        </div>
+        <div v-if="!geminiKeySaved" class="flex items-center gap-2 rounded-md border border-warning/30 bg-warning/10 px-2.5 py-2">
+          <UIcon name="i-lucide-key-round" class="size-3.5 text-warning" />
+          <span class="flex-1 text-[11px] text-warning-600">{{ t('tmcut.voice.keyRequired') }}</span>
           <UButton
-            color="neutral"
-            variant="soft"
-            :loading="geminiKeySaving"
-            :disabled="!apiKey.trim()"
-            @click="saveGeminiKey"
+            size="xs"
+            color="warning"
+            variant="ghost"
+            @click="geminiSettingsOpen = true"
           >
-            {{ t('tmcut.voice.saveKey') }}
+            {{ t('tmcut.voice.configure') }}
           </UButton>
         </div>
         <p class="text-[11px] text-warning-600">
@@ -491,7 +853,7 @@ onMounted(async () => {
         <UButton
           color="primary"
           variant="soft"
-          :disabled="!narration.trim() || (activeEngine === 'local' && !localOnline) || (activeEngine === 'gemini' && !apiKey.trim() && !geminiKeySaved)"
+          :disabled="!narration.trim() || (activeEngine === 'local' && !localOnline) || (activeEngine === 'gemini' && !geminiKeySaved)"
           :loading="activeEngine === 'local' ? localBusy : geminiBusy"
           @click="activeEngine === 'local' ? makeLocalVoiceover() : makeGeminiVoiceover()"
         >
@@ -500,4 +862,238 @@ onMounted(async () => {
       </div>
     </section>
   </div>
+
+  <USlideover
+    v-model:open="localSettingsOpen"
+    :title="t('tmcut.voice.localSettingsTitle')"
+    :description="providerLabel"
+    :ui="{ content: 'sm:max-w-lg' }"
+  >
+    <template #body>
+      <div class="space-y-5">
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <UFormField :label="t('tmcut.voice.provider')">
+            <USelect
+              v-model="provider"
+              :items="PROVIDERS.map(item => ({ label: t(`tmcut.voice.providers.${item.id}`), value: item.id }))"
+              class="w-full"
+              @update:model-value="switchProvider"
+            />
+          </UFormField>
+          <UFormField :label="t('tmcut.voice.baseUrl')">
+            <UInput v-model="baseUrl" class="w-full" @change="saveLocalUrl" />
+          </UFormField>
+        </div>
+        <div class="flex items-center gap-2">
+          <UButton
+            size="sm"
+            color="neutral"
+            variant="soft"
+            icon="i-lucide-refresh-cw"
+            :loading="localBusy"
+            @click="checkLocalService"
+          >
+            {{ t('tmcut.voice.checkService') }}
+          </UButton>
+          <UBadge :color="localOnline ? 'success' : 'neutral'" variant="subtle">
+            <UIcon :name="localOnline ? 'i-lucide-circle-check' : 'i-lucide-circle-alert'" class="mr-1 size-3.5" />{{ localOnline ? t('tmcut.voice.online') : t('tmcut.voice.offline') }}
+          </UBadge>
+        </div>
+        <p v-if="localError" class="text-xs text-warning-600">
+          {{ localError }}
+        </p>
+        <p v-if="provider === 'cit'" class="text-[11px] text-muted">
+          {{ t('tmcut.voice.citHint') }}
+        </p>
+
+        <div
+          v-if="isDesktop && (provider === 'vieneu' || provider === 'cit')"
+          class="space-y-2 rounded-md border border-default p-3"
+        >
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="min-w-0">
+              <p class="text-xs font-medium">
+                {{ t('tmcut.voice.engine.title') }}
+              </p>
+              <p class="text-[11px] text-muted">
+                {{ engineHint }}
+              </p>
+            </div>
+            <div class="flex items-center gap-2">
+              <UBadge :color="engineStatus?.phase === 'running' ? 'success' : 'neutral'" variant="subtle">
+                {{ engineStatus?.phase === 'running' ? t('tmcut.voice.engine.running') : t('tmcut.voice.engine.stopped') }}
+              </UBadge>
+              <UButton
+                v-if="!engineStatus?.installed"
+                color="primary"
+                variant="soft"
+                size="xs"
+                icon="i-lucide-download"
+                :loading="engineWorking"
+                :disabled="engineWorking"
+                @click="installEngine"
+              >
+                {{ t('tmcut.voice.engine.install') }}
+              </UButton>
+              <UButton
+                v-else-if="engineStatus?.phase === 'running'"
+                color="neutral"
+                variant="soft"
+                size="xs"
+                :loading="engineWorking"
+                :disabled="engineWorking"
+                @click="stopEngine"
+              >
+                {{ t('tmcut.voice.engine.stop') }}
+              </UButton>
+              <UButton
+                v-else
+                color="primary"
+                variant="soft"
+                size="xs"
+                icon="i-lucide-play"
+                :loading="engineWorking"
+                :disabled="engineWorking"
+                @click="startEngine"
+              >
+                {{ t('tmcut.voice.engine.start') }}
+              </UButton>
+            </div>
+          </div>
+          <UProgress v-if="engineWorking && engineStatus?.progress" :model-value="engineStatus.progress.percent ?? 0" size="xs" />
+          <p v-if="engineStatus?.dir" class="truncate text-[10px] text-muted" :title="engineStatus.dir">
+            {{ engineStatus.dir }}
+          </p>
+        </div>
+
+        <div class="space-y-2">
+          <h4 class="text-[11px] font-semibold uppercase tracking-wide text-muted">
+            {{ t('tmcut.voice.voiceLibrary') }}
+          </h4>
+          <p v-if="localVoices.length" class="text-[11px] text-muted">
+            {{ t('tmcut.voice.serviceVoices', { count: localVoices.length }) }}
+          </p>
+          <div v-if="managedAvailable" class="grid grid-cols-1 items-end gap-2 md:grid-cols-[1fr_auto_auto]">
+            <UFormField :label="t('tmcut.voice.voiceList')">
+              <USelect v-model="selectedVoiceId" :items="managedVoices.map(v => ({ label: `${v.name} · ${v.engineName}`, value: v.id }))" class="w-full" />
+            </UFormField>
+            <UButton
+              color="neutral"
+              variant="soft"
+              :disabled="!chosenLocal || !localOnline"
+              :loading="localBusy"
+              @click="syncVoice"
+            >
+              {{ t('tmcut.voice.sync') }}
+            </UButton>
+            <UButton
+              color="error"
+              variant="ghost"
+              :disabled="!chosenLocal"
+              @click="deleteVoice"
+            >
+              {{ t('tmcut.voice.delete') }}
+            </UButton>
+          </div>
+          <p v-if="managedAvailable" class="text-[11px] text-muted">
+            {{ provider === 'cit' ? t('tmcut.voice.citPersistenceNote') : t('tmcut.voice.localPersistenceNote') }}
+          </p>
+        </div>
+
+        <div v-if="isDesktop" class="space-y-2">
+          <h4 class="text-[11px] font-semibold uppercase tracking-wide text-muted">
+            {{ t('tmcut.voice.cloning') }}
+          </h4>
+          <p v-if="provider === 'cit'" class="text-[11px] text-muted">
+            {{ t('tmcut.voice.cloneHintCit') }}
+          </p>
+          <div v-if="provider === 'cit'" class="space-y-1 rounded-md border border-default bg-elevated/40 p-2.5">
+            <UCheckbox v-model="consentConfirmed" :label="t('tmcut.voice.consent')" />
+            <p class="text-[11px] text-muted">
+              {{ citConsent?.rightsStatement || t('tmcut.voice.consentUnavailable') }}
+            </p>
+          </div>
+          <div class="grid grid-cols-1 items-end gap-2 md:grid-cols-[1fr_1fr_auto]">
+            <UFormField :label="t('tmcut.voice.name')">
+              <UInput v-model="voiceName" maxlength="64" class="w-full" />
+            </UFormField>
+            <UFormField :label="t('tmcut.voice.reference')">
+              <UInput
+                :model-value="samplePath ? samplePath.split(/[\\/]/).pop() : ''"
+                readonly
+                :placeholder="t('tmcut.voice.pickReference')"
+                class="w-full"
+              />
+            </UFormField>
+            <UButton
+              color="neutral"
+              variant="soft"
+              icon="i-lucide-folder-open"
+              @click="chooseSample"
+            >
+              {{ t('tmcut.voice.browse') }}
+            </UButton>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <UButton
+              color="primary"
+              variant="soft"
+              :disabled="!voiceName.trim() || !samplePath || (provider === 'cit' && !consentConfirmed)"
+              :loading="localBusy"
+              @click="addVoice"
+            >
+              {{ t('tmcut.voice.saveReference') }}
+            </UButton>
+            <span class="text-xs text-muted">{{ t('tmcut.voice.referencePrivacy') }}</span>
+          </div>
+        </div>
+        <p v-else class="text-[11px] text-muted">
+          {{ t('tmcut.voice.referenceDesktopOnly') }}
+        </p>
+      </div>
+    </template>
+  </USlideover>
+
+  <USlideover
+    v-model:open="geminiSettingsOpen"
+    :title="t('tmcut.voice.geminiSettingsTitle')"
+    :ui="{ content: 'sm:max-w-md' }"
+    @update:open="onGeminiSettingsOpen"
+  >
+    <template #body>
+      <div class="space-y-4">
+        <UBadge :color="geminiKeySaved ? 'success' : 'neutral'" variant="subtle">
+          <UIcon :name="geminiKeySaved ? 'i-lucide-circle-check' : 'i-lucide-circle-alert'" class="mr-1 size-3.5" />{{ geminiKeySaved ? t('tmcut.voice.keySavedBadge') : t('tmcut.voice.geminiKeyMissing') }}
+        </UBadge>
+        <div class="space-y-3">
+          <UFormField :label="t('tmcut.voice.geminiKey')">
+            <UInput
+              v-model="apiKey"
+              type="password"
+              autocomplete="off"
+              :placeholder="geminiKeySaved ? t('tmcut.voice.keyAlreadySaved') : t('tmcut.voice.keySetInSettings')"
+              class="w-full"
+              @keyup.enter="saveGeminiKey"
+            />
+          </UFormField>
+          <UButton
+            color="primary"
+            variant="soft"
+            block
+            :loading="geminiKeySaving"
+            :disabled="!apiKey.trim()"
+            @click="saveGeminiKey"
+          >
+            {{ t('tmcut.voice.saveKey') }}
+          </UButton>
+        </div>
+        <p class="text-[11px] text-muted">
+          {{ t('tmcut.voice.keySetInSettings') }}
+        </p>
+        <p class="text-[11px] text-warning-600">
+          {{ t('tmcut.voice.geminiPrivacy') }}
+        </p>
+      </div>
+    </template>
+  </USlideover>
 </template>

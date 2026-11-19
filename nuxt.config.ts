@@ -71,6 +71,18 @@ export default defineNuxtConfig({
     }
   },
 
+  // Pin the dev listener host. Nuxt's schema default is a `$resolve` marker that
+  // reads NUXT_HOST/NITRO_HOST/HOST; the installed @nuxt/cli (4.0.1) never
+  // applies that resolver, so the stub itself was persisted to
+  // node_modules/.cache/nuxt/dev-server.json as `"hostname":{}` and the next
+  // `pnpm dev` crashed in the eager listener with
+  // `options.hostname.toLowerCase is not a function`. A string here is also what
+  // the sibling apps (tm-tools, tm-hub) already pass, and `--host` still wins
+  // over it on the command line.
+  devServer: {
+    host: 'localhost'
+  },
+
   compatibilityDate: '2026-06-30',
 
   vite: {

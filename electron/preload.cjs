@@ -9,6 +9,7 @@ const PUSH_CHANNELS = [
   'app-updater:status-changed',
   'tmcut:assetCenter:progress',
   'tmcut:downloadProgress',
+  'tmcut:engineProgress',
   // MCP server channels
   'mcp:server:tool:invoke',
   'mcp:server:session:init',
@@ -99,10 +100,12 @@ const tmcut = exposeNamespace('tmcut', {
     'writeRecovery', 'readRecovery', 'deleteRecovery', 'deleteProject',
     'listSnapshots', 'saveSnapshot', 'readSnapshot', 'deleteSnapshot',
     'statFiles', 'saveRecording', 'saveRender', 'downloadMedia', 'cancelDownload', 'stockSearch',
-    'voiceStatus', 'enrollVoice', 'listManagedVoices', 'addManagedVoice', 'deleteManagedVoice', 'syncManagedVoice', 'synthesizeVoice', 'synthesizeGeminiVoice',
+    'voiceStatus', 'voiceConsent', 'enrollVoice', 'listManagedVoices', 'addManagedVoice', 'deleteManagedVoice', 'syncManagedVoice', 'synthesizeVoice', 'synthesizeGeminiVoice',
+    'citEngineStatus', 'citEngineInstall', 'citEngineStart', 'citEngineStop',
+    'vieneuEngineStatus', 'vieneuEngineInstall', 'vieneuEngineStart', 'vieneuEngineStop',
     'listFonts'
   ],
-  on: ['downloadProgress']
+  on: ['downloadProgress', 'engineProgress']
 })
 
 // On-demand Asset Center I/O (registry + verified downloads). The queue/

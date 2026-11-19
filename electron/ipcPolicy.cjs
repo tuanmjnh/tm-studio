@@ -30,6 +30,8 @@ const PUSH_CHANNELS = [
   'tmcut:assetCenter:progress',
   // Generated-media download progress (bytes loaded of the declared total).
   'tmcut:downloadProgress',
+  // Managed CIT engine install/start progress (phase + bytes).
+  'tmcut:engineProgress',
   // MCP server channels (Phase 2)
   'mcp:server:tool:invoke',
   'mcp:server:session:init',

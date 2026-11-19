@@ -1,5 +1,5 @@
 import type { TmcutTimelineItem } from '~/composables/useTmcutProject'
-import { ticksToSec } from '@tuanmjnh/tm-cut-core'
+import { TICKS_PER_SECOND, sourceToTimeline, ticksToSec } from '@tuanmjnh/tm-cut-core'
 
 /**
  * C16-R2/R3: single accessors for clip TIME GEOMETRY.
@@ -62,4 +62,22 @@ export function clipStartSec(clip: Pick<TmcutTimelineItem, 'offset'>): number {
 /** Timeline end, seconds. */
 export function clipEndSec(clip: Pick<TmcutTimelineItem, 'in' | 'out' | 'speed' | 'offset'>): number {
   return clipStartSec(clip) + clipDurationSec(clip)
+}
+
+/**
+ * Source (media) seconds -> timeline seconds, through the clip's own geometry.
+ *
+ * A media element can only report its position in the SOURCE file. Core's
+ * position law (`sourceToTimeline`) knows trim, speed and reverse, so this is
+ * the one place that answers "the picture at media 12 s belongs to timeline
+ * second N". Without it a held playback picture parked the playhead on the
+ * media second, which is a different instant as soon as `in`, `offset` or
+ * `speed` is not the identity.
+ */
+export function mediaSecToTimelineSec(
+  clip: Pick<TmcutTimelineItem, 'in' | 'out' | 'speed' | 'offset' | 'reverse'>,
+  mediaSec: number
+): number {
+  const sourceTicks = Math.round(mediaSec * TICKS_PER_SECOND)
+  return ticksToSec(clipStartTicks(clip) + sourceToTimeline(clip, sourceTicks))
 }
