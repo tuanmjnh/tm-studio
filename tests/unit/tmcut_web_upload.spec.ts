@@ -13,11 +13,13 @@
  *  - the wiring contract: toURL passes /uploads/ through, importWebFiles
  *    talks to the endpoint, and the serve route exists.
  */
+import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   parseUploadRange,
+  pruneOldUploads,
   resolveUploadFilePath,
   uploadKindForName,
   uploadsContentTypeForName
@@ -32,6 +34,17 @@ let failed = 0
 function check(name: string, fn: () => void) {
   try {
     fn()
+    passed++
+    console.log(`[ok] ${name}`)
+  } catch (error) {
+    failed++
+    console.error(`[FAIL] ${name}:`, error instanceof Error ? error.message : error)
+  }
+}
+
+async function checkAsync(name: string, fn: () => Promise<void>) {
+  try {
+    await fn()
     passed++
     console.log(`[ok] ${name}`)
   } catch (error) {
@@ -127,6 +140,52 @@ async function main() {
     if (!route.includes('parseUploadRange')) throw new Error('range support missing')
     if (!route.includes('resolveUploadFilePath')) throw new Error('traversal guard missing')
     if (!route.includes('206')) throw new Error('partial responses missing')
+  })
+
+  check('uploads retention is off by default and only runs when configured', () => {
+    // A saved project may still name an old /uploads/ URL, so deleting by age
+    // must be an explicit server policy. Pin the default at 0 and the guard at
+    // the call site.
+    const cfg = read('server/config/index.ts')
+    if (!cfg.includes('readEnv(\'TOOLS_UPLOADS_RETENTION_DAYS\', \'0\')')) {
+      throw new Error('retention env must default to 0 (keep forever)')
+    }
+    const route = read('server/api/v1/media/upload.post.ts')
+    if (!route.includes('pruneOldUploads')) throw new Error('upload route must run the sweep')
+    if (!route.includes('config.uploads.retentionDays > 0')) throw new Error('sweep must be guarded by the configured policy')
+  })
+
+  await checkAsync('pruneOldUploads deletes only files past the window', async () => {
+    const base = join(ROOT, 'node_modules', '.cache')
+    await mkdir(base, { recursive: true })
+    const dir = await mkdtemp(join(base, 'upload-prune-'))
+    try {
+      const day = 24 * 60 * 60 * 1000
+      const now = Date.now()
+      await writeFile(join(dir, 'old.mp3'), 'old')
+      await writeFile(join(dir, 'fresh.mp3'), 'fresh')
+      await mkdir(join(dir, 'nested'))
+      await writeFile(join(dir, 'nested', 'keep.mp3'), 'nested')
+      await utimes(join(dir, 'old.mp3'), new Date(now - 3 * day), new Date(now - 3 * day))
+      await utimes(join(dir, 'nested', 'keep.mp3'), new Date(now - 3 * day), new Date(now - 3 * day))
+
+      const off = await pruneOldUploads(dir, 0, now)
+      if (off.deleted !== 0) throw new Error(`retention 0 deleted ${off.deleted} files`)
+
+      const on = await pruneOldUploads(dir, 1, now)
+      if (on.deleted !== 1) throw new Error(`expected 1 old file deleted, got ${on.deleted}`)
+      if (on.kept !== 1) throw new Error(`expected 1 fresh file kept, got ${on.kept}`)
+      const { readdirSync } = await import('node:fs')
+      const left = readdirSync(dir).sort()
+      if (left.join(',') !== 'fresh.mp3,nested') throw new Error(`unexpected survivors: ${left.join(',')}`)
+      const nested = readdirSync(join(dir, 'nested'))
+      if (nested.join(',') !== 'keep.mp3') throw new Error('nested files must never be touched')
+
+      const missing = await pruneOldUploads(join(dir, 'does-not-exist'), 1, now)
+      if (missing.deleted !== 0 || missing.kept !== 0) throw new Error('missing dir must be a no-op')
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 
   const summary = `${passed} passed${failed ? `, ${failed} FAILED` : ''}`

@@ -101,11 +101,12 @@ const tmcut = exposeNamespace('tmcut', {
     'listSnapshots', 'saveSnapshot', 'readSnapshot', 'deleteSnapshot',
     'statFiles', 'saveRecording', 'saveRender', 'downloadMedia', 'cancelDownload', 'stockSearch',
     'voiceStatus', 'voiceConsent', 'enrollVoice', 'listManagedVoices', 'addManagedVoice', 'deleteManagedVoice', 'syncManagedVoice', 'synthesizeVoice', 'synthesizeGeminiVoice',
+    'cloudVoices', 'cloudSynthesize', 'cloudCancel', 'cloudListVoices',
     'citEngineStatus', 'citEngineInstall', 'citEngineStart', 'citEngineStop',
     'vieneuEngineStatus', 'vieneuEngineInstall', 'vieneuEngineStart', 'vieneuEngineStop',
     'listFonts'
   ],
-  on: ['downloadProgress', 'engineProgress']
+  on: ['downloadProgress', 'engineProgress', 'cloudProgress']
 })
 
 // On-demand Asset Center I/O (registry + verified downloads). The queue/

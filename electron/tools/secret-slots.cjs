@@ -23,7 +23,11 @@
 // AI_CONFIG_SECRET is the master key that seals provider keys in the app-local
 // AI store. It is generated once per install and lives in the same vault, so it
 // is encrypted at rest and masked on read like every other credential.
-const SECRET_SLOT_RE = /^(AI_API_KEY(_.+)?|TMCUT_GEMINI_API_KEY|NUXT_HUB_APP_SECRET|HUB_DEVICE_SECRET|AI_CONFIG_SECRET)$/
+//
+// TMCUT_OPENAI_API_KEY / TMCUT_ELEVENLABS_API_KEY / TMCUT_AZURE_SPEECH_KEY /
+// TMCUT_GOOGLE_TTS_API_KEY are the Voice Studio cloud TTS credentials (R146).
+// They are read only by the main process; the renderer sees a masked echo.
+const SECRET_SLOT_RE = /^(AI_API_KEY(_.+)?|TMCUT_GEMINI_API_KEY|TMCUT_OPENAI_API_KEY|TMCUT_ELEVENLABS_API_KEY|TMCUT_AZURE_SPEECH_KEY|TMCUT_GOOGLE_TTS_API_KEY|NUXT_HUB_APP_SECRET|HUB_DEVICE_SECRET|AI_CONFIG_SECRET)$/
 
 /** True when a config key is an API-key slot (encrypted at rest, masked
  *  to the renderer, re-encrypted by the migration). */

@@ -1,4 +1,5 @@
-import { resolve, sep } from 'node:path'
+import { readdir, stat, unlink } from 'node:fs/promises'
+import { join, resolve, sep } from 'node:path'
 
 /**
  * Web-runtime media upload helpers (shared by the upload endpoint and the
@@ -100,6 +101,47 @@ export function resolveUploadFilePath(dir: string, segments: string[]): string |
   const target = resolve(root, ...decoded)
   if (!target.startsWith(root + sep)) return null
   return target
+}
+
+/**
+ * Age-based prune of stored web uploads. Off unless `retentionDays > 0`:
+ * a saved project may still reference a file by its /uploads/ URL, so expiry
+ * is an explicit server policy (TOOLS_UPLOADS_RETENTION_DAYS), never a default.
+ * Only regular files in the dir root are considered; per-file failures are
+ * skipped rather than aborting the sweep.
+ */
+export async function pruneOldUploads(
+  dir: string,
+  retentionDays: number,
+  now = Date.now()
+): Promise<{ deleted: number, kept: number }> {
+  if (!(retentionDays > 0)) return { deleted: 0, kept: 0 }
+  const cutoff = now - retentionDays * 24 * 60 * 60 * 1000
+  let entries
+  try {
+    entries = await readdir(dir, { withFileTypes: true })
+  } catch {
+    return { deleted: 0, kept: 0 }
+  }
+  let deleted = 0
+  let kept = 0
+  for (const entry of entries) {
+    if (!entry.isFile()) continue
+    const full = join(dir, entry.name)
+    const info = await stat(full).catch(() => null)
+    if (!info?.isFile()) continue
+    if (info.mtimeMs >= cutoff) {
+      kept++
+      continue
+    }
+    try {
+      await unlink(full)
+      deleted++
+    } catch {
+      kept++
+    }
+  }
+  return { deleted, kept }
 }
 
 export interface UploadRange {

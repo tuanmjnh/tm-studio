@@ -3,7 +3,7 @@ import { mkdir, unlink } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { config } from '../../../config/index'
-import { uploadKindForName } from '../../../utils/uploads'
+import { uploadKindForName, pruneOldUploads } from '../../../utils/uploads'
 
 /**
  * Web-runtime media upload (R152). The browser pickers hand us File blobs —
@@ -26,6 +26,8 @@ import { uploadKindForName } from '../../../utils/uploads'
  *   body   = raw file bytes (content-type: application/octet-stream)
  *   ←      = { ok, kind, url: '/uploads/<stored>', size, name }
  */
+let lastPruneAt = 0
+
 export default defineEventHandler(async (event) => {
   if (!event.context.auth) {
     throw createError({ statusCode: 401, statusMessage: 'error.unauthorized', message: 'Unauthorized' })
@@ -83,6 +85,15 @@ export default defineEventHandler(async (event) => {
   } catch (error) {
     await unlink(dest).catch(() => {})
     throw error
+  }
+
+  // Lazy retention: a successful upload doubles as the sweep trigger, at most
+  // once an hour, so a quiet server never pays for the scan and a busy one
+  // never pays for it per file. The response does not wait on the sweep.
+  const now = Date.now()
+  if (config.uploads.retentionDays > 0 && now - lastPruneAt > 60 * 60 * 1000) {
+    lastPruneAt = now
+    void pruneOldUploads(dir, config.uploads.retentionDays).catch(() => {})
   }
 
   return {

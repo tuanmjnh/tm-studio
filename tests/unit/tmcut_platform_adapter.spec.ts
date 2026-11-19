@@ -180,7 +180,13 @@ async function main() {
     // The storage surface is the whole list: upload bytes, stream them back.
     // Voice is the one exception because TTS is a provider call, not a
     // transform of the user's file.
-    const allowed = new Set(['/api/v1/media/upload', '/api/v1/media/tts', '/api/v1/media/tts/status'])
+    const allowed = new Set(['/api/v1/media/upload', '/api/v1/media/tts', '/api/v1/media/tts/status', '/api/v1/media/tts-cloud'])
+    for (const route of allowed) {
+      const base = `server/api/v1/media/${route.replace('/api/v1/media/', '')}`
+      const served = ['get', 'post', 'put', 'delete'].some(method => existsSync(join(root, `${base}.${method}.ts`)))
+        || existsSync(join(root, `${base}.ts`))
+      assert.ok(served, `allowlisted route ${route} has no server file`)
+    }
     const declared = new Set<string>()
     const walk = (dir: string) => {
       for (const entry of readdirSync(join(root, dir), { withFileTypes: true })) {

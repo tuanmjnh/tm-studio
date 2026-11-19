@@ -11,6 +11,7 @@ const { fetchStockJson } = require('./stock-proxy.cjs')
 const { createCitEngine } = require('./cit-engine.cjs')
 const { createVieneuEngine } = require('./vieneu-engine.cjs')
 const { randomUUID } = require('node:crypto')
+const { setTimeout: delay } = require('node:timers/promises')
 const {
   MAX_VOICE_REFERENCE_BYTES,
   MAX_TTS_TEXT_LENGTH,
@@ -26,6 +27,18 @@ const {
   validateSynthesisInput,
   getServiceError
 } = require('./tmcut-voice.cjs')
+const {
+  MAX_CLOUD_AUDIO_BYTES,
+  CLOUD_PROVIDERS,
+  normalizeCloudProvider,
+  cloudProviderList,
+  cloudRequests,
+  cloudAudio,
+  cloudVoiceListRequest,
+  parseCloudVoiceList,
+  sniffAudioExt,
+  cloudServiceError
+} = require('./tmcut-cloud-voice.cjs')
 
 const moduleName = 'tmcut'
 
@@ -841,6 +854,119 @@ function registerTmcutController() {
     } catch (error) {
       return { ok: false, error: String((error && error.message) || error) }
     }
+  })
+
+  // R146/R147 — cloud TTS. Keys reach Main only through the encrypted config
+  // (process.env slots set by set-config); the renderer never sends them.
+  // Each synthesis is a cancellable job keyed by a renderer-supplied id; Main
+  // reports one progress event per chunk so long gtts texts are visible.
+  const cloudJobs = new Map()
+
+  function sendCloudProgress(event, requestId, done, total) {
+    if (!event.sender || event.sender.isDestroyed()) return
+    event.sender.send(`${moduleName}:cloudProgress`, { requestId, done, total })
+  }
+
+  /** 429/503 get up to two retries: honour Retry-After, else 500 ms doubling. */
+  async function fetchCloudWithRetry(url, init, signal, attempts = 3) {
+    for (let attempt = 0; ; attempt++) {
+      const response = await fetch(url, { ...init, signal })
+      if ((response.status !== 429 && response.status !== 503) || attempt >= attempts - 1) return response
+      await response.body?.cancel().catch(() => {})
+      const retryAfter = Number(response.headers.get('retry-after'))
+      const wait = Number.isFinite(retryAfter) && retryAfter > 0
+        ? Math.min(retryAfter * 1000, 5000)
+        : Math.min(500 * 2 ** attempt, 4000)
+      await delay(wait, undefined, { signal })
+    }
+  }
+
+  ipcMain.handle(`${moduleName}:cloudVoices`, async () => {
+    try {
+      return {
+        ok: true,
+        data: cloudProviderList().map(item => ({
+          ...item,
+          hasKey: item.keySlot ? !!String(process.env[item.keySlot] || '').trim() : true,
+          hasRegion: item.needsRegion ? !!String(process.env.TMCUT_AZURE_SPEECH_REGION || '').trim() : true
+        }))
+      }
+    } catch (error) {
+      return { ok: false, error: String((error && error.message) || error) }
+    }
+  })
+
+  ipcMain.handle(`${moduleName}:cloudListVoices`, async (_event, args = {}) => {
+    try {
+      const provider = normalizeCloudProvider(args.provider)
+      const spec = CLOUD_PROVIDERS[provider]
+      const key = spec.keySlot ? String(process.env[spec.keySlot] || '').trim() : ''
+      const request = cloudVoiceListRequest(provider, { key })
+      const response = await fetchCloudWithRetry(request.url, request.init, AbortSignal.timeout(30_000))
+      const text = await response.text()
+      if (!response.ok) return { ok: false, error: cloudServiceError(provider, response.status, text.slice(0, 2000)) }
+      const data = parseCloudVoiceList(provider, text)
+      if (!data.length) return { ok: false, error: `${spec.label} returned no voices` }
+      return { ok: true, data }
+    } catch (error) {
+      return { ok: false, error: String((error && error.message) || error) }
+    }
+  })
+
+  ipcMain.handle(`${moduleName}:cloudSynthesize`, async (event, args = {}) => {
+    const requestId = String(args.requestId || '').slice(0, 64) || `req-${randomUUID()}`
+    const job = new AbortController()
+    cloudJobs.set(requestId, job)
+    try {
+      const provider = normalizeCloudProvider(args.provider)
+      const spec = CLOUD_PROVIDERS[provider]
+      const key = spec.keySlot ? String(process.env[spec.keySlot] || '').trim() : ''
+      const region = spec.needsRegion ? String(process.env.TMCUT_AZURE_SPEECH_REGION || '').trim() : ''
+      if (spec.keySlot && !key) return { ok: false, error: `Set the ${spec.label} API key in Voice Studio first` }
+      if (spec.needsRegion && !region) return { ok: false, error: 'Set the Azure region in Voice Studio first' }
+      const requests = cloudRequests(provider, { text: args.text, voice: args.voice, key, region })
+      const bodies = []
+      sendCloudProgress(event, requestId, 0, requests.length)
+      for (let index = 0; index < requests.length; index++) {
+        const request = requests[index]
+        const signal = AbortSignal.any([job.signal, AbortSignal.timeout(120_000)])
+        const response = await fetchCloudWithRetry(request.url, request.init, signal)
+        const declared = Number(response.headers.get('content-length')) || 0
+        if (declared > MAX_CLOUD_AUDIO_BYTES) return { ok: false, error: 'Generated audio exceeds the 64 MiB limit' }
+        const body = Buffer.from(await response.arrayBuffer())
+        if (!response.ok) {
+          // Upstream error text never leaves Main with the key in it, even if
+          // the service echoes the credential back.
+          const text = body.toString('utf8').slice(0, 2000)
+          const safe = key ? text.split(key).join('********') : text
+          return { ok: false, error: cloudServiceError(provider, response.status, safe) }
+        }
+        if (body.length > MAX_CLOUD_AUDIO_BYTES) return { ok: false, error: 'Generated audio exceeds the 64 MiB limit' }
+        bodies.push(body)
+        sendCloudProgress(event, requestId, index + 1, requests.length)
+      }
+      const { bytes, ext } = cloudAudio(provider, bodies)
+      if (!bytes.length) return { ok: false, error: `${spec.label} returned empty audio` }
+      if (bytes.length > MAX_CLOUD_AUDIO_BYTES) return { ok: false, error: 'Generated audio exceeds the 64 MiB limit' }
+      if (!sniffAudioExt(bytes)) return { ok: false, error: `${spec.label} did not return valid audio` }
+      ensureDirs()
+      const filePath = path.join(getDirs().recordings, `cloud-${provider}-tts-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`)
+      fs.writeFileSync(filePath, bytes, { flag: 'wx' })
+      return { ok: true, path: filePath, size: bytes.length }
+    } catch (error) {
+      if (job.signal.aborted) return { ok: false, canceled: true, error: 'Canceled' }
+      return { ok: false, error: String((error && error.message) || error) }
+    } finally {
+      cloudJobs.delete(requestId)
+    }
+  })
+
+  ipcMain.handle(`${moduleName}:cloudCancel`, async (_event, args = {}) => {
+    const requestId = String(args.requestId || '')
+    const job = cloudJobs.get(requestId)
+    if (!job) return { ok: false, error: 'No running cloud request' }
+    job.abort()
+    return { ok: true }
   })
 
   // Roadmap D-4: MediaRecorder blobs must land on disk for the desktop

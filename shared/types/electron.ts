@@ -168,6 +168,19 @@ export interface ManagedEngineStatus {
   commit: string
 }
 
+/** One cloud TTS provider as Main reports it (electron/tools/tmcut-cloud-voice.cjs). */
+export interface CloudVoiceProviderInfo {
+  id: string
+  label: string
+  keySlot: string | null
+  needsRegion: boolean
+  voiceInput: 'select' | 'id'
+  defaultVoice: string
+  voices: Array<{ id: string, label: string }>
+  hasKey: boolean
+  hasRegion: boolean
+}
+
 /** One system font face (roadmap C-1): `path` feeds drawtext fontfile= so the export renders the very file the preview family shows. */
 export interface TmcutFontEntry {
   family: string
@@ -452,6 +465,17 @@ export interface TmcutNamespace {
   onEngineProgress(callback: (status: ManagedEngineStatus) => void): () => void
   /** Uses the API key from encrypted desktop config; never pass credentials over renderer IPC. */
   synthesizeGeminiVoice(args: { text: string, voice: string, style?: string, model?: string }): Promise<{ ok: boolean, path?: string, size?: number, error?: string }>
+  /** Cloud TTS catalogue; `hasKey`/`hasRegion` are flags — the values never cross IPC. */
+  cloudVoices(): Promise<{ ok: boolean, data?: CloudVoiceProviderInfo[], error?: string }>
+  /** Same credential rule as Gemini: Main reads the key from its encrypted config.
+   *  `requestId` keys the progress events and the cancel call. */
+  cloudSynthesize(args: { provider: string, text: string, voice?: string, requestId?: string }): Promise<{ ok: boolean, path?: string, size?: number, canceled?: boolean, error?: string }>
+  /** Abort a running cloud synthesis; its pending promise settles with `canceled`. */
+  cloudCancel(args: { requestId: string }): Promise<{ ok: boolean, error?: string }>
+  /** Provider voice list (ElevenLabs/Google Cloud) fetched in Main with the saved key. */
+  cloudListVoices(args: { provider: string }): Promise<{ ok: boolean, data?: Array<{ id: string, label: string }>, error?: string }>
+  /** One event per synthesized chunk (gtts splits long text). */
+  onCloudProgress(callback: (payload: { requestId: string, done: number, total: number }) => void): () => void
   /**
    * Recording blob persistence (roadmap D-4): writes into <base>/recordings/,
    * returns the path. `prefix` names non-voiceover takes (e.g. a command clip

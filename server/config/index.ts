@@ -19,6 +19,8 @@ export interface AppConfig {
   uploads: {
     dir: string
     maxMb: number
+    /** Age-based prune of web uploads in days; 0 keeps every file forever. */
+    retentionDays: number
   }
 }
 
@@ -41,7 +43,10 @@ export function loadConfig(): AppConfig {
     },
     uploads: {
       dir: readEnv('TOOLS_UPLOADS_DIR', join(process.cwd(), '.data', 'uploads')),
-      maxMb: parseInt(readEnv('TOOLS_UPLOADS_MAX_MB', '512'))
+      maxMb: parseInt(readEnv('TOOLS_UPLOADS_MAX_MB', '512')),
+      // Deleting by age can orphan a saved project's asset, so the default is
+      // off and only an explicit env value turns the prune on.
+      retentionDays: Math.max(0, parseInt(readEnv('TOOLS_UPLOADS_RETENTION_DAYS', '0')) || 0)
     }
   }
 }
