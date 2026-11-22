@@ -13,8 +13,8 @@ allowBuilds:
   vue-demi: true
 
 minimumReleaseAgeExclude:
-  - '@tuanmjnh/tm-hub-client@1.2.0'
-  - '@tuanmjnh/tm-cut-core@0.1.1'
+  - '@tuanmjnh/tm-hub-client@1.2.0 || 1.2.1'
+  - '@tuanmjnh/tm-cut-core@0.1.1 || 0.1.2'
   - '@tuanmjnh/tm-ui@0.1.0 || 0.1.3 || 0.1.4 || 0.2.0'
   - 'tm-cut-core@0.1.1'
   - '@tuanmjnh/tm-core@0.1.0 || 0.1.2'

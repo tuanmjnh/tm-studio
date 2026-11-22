@@ -200,11 +200,11 @@ importers:
         specifier: ^0.1.2
         version: 0.1.2
       '@tuanmjnh/tm-cut-core':
-        specifier: ^0.1.1
-        version: 0.1.1
+        specifier: 0.1.2
+        version: 0.1.2
       '@tuanmjnh/tm-hub-client':
-        specifier: 1.2.0
-        version: 1.2.0
+        specifier: 1.2.1
+        version: 1.2.1
       '@tuanmjnh/tm-mongo':
         specifier: ^0.1.0
         version: 0.1.0
@@ -3091,11 +3091,11 @@ packages:
   '@tuanmjnh/tm-core@0.1.2':
     resolution: {integrity: sha512-8ZgdJy4ofun7svDxsjcxUFWGJZxT3O+WWWiDu0FS2t+UfvOZVFzC2V9/zHUOO/PzzYKLZNegg5bQNpALBFF61w==}
 
-  '@tuanmjnh/tm-cut-core@0.1.1':
-    resolution: {integrity: sha512-vny/LMucwryzv2m9U/ABR6iDDC/BH1kpi1XB1s6TkNo3aj9IPnm3y+drkOibBZ7ZCH12FqdLlW5Si8b9L/PWXg==}
+  '@tuanmjnh/tm-cut-core@0.1.2':
+    resolution: {integrity: sha512-zuNbCJYitYPfgORSYJXBBt6S0NvhWYMclWjSZNL8CRo+H1DIinIjHQREPYS+M59RPND1m+/lpN148Nj1M6Qmgw==}
 
-  '@tuanmjnh/tm-hub-client@1.2.0':
-    resolution: {integrity: sha512-2a46mgIu89kdXcrVtGacgqmPkWrRLobMUUUT3Re6dxXv7L7+UQ6F8UimuCZsW3Ue770kXr8dibgKTIkr4KskhA==}
+  '@tuanmjnh/tm-hub-client@1.2.1':
+    resolution: {integrity: sha512-9xSjxUqM1qcnL65y3pP8PBNpAVFf5n8kOhqQ9POCNjKRxV4wMuknVEO5A/IsVVI8H8rQHpk1lXzHdC7XznRr+w==}
 
   '@tuanmjnh/tm-mongo@0.1.0':
     resolution: {integrity: sha512-jhQsqD8gG7w3CG4cZz5yPoi7aVZgrxIbDR+buNiEKPBH/tXAAMw5eCyyQPJ0PCbZeLqpuAWYA+fhpuZMGjO/Eg==}
@@ -10696,9 +10696,9 @@ snapshots:
 
   '@tuanmjnh/tm-core@0.1.2': {}
 
-  '@tuanmjnh/tm-cut-core@0.1.1': {}
+  '@tuanmjnh/tm-cut-core@0.1.2': {}
 
-  '@tuanmjnh/tm-hub-client@1.2.0': {}
+  '@tuanmjnh/tm-hub-client@1.2.1': {}
 
   '@tuanmjnh/tm-mongo@0.1.0': {}
 
