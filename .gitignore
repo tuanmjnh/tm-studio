@@ -4,6 +4,7 @@
 .nuxt
 .nitro
 .cache
+.vercel
 .playwright-mcp
 .tmp-*
 .gate-*
