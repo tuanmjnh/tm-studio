@@ -17,14 +17,14 @@ Vite alias. Both facts changed:
 - The engine moved to `tm-platform/packages/tm-cut-core` and is installed from
   npm like every other shared package.
 - The published tarball is **the contents of `dist`**. There is no `src` inside
-  an installed copy, so the alias `'tm-cut-core' → node_modules/@tuanmjnh/tm-cut-core/index.js`
+  an installed copy, so the alias `'tm-cut-core' → node_modules/@tuanmjnh/tm-cut-core/dist/index.js`
   resolves to a file that does not exist.
 
 Measured on the registry install (`tm-cut-core@0.1.1`):
 
 ```
 $ pnpm build
-[UNLOADABLE_DEPENDENCY] Could not load node_modules/@tuanmjnh/tm-cut-core/index.js
+[UNLOADABLE_DEPENDENCY] Could not load node_modules/@tuanmjnh/tm-cut-core/dist/index.js
   app/pages/tmcut/editor.vue:27  import { instantiateTemplate } from "tm-cut-core"
 ```
 

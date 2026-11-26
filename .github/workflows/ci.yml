@@ -90,18 +90,13 @@ jobs:
           printf '  %s\n' "${CHANGED[@]}"
           pnpm exec eslint "${CHANGED[@]}"
 
-      - name: Build the core package
-        run: pnpm build:core
-
-      - name: Typecheck the core package
-        run: pnpm typecheck:core
-
-      - name: Core import boundaries
-        run: pnpm check:core
-
-      - name: Core test suite
-        run: pnpm test:core
-
+      # The core engine (`@tuanmjnh/tm-cut-core`) is no longer gated here.
+      # This app installs it from GitHub at a pinned commit, so the engine's
+      # own build, typecheck, boundary check and test suite run in the
+      # repository that owns them (tm-platform CI). The `build:core`-family
+      # scripts stay in package.json for local use, where a sibling checkout
+      # does exist — a runner has no `../tm-platform`, so calling them here
+      # failed on a path that could not be created.
       - name: Unit specs
         run: pnpm test:unit
 
