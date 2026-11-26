@@ -56,7 +56,7 @@ async function main() {
   await check('core declares the waveform law, not only exports it', () => {
     // The app types tmcut-core from hand-written declarations, so a runtime
     // export nobody declared is invisible to the caller that must use it.
-    const dts = read('node_modules/@tuanmjnh/tm-cut-core/index.d.ts')
+    const dts = read('node_modules/@tuanmjnh/tm-cut-core/dist/index.d.ts')
     for (const name of [
       'TMCUT_WAVEFORM_ALGORITHM', 'TMCUT_WAVEFORM_PEAK_PRECISION', 'floatPeakBuckets',
       'buildWaveformPayload', 'readWaveformPayload'

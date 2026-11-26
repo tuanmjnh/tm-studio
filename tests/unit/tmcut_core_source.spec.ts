@@ -77,7 +77,7 @@ function escaping(): string[] {
 // src tree under node_modules to compare against. The rule ADR-022 protected is
 // unchanged — one engine, one copy — it is now enforced by the package
 // resolution rather than by a build-artifact comparison.
-const CORE_PKG_DIR = join(ROOT, 'node_modules', '@tuanmjnh', 'tm-cut-core')
+const CORE_PKG_DIR = join(ROOT, 'node_modules', '@tuanmjnh', 'tm-cut-core', 'dist')
 
 function readsBuildArtifact(): string[] {
   // ADR-022 forbade reading a locally-built dist because it could lag src. With
@@ -217,7 +217,7 @@ describe('core source boundary', () => {
     assert.equal(typeof pkg.name, 'string')
     assert.deepEqual(aliasKeys(), [], 'no nuxt alias and no tsconfig path names the package')
     assert.ok(pkg.exports?.['.'], 'the package declares its own entry point')
-    assert.equal(existsSync(join(ROOT, 'node_modules', '@tuanmjnh', 'tm-cut-core', 'index.js')), true, 'and the entry file is installed')
+    assert.equal(existsSync(join(ROOT, 'node_modules', '@tuanmjnh', 'tm-cut-core', 'dist', 'index.js')), true, 'and the entry file is installed')
   })
 
   it('nothing imports the core through the pre-ADR-017 alias', () => {
@@ -316,7 +316,7 @@ describe('core source boundary', () => {
     // the spec actually gets. `htmlVideoSeekContract` is the newest core export
     // (ADR-021), so a loaded module without it is an older copy whatever the
     // specifier looks like. ADR-034: the specifier is the package name now.
-    const liveCore = join(ROOT, 'node_modules', '@tuanmjnh', 'tm-cut-core', 'index.js')
+    const liveCore = join(ROOT, 'node_modules', '@tuanmjnh', 'tm-cut-core', 'dist', 'index.js')
     const loaded = await import(pathToFileURL(liveCore).href)
     assert.equal(typeof loaded.htmlVideoSeekContract, 'function', 'the installed package is the current core')
 

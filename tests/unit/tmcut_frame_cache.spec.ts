@@ -200,7 +200,7 @@ async function main() {
   await check('core declares the frame-request law to the app', () => {
     // The app types tmcut-core from hand-written declarations, so a runtime
     // export nobody declared is invisible to the app that must call it.
-    const dts = read('node_modules/@tuanmjnh/tm-cut-core/index.d.ts')
+    const dts = read('node_modules/@tuanmjnh/tm-cut-core/dist/index.d.ts')
     for (const name of [
       'frameRequestMillis', 'frameRequestWidth', 'frameRequestKey', 'isFrameCacheKey',
       'frameTimeWithinMedia', 'createFrameSlotLedger', 'planFrameCacheEviction',

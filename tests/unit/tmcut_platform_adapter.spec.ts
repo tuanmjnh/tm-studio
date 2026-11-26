@@ -220,7 +220,7 @@ async function main() {
   await check('the adapter carries one probe, and it writes nothing', async () => {
     await freshStore()
     const source = read('app/composables/useTmcutPlatform.ts')
-    const contract = read('node_modules/@tuanmjnh/tm-cut-core/types/platform.ts')
+    const contract = read('node_modules/@tuanmjnh/tm-cut-core/dist/types/platform.ts')
     // Slice I deleted the ffprobe leg, so the raw-JSON `probe` that only a host
     // binary could answer went with it. One demuxing service answers both hosts
     // now, and a second shape would be a second truth.

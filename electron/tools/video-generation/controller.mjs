@@ -15,19 +15,19 @@ import {
   registerGenerationAdapter,
   getGenerationAdapter,
   listGenerationAdapters
-} from '../../../node_modules/@tuanmjnh/tm-cut-core/generationAdapter.js'
+} from '../../../node_modules/@tuanmjnh/tm-cut-core/dist/generationAdapter.js'
 
-import { registerProviderAdapter } from '../../../node_modules/@tuanmjnh/tm-cut-core/providerAdapter.js'
+import { registerProviderAdapter } from '../../../node_modules/@tuanmjnh/tm-cut-core/dist/providerAdapter.js'
 
 const require = createRequire(import.meta.url)
 const { app, ipcMain } = require('electron')
 
 // Adapter registry lives in the core's generationAdapter + providerAdapter
-// modules, read from @tuanmjnh/tm-cut-core's src — the same artifact the `@tuanmjnh/tm-cut-core`
-// alias gives the app and the tests — and not from the package's dist, a
-// gitignored build artifact that goes stale whenever src changes without a
-// rebuild (G13). Both modules import nothing further, and electron-builder.yml
-// ships the src tree, so these paths also exist inside the packaged app.
+// modules. The package is installed from GitHub, which keeps the repository
+// layout, so these files sit under dist/ rather than at the package root — the
+// same files the app and the tests resolve through the package exports. Both
+// modules import nothing further, and electron-builder.yml ships dist/, so these
+// paths also exist inside the packaged app.
 // Adapters registered with registerGenerationAdapter() are retrievable with
 // getGenerationAdapter().
 // (The previous local Map was never populated, so getMainAdapter always returned

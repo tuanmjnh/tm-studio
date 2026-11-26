@@ -104,7 +104,7 @@ describe('the core keeps Node-only imports out of the client graph', () => {
     ]
     // The published package is a bundle, so one file is the whole engine. Scanning
     // it is strictly stronger than scanning 62 sources one by one.
-    const rel = 'node_modules/@tuanmjnh/tm-cut-core/index.js'
+    const rel = 'node_modules/@tuanmjnh/tm-cut-core/dist/index.js'
     const src = stripComments(read(rel))
     for (const pattern of patterns) {
       for (const match of src.matchAll(pattern)) {

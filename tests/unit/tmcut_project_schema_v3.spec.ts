@@ -33,7 +33,7 @@ const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8')
 
 /** Shipped code only. Specs must be allowed to name the field they forbid. */
 // The published package is a bundle, so the engine's code lives in one file.
-const CODE_DIRS = ['app', 'server', 'shared', 'electron', 'node_modules/@tuanmjnh/tm-cut-core/index.js']
+const CODE_DIRS = ['app', 'server', 'shared', 'electron', 'node_modules/@tuanmjnh/tm-cut-core/dist/index.js']
 const CODE_EXT = /\.(ts|mts|cts|js|mjs|cjs|vue)$/
 
 function walk(dir: string, out: string[] = []): string[] {
@@ -155,6 +155,6 @@ describe('the plan-only sequences shape', () => {
       }
     }
     assert.equal(readers.length, 1, 'exactly one reader, and it is the core')
-    assert.ok(readers[0]!.startsWith('node_modules/@tuanmjnh/tm-cut-core/index.js:'), 'the app file container label must stay unread')
+    assert.ok(readers[0]!.startsWith('node_modules/@tuanmjnh/tm-cut-core/dist/index.js:'), 'the app file container label must stay unread')
   })
 })

@@ -19,7 +19,8 @@ files:
   # The main process reads the core from the package: video-generation/controller.mjs
   # imports the adapter registries from @tuanmjnh/tm-cut-core, the same artifact the app and
   # the tests resolve through the package exports — one engine, one copy (G13).
-  # The tarball is the contents of dist, so this path is flat: there is no src/.
+  # The package is installed from GitHub, so the tree keeps its repository layout:
+  # the entry files are under dist/, not at the package root.
   - node_modules/@tuanmjnh/tm-cut-core/**/*
   - .output/**/*
   - public/icon.ico

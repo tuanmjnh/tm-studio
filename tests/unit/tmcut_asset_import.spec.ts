@@ -156,7 +156,7 @@ async function main() {
   await check('the six states are core\'s, in the order the pipeline walks them', () => {
     assert.deepEqual(TMCUT_IMPORT_STATES, ['queued', 'probing', 'ready', 'partial', 'unsupported', 'error'])
     // The union lives in core; a renamed or extra verdict there must fail here.
-    const union = /export type TmcutImportStatus =([^\n]*)/.exec(read('node_modules/@tuanmjnh/tm-cut-core/types/mediaInfo.ts'))?.[1]
+    const union = /export type TmcutImportStatus =([^\n]*)/.exec(read('node_modules/@tuanmjnh/tm-cut-core/dist/types/mediaInfo.ts'))?.[1]
     assert.ok(union, 'core declares the union')
     for (const state of TMCUT_IMPORT_STATES) {
       assert.ok(union.includes(`'${state}'`), `core is missing '${state}'`)

@@ -7,7 +7,10 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const ROOT = join(import.meta.dirname, '..', '..', '..')
-const BUNDLE = join(ROOT, 'node_modules', '@tuanmjnh', 'tm-cut-core', 'index.js')
+// Installed from GitHub at a pinned commit, so the package keeps the repository
+// layout: the bundle and the declarations sit under dist/, not at the root.
+const PKG = join(ROOT, 'node_modules', '@tuanmjnh', 'tm-cut-core', 'dist')
+const BUNDLE = join(PKG, 'index.js')
 
 let cached = null
 function bundle() {
@@ -29,5 +32,5 @@ export function moduleSource(name) {
 
 /** The package's type declarations. dist/index.d.ts is what a consumer sees. */
 export function typeDeclarations() {
-  return readFileSync(join(ROOT, 'node_modules', '@tuanmjnh', 'tm-cut-core', 'index.d.ts'), 'utf8')
+  return readFileSync(join(PKG, 'index.d.ts'), 'utf8')
 }
