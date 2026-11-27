@@ -106,6 +106,14 @@ jobs:
       - name: Source hygiene (no emitted twins)
         run: pnpm check:hygiene
 
+      # Nothing else builds this app. The Electron installer is packaged by
+      # hand (`build:electron:win`), so a Nitro or client-bundle break would
+      # merge green and only appear at packaging time. The build is also the
+      # step that proves the GSAP/Tiptap/module graph still resolves — a
+      # typecheck can pass while Nitro fails to bundle.
+      - name: Production build
+        run: pnpm build
+
   browser-media:
     name: Browser media integration
     # Windows: the only runner that ships Microsoft Edge, which is the browser
